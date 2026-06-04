@@ -73,10 +73,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   padding: const EdgeInsets.all(30),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.primaryColor.withOpacity(0.2),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
                         blurRadius: 50,
                         spreadRadius: 20,
                       ),
@@ -103,7 +103,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   'TRACK YOUR LIFE',
                   style: AppTheme.bodySmall.copyWith(
                     letterSpacing: 4,
-                    color: AppTheme.primaryLight.withOpacity(0.7),
+                    color: AppTheme.primaryLight.withValues(alpha: 0.7),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
