@@ -147,6 +147,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: FullScreenPage(
@@ -243,32 +244,35 @@ class _LogsScreenState extends State<LogsScreen> {
           _useMockData ? _buildLocalTimeline() : _buildFirestoreTimeline(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToWriteScreen(),
-        backgroundColor: AppTheme.primaryColor,
-        elevation: 8,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        ),
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(bottom: bottomPadding + 86),
+        child: FloatingActionButton(
+          onPressed: () => _navigateToWriteScreen(),
+          backgroundColor: AppTheme.primaryColor,
+          elevation: 8,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            gradient: const LinearGradient(
-              colors: [AppTheme.primaryColor, AppTheme.primaryDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryColor.withOpacity(0.4),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
-          child: const IconMd(Icons.add, color: Colors.white),
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryColor, AppTheme.primaryDark],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const IconMd(Icons.add, color: Colors.white),
+          ),
         ),
       ),
     );
