@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/app_icons.dart';
 import '../models/log_entry.dart';
 
 class WriteLogScreen extends StatefulWidget {
@@ -103,6 +102,8 @@ class _WriteLogScreenState extends State<WriteLogScreen> {
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 1,
+                  textInputAction: TextInputAction.done,
                   decoration: const InputDecoration(
                     hintText: 'Give it a title...',
                     hintStyle: TextStyle(color: Colors.white24, fontSize: 24),
@@ -157,19 +158,19 @@ class _WriteLogScreenState extends State<WriteLogScreen> {
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? AppTheme.primaryColor.withOpacity(0.15)
-                                  : AppTheme.surfaceColor.withOpacity(0.4),
+                                  ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                                  : AppTheme.surfaceColor.withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                               border: Border.all(
                                 color: isSelected
                                     ? AppTheme.primaryColor
-                                    : Colors.white.withOpacity(0.05),
+                                    : Colors.white.withValues(alpha: 0.05),
                                 width: isSelected ? 2 : 1,
                               ),
                               boxShadow: isSelected
                                   ? [
                                       BoxShadow(
-                                        color: AppTheme.primaryColor.withOpacity(0.3),
+                                        color: AppTheme.primaryColor.withValues(alpha: 0.3),
                                         blurRadius: 8,
                                         spreadRadius: 1,
                                       )
@@ -204,10 +205,10 @@ class _WriteLogScreenState extends State<WriteLogScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: AppTheme.surfaceColor.withOpacity(0.5),
+                          color: AppTheme.surfaceColor.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Colors.white.withValues(alpha: 0.05),
                             width: 1,
                           ),
                         ),
@@ -233,9 +234,9 @@ class _WriteLogScreenState extends State<WriteLogScreen> {
                         height: 48,
                         width: 48,
                         decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withOpacity(0.2),
+                          color: AppTheme.primaryColor.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                          border: Border.all(color: AppTheme.primaryColor.withOpacity(0.4)),
+                          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.4)),
                         ),
                         child: const Icon(Icons.add, color: Colors.white),
                       ),
@@ -257,11 +258,11 @@ class _WriteLogScreenState extends State<WriteLogScreen> {
                           fontWeight: FontWeight.w500,
                           fontSize: 12,
                         ),
-                        backgroundColor: AppTheme.primaryColor.withOpacity(0.15),
+                        backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                           side: BorderSide(
-                            color: AppTheme.primaryColor.withOpacity(0.3),
+                            color: AppTheme.primaryColor.withValues(alpha: 0.3),
                             width: 1,
                           ),
                         ),
@@ -286,10 +287,10 @@ class _WriteLogScreenState extends State<WriteLogScreen> {
                   constraints: const BoxConstraints(minHeight: 250),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor.withOpacity(0.4),
+                    color: AppTheme.surfaceColor.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.05),
+                      color: Colors.white.withValues(alpha: 0.05),
                       width: 1,
                     ),
                   ),

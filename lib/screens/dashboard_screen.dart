@@ -187,19 +187,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 builder: (context, checkinSnapshot) {
                   final checkIns = checkinSnapshot.data ?? [];
                   
+                  final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
+
                   // Classify activities into pending and completed today
                   final List<Activity> pendingActivities = [];
                   final List<Activity> completedActivities = [];
                   
                   for (var activity in checkedActivities) {
-                    final activityCheckIns = checkIns
-                        .where((c) => c.activityId == activity.id && _isToday(c.timestamp) && c.checked)
+                    final activityCheckIns = todayCheckIns
+                        .where((c) => c.activityId == activity.id)
                         .toList();
                     final todayCount = activityCheckIns.length;
-                    final target = activity.targetCount;
-                    final bool isCompleted = activity.trackingType == 'multiple'
-                        ? todayCount >= target
-                        : todayCount >= 1;
+                    final bool isCompleted = todayCount >= activity.targetCount;
                         
                     if (isCompleted) {
                       completedActivities.add(activity);
@@ -207,6 +206,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       pendingActivities.add(activity);
                     }
                   }
+
+                  String? getSortingTime(Activity activity) {
+                    if (activity.trackingType == 'multiple') {
+                      for (var template in activity.subTaskTemplates) {
+                        final parts = template.split('|');
+                        if (parts.length > 1) {
+                          final timeStr = parts.last;
+                          final isCheckedIn = todayCheckIns.any((c) => c.activityId == activity.id && c.subTaskName == template);
+                          if (!isCheckedIn) {
+                            return timeStr;
+                          }
+                        }
+                      }
+                      // Fallback: first scheduled subtask's time
+                      for (var template in activity.subTaskTemplates) {
+                        final parts = template.split('|');
+                        if (parts.length > 1) {
+                          return parts.last;
+                        }
+                      }
+                    }
+                    return activity.scheduledTime;
+                  }
+
+                  int compareActivities(Activity a, Activity b) {
+                    final aTime = getSortingTime(a);
+                    final bTime = getSortingTime(b);
+                    if (aTime != null && bTime != null) {
+                      return aTime.compareTo(bTime);
+                    }
+                    if (aTime != null && bTime == null) {
+                      return -1;
+                    }
+                    if (aTime == null && bTime != null) {
+                      return 1;
+                    }
+                    return a.timestamp.compareTo(b.timestamp);
+                  }
+
+                  pendingActivities.sort(compareActivities);
+                  completedActivities.sort(compareActivities);
                   
                   return Column(
                     mainAxisSize: MainAxisSize.min,
@@ -442,27 +482,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    int completedHabits = 0;
-    final totalHabits = activities.length;
+    int completedActivities = 0;
+    final totalActivities = activities.length;
 
     for (var activity in activities) {
       final activityCheckIns = checkIns
           .where((c) => c.activityId == activity.id && _isToday(c.timestamp) && c.checked)
           .toList();
       final todayCount = activityCheckIns.length;
-      final target = activity.targetCount;
-      if (activity.trackingType == 'multiple') {
-        if (todayCount >= target) {
-          completedHabits++;
-        }
-      } else {
-        if (todayCount >= 1) {
-          completedHabits++;
-        }
+      if (todayCount >= activity.targetCount) {
+        completedActivities++;
       }
     }
 
-    final double completionRate = totalHabits > 0 ? completedHabits / totalHabits : 0.0;
+    final double completionRate = totalActivities > 0 ? completedActivities / totalActivities : 0.0;
     
     String motivationalMessage = 'Start your day by checking in to an activity!';
     if (completionRate > 0 && completionRate < 0.5) {
@@ -470,7 +503,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (completionRate >= 0.5 && completionRate < 1.0) {
       motivationalMessage = 'More than halfway there! Almost done!';
     } else if (completionRate == 1.0) {
-      motivationalMessage = 'Perfect day! You\'ve completed all active habits! 🎉';
+      motivationalMessage = 'Perfect day! You\'ve completed all active activities! 🎉';
     }
 
     return Container(
@@ -480,8 +513,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: AppTheme.surfaceColor.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
-          width: 1,
+          color: Colors.white.withOpacity(0.08),
         ),
       ),
       child: Row(
@@ -500,7 +532,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const VGapSm(),
                 Text(
-                  '$completedHabits of $totalHabits Completed',
+                  '$completedActivities of $totalActivities Completed',
                   style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const VGapSm(),
@@ -608,10 +640,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         c.checked)
                     .toList();
                 final todayCount = activityCheckIns.length;
-                final target = activity.targetCount;
-                final bool isDone = activity.trackingType == 'multiple'
-                    ? todayCount >= target
-                    : todayCount >= 1;
+                final bool isDone = todayCount >= activity.targetCount;
                 if (isDone) completed++;
               }
 
@@ -788,11 +817,9 @@ class _DashboardActivityChipState extends State<_DashboardActivityChip> {
 
   Widget _buildChip(int todayCount) {
     final targetCount = widget.activity.targetCount;
-    final isMultiple = widget.activity.trackingType == 'multiple';
-    final isCompleted = isMultiple ? todayCount >= targetCount : todayCount >= 1;
-    final double progress = isMultiple
-        ? (targetCount > 0 ? (todayCount / targetCount).clamp(0.0, 1.0) : 0.0)
-        : (todayCount >= 1 ? 1.0 : 0.0);
+    final isMultiple = targetCount > 1;
+    final isCompleted = todayCount >= targetCount;
+    final double progress = targetCount > 0 ? (todayCount / targetCount).clamp(0.0, 1.0) : 0.0;
 
     final Color accentColor = isCompleted ? AppTheme.successColor : AppTheme.primaryColor;
 

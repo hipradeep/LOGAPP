@@ -62,18 +62,20 @@ class FirebaseService {
   ];
 
   static final List<Activity> mockActivities = [
-    Activity(id: 'act-1', name: 'Meditate 10m', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 10)), trackingType: 'daily', targetCount: 1),
-    Activity(id: 'act-2', name: 'Drink 3L Water', checked: false, timestamp: DateTime.now().subtract(const Duration(minutes: 9)), trackingType: 'multiple', targetCount: 3),
-    Activity(id: 'act-3', name: 'Read a Book', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 8)), trackingType: 'daily', targetCount: 1),
-    Activity(id: 'act-4', name: 'Gym Session', checked: false, timestamp: DateTime.now().subtract(const Duration(minutes: 7)), trackingType: 'daily', targetCount: 1),
-    Activity(id: 'act-5', name: 'Code Flutter', checked: false, timestamp: DateTime.now().subtract(const Duration(minutes: 6)), trackingType: 'multiple', targetCount: 2),
-    Activity(id: 'act-6', name: 'Sleep 8 Hours', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 5)), trackingType: 'daily', targetCount: 1),
+    Activity(id: 'act-1', name: 'Meditate 10m', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 10)), trackingType: 'single', targetCount: 1, repeatDays: [1, 2, 3, 4, 5, 6, 7], scheduledTime: '06:30', startDate: DateTime.now().subtract(const Duration(days: 30))),
+    Activity(id: 'act-2', name: 'Skincare', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 9)), trackingType: 'multiple', targetCount: 1, repeatDays: [1, 2, 3, 4, 5, 6, 7], scheduledTime: '07:00', startDate: DateTime.now().subtract(const Duration(days: 14)), subTaskTemplates: ['Morning Skincare', 'Evening Skincare']),
+    Activity(id: 'act-3', name: 'Study DSA', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 8)), trackingType: 'milestone', targetCount: 1, repeatDays: [1, 2, 3, 4, 5], scheduledTime: '21:00'),
+    Activity(id: 'act-4', name: 'Gym Session', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 7)), trackingType: 'single', targetCount: 1, repeatDays: [1, 3, 5], scheduledTime: '07:00', startDate: DateTime.now().subtract(const Duration(days: 7)), endDate: DateTime.now().add(const Duration(days: 90))),
+    Activity(id: 'act-5', name: 'Drink Water', checked: false, timestamp: DateTime.now().subtract(const Duration(minutes: 6)), trackingType: 'single', targetCount: 1, repeatDays: [1, 2, 3, 4, 5, 6, 7], scheduledTime: '10:00'),
+    Activity(id: 'act-6', name: 'Sleep 8 Hours', checked: true, timestamp: DateTime.now().subtract(const Duration(minutes: 5)), trackingType: 'single', targetCount: 1, repeatDays: [1, 2, 3, 4, 5, 6, 7], scheduledTime: '22:00'),
   ];
 
   static final List<CheckIn> mockCheckIns = [
     CheckIn(id: 'c-1', activityId: 'act-1', timestamp: DateTime.now().subtract(const Duration(days: 1)), checked: true),
     CheckIn(id: 'c-2', activityId: 'act-1', timestamp: DateTime.now().subtract(const Duration(days: 2)), checked: true),
-    CheckIn(id: 'c-3', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 4)), checked: true),
+    CheckIn(id: 'c-3', activityId: 'act-2', timestamp: DateTime.now().subtract(const Duration(hours: 2)), checked: true, subTaskName: 'Morning Skincare'),
+    CheckIn(id: 'c-4', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 4)), checked: true, subTaskName: 'Linked list'),
+    CheckIn(id: 'c-5', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 3)), checked: false, subTaskName: 'Stack'),
   ];
 
   // ==================== LOGS OPERATIONS ====================
@@ -196,14 +198,28 @@ class FirebaseService {
   }
 
   // Create new activity
-  Future<void> createActivity(String name, {String trackingType = 'daily', int targetCount = 1}) async {
+  Future<void> createActivity(
+    String name, {
+    String trackingType = 'single',
+    int targetCount = 1,
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subTaskTemplates = const [],
+  }) async {
     final newActivity = Activity(
       id: '',
       name: name,
-      checked: false,
+      checked: true,
       timestamp: DateTime.now(),
       trackingType: trackingType,
       targetCount: targetCount,
+      repeatDays: repeatDays,
+      scheduledTime: scheduledTime,
+      startDate: startDate,
+      endDate: endDate,
+      subTaskTemplates: subTaskTemplates,
     );
     await _activitiesCollection.add(newActivity.toFirestore());
   }
@@ -217,11 +233,26 @@ class FirebaseService {
   }
 
   // Update activity details
-  Future<void> updateActivity(String id, String name, String trackingType, int targetCount) async {
+  Future<void> updateActivity(
+    String id,
+    String name,
+    String trackingType,
+    int targetCount, {
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subTaskTemplates = const [],
+  }) async {
     await _activitiesCollection.doc(id).update({
       'name': name,
       'trackingType': trackingType,
       'targetCount': targetCount,
+      'repeatDays': repeatDays,
+      'scheduledTime': scheduledTime,
+      'startDate': startDate != null ? Timestamp.fromDate(startDate) : null,
+      'endDate': endDate != null ? Timestamp.fromDate(endDate) : null,
+      'subTaskTemplates': subTaskTemplates,
     });
   }
 
@@ -297,12 +328,13 @@ class FirebaseService {
   }
 
   // Create new check-in
-  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked) async {
+  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked, {String? subTaskName}) async {
     final newCheckIn = CheckIn(
       id: '',
       activityId: activityId,
       timestamp: timestamp,
       checked: checked,
+      subTaskName: subTaskName,
     );
     await _checkinsCollection.add(newCheckIn.toFirestore());
   }

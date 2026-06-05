@@ -682,12 +682,12 @@ class _LogsScreenState extends State<LogsScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (activity.trackingType == 'multiple') ...[
+                          if (activity.trackingType != 'single') ...[
                             const HGapSm(),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withOpacity(0.2),
+                                color: AppTheme.primaryColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Text(

@@ -1,6 +1,6 @@
 ---
 trigger: always_on
-glob:
-description:
 ---
 
+1. Do not use Deprecated: 
+   - AppTheme.primaryColor.withOpacity() use .withValues()

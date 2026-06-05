@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/app_icons.dart';
-import '../widgets/add_activity_sheet.dart';
+import 'add_activity_screen.dart';
 import '../models/activity.dart';
+import '../models/check_in.dart';
 import '../services/firebase_service.dart';
 
 class TrackActivitiesScreen extends StatefulWidget {
-  const TrackActivitiesScreen({Key? key}) : super(key: key);
+  const TrackActivitiesScreen({super.key});
 
   @override
   State<TrackActivitiesScreen> createState() => _TrackActivitiesScreenState();
@@ -23,10 +22,11 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   bool _useMockData = false;
   List<Activity> get _mockActivities => FirebaseService.mockActivities;
 
+  static const _dayLabelsShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
   @override
   void initState() {
     super.initState();
-    // If Firebase isn't configured, default to offline simulator mode automatically
     _useMockData = Firebase.apps.isEmpty;
   }
 
@@ -37,10 +37,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       isScrollable: true,
       title: 'Track Activities',
       showBackButton: true,
-      padding: EdgeInsets.zero, // We want full-width grid padding custom-handled
+      padding: EdgeInsets.zero,
       actions: [
         GestureDetector(
-          onTap: _showAddActivityBottomSheet,
+          onTap: _navigateToAddActivity,
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -68,7 +68,6 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         ),
       ],
       children: [
-        // Subheader indicating mode
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
@@ -86,7 +85,6 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               const HGapSm(),
               GestureDetector(
                 onTap: () {
-                  // Only allow toggling if Firebase is actually configured
                   if (Firebase.apps.isNotEmpty) {
                     setState(() {
                       _useMockData = !_useMockData;
@@ -112,13 +110,13 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: _useMockData 
-                        ? AppTheme.warningColor.withOpacity(0.15) 
-                        : AppTheme.successColor.withOpacity(0.15),
+                        ? AppTheme.warningColor.withValues(alpha: 0.15) 
+                        : AppTheme.successColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _useMockData 
-                          ? AppTheme.warningColor.withOpacity(0.4) 
-                          : AppTheme.successColor.withOpacity(0.4),
+                          ? AppTheme.warningColor.withValues(alpha: 0.4) 
+                          : AppTheme.successColor.withValues(alpha: 0.4),
                       width: 1,
                     ),
                   ),
@@ -151,18 +149,15 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           ),
         ),
         const VGapMd(),
-        
-        // 2-Column Grid
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _useMockData ? _buildLocalGrid() : _buildFirestoreGrid(),
+          child: _useMockData ? _buildLocalList() : _buildFirestoreList(),
         ),
       ],
     );
   }
 
-  // FIRESTORE GRID STREAM
-  Widget _buildFirestoreGrid() {
+  Widget _buildFirestoreList() {
     return StreamBuilder<List<Activity>>(
       stream: _firebaseService.getActivitiesStream(),
       builder: (context, snapshot) {
@@ -188,28 +183,110 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           return _buildEmptyState();
         }
 
-        return _buildGrid(activities, isLive: true);
+        return StreamBuilder<List<CheckIn>>(
+          stream: _firebaseService.getCheckedActivitiesCheckInsStream(),
+          builder: (context, checkinSnapshot) {
+            final checkIns = checkinSnapshot.data ?? [];
+            return _buildList(activities, checkIns, isLive: true);
+          },
+        );
       },
     );
   }
 
-  // LOCAL OFFLINE GRID
-  Widget _buildLocalGrid() {
+  Widget _buildLocalList() {
     if (_mockActivities.isEmpty) {
       return _buildEmptyState();
     }
-    return _buildGrid(_mockActivities, isLive: false);
+    return _buildList(_mockActivities, FirebaseService.mockCheckIns, isLive: false);
   }
 
-  // THE GRID BUILDERS WITH SEPARATED SECTIONS
-  Widget _buildGrid(List<Activity> activities, {required bool isLive}) {
+  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, {required bool isLive}) {
     final active = activities.where((a) => a.checked).toList();
     final completed = activities.where((a) => !a.checked).toList();
 
-    // Sort active by timestamp ascending (creation order)
-    active.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    // Sort completed by timestamp descending (newest completed first)
-    completed.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    bool isExpired(Activity activity) {
+      if (activity.endDate != null) {
+        final today = DateTime.now();
+        final endMidnight = DateTime(activity.endDate!.year, activity.endDate!.month, activity.endDate!.day);
+        final todayMidnight = DateTime(today.year, today.month, today.day);
+        return todayMidnight.isAfter(endMidnight);
+      }
+      return false;
+    }
+
+    bool isToday(DateTime date) {
+      final now = DateTime.now();
+      return date.day == now.day && date.month == now.month && date.year == now.year;
+    }
+
+    final todayCheckIns = checkIns.where((c) => isToday(c.timestamp) && c.checked).toList();
+
+    String? getSortingTime(Activity activity) {
+      if (activity.trackingType == 'multiple') {
+        for (var template in activity.subTaskTemplates) {
+          final parts = template.split('|');
+          if (parts.length > 1) {
+            final timeStr = parts.last;
+            final isCheckedIn = todayCheckIns.any((c) => c.activityId == activity.id && c.subTaskName == template);
+            if (!isCheckedIn) {
+              return timeStr;
+            }
+          }
+        }
+        // Fallback: first scheduled subtask's time
+        for (var template in activity.subTaskTemplates) {
+          final parts = template.split('|');
+          if (parts.length > 1) {
+            return parts.last;
+          }
+        }
+      }
+      return activity.scheduledTime;
+    }
+
+    int compareActive(Activity a, Activity b) {
+      final aExpired = isExpired(a);
+      final bExpired = isExpired(b);
+      if (aExpired != bExpired) {
+        return aExpired ? 1 : -1;
+      }
+      final aTime = getSortingTime(a);
+      final bTime = getSortingTime(b);
+      if (aTime != null && bTime != null) {
+        return aTime.compareTo(bTime);
+      }
+      if (aTime != null && bTime == null) {
+        return -1;
+      }
+      if (aTime == null && bTime != null) {
+        return 1;
+      }
+      return a.timestamp.compareTo(b.timestamp);
+    }
+
+    int compareCompleted(Activity a, Activity b) {
+      final aExpired = isExpired(a);
+      final bExpired = isExpired(b);
+      if (aExpired != bExpired) {
+        return aExpired ? 1 : -1;
+      }
+      final aTime = getSortingTime(a);
+      final bTime = getSortingTime(b);
+      if (aTime != null && bTime != null) {
+        return aTime.compareTo(bTime);
+      }
+      if (aTime != null && bTime == null) {
+        return -1;
+      }
+      if (aTime == null && bTime != null) {
+        return 1;
+      }
+      return b.timestamp.compareTo(a.timestamp);
+    }
+
+    active.sort(compareActive);
+    completed.sort(compareCompleted);
 
     if (active.isEmpty && completed.isEmpty) {
       return _buildEmptyState();
@@ -219,16 +296,22 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (active.isNotEmpty) ...[
-          _buildSectionHeader('Active Activities (${active.length})'),
+          _buildSectionHeader('Active Activities (${active.length})', AppTheme.primaryColor),
           const VGapSm(),
-          _buildActivityGrid(active, isLive),
-          const VGapLg(),
+          ...active.map((a) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildActivityCard(a, isLive),
+          )),
+          const VGapMd(),
         ],
         if (completed.isNotEmpty) ...[
-          _buildSectionHeader('Completed Activities (${completed.length})'),
+          _buildSectionHeader('Completed Activities (${completed.length})', AppTheme.successColor),
           const VGapSm(),
-          _buildActivityGrid(completed, isLive),
-          const VGapLg(),
+          ...completed.map((a) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildActivityCard(a, isLive),
+          )),
+          const VGapMd(),
         ],
         const VGapXxl(),
         const VGapXxl(),
@@ -237,131 +320,271 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, Color accentColor) {
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: AppTheme.bodySmall.copyWith(
-          color: AppTheme.primaryLight,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.0,
-        ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 16,
+            decoration: BoxDecoration(
+              color: accentColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const HGapSm(),
+          Text(
+            title.toUpperCase(),
+            style: AppTheme.bodySmall.copyWith(
+              color: accentColor,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildActivityGrid(List<Activity> activities, bool isLive) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(top: 4, bottom: 12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 2.1, // Adjusted ratio to fit text and subtitle
-      ),
-      itemCount: activities.length,
-      itemBuilder: (context, index) {
-        final activity = activities[index];
-        return _buildActivityCard(activity, isLive);
-      },
-    );
+  String _getRepeatDaysLabel(List<int> days) {
+    if (days.length == 7) return 'Every day';
+    if (days.length == 5 && !days.contains(6) && !days.contains(7)) return 'Weekdays';
+    if (days.length == 2 && days.contains(6) && days.contains(7)) return 'Weekends';
+    return days.map((d) => _dayLabelsShort[d - 1]).join(', ');
   }
 
-  // CARD LAYOUT FOR SINGLE ACTIVITY WITH CUSTOM CHECKBOX
+  String _formatScheduledTime(String timeStr) {
+    final parts = timeStr.split(':');
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
+    final t = TimeOfDay(hour: hour, minute: minute);
+    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    final m = t.minute.toString().padLeft(2, '0');
+    final period = t.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$h:$m $period';
+  }
+
+  ({IconData icon, String label, Color color}) _getTypeBadge(String trackingType) {
+    switch (trackingType) {
+      case 'multiple':
+        return (icon: Icons.repeat_rounded, label: 'Multiple', color: AppTheme.secondaryColor);
+      case 'milestone':
+        return (icon: Icons.flag_rounded, label: 'Milestone', color: AppTheme.warningColor);
+      case 'single':
+      default:
+        return (icon: Icons.bolt_rounded, label: 'Single', color: AppTheme.primaryColor);
+    }
+  }
+
   Widget _buildActivityCard(Activity activity, bool isLive) {
+    final isActive = activity.checked;
+    final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
+    final typeBadge = _getTypeBadge(activity.trackingType);
+
+    // Calculate progress percentage of the date range (start date to end date)
+    double progressPercent = 0.0;
+    final start = activity.startDate;
+    final end = activity.endDate;
+    if (start != null && end != null) {
+      final today = DateTime.now();
+      final startMidnight = DateTime(start.year, start.month, start.day);
+      final endMidnight = DateTime(end.year, end.month, end.day);
+      final todayMidnight = DateTime(today.year, today.month, today.day);
+
+      final totalDays = endMidnight.difference(startMidnight).inDays + 1;
+      int elapsedDays = todayMidnight.difference(startMidnight).inDays + 1;
+      if (todayMidnight.isBefore(startMidnight)) {
+        elapsedDays = 0;
+      } else if (todayMidnight.isAfter(endMidnight)) {
+        elapsedDays = totalDays;
+      }
+      progressPercent = totalDays > 0 ? (elapsedDays / totalDays).clamp(0.0, 1.0) : 0.0;
+    }
+
     return GestureDetector(
-      onTap: () => _showActivityOptions(activity, isLive),
-      onLongPress: () => _showActivityOptions(activity, isLive),
+      onTap: () => _navigateToEditActivity(activity, isLive),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: activity.checked
-              ? AppTheme.primaryColor.withOpacity(0.12)
-              : AppTheme.successColor.withOpacity(0.04),
+          color: isActive
+              ? AppTheme.primaryColor.withValues(alpha: 0.06)
+              : AppTheme.successColor.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
           border: Border.all(
-            color: activity.checked
-                ? AppTheme.primaryColor.withOpacity(0.6)
-                : AppTheme.successColor.withOpacity(0.2),
-            width: 1.5,
+            color: accentColor.withValues(alpha: 0.2),
+            width: 1,
           ),
-          boxShadow: activity.checked
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primaryColor.withOpacity(0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : null,
         ),
-        child: Row(
-          children: [
-            // Circular Custom Checkbox (both active/completed show checked icon with respective theme color)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: activity.checked ? AppTheme.primaryColor : AppTheme.successColor,
-                border: Border.all(
-                  color: activity.checked ? AppTheme.primaryColor : AppTheme.successColor,
-                  width: 2,
-                ),
-              ),
-              child: const Icon(Icons.check, size: 14, color: Colors.white),
-            ),
-            const HGapSm(),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.name,
-                    style: AppTheme.bodyMedium.copyWith(
-                      color: activity.checked ? Colors.white : AppTheme.textSecondary,
-                      fontWeight: activity.checked ? FontWeight.bold : FontWeight.normal,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          child: Stack(
+            children: [
+              // Whole card background progress bar (light color)
+              if (start != null && end != null && progressPercent > 0)
+                Positioned.fill(
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: progressPercent,
+                    child: Container(
+                      color: typeBadge.color.withValues(alpha: 0.1),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  if (activity.checked) ...[
-                    const VGapXs(),
-                    Text(
-                      'Added: ${DateFormat('MMM d').format(activity.timestamp)}',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary.withOpacity(0.55),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
+                ),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 4,
+                      decoration: BoxDecoration(
+                        color: typeBadge.color.withValues(alpha: 0.8),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(AppTheme.defaultBorderRadius),
+                          bottomLeft: Radius.circular(AppTheme.defaultBorderRadius),
+                        ),
                       ),
                     ),
-                  ] else ...[
-                    const VGapXs(),
-                    Text(
-                      'Completed: ${DateFormat('MMM d').format(activity.timestamp)}',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary.withOpacity(0.55),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                _buildActivityProgressIcon(activity),
+                                const HGapMd(),
+                                Expanded(
+                                  child: Text(
+                                    activity.name,
+                                    style: AppTheme.bodyLarge.copyWith(
+                                      color: isActive ? Colors.white : AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const HGapSm(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: typeBadge.color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: typeBadge.color.withValues(alpha: 0.3),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        typeBadge.icon,
+                                        size: 12,
+                                        color: typeBadge.color.withValues(alpha: 0.8),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        typeBadge.label,
+                                        style: TextStyle(
+                                          color: typeBadge.color.withValues(alpha: 0.8),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const VGapSm(),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                if (activity.targetCount > 1)
+                                  _buildMetaChip(
+                                    icon: Icons.repeat_rounded,
+                                    label: '${activity.targetCount}x/day',
+                                    color: AppTheme.secondaryColor,
+                                  ),
+                                if (activity.scheduledTime != null)
+                                  _buildMetaChip(
+                                    icon: Icons.access_time_rounded,
+                                    label: _formatScheduledTime(activity.scheduledTime!),
+                                    color: AppTheme.primaryLight,
+                                  ),
+                                _buildMetaChip(
+                                  icon: Icons.calendar_view_week_rounded,
+                                  label: _getRepeatDaysLabel(activity.repeatDays),
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ],
+                            ),
+
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // EMPTY CHECKLIST WIDGET
+  Widget _buildMetaChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color.withValues(alpha: 0.7)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.8),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildActivityProgressIcon(Activity activity) {
+    final isActive = activity.checked;
+    final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: accentColor,
+        border: Border.all(color: accentColor, width: 2),
+      ),
+      child: const Icon(Icons.check, size: 14, color: Colors.white),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -370,7 +593,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           Icon(
             Icons.playlist_add,
             size: 64,
-            color: AppTheme.primaryColor.withOpacity(0.3),
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
           ),
           const VGapMd(),
           Text(
@@ -388,116 +611,135 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
-  // ADD NEW ACTIVITY BOTTOM SHEET
-  void _showAddActivityBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AddActivitySheet(
-        onAdd: (name, trackingType, targetCount) {
-          _addActivity(name, trackingType, targetCount, _useMockData);
-        },
-      ),
-    );
-  }
-
-  // SHOW LONG-PRESS ACTIVITY OPTIONS MENU
-  void _showActivityOptions(Activity activity, bool isLive) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+  void _navigateToAddActivity() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddActivityScreen(
+          onAdd: (name, trackingType, targetCount, {
+            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+            String? scheduledTime,
+            DateTime? startDate,
+            DateTime? endDate,
+            List<String> subTaskTemplates = const [],
+          }) {
+            _addActivity(
+              name, trackingType, targetCount, _useMockData,
+              repeatDays: repeatDays,
+              scheduledTime: scheduledTime,
+              startDate: startDate,
+              endDate: endDate,
+              subTaskTemplates: subTaskTemplates,
+            );
+          },
         ),
-        title: Text(activity.name, style: AppTheme.headingSmall),
-        content: const Text('Choose an action for this activity:'),
-        actions: [
-          // Edit option
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showEditActivityBottomSheet(activity, isLive);
-            },
-            child: const Text('Edit', style: TextStyle(color: AppTheme.primaryLight)),
-          ),
-          // Toggle Track/Check state option
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _toggleActivity(activity, isLive);
-            },
-            child: Text(
-              activity.checked ? 'Completed' : 'Check / Show on Home',
-              style: TextStyle(
-                color: activity.checked ? AppTheme.successColor : Colors.white70,
-                fontWeight: activity.checked ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ),
-          // Delete option
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmDeleteActivity(activity, isLive);
-            },
-            child: const Text('Delete', style: TextStyle(color: AppTheme.errorColor)),
-          ),
-          // Cancel
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: AppTheme.bodyMedium),
-          ),
-        ],
       ),
     );
   }
 
-  // EDIT ACTIVITY BOTTOM SHEET
-  void _showEditActivityBottomSheet(Activity activity, bool isLive) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AddActivitySheet(
-        onAdd: (_, __, ___) {}, // Unused when editing
-        initialActivity: activity,
-        onEdit: (name, trackingType, targetCount) {
-          _editActivity(activity.id, name, trackingType, targetCount, isLive);
-        },
+  void _navigateToEditActivity(Activity activity, bool isLive) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddActivityScreen(
+          onAdd: (name, trackingType, targetCount, {
+            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+            String? scheduledTime,
+            DateTime? startDate,
+            DateTime? endDate,
+            List<String> subTaskTemplates = const [],
+          }) {},
+          initialActivity: activity,
+          onEdit: (name, trackingType, targetCount, {
+            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+            String? scheduledTime,
+            DateTime? startDate,
+            DateTime? endDate,
+            List<String> subTaskTemplates = const [],
+          }) {
+            _editActivity(
+              activity.id, name, trackingType, targetCount, isLive,
+              repeatDays: repeatDays,
+              scheduledTime: scheduledTime,
+              startDate: startDate,
+              endDate: endDate,
+              subTaskTemplates: subTaskTemplates,
+            );
+          },
+          onDelete: () async {
+            final deleted = await _confirmDeleteActivity(activity, isLive);
+            if (deleted && context.mounted) {
+              Navigator.pop(context);
+            }
+          },
+          onToggleComplete: () {
+            _toggleActivity(activity, isLive);
+            if (context.mounted) {
+              Navigator.pop(context);
+            }
+          },
+        ),
       ),
     );
   }
 
-  // OPERATIONS
-  void _addActivity(String name, String trackingType, int targetCount, bool isMock) async {
+  void _addActivity(
+    String name, String trackingType, int targetCount, bool isMock, {
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subTaskTemplates = const [],
+  }) async {
     if (isMock) {
       setState(() {
         _mockActivities.add(
           Activity(
             id: 'mock-${DateTime.now().millisecondsSinceEpoch}',
             name: name,
-            checked: false,
+            checked: true,
             timestamp: DateTime.now(),
             trackingType: trackingType,
             targetCount: targetCount,
+            repeatDays: repeatDays,
+            scheduledTime: scheduledTime,
+            startDate: startDate,
+            endDate: endDate,
+            subTaskTemplates: subTaskTemplates,
           ),
         );
       });
       FirebaseService.notifyActivitiesChanged();
     } else {
       try {
-        await _firebaseService.createActivity(name, trackingType: trackingType, targetCount: targetCount);
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add activity: $e'), backgroundColor: AppTheme.errorColor),
+        await _firebaseService.createActivity(
+          name,
+          trackingType: trackingType,
+          targetCount: targetCount,
+          repeatDays: repeatDays,
+          scheduledTime: scheduledTime,
+          startDate: startDate,
+          endDate: endDate,
+          subTaskTemplates: subTaskTemplates,
         );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to add activity: $e'), backgroundColor: AppTheme.errorColor),
+          );
+        }
       }
     }
   }
 
-  void _editActivity(String id, String name, String trackingType, int targetCount, bool isLive) async {
+  void _editActivity(
+    String id, String name, String trackingType, int targetCount, bool isLive, {
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subTaskTemplates = const [],
+  }) async {
     if (!isLive) {
       setState(() {
         final idx = _mockActivities.indexWhere((item) => item.id == id);
@@ -506,23 +748,41 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             name: name,
             trackingType: trackingType,
             targetCount: targetCount,
+            repeatDays: repeatDays,
+            scheduledTime: scheduledTime,
+            startDate: startDate,
+            endDate: endDate,
+            subTaskTemplates: subTaskTemplates,
           );
         }
       });
       FirebaseService.notifyActivitiesChanged();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Activity updated locally.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activity updated locally.')),
+        );
+      }
     } else {
       try {
-        await _firebaseService.updateActivity(id, name, trackingType, targetCount);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity updated in Firestore.')),
+        await _firebaseService.updateActivity(
+          id, name, trackingType, targetCount,
+          repeatDays: repeatDays,
+          scheduledTime: scheduledTime,
+          startDate: startDate,
+          endDate: endDate,
+          subTaskTemplates: subTaskTemplates,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Activity updated in Firestore.')),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
+          );
+        }
       }
     }
   }
@@ -544,14 +804,16 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       try {
         await _firebaseService.toggleActivity(activity.id, newChecked);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
+          );
+        }
       }
     }
   }
 
-  void _confirmDeleteActivity(Activity activity, bool isLive) async {
+  Future<bool> _confirmDeleteActivity(Activity activity, bool isLive) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -577,21 +839,30 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           _mockActivities.removeWhere((item) => item.id == activity.id);
         });
         FirebaseService.notifyActivitiesChanged();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity deleted locally.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Activity deleted locally.')),
+          );
+        }
       } else {
         try {
           await _firebaseService.deleteActivity(activity.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Activity deleted from Firestore.')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Activity deleted from Firestore.')),
+            );
+          }
         } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete activity: $e'), backgroundColor: AppTheme.errorColor),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to delete activity: $e'), backgroundColor: AppTheme.errorColor),
+            );
+          }
+          return false;
         }
       }
+      return true;
     }
+    return false;
   }
 }

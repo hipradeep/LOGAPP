@@ -5,21 +5,27 @@ class CheckIn {
   final String activityId;
   final DateTime timestamp;
   final bool checked;
+  final String? subTaskName;
 
   CheckIn({
     required this.id,
     required this.activityId,
     required this.timestamp,
     required this.checked,
+    this.subTaskName,
   });
 
   // Convert to Firestore Map
   Map<String, dynamic> toFirestore() {
-    return {
+    final Map<String, dynamic> data = {
       'activityId': activityId,
       'timestamp': Timestamp.fromDate(timestamp),
       'checked': checked,
     };
+    if (subTaskName != null) {
+      data['subTaskName'] = subTaskName;
+    }
+    return data;
   }
 
   // Create from Firestore Document Snapshot
@@ -36,6 +42,7 @@ class CheckIn {
       activityId: data['activityId'] as String? ?? '',
       timestamp: dateTime,
       checked: data['checked'] as bool? ?? false,
+      subTaskName: data['subTaskName'] as String?,
     );
   }
 
@@ -44,12 +51,14 @@ class CheckIn {
     String? activityId,
     DateTime? timestamp,
     bool? checked,
+    String? subTaskName,
   }) {
     return CheckIn(
       id: id ?? this.id,
       activityId: activityId ?? this.activityId,
       timestamp: timestamp ?? this.timestamp,
       checked: checked ?? this.checked,
+      subTaskName: subTaskName ?? this.subTaskName,
     );
   }
 }
