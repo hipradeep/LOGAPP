@@ -351,7 +351,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     if (days.length == 7) return 'Every day';
     if (days.length == 5 && !days.contains(6) && !days.contains(7)) return 'Weekdays';
     if (days.length == 2 && days.contains(6) && days.contains(7)) return 'Weekends';
-    return days.map((d) => _dayLabelsShort[d - 1]).join(', ');
+    return days.map((d) => _dayLabelsShort[d - 1][0]).join(', ');
   }
 
   String _formatScheduledTime(String timeStr) {
