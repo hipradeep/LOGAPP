@@ -7,6 +7,7 @@ import '../widgets/app_spacers.dart';
 import 'add_activity_screen.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
+import '../models/sub_task.dart';
 import '../services/firebase_service.dart';
 
 class TrackActivitiesScreen extends StatefulWidget {
@@ -187,7 +188,13 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           stream: _firebaseService.getCheckedActivitiesCheckInsStream(),
           builder: (context, checkinSnapshot) {
             final checkIns = checkinSnapshot.data ?? [];
-            return _buildList(activities, checkIns, isLive: true);
+            return StreamBuilder<List<SubTask>>(
+              stream: _firebaseService.getSubTasksStream(),
+              builder: (context, subtaskSnapshot) {
+                final subTasks = subtaskSnapshot.data ?? [];
+                return _buildList(activities, checkIns, subTasks, isLive: true);
+              },
+            );
           },
         );
       },
@@ -198,10 +205,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     if (_mockActivities.isEmpty) {
       return _buildEmptyState();
     }
-    return _buildList(_mockActivities, FirebaseService.mockCheckIns, isLive: false);
+    return _buildList(_mockActivities, FirebaseService.mockCheckIns, FirebaseService.mockSubTasks, isLive: false);
   }
 
-  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, {required bool isLive}) {
+  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, List<SubTask> subTasks, {required bool isLive}) {
     final active = activities.where((a) => a.checked).toList();
     final completed = activities.where((a) => !a.checked).toList();
 
@@ -220,7 +227,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       return date.day == now.day && date.month == now.month && date.year == now.year;
     }
 
-    final todayCheckIns = checkIns.where((c) => isToday(c.timestamp) && c.checked).toList();
+    final todaySubTasks = subTasks.where((s) => isToday(s.timestamp) && s.checked).toList();
 
     String? getSortingTime(Activity activity) {
       if (activity.trackingType == 'multiple') {
@@ -228,7 +235,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           final parts = template.split('|');
           if (parts.length > 1) {
             final timeStr = parts.last;
-            final isCheckedIn = todayCheckIns.any((c) => c.activityId == activity.id && c.subTaskName == template);
+            final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.subTaskName == template);
             if (!isCheckedIn) {
               return timeStr;
             }
@@ -622,6 +629,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             DateTime? startDate,
             DateTime? endDate,
             List<String> subTaskTemplates = const [],
+            String? description,
           }) {
             _addActivity(
               name, trackingType, targetCount, _useMockData,
@@ -630,6 +638,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               startDate: startDate,
               endDate: endDate,
               subTaskTemplates: subTaskTemplates,
+              description: description,
             );
           },
         ),
@@ -648,6 +657,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             DateTime? startDate,
             DateTime? endDate,
             List<String> subTaskTemplates = const [],
+            String? description,
           }) {},
           initialActivity: activity,
           onEdit: (name, trackingType, targetCount, {
@@ -656,6 +666,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             DateTime? startDate,
             DateTime? endDate,
             List<String> subTaskTemplates = const [],
+            String? description,
           }) {
             _editActivity(
               activity.id, name, trackingType, targetCount, isLive,
@@ -664,6 +675,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               startDate: startDate,
               endDate: endDate,
               subTaskTemplates: subTaskTemplates,
+              description: description,
             );
           },
           onDelete: () async {
@@ -690,6 +702,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     DateTime? startDate,
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
+    String? description,
   }) async {
     if (isMock) {
       setState(() {
@@ -706,6 +719,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             startDate: startDate,
             endDate: endDate,
             subTaskTemplates: subTaskTemplates,
+            description: description,
           ),
         );
       });
@@ -721,6 +735,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           startDate: startDate,
           endDate: endDate,
           subTaskTemplates: subTaskTemplates,
+          description: description,
         );
       } catch (e) {
         if (mounted) {
@@ -739,6 +754,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     DateTime? startDate,
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
+    String? description,
   }) async {
     if (!isLive) {
       setState(() {
@@ -753,6 +769,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             startDate: startDate,
             endDate: endDate,
             subTaskTemplates: subTaskTemplates,
+            description: description,
           );
         }
       });
@@ -771,6 +788,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           startDate: startDate,
           endDate: endDate,
           subTaskTemplates: subTaskTemplates,
+          description: description,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +13,7 @@ import '../services/firebase_service.dart';
 import 'write_log_screen.dart';
 
 class LogsScreen extends StatefulWidget {
-  const LogsScreen({Key? key}) : super(key: key);
+  const LogsScreen({super.key});
 
   @override
   State<LogsScreen> createState() => _LogsScreenState();
@@ -23,11 +22,283 @@ class LogsScreen extends StatefulWidget {
 class _LogsScreenState extends State<LogsScreen> {
   final FirebaseService _firebaseService = FirebaseService();
   bool _useMockData = false;
+  DateTime _selectedDate = DateTime.now();
+  DateTime _currentMonth = DateTime.now();
+  late final Stream<List<Activity>> _activitiesStream = _firebaseService.getActivitiesStream();
+  late final Stream<List<LogEntry>> _logsStream = _firebaseService.getLogsStream();
+  late final Stream<List<CheckIn>> _checkInsStream = _firebaseService.getCheckedActivitiesCheckInsStream();
 
   @override
   void initState() {
     super.initState();
     _useMockData = Firebase.apps.isEmpty;
+    _currentMonth = _selectedDate;
+  }
+
+
+  List<DateTime?> _generateMonthGridDates(DateTime monthDate) {
+    final firstDayOfMonth = DateTime(monthDate.year, monthDate.month, 1);
+    final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
+    
+    final startPadding = firstDayOfMonth.weekday == 7 ? 0 : firstDayOfMonth.weekday;
+    
+    final List<DateTime?> gridDates = [];
+    for (int i = 0; i < startPadding; i++) {
+      gridDates.add(null);
+    }
+    
+    final totalDays = lastDayOfMonth.day;
+    for (int i = 1; i <= totalDays; i++) {
+      gridDates.add(DateTime(monthDate.year, monthDate.month, i));
+    }
+    
+    while (gridDates.length % 7 != 0) {
+      gridDates.add(null);
+    }
+    
+    return gridDates;
+  }
+
+
+
+  bool _isFutureDay(DateTime date) {
+    final today = DateTime.now();
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+    final dateMidnight = DateTime(date.year, date.month, date.day);
+    return dateMidnight.isAfter(todayMidnight);
+  }
+
+  Widget _buildCalendarHeader() {
+    final dateStr = DateFormat('d MMM, yy').format(_selectedDate);
+    final weekdayStr = DateFormat('EEEE').format(_selectedDate);
+    
+    return Padding(
+      padding: const EdgeInsets.only(left: 10, right: 2, top: 4, bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  dateStr,
+                  style: AppTheme.headingSmall.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    weekdayStr,
+                    style: AppTheme.bodySmall.copyWith(
+                      color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
+                  });
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                DateFormat('MMM yyyy').format(_currentMonth),
+                style: AppTheme.bodySmall.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 2),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
+                  });
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeekdaysHeader() {
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: weekdays.map((day) {
+          return SizedBox(
+            width: 32,
+            child: Text(
+              day,
+              textAlign: TextAlign.center,
+              style: AppTheme.bodySmall.copyWith(
+                color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildDayCell(DateTime date, DateTime today, List<LogEntry> logs, List<CheckIn> checkIns) {
+    final isSelected = _isSameDay(date, _selectedDate);
+    final isTodayDate = _isSameDay(date, today);
+    final isFuture = _isFutureDay(date);
+    
+    final hasLog = logs.any((l) => _isSameDay(l.timestamp, date));
+    final hasCheckIn = checkIns.any((c) => _isSameDay(c.timestamp, date) && c.checked);
+    
+    final dayNumber = DateFormat('d').format(date);
+    
+    return GestureDetector(
+      onTap: isFuture
+          ? null
+          : () {
+              setState(() {
+                _selectedDate = date;
+                _currentMonth = date;
+              });
+            },
+      child: Opacity(
+        opacity: isFuture ? 0.3 : 1.0,
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            shape: BoxShape.circle,
+            border: isTodayDate && !isSelected
+                ? Border.all(color: AppTheme.primaryColor, width: 1.2)
+                : null,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                dayNumber,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected || isTodayDate ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected
+                      ? AppTheme.backgroundColor
+                      : Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: 0.5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (hasLog)
+                    Container(
+                      width: 2.5,
+                      height: 2.5,
+                      margin: const EdgeInsets.only(right: 1),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isSelected ? AppTheme.primaryDark : AppTheme.primaryLight,
+                      ),
+                    ),
+                  if (hasCheckIn)
+                    Container(
+                      width: 2.5,
+                      height: 2.5,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.successColor,
+                      ),
+                    ),
+                  if (!hasLog && !hasCheckIn)
+                    const SizedBox(height: 2.5),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonthGrid(List<LogEntry> logs, List<CheckIn> checkIns) {
+    final gridDates = _generateMonthGridDates(_currentMonth);
+    final today = DateTime.now();
+    
+    final List<Widget> rows = [];
+    for (int i = 0; i < gridDates.length; i += 7) {
+      final weekDates = gridDates.sublist(i, i + 7);
+      rows.add(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: weekDates.map((date) {
+            if (date == null) {
+              return const SizedBox(width: 32, height: 32);
+            }
+            return _buildDayCell(date, today, logs, checkIns);
+          }).toList(),
+        ),
+      );
+      if (i + 7 < gridDates.length) {
+        rows.add(const SizedBox(height: 4));
+      }
+    }
+    
+    return Column(
+      children: rows,
+    );
+  }
+
+  Widget _buildCalendarView(List<LogEntry> logs, List<CheckIn> checkIns) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: Column(
+        children: [
+          _buildCalendarHeader(),
+          _buildWeekdaysHeader(),
+          const SizedBox(height: 4),
+          _buildMonthGrid(logs, checkIns),
+        ],
+      ),
+    );
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -180,7 +451,7 @@ class _LogsScreenState extends State<LogsScreen> {
               children: [
               Expanded(
                 child: Text(
-                  'Journal & Check-ins (Last 2 Days)'.toUpperCase(),
+                  'Journal & Check-ins'.toUpperCase(),
                   style: AppTheme.bodySmall.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
@@ -200,13 +471,13 @@ class _LogsScreenState extends State<LogsScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: _useMockData
-                          ? AppTheme.warningColor.withOpacity(0.15)
-                          : AppTheme.successColor.withOpacity(0.15),
+                          ? AppTheme.warningColor.withValues(alpha: 0.15)
+                          : AppTheme.successColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: _useMockData
-                            ? AppTheme.warningColor.withOpacity(0.4)
-                            : AppTheme.successColor.withOpacity(0.4),
+                            ? AppTheme.warningColor.withValues(alpha: 0.4)
+                            : AppTheme.successColor.withValues(alpha: 0.4),
                         width: 1,
                       ),
                     ),
@@ -281,7 +552,7 @@ class _LogsScreenState extends State<LogsScreen> {
   // FIRESTORE STREAM PIPELINE
   Widget _buildFirestoreTimeline() {
     return StreamBuilder<List<Activity>>(
-      stream: _firebaseService.getActivitiesStream(),
+      stream: _activitiesStream,
       builder: (context, activitiesSnapshot) {
         if (activitiesSnapshot.hasError) {
           return const Center(child: Text('Error loading activities'));
@@ -293,7 +564,7 @@ class _LogsScreenState extends State<LogsScreen> {
         final activities = activitiesSnapshot.data ?? [];
 
         return StreamBuilder<List<LogEntry>>(
-          stream: _firebaseService.getLogsStream(),
+          stream: _logsStream,
           builder: (context, logsSnapshot) {
             if (logsSnapshot.hasError) {
               return const Center(child: Text('Error loading journal entries'));
@@ -305,7 +576,7 @@ class _LogsScreenState extends State<LogsScreen> {
             final logs = logsSnapshot.data ?? [];
 
             return StreamBuilder<List<CheckIn>>(
-              stream: _firebaseService.getCheckedActivitiesCheckInsStream(),
+              stream: _checkInsStream,
               builder: (context, checkinsSnapshot) {
                 if (checkinsSnapshot.hasError) {
                   return const Center(child: Text('Error loading check-ins'));
@@ -339,75 +610,59 @@ class _LogsScreenState extends State<LogsScreen> {
     List<LogEntry> logs,
     List<CheckIn> checkIns,
   ) {
-    final DateTime now = DateTime.now();
-    final DateTime yesterday = now.subtract(const Duration(days: 1));
+    final DateTime today = DateTime.now();
+    final DateTime yesterday = today.subtract(const Duration(days: 1));
 
-    // Today filter
-    final todayLogs = logs.where((l) => _isSameDay(l.timestamp, now)).toList();
-    final todayCheckIns = checkIns.where((c) => _isSameDay(c.timestamp, now) && c.checked).toList();
+    String headerTitle = '';
+    if (_isSameDay(_selectedDate, today)) {
+      headerTitle = 'Today';
+    } else if (_isSameDay(_selectedDate, yesterday)) {
+      headerTitle = 'Yesterday';
+    } else {
+      headerTitle = DateFormat('EEEE').format(_selectedDate);
+    }
 
-    // Yesterday filter
-    final yesterdayLogs = logs.where((l) => _isSameDay(l.timestamp, yesterday)).toList();
-    final yesterdayCheckIns = checkIns.where((c) => _isSameDay(c.timestamp, yesterday) && c.checked).toList();
+    final dayLogs = logs.where((l) => _isSameDay(l.timestamp, _selectedDate)).toList();
+    final dayCheckIns = checkIns.where((c) => _isSameDay(c.timestamp, _selectedDate) && c.checked).toList();
 
-    // Combine and sort Today items by timestamp (newest first)
-    final List<dynamic> todayItems = [...todayLogs, ...todayCheckIns];
-    todayItems.sort((a, b) {
+    final List<dynamic> dayItems = [...dayLogs, ...dayCheckIns];
+    dayItems.sort((a, b) {
       final DateTime timeA = a is LogEntry ? a.timestamp : (a as CheckIn).timestamp;
       final DateTime timeB = b is LogEntry ? b.timestamp : (b as CheckIn).timestamp;
       return timeB.compareTo(timeA);
     });
 
-    // Combine and sort Yesterday items by timestamp (newest first)
-    final List<dynamic> yesterdayItems = [...yesterdayLogs, ...yesterdayCheckIns];
-    yesterdayItems.sort((a, b) {
-      final DateTime timeA = a is LogEntry ? a.timestamp : (a as CheckIn).timestamp;
-      final DateTime timeB = b is LogEntry ? b.timestamp : (b as CheckIn).timestamp;
-      return timeB.compareTo(timeA);
-    });
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // TODAY SECTION
-          _buildSectionHeader('Today', now),
-          const VGapMd(),
-          if (todayItems.isEmpty)
-            _buildEmptyDayState('No entries or check-ins completed today.')
-          else ...[
-            ...todayItems.map((item) {
-              if (item is LogEntry) {
-                return _buildJournalCard(item);
-              } else if (item is CheckIn) {
-                return _buildCheckInTile(item, activities);
-              }
-              return const SizedBox.shrink();
-            }),
-          ],
-          const VGapLg(),
-
-          // YESTERDAY SECTION
-          _buildSectionHeader('Yesterday', yesterday),
-          const VGapMd(),
-          if (yesterdayItems.isEmpty)
-            _buildEmptyDayState('No entries or check-ins completed yesterday.')
-          else ...[
-            ...yesterdayItems.map((item) {
-              if (item is LogEntry) {
-                return _buildJournalCard(item);
-              } else if (item is CheckIn) {
-                return _buildCheckInTile(item, activities);
-              }
-              return const SizedBox.shrink();
-            }),
-          ],
-          const VGapXxl(),
-          const VGapXxl(),
-          const VGapXxl(),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCalendarView(logs, checkIns),
+        const VGapMd(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader(headerTitle, _selectedDate),
+              const VGapMd(),
+              if (dayItems.isEmpty)
+                _buildEmptyDayState('No entries or check-ins completed on this day.')
+              else ...[
+                ...dayItems.map((item) {
+                  if (item is LogEntry) {
+                    return _buildJournalCard(item);
+                  } else if (item is CheckIn) {
+                    return _buildCheckInTile(item, activities);
+                  }
+                  return const SizedBox.shrink();
+                }),
+              ],
+              const VGapXxl(),
+              const VGapXxl(),
+              const VGapXxl(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -441,11 +696,11 @@ class _LogsScreenState extends State<LogsScreen> {
   // BUILD DUMMY / EMPTY TEXT WIDGET
   Widget _buildEmptyDayState(String text) {
     return Padding(
-      padding: const EdgeInsets.only(left: 12, top: 4, bottom: 16),
+      padding: const EdgeInsets.only(top: 4, bottom: 16),
       child: Text(
         text,
         style: AppTheme.bodyMedium.copyWith(
-          color: AppTheme.textSecondary.withOpacity(0.6),
+          color: AppTheme.textSecondary.withValues(alpha: 0.6),
           fontStyle: FontStyle.italic,
           fontSize: 13,
         ),
@@ -461,13 +716,13 @@ class _LogsScreenState extends State<LogsScreen> {
     return GestureDetector(
       onLongPress: () => _showJournalOptionsBottomSheet(entry, isLive),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8, left: 12),
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withOpacity(0.3),
+          color: AppTheme.surfaceColor.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.white.withOpacity(0.04),
+            color: Colors.white.withValues(alpha: 0.04),
             width: 1,
           ),
         ),
@@ -481,9 +736,9 @@ class _LogsScreenState extends State<LogsScreen> {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppTheme.primaryColor.withOpacity(0.1),
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
                 border: Border.all(
-                  color: AppTheme.primaryColor.withOpacity(0.2),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.2),
                   width: 1,
                 ),
               ),
@@ -526,7 +781,7 @@ class _LogsScreenState extends State<LogsScreen> {
                     Text(
                       entry.content,
                       style: AppTheme.bodyMedium.copyWith(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 12,
                       ),
                       maxLines: 2,
@@ -555,7 +810,7 @@ class _LogsScreenState extends State<LogsScreen> {
               topRight: Radius.circular(AppTheme.defaultBorderRadius),
             ),
             border: Border(
-              top: BorderSide(color: Colors.white.withOpacity(0.08), width: 1),
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1),
             ),
           ),
           child: SafeArea(
@@ -568,7 +823,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -618,19 +873,7 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
-  Widget _buildTagChip(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        '#$label',
-        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10),
-      ),
-    );
-  }
+
 
   // BUILD CHECK-IN TILE
   Widget _buildCheckInTile(CheckIn checkIn, List<Activity> activities) {
@@ -641,13 +884,13 @@ class _LogsScreenState extends State<LogsScreen> {
     final timeStr = DateFormat('h:mm a').format(checkIn.timestamp);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8, left: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.successColor.withOpacity(0.06),
+        color: AppTheme.successColor.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppTheme.successColor.withOpacity(0.2),
+          color: AppTheme.successColor.withValues(alpha: 0.2),
           width: 1,
         ),
       ),
@@ -710,7 +953,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       Text(
                         'Logged a quick check-in.',
                         style: AppTheme.bodyMedium.copyWith(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,
                         ),
                       ),

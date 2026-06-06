@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import '../models/log_entry.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
+import '../models/sub_task.dart';
 
 class FirebaseService {
   final CollectionReference _logsCollection =
@@ -15,9 +16,13 @@ class FirebaseService {
   final CollectionReference _checkinsCollection =
       FirebaseFirestore.instance.collection('checkins');
 
+  final CollectionReference _subtasksCollection =
+      FirebaseFirestore.instance.collection('subtasks');
+
   // ==================== REACTIVE OFFLINE STREAM CONTROLLERS ====================
   static final StreamController<List<Activity>> _mockActivitiesController = StreamController<List<Activity>>.broadcast();
   static final StreamController<List<CheckIn>> _mockCheckInsController = StreamController<List<CheckIn>>.broadcast();
+  static final StreamController<List<SubTask>> _mockSubTasksController = StreamController<List<SubTask>>.broadcast();
   static final StreamController<List<LogEntry>> _mockLogsController = StreamController<List<LogEntry>>.broadcast();
 
   static void notifyActivitiesChanged() {
@@ -26,6 +31,10 @@ class FirebaseService {
 
   static void notifyCheckInsChanged() {
     _mockCheckInsController.add(List.from(mockCheckIns));
+  }
+
+  static void notifySubTasksChanged() {
+    _mockSubTasksController.add(List.from(mockSubTasks));
   }
 
   static void notifyLogsChanged() {
@@ -73,9 +82,12 @@ class FirebaseService {
   static final List<CheckIn> mockCheckIns = [
     CheckIn(id: 'c-1', activityId: 'act-1', timestamp: DateTime.now().subtract(const Duration(days: 1)), checked: true),
     CheckIn(id: 'c-2', activityId: 'act-1', timestamp: DateTime.now().subtract(const Duration(days: 2)), checked: true),
-    CheckIn(id: 'c-3', activityId: 'act-2', timestamp: DateTime.now().subtract(const Duration(hours: 2)), checked: true, subTaskName: 'Morning Skincare'),
-    CheckIn(id: 'c-4', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 4)), checked: true, subTaskName: 'Linked list'),
-    CheckIn(id: 'c-5', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 3)), checked: false, subTaskName: 'Stack'),
+  ];
+
+  static final List<SubTask> mockSubTasks = [
+    SubTask(id: 'sub-1', activityId: 'act-2', timestamp: DateTime.now().subtract(const Duration(hours: 2)), checked: true, subTaskName: 'Morning Skincare'),
+    SubTask(id: 'sub-2', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 4)), checked: true, subTaskName: 'Linked list'),
+    SubTask(id: 'sub-3', activityId: 'act-3', timestamp: DateTime.now().subtract(const Duration(hours: 3)), checked: false, subTaskName: 'Stack'),
   ];
 
   // ==================== LOGS OPERATIONS ====================
@@ -207,6 +219,7 @@ class FirebaseService {
     DateTime? startDate,
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
+    String? description,
   }) async {
     final newActivity = Activity(
       id: '',
@@ -220,6 +233,7 @@ class FirebaseService {
       startDate: startDate,
       endDate: endDate,
       subTaskTemplates: subTaskTemplates,
+      description: description,
     );
     await _activitiesCollection.add(newActivity.toFirestore());
   }
@@ -243,6 +257,7 @@ class FirebaseService {
     DateTime? startDate,
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
+    String? description,
   }) async {
     await _activitiesCollection.doc(id).update({
       'name': name,
@@ -253,6 +268,7 @@ class FirebaseService {
       'startDate': startDate != null ? Timestamp.fromDate(startDate) : null,
       'endDate': endDate != null ? Timestamp.fromDate(endDate) : null,
       'subTaskTemplates': subTaskTemplates,
+      'description': description,
     });
   }
 
@@ -328,13 +344,12 @@ class FirebaseService {
   }
 
   // Create new check-in
-  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked, {String? subTaskName}) async {
+  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked) async {
     final newCheckIn = CheckIn(
       id: '',
       activityId: activityId,
       timestamp: timestamp,
       checked: checked,
-      subTaskName: subTaskName,
     );
     await _checkinsCollection.add(newCheckIn.toFirestore());
   }
@@ -349,5 +364,90 @@ class FirebaseService {
   // Delete a check-in
   Future<void> deleteCheckIn(String id) async {
     await _checkinsCollection.doc(id).delete();
+  }
+
+  // ==================== SUB-TASKS OPERATIONS ====================
+
+  // Stream of all sub-tasks
+  Stream<List<SubTask>> getSubTasksStream() {
+    if (Firebase.apps.isEmpty) {
+      late StreamController<List<SubTask>> controller;
+      StreamSubscription? sub;
+      controller = StreamController<List<SubTask>>(
+        onListen: () {
+          controller.add(List.from(mockSubTasks));
+          sub = _mockSubTasksController.stream.listen((data) {
+            controller.add(data);
+          });
+        },
+        onCancel: () {
+          sub?.cancel();
+          controller.close();
+        },
+      );
+      return controller.stream;
+    }
+    return _subtasksCollection
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => SubTask.fromFirestore(doc)).toList();
+    });
+  }
+
+  // Stream of sub-tasks for a specific activity ordered by timestamp descending
+  Stream<List<SubTask>> getSubTasksForActivityStream(String activityId) {
+    if (Firebase.apps.isEmpty) {
+      late StreamController<List<SubTask>> controller;
+      StreamSubscription? sub;
+      controller = StreamController<List<SubTask>>(
+        onListen: () {
+          final filtered = mockSubTasks.where((s) => s.activityId == activityId).toList();
+          filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          controller.add(filtered);
+          sub = _mockSubTasksController.stream.listen((data) {
+            final f = data.where((s) => s.activityId == activityId).toList();
+            f.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+            controller.add(f);
+          });
+        },
+        onCancel: () {
+          sub?.cancel();
+          controller.close();
+        },
+      );
+      return controller.stream;
+    }
+    return _subtasksCollection
+        .where('activityId', isEqualTo: activityId)
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs.map((doc) => SubTask.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return list;
+    });
+  }
+
+  // Create new sub-task check-in
+  Future<void> createSubTask(String activityId, String subTaskName, DateTime timestamp, bool checked) async {
+    final newSubTask = SubTask(
+      id: '',
+      activityId: activityId,
+      subTaskName: subTaskName,
+      timestamp: timestamp,
+      checked: checked,
+    );
+    await _subtasksCollection.add(newSubTask.toFirestore());
+  }
+
+  // Toggle sub-task check-in status
+  Future<void> toggleSubTask(String id, bool checked) async {
+    await _subtasksCollection.doc(id).update({
+      'checked': checked,
+    });
+  }
+
+  // Delete a sub-task check-in
+  Future<void> deleteSubTask(String id) async {
+    await _subtasksCollection.doc(id).delete();
   }
 }

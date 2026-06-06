@@ -4,7 +4,6 @@ import 'package:firebase_core/firebase_core.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/app_icons.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/activity_check_in_sheet.dart';
@@ -12,6 +11,7 @@ import '../widgets/activity_check_in_sheet.dart';
 import '../models/log_entry.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
+import '../models/sub_task.dart';
 import '../services/firebase_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -27,6 +27,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   
   late Stream<List<Activity>> _checkedActivitiesStream;
   late Stream<List<CheckIn>> _checkInsStream;
+  late Stream<List<SubTask>> _subTasksStream;
 
   final List<Map<String, String>> _moods = [
     {'emoji': '😊', 'label': 'Happy'},
@@ -47,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _initStreams() {
     _checkedActivitiesStream = _firebaseService.getCheckedActivitiesStream();
     _checkInsStream = _firebaseService.getCheckedActivitiesCheckInsStream();
+    _subTasksStream = _firebaseService.getSubTasksStream();
   }
 
   bool _isToday(DateTime date) {
@@ -187,80 +189,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 builder: (context, checkinSnapshot) {
                   final checkIns = checkinSnapshot.data ?? [];
                   
-                  final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
+                  return StreamBuilder<List<SubTask>>(
+                    stream: _subTasksStream,
+                    builder: (context, subtaskSnapshot) {
+                      final subTasks = subtaskSnapshot.data ?? [];
+                      
+                      final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
+                      final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp) && s.checked).toList();
 
-                  // Classify activities into pending and completed today
-                  final List<Activity> pendingActivities = [];
-                  final List<Activity> completedActivities = [];
-                  
-                  for (var activity in checkedActivities) {
-                    final activityCheckIns = todayCheckIns
-                        .where((c) => c.activityId == activity.id)
-                        .toList();
-                    final todayCount = activityCheckIns.length;
-                    final bool isCompleted = todayCount >= activity.targetCount;
-                        
-                    if (isCompleted) {
-                      completedActivities.add(activity);
-                    } else {
-                      pendingActivities.add(activity);
-                    }
-                  }
+                      // Classify activities into pending and completed today
+                      final List<Activity> pendingActivities = [];
+                      final List<Activity> completedActivities = [];
+                      
+                      for (var activity in checkedActivities) {
+                        final int todayCount;
+                        if (activity.trackingType == 'multiple') {
+                          todayCount = todaySubTasks.where((s) => s.activityId == activity.id).length;
+                        } else {
+                          todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
+                        }
+                        final bool isCompleted = todayCount >= activity.targetCount;
+                            
+                        if (isCompleted) {
+                          completedActivities.add(activity);
+                        } else {
+                          pendingActivities.add(activity);
+                        }
+                      }
 
-                  String? getSortingTime(Activity activity) {
-                    if (activity.trackingType == 'multiple') {
-                      for (var template in activity.subTaskTemplates) {
-                        final parts = template.split('|');
-                        if (parts.length > 1) {
-                          final timeStr = parts.last;
-                          final isCheckedIn = todayCheckIns.any((c) => c.activityId == activity.id && c.subTaskName == template);
-                          if (!isCheckedIn) {
-                            return timeStr;
+                      String? getSortingTime(Activity activity) {
+                        if (activity.trackingType == 'multiple') {
+                          for (var template in activity.subTaskTemplates) {
+                            final parts = template.split('|');
+                            if (parts.length > 1) {
+                              final timeStr = parts.last;
+                              final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.subTaskName == template);
+                              if (!isCheckedIn) {
+                                return timeStr;
+                              }
+                            }
+                          }
+                          // Fallback: first scheduled subtask's time
+                          for (var template in activity.subTaskTemplates) {
+                            final parts = template.split('|');
+                            if (parts.length > 1) {
+                              return parts.last;
+                            }
                           }
                         }
+                        return activity.scheduledTime;
                       }
-                      // Fallback: first scheduled subtask's time
-                      for (var template in activity.subTaskTemplates) {
-                        final parts = template.split('|');
-                        if (parts.length > 1) {
-                          return parts.last;
+
+                      int compareActivities(Activity a, Activity b) {
+                        final aTime = getSortingTime(a);
+                        final bTime = getSortingTime(b);
+                        if (aTime != null && bTime != null) {
+                          return aTime.compareTo(bTime);
                         }
+                        if (aTime != null && bTime == null) {
+                          return -1;
+                        }
+                        if (aTime == null && bTime != null) {
+                          return 1;
+                        }
+                        return a.timestamp.compareTo(b.timestamp);
                       }
-                    }
-                    return activity.scheduledTime;
-                  }
 
-                  int compareActivities(Activity a, Activity b) {
-                    final aTime = getSortingTime(a);
-                    final bTime = getSortingTime(b);
-                    if (aTime != null && bTime != null) {
-                      return aTime.compareTo(bTime);
-                    }
-                    if (aTime != null && bTime == null) {
-                      return -1;
-                    }
-                    if (aTime == null && bTime != null) {
-                      return 1;
-                    }
-                    return a.timestamp.compareTo(b.timestamp);
-                  }
-
-                  pendingActivities.sort(compareActivities);
-                  completedActivities.sort(compareActivities);
-                  
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildCheckedActivitiesList(pendingActivities, isCompletedList: false),
-                      if (completedActivities.isNotEmpty) ...[
-                        const VGapSm(),
-                        _buildCheckedActivitiesList(completedActivities, isCompletedList: true),
-                      ],
-                      const VGapSm(),
-                      _buildDailySummaryCard(checkedActivities, checkIns),
-                      const VGapSm(),
-                      _buildWeeklyCalendarCard(checkedActivities, checkIns),
-                    ],
+                      pendingActivities.sort(compareActivities);
+                      completedActivities.sort(compareActivities);
+                      
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildCheckedActivitiesList(pendingActivities, todayCheckIns, todaySubTasks, isCompletedList: false),
+                          if (completedActivities.isNotEmpty) ...[
+                            const VGapSm(),
+                            _buildCheckedActivitiesList(completedActivities, todayCheckIns, todaySubTasks, isCompletedList: true),
+                          ],
+                          const VGapSm(),
+                          _buildDailySummaryCard(checkedActivities, checkIns, subTasks),
+                          const VGapSm(),
+                          _buildWeeklyCalendarCard(checkedActivities, checkIns, subTasks),
+                        ],
+                      );
+                    },
                   );
                 },
               );
@@ -274,7 +286,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildCheckedActivitiesList(List<Activity> activities, {required bool isCompletedList}) {
+  Widget _buildCheckedActivitiesList(
+    List<Activity> activities,
+    List<CheckIn> todayCheckIns,
+    List<SubTask> todaySubTasks, {
+    required bool isCompletedList,
+  }) {
     if (activities.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -318,9 +335,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             spacing: 8,
             runSpacing: 8,
             children: activities.map((activity) {
+              final int count = activity.trackingType == 'multiple'
+                  ? todaySubTasks.where((s) => s.activityId == activity.id).length
+                  : todayCheckIns.where((c) => c.activityId == activity.id).length;
+
               return _DashboardActivityChip(
                 activity: activity,
-                useMockData: _useMockData,
+                todayCount: count,
                 onTap: () {
                   showModalBottomSheet(
                     context: context,
@@ -450,7 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Widget _buildDailySummaryCard(List<Activity> activities, List<CheckIn> checkIns) {
+  Widget _buildDailySummaryCard(List<Activity> activities, List<CheckIn> checkIns, List<SubTask> subTasks) {
     if (activities.isEmpty) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -485,11 +506,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int completedActivities = 0;
     final totalActivities = activities.length;
 
+    final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
+    final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp) && s.checked).toList();
+
     for (var activity in activities) {
-      final activityCheckIns = checkIns
-          .where((c) => c.activityId == activity.id && _isToday(c.timestamp) && c.checked)
-          .toList();
-      final todayCount = activityCheckIns.length;
+      final int todayCount;
+      if (activity.trackingType == 'multiple') {
+        todayCount = todaySubTasks.where((s) => s.activityId == activity.id).length;
+      } else {
+        todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
+      }
       if (todayCount >= activity.targetCount) {
         completedActivities++;
       }
@@ -576,7 +602,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ==================== WEEKLY CALENDAR VIEW ====================
 
-  Widget _buildWeeklyCalendarCard(List<Activity> activities, List<CheckIn> checkIns) {
+  Widget _buildWeeklyCalendarCard(List<Activity> activities, List<CheckIn> checkIns, List<SubTask> subTasks) {
     if (activities.isEmpty) return const SizedBox.shrink();
 
     final now = DateTime.now();
@@ -633,13 +659,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               // Calculate completion for this day
               int completed = 0;
               for (var activity in activities) {
-                final activityCheckIns = checkIns
-                    .where((c) =>
-                        c.activityId == activity.id &&
-                        _isSameDay(c.timestamp, day) &&
-                        c.checked)
-                    .toList();
-                final todayCount = activityCheckIns.length;
+                final int todayCount;
+                if (activity.trackingType == 'multiple') {
+                  todayCount = subTasks
+                      .where((s) =>
+                          s.activityId == activity.id &&
+                          _isSameDay(s.timestamp, day) &&
+                          s.checked)
+                      .length;
+                } else {
+                  todayCount = checkIns
+                      .where((c) =>
+                          c.activityId == activity.id &&
+                          _isSameDay(c.timestamp, day) &&
+                          c.checked)
+                      .length;
+                }
                 final bool isDone = todayCount >= activity.targetCount;
                 if (isDone) completed++;
               }
@@ -753,90 +788,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _DashboardActivityChip extends StatefulWidget {
+class _DashboardActivityChip extends StatelessWidget {
   final Activity activity;
-  final bool useMockData;
+  final int todayCount;
   final VoidCallback onTap;
 
   const _DashboardActivityChip({
     Key? key,
     required this.activity,
-    required this.useMockData,
+    required this.todayCount,
     required this.onTap,
   }) : super(key: key);
 
   @override
-  State<_DashboardActivityChip> createState() => _DashboardActivityChipState();
-}
-
-class _DashboardActivityChipState extends State<_DashboardActivityChip> {
-  final FirebaseService _firebaseService = FirebaseService();
-  late Stream<List<CheckIn>> _checkInsStream;
-
-  @override
-  void initState() {
-    super.initState();
-    _initStream();
-  }
-
-  @override
-  void didUpdateWidget(covariant _DashboardActivityChip oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.activity.id != widget.activity.id || oldWidget.useMockData != widget.useMockData) {
-      _initStream();
-    }
-  }
-
-  void _initStream() {
-    _checkInsStream = _firebaseService.getCheckInsStream(widget.activity.id);
-  }
-
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.day == now.day && date.month == now.month && date.year == now.year;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (widget.useMockData) {
-      final checkIns = FirebaseService.mockCheckIns
-          .where((c) => c.activityId == widget.activity.id && _isToday(c.timestamp) && c.checked)
-          .toList();
-      return _buildChip(checkIns.length);
-    } else {
-      return StreamBuilder<List<CheckIn>>(
-        stream: _checkInsStream,
-        builder: (context, snapshot) {
-          final checkIns = snapshot.data ?? [];
-          final todayCount = checkIns.where((c) => _isToday(c.timestamp) && c.checked).length;
-          return _buildChip(todayCount);
-        },
-      );
-    }
-  }
-
-  Widget _buildChip(int todayCount) {
-    final targetCount = widget.activity.targetCount;
+    final targetCount = activity.targetCount;
     final isMultiple = targetCount > 1;
     final isCompleted = todayCount >= targetCount;
     final double progress = targetCount > 0 ? (todayCount / targetCount).clamp(0.0, 1.0) : 0.0;
 
-    final Color accentColor = isCompleted ? AppTheme.successColor : AppTheme.primaryColor;
+    final Color typeColor;
+    switch (activity.trackingType) {
+      case 'multiple':
+        typeColor = AppTheme.secondaryColor;
+        break;
+      case 'milestone':
+        typeColor = AppTheme.warningColor;
+        break;
+      case 'single':
+      default:
+        typeColor = AppTheme.primaryColor;
+        break;
+    }
+
+    final Color accentColor = isCompleted ? AppTheme.successColor : typeColor;
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withOpacity(0.6),
+          color: typeColor.withValues(alpha: isCompleted ? 0.12 : 0.08),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: accentColor.withOpacity(isCompleted ? 0.3 : 0.12),
+            color: accentColor.withValues(alpha: isCompleted ? 0.35 : 0.2),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: accentColor.withOpacity(isCompleted ? 0.15 : 0.06),
+              color: typeColor.withValues(alpha: isCompleted ? 0.15 : 0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -855,7 +855,7 @@ class _DashboardActivityChipState extends State<_DashboardActivityChip> {
                   CircularProgressIndicator(
                     value: progress,
                     strokeWidth: 2.5,
-                    backgroundColor: Colors.white.withOpacity(0.08),
+                    backgroundColor: Colors.white.withValues(alpha: 0.08),
                     valueColor: AlwaysStoppedAnimation<Color>(accentColor),
                   ),
                   if (isCompleted)
@@ -869,7 +869,7 @@ class _DashboardActivityChipState extends State<_DashboardActivityChip> {
                       width: 5,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.7),
+                        color: accentColor.withValues(alpha: 0.7),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -879,10 +879,10 @@ class _DashboardActivityChipState extends State<_DashboardActivityChip> {
             const SizedBox(width: 8),
             // Activity name
             Text(
-              widget.activity.name,
+              activity.name,
               style: AppTheme.bodySmall.copyWith(
                 color: isCompleted
-                    ? AppTheme.successColor.withOpacity(0.9)
+                    ? AppTheme.successColor.withValues(alpha: 0.9)
                     : AppTheme.textPrimary,
                 fontWeight: FontWeight.w600,
                 fontSize: 11,
@@ -894,7 +894,7 @@ class _DashboardActivityChipState extends State<_DashboardActivityChip> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.15),
+                  color: accentColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

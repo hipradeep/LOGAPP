@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
+import 'management_screen.dart';
 import 'logs_screen.dart';
 import 'settings_screen.dart';
 
@@ -17,6 +18,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _screens = [
     const DashboardScreen(),
+    const ManagementScreen(),
     const LogsScreen(),
     const SettingsScreen(),
   ];
@@ -26,6 +28,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       icon: Icons.home_outlined,
       activeIcon: Icons.home_filled,
       label: 'Home',
+    ),
+    _NavItem(
+      icon: Icons.fact_check_outlined,
+      activeIcon: Icons.fact_check,
+      label: 'Manage',
     ),
     _NavItem(
       icon: Icons.history_outlined,
@@ -51,31 +58,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
       bottomNavigationBar: Container(
         color: Colors.transparent,
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: bottomPadding + 10,
-          top: 8,
-        ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
-              height: 68,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              height: 68 + bottomPadding,
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom: bottomPadding,
+                top: 8,
+              ),
               decoration: BoxDecoration(
-                color: AppTheme.surfaceColor.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.1),
-                  width: 1,
+                color: AppTheme.surfaceColor.withValues(alpha: 0.85),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 20,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
@@ -103,42 +111,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     required bool isActive,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 72,
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Icon container — solid purple square for active, transparent for inactive
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              width: 40,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppTheme.primaryColor
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: isActive
-                    ? [
-                        BoxShadow(
-                          color: AppTheme.primaryColor.withOpacity(0.45),
-                          blurRadius: 10,
-                          spreadRadius: 0,
-                          offset: const Offset(0, 3),
-                        ),
-                      ]
-                    : [],
-              ),
-              child: Icon(
-                isActive ? item.activeIcon : item.icon,
-                color: isActive ? Colors.white : AppTheme.textSecondary,
-                size: 20,
-              ),
+            Icon(
+              isActive ? item.activeIcon : item.icon,
+              color: isActive ? AppTheme.primaryColor : AppTheme.textSecondary,
+              size: 24,
             ),
             const SizedBox(height: 4),
             // Label
@@ -146,7 +130,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               item.label,
               style: TextStyle(
                 color: isActive
-                    ? AppTheme.primaryLight
+                    ? AppTheme.primaryColor
                     : AppTheme.textSecondary,
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,

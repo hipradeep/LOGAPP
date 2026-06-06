@@ -14,6 +14,7 @@ class AddActivityScreen extends StatefulWidget {
     DateTime? startDate,
     DateTime? endDate,
     List<String> subTaskTemplates,
+    String? description,
   }) onAdd;
   final Activity? initialActivity;
   final Function(String name, String trackingType, int targetCount, {
@@ -22,6 +23,7 @@ class AddActivityScreen extends StatefulWidget {
     DateTime? startDate,
     DateTime? endDate,
     List<String> subTaskTemplates,
+    String? description,
   })? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleComplete;
@@ -41,6 +43,7 @@ class AddActivityScreen extends StatefulWidget {
 
 class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindingObserver {
   final TextEditingController _activityNameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _subTaskInputController = TextEditingController();
   final List<String> _subTasks = [];
   final FocusNode _focusNode = FocusNode();
@@ -66,6 +69,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     if (widget.initialActivity != null) {
       final a = widget.initialActivity!;
       _activityNameController.text = a.name;
+      _descriptionController.text = a.description ?? '';
       _trackingType = a.trackingType;
       _repeatDays = List<int>.from(a.repeatDays);
       if (a.scheduledTime != null) {
@@ -91,6 +95,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _activityNameController.dispose();
+    _descriptionController.dispose();
     _subTaskInputController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -148,6 +153,8 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
 
     final timeStr = _trackingType == 'multiple' ? null : _formatTimeOfDay(_scheduledTime);
 
+    final descriptionStr = _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim();
+
     if (widget.initialActivity != null && widget.onEdit != null) {
       widget.onEdit!(
         name,
@@ -158,6 +165,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         startDate: _startDate,
         endDate: _endDate,
         subTaskTemplates: finalSubTasks,
+        description: descriptionStr,
       );
     } else {
       widget.onAdd(
@@ -169,6 +177,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         startDate: _startDate,
         endDate: _endDate,
         subTaskTemplates: finalSubTasks,
+        description: descriptionStr,
       );
     }
     Navigator.pop(context);
@@ -378,7 +387,56 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             _buildDateRangeProgress(),
           ],
           const VGapLg(),
+
+          // Description
+          _buildSectionLabel('DESCRIPTION'),
+          const VGapSm(),
+          _buildDescriptionInputField(),
+          const VGapLg(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDescriptionInputField() {
+    return TextField(
+      controller: _descriptionController,
+      maxLines: null,
+      minLines: 4,
+      keyboardType: TextInputType.multiline,
+      textInputAction: TextInputAction.newline,
+      textCapitalization: TextCapitalization.sentences,
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: 'Enter activity description (optional)...',
+        hintStyle: TextStyle(
+          color: AppTheme.textSecondary.withValues(alpha: 0.5),
+          fontSize: 14,
+        ),
+        filled: true,
+        fillColor: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Colors.white.withValues(alpha: 0.06),
+            width: 1.5,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Colors.white.withValues(alpha: 0.06),
+            width: 1.5,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: AppTheme.primaryColor.withValues(alpha: 0.4),
+            width: 1.5,
+          ),
+        ),
       ),
     );
   }
