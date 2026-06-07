@@ -33,14 +33,16 @@ class _MilestonesTabState extends State<MilestonesTab> {
   @override
   void initState() {
     super.initState();
-    _currentEndDate = DateTime.now();
+    final now = DateTime.now();
+    _currentEndDate = DateTime(now.year, now.month, now.day);
   }
 
   @override
   void didUpdateWidget(covariant MilestonesTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedActivity?.id != widget.selectedActivity?.id) {
-      _currentEndDate = DateTime.now();
+      final now = DateTime.now();
+      _currentEndDate = DateTime(now.year, now.month, now.day);
     }
   }
 
@@ -49,13 +51,38 @@ class _MilestonesTabState extends State<MilestonesTab> {
     final start = _currentEndDate.subtract(const Duration(days: 6));
     final end = _currentEndDate;
     final DateFormat formatter = DateFormat('MMM d');
-    final rangeText = '${formatter.format(start)} – ${formatter.format(end)}';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isFutureWeek = _currentEndDate.isAfter(today);
 
-    // Generate all 7 days of the range in descending order
+    String rangeText;
+    if (isFutureWeek) {
+      rangeText = '${formatter.format(start)} to ${formatter.format(end)}';
+    } else {
+      final endDay = DateTime(end.year, end.month, end.day);
+      if (endDay == today) {
+        rangeText = 'Today to ${formatter.format(start)}';
+      } else {
+        rangeText = '${formatter.format(end)} to ${formatter.format(start)}';
+      }
+    }
+
+    // Generate rangeDays conditionally:
+    // Ascending for future weeks, Descending for current/past weeks.
+
     final List<DateTime> rangeDays = [];
-    for (int i = 0; i < 7; i++) {
-      final day = _currentEndDate.subtract(Duration(days: i));
-      rangeDays.add(DateTime(day.year, day.month, day.day));
+    if (isFutureWeek) {
+      // Ascending (earliest to latest): e.g. Jun 8 to Jun 14
+      for (int i = 6; i >= 0; i--) {
+        final day = _currentEndDate.subtract(Duration(days: i));
+        rangeDays.add(DateTime(day.year, day.month, day.day));
+      }
+    } else {
+      // Descending (latest to earliest): e.g. Today to Jun 1
+      for (int i = 0; i < 7; i++) {
+        final day = _currentEndDate.subtract(Duration(days: i));
+        rangeDays.add(DateTime(day.year, day.month, day.day));
+      }
     }
 
     final filteredSubTasks = widget.subTasks.where((st) {
