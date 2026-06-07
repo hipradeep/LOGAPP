@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
@@ -8,6 +9,7 @@ import '../models/activity.dart';
 import '../models/sub_task.dart';
 import '../services/firebase_service.dart';
 import '../widgets/milestones_tab.dart';
+import '../widgets/add_milestone_sub_task_sheet.dart';
 
 // ==================== LOCAL DATA MODELS ====================
 
@@ -73,9 +75,15 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
   // Current active category (0: Milestones, 1: Budget, 2: Diet, 3: Reminders, 4: Study)
   int _activeCategoryIndex = 0;
+  bool _isMenuOpen = false;
 
   // Selected milestone activity
   Activity? _selectedMilestoneActivity;
+  bool _shouldSelectDefaultMilestone = true;
+
+  late final Stream<List<Activity>> _activitiesStream = _firebaseService.getActivitiesStream();
+  Stream<List<SubTask>>? _subTasksStream;
+  Activity? _lastStreamedActivity;
 
   final List<BudgetItem> _budgets = [
     BudgetItem(category: 'Food & Groceries', limit: 200, spent: 145),
@@ -137,9 +145,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
       backgroundColor: Colors.transparent,
       body: FullScreenPage(
         showScaffold: false,
-        isScrollable: true,
+        isScrollable: false,
         title: 'Manage Life',
         padding: EdgeInsets.zero,
+        actions: [
+          _buildMenuToggleButton(),
+        ],
         backgroundWidgets: const [
           GlowBlob(
             top: -40,
@@ -157,77 +168,262 @@ class _ManagementScreenState extends State<ManagementScreen> {
           ),
         ],
         children: [
-          // Horizontal Selector Bar (Circular Buttons)
-          _buildCategorySelector(),
-          const VGapMd(),
-          
-          // Active List Content
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: _buildActiveContent(),
+          Expanded(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // 1. Scrollable Active Content
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 24,
+                      right: 24,
+                      top: 16,
+                      bottom: bottomPadding + 100,
+                    ),
+                    child: _buildActiveContent(),
+                  ),
+                ),
+                
+                // 2. Tap-to-Close Menu Barrier
+                if (_isMenuOpen)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        setState(() {
+                          _isMenuOpen = false;
+                        });
+                      },
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                
+                // 3. Overlaid Collapsible Category Menu
+                Positioned(
+                  top: -16,
+                  left: 0,
+                  right: 0,
+                  child: _buildCollapsibleCategoryMenu(),
+                ),
+              ],
+            ),
           ),
-          
-          // Padding to avoid overlap with bottom navigation bar
-          SizedBox(height: bottomPadding + 100),
         ],
       ),
+      floatingActionButton: _activeCategoryIndex == 0 && _selectedMilestoneActivity != null
+          ? Padding(
+              padding: EdgeInsets.only(bottom: bottomPadding + 68),
+              child: FloatingActionButton.small(
+                onPressed: () => _showAddSubTaskSheet(context),
+                backgroundColor: AppTheme.primaryColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              ),
+            )
+          : null,
     );
   }
 
   // ==================== WIDGET BUILDERS ====================
 
-  Widget _buildCategorySelector() {
-    return SizedBox(
-      height: 96,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final isSelected = _activeCategoryIndex == index;
-          final cat = _categories[index];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: GestureDetector(
-              onTap: () => setState(() => _activeCategoryIndex = index),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected
-                            ? AppTheme.primaryColor
-                            : Colors.white.withValues(alpha: 0.15),
-                        width: 1.5,
-                      ),
-                      color: isSelected
-                          ? AppTheme.primaryColor.withValues(alpha: 0.1)
-                          : Colors.transparent,
-                    ),
-                    child: Icon(
-                      isSelected ? cat['activeIcon'] : cat['icon'],
-                      color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
-                      size: 22,
-                    ),
+  Widget _buildMenuToggleButton() {
+    final selectedCategory = _categories[_activeCategoryIndex];
+
+    return GestureDetector(
+      onTap: () => setState(() => _isMenuOpen = !_isMenuOpen),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _isMenuOpen
+              ? AppTheme.primaryColor.withValues(alpha: 0.16)
+              : Colors.white.withValues(alpha: 0.06),
+          border: Border.all(
+            color: _isMenuOpen
+                ? AppTheme.primaryColor.withValues(alpha: 0.35)
+                : Colors.white.withValues(alpha: 0.12),
+            width: 1,
+          ),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              selectedCategory['activeIcon'] as IconData,
+              color: _isMenuOpen ? AppTheme.primaryLight : Colors.white,
+              size: 20,
+            ),
+            Positioned(
+              right: 3,
+              bottom: 3,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.surfaceColor,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    width: 1,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    cat['label'],
-                    style: TextStyle(
-                      color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
-                      fontSize: 10,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                ],
+                ),
+                child: Icon(
+                  _isMenuOpen
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.textSecondary,
+                  size: 12,
+                ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollapsibleCategoryMenu() {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: SizedBox(
+        width: double.infinity,
+        height: _isMenuOpen ? null : 0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+            boxShadow: _isMenuOpen
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : [],
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceColor.withValues(
+                    alpha: _isMenuOpen ? 0.85 : 0.0,
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(
+                      alpha: _isMenuOpen ? 0.08 : 0.0,
+                    ),
+                    width: 1.0,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const VGapMd(),
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 150),
+                      opacity: _isMenuOpen ? 1.0 : 0.0,
+                      child: _buildCategorySelector(),
+                    ),
+                    const VGapMd(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategorySelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const double spacing = 16;
+          final itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: 14,
+            children: List.generate(_categories.length, (index) {
+              final isSelected = _activeCategoryIndex == index;
+              final cat = _categories[index];
+              return SizedBox(
+                width: itemWidth,
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _activeCategoryIndex = index;
+                    if (index == 0) {
+                      _shouldSelectDefaultMilestone = true;
+                    }
+                  }),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected
+                                ? AppTheme.primaryColor
+                                : Colors.white.withValues(alpha: 0.15),
+                            width: 1.5,
+                          ),
+                          color: isSelected
+                              ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                           isSelected ? cat['activeIcon'] : cat['icon'],
+                          color: isSelected
+                              ? AppTheme.primaryColor
+                              : AppTheme.textSecondary,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        cat['label'],
+                        style: TextStyle(
+                          color: isSelected
+                              ? AppTheme.primaryColor
+                              : AppTheme.textSecondary,
+                          fontSize: 10,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           );
         },
       ),
@@ -255,7 +451,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
   Widget _buildMilestonesContent() {
     return StreamBuilder<List<Activity>>(
-      stream: _firebaseService.getActivitiesStream(),
+      stream: _activitiesStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -268,36 +464,72 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
         final allActivities = snapshot.data ?? [];
         final milestoneActivities = allActivities
-            .where((a) => a.trackingType == 'milestone')
+            .where((a) => a.trackingType == 'milestone' && a.checked)
             .toList();
+        final selectedActivity = _getDefaultMilestoneActivity(milestoneActivities);
 
-        // Auto-select first milestone activity if none selected
-        if (_selectedMilestoneActivity == null && milestoneActivities.isNotEmpty) {
+        if (selectedActivity != null &&
+            _selectedMilestoneActivity?.id != selectedActivity.id) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() {
-                _selectedMilestoneActivity = milestoneActivities.first;
+                _selectedMilestoneActivity = selectedActivity;
+                _shouldSelectDefaultMilestone = false;
+                _subTasksStream = _firebaseService.getSubTasksForActivityStream(selectedActivity.id);
+                _lastStreamedActivity = selectedActivity;
               });
             }
           });
         }
 
         // Fetch subtasks for the selected activity
-        if (_selectedMilestoneActivity != null) {
+        if (selectedActivity != null) {
+          if (_subTasksStream == null || _lastStreamedActivity?.id != selectedActivity.id) {
+            _subTasksStream = _firebaseService.getSubTasksForActivityStream(selectedActivity.id);
+            _lastStreamedActivity = selectedActivity;
+          }
+
           return StreamBuilder<List<SubTask>>(
-            stream: _firebaseService.getSubTasksForActivityStream(_selectedMilestoneActivity!.id),
+            stream: _subTasksStream!,
             builder: (context, subtaskSnapshot) {
+              if (subtaskSnapshot.connectionState == ConnectionState.waiting &&
+                  !subtaskSnapshot.hasData) {
+                return MilestonesTab(
+                  milestoneActivities: milestoneActivities,
+                  selectedActivity: selectedActivity,
+                  subTasks: const [],
+                  isLoadingSubTasks: true,
+                  onActivitySelected: (activity) {
+                    setState(() {
+                      _selectedMilestoneActivity = activity;
+                      _shouldSelectDefaultMilestone = false;
+                      if (activity != null) {
+                        _subTasksStream = _firebaseService.getSubTasksForActivityStream(activity.id);
+                        _lastStreamedActivity = activity;
+                      }
+                    });
+                  },
+                  onToggleSubTask: _toggleSubTask,
+                );
+              }
+
               final subTasks = subtaskSnapshot.data ?? [];
 
               return MilestonesTab(
                 milestoneActivities: milestoneActivities,
-                selectedActivity: _selectedMilestoneActivity,
+                selectedActivity: selectedActivity,
                 subTasks: subTasks,
                 onActivitySelected: (activity) {
                   setState(() {
                     _selectedMilestoneActivity = activity;
+                    _shouldSelectDefaultMilestone = false;
+                    if (activity != null) {
+                      _subTasksStream = _firebaseService.getSubTasksForActivityStream(activity.id);
+                      _lastStreamedActivity = activity;
+                    }
                   });
                 },
+                onToggleSubTask: _toggleSubTask,
               );
             },
           );
@@ -305,15 +537,67 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
         return MilestonesTab(
           milestoneActivities: milestoneActivities,
-          selectedActivity: _selectedMilestoneActivity,
+          selectedActivity: selectedActivity,
           subTasks: const [],
           onActivitySelected: (activity) {
             setState(() {
               _selectedMilestoneActivity = activity;
+              _shouldSelectDefaultMilestone = false;
+              if (activity != null) {
+                _subTasksStream = _firebaseService.getSubTasksForActivityStream(activity.id);
+                _lastStreamedActivity = activity;
+              }
             });
           },
+          onToggleSubTask: _toggleSubTask,
         );
       },
+    );
+  }
+
+  Activity? _getDefaultMilestoneActivity(List<Activity> milestoneActivities) {
+    if (milestoneActivities.isEmpty) {
+      return null;
+    }
+
+    if (_shouldSelectDefaultMilestone) {
+      return milestoneActivities.first;
+    }
+
+    for (final activity in milestoneActivities) {
+      if (activity.id == _selectedMilestoneActivity?.id) {
+        return activity;
+      }
+    }
+
+    return milestoneActivities.first;
+  }
+
+  Future<void> _addMilestoneSubTask(Activity activity, String subTaskName, DateTime timestamp) async {
+    await _firebaseService.createSubTask(
+      activity.id,
+      subTaskName,
+      timestamp,
+      false,
+    );
+  }
+
+  Future<void> _toggleSubTask(SubTask subTask, bool checked) async {
+    await _firebaseService.toggleSubTask(subTask.id, checked);
+  }
+
+  void _showAddSubTaskSheet(BuildContext context) {
+    final activity = _selectedMilestoneActivity;
+    if (activity == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddMilestoneSubTaskSheet(
+        activity: activity,
+        onAddSubTask: _addMilestoneSubTask,
+      ),
     );
   }
 

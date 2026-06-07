@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
-import 'history_item_card.dart';
 import 'vertical_calendar_month.dart';
 
 class CheckInHistorySheet extends StatefulWidget {

@@ -427,20 +427,63 @@ class FirebaseService {
     });
   }
 
+  // Stream the current milestone sub-task plus sub-tasks added in the last 3 days.
+  // "Current" is the newest sub-task document; unfinished older work stays visible too.
+  Stream<List<SubTask>> getCurrentAndRecentMilestoneSubTasksStream(
+    Activity activity,
+  ) {
+    if (activity.trackingType != 'milestone' || !activity.checked) {
+      return Stream.value(const <SubTask>[]);
+    }
+
+    final cutoff = DateTime.now().subtract(const Duration(days: 3));
+
+    List<SubTask> filterAndSort(Iterable<SubTask> source) {
+      final sorted = source
+          .where((s) => s.activityId == activity.id)
+          .toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      final currentSubTaskId = sorted.isNotEmpty ? sorted.first.id : null;
+      final list = sorted
+          .where((s) =>
+              s.id == currentSubTaskId ||
+              !s.checked ||
+              !s.timestamp.isBefore(cutoff))
+          .toList();
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return list;
+    }
+
+    return getSubTasksForActivityStream(activity.id).map(filterAndSort);
+  }
+
   // Create new sub-task check-in
   Future<void> createSubTask(String activityId, String subTaskName, DateTime timestamp, bool checked) async {
     final newSubTask = SubTask(
-      id: '',
+      id: Firebase.apps.isEmpty ? 'sub-${DateTime.now().millisecondsSinceEpoch}' : '',
       activityId: activityId,
       subTaskName: subTaskName,
       timestamp: timestamp,
       checked: checked,
     );
+    if (Firebase.apps.isEmpty) {
+      mockSubTasks.add(newSubTask);
+      notifySubTasksChanged();
+      return;
+    }
     await _subtasksCollection.add(newSubTask.toFirestore());
   }
 
   // Toggle sub-task check-in status
   Future<void> toggleSubTask(String id, bool checked) async {
+    if (Firebase.apps.isEmpty) {
+      final idx = mockSubTasks.indexWhere((s) => s.id == id);
+      if (idx != -1) {
+        mockSubTasks[idx] = mockSubTasks[idx].copyWith(checked: checked);
+        notifySubTasksChanged();
+      }
+      return;
+    }
     await _subtasksCollection.doc(id).update({
       'checked': checked,
     });
@@ -448,6 +491,11 @@ class FirebaseService {
 
   // Delete a sub-task check-in
   Future<void> deleteSubTask(String id) async {
+    if (Firebase.apps.isEmpty) {
+      mockSubTasks.removeWhere((s) => s.id == id);
+      notifySubTasksChanged();
+      return;
+    }
     await _subtasksCollection.doc(id).delete();
   }
 }
