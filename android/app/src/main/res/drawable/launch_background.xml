@@ -2,9 +2,12 @@
 <!-- Modify this file to customize your launch splash screen -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_background" />
-    <item>
+
+    <!-- For Android 12+, the app icon is centered automatically.
+         For older versions, you can uncomment the block below to show the image. -->
+    <!-- <item>
         <bitmap
             android:gravity="center"
-            android:src="@drawable/splash_logo" />
-    </item>
+            android:src="@mipmap/ic_launcher" />
+    </item> -->
 </layer-list>
