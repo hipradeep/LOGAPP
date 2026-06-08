@@ -5,6 +5,7 @@ import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_icons.dart';
 import 'track_activities_screen.dart';
+import 'manage_budget_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -29,10 +30,10 @@ class SettingsScreen extends StatelessWidget {
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor.withOpacity(0.4),
+            color: AppTheme.surfaceColor.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
             border: Border.all(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               width: 1,
             ),
           ),
@@ -49,6 +50,21 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const TrackActivitiesScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildDivider(),
+              _buildMenuItem(
+                context,
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Manage Budget',
+                subtitle: 'Set salary, limits, and view expenses',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ManageBudgetScreen(),
                     ),
                   );
                 },
@@ -109,7 +125,7 @@ class SettingsScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.12),
+                color: AppTheme.primaryColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: IconMd(icon, color: AppTheme.primaryLight),
@@ -142,7 +158,7 @@ class SettingsScreen extends StatelessWidget {
     return Divider(
       height: 1,
       thickness: 1,
-      color: Colors.white.withOpacity(0.05),
+      color: Colors.white.withValues(alpha: 0.05),
       indent: 20,
       endIndent: 20,
     );

@@ -518,6 +518,7 @@ class _LogsScreenState extends State<LogsScreen> {
       floatingActionButton: Padding(
         padding: EdgeInsets.only(bottom: bottomPadding + 86),
         child: FloatingActionButton(
+          heroTag: null,
           onPressed: () => _navigateToWriteScreen(),
           backgroundColor: AppTheme.primaryColor,
           elevation: 8,
@@ -598,10 +599,25 @@ class _LogsScreenState extends State<LogsScreen> {
 
   // LOCAL OFFLINE SIMULATION
   Widget _buildLocalTimeline() {
-    final activities = FirebaseService.mockActivities;
-    final logs = FirebaseService.mockEntries;
-    final checkIns = FirebaseService.mockCheckIns;
-    return _buildTimelineList(activities, logs, checkIns);
+    return StreamBuilder<List<CheckIn>>(
+      stream: _firebaseService.getMockCheckInsStream(),
+      builder: (context, checkinsSnapshot) {
+        final checkIns = checkinsSnapshot.data ?? FirebaseService.mockCheckIns;
+        return StreamBuilder<List<LogEntry>>(
+          stream: _firebaseService.getMockLogsStream(),
+          builder: (context, logsSnapshot) {
+            final logs = logsSnapshot.data ?? FirebaseService.mockEntries;
+            return StreamBuilder<List<Activity>>(
+              stream: _firebaseService.getMockActivitiesStream(),
+              builder: (context, activitiesSnapshot) {
+                final activities = activitiesSnapshot.data ?? FirebaseService.mockActivities;
+                return _buildTimelineList(activities, logs, checkIns);
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   // TIMELINE BUILDER
@@ -929,7 +945,24 @@ class _LogsScreenState extends State<LogsScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (activity.trackingType != 'single') ...[
+                          if (checkIn.subTaskName != null) ...[
+                            const HGapSm(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Sub-task',
+                                style: TextStyle(
+                                  color: AppTheme.primaryLight,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ] else if (activity.trackingType != 'single') ...[
                             const HGapSm(),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
@@ -951,7 +984,9 @@ class _LogsScreenState extends State<LogsScreen> {
                       ),
                       const VGapXs(),
                       Text(
-                        'Logged a quick check-in.',
+                        checkIn.subTaskName != null
+                            ? 'Completed: ${checkIn.subTaskName!.split('|').first}'
+                            : 'Logged a quick check-in.',
                         style: AppTheme.bodyMedium.copyWith(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,

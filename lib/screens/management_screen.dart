@@ -7,23 +7,14 @@ import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../models/activity.dart';
 import '../models/sub_task.dart';
+import '../models/budget_item.dart';
+import '../widgets/budget_tab.dart';
 import '../services/firebase_service.dart';
 import '../widgets/milestones_tab.dart';
 import '../widgets/add_milestone_sub_task_sheet.dart';
+import '../widgets/add_transaction_sheet.dart';
 
 // ==================== LOCAL DATA MODELS ====================
-
-class BudgetItem {
-  String category;
-  double limit;
-  double spent;
-
-  BudgetItem({
-    required this.category,
-    required this.limit,
-    required this.spent,
-  });
-}
 
 class DietItem {
   String foodName;
@@ -81,15 +72,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
   Activity? _selectedMilestoneActivity;
   bool _shouldSelectDefaultMilestone = true;
 
+  // Selected budget category
+  BudgetItem? _selectedBudget;
+
   late final Stream<List<Activity>> _activitiesStream = _firebaseService.getActivitiesStream();
   Stream<List<SubTask>>? _subTasksStream;
   Activity? _lastStreamedActivity;
-
-  final List<BudgetItem> _budgets = [
-    BudgetItem(category: 'Food & Groceries', limit: 200, spent: 145),
-    BudgetItem(category: 'Transport', limit: 80, spent: 40),
-    BudgetItem(category: 'Entertainment', limit: 100, spent: 110),
-  ];
 
   final List<DietItem> _dietItems = [
     DietItem(foodName: 'Oatmeal with Berries', calories: 350, mealType: 'Breakfast'),
@@ -216,13 +204,25 @@ class _ManagementScreenState extends State<ManagementScreen> {
           ? Padding(
               padding: EdgeInsets.only(bottom: bottomPadding + 68),
               child: FloatingActionButton.small(
+                heroTag: null,
                 onPressed: () => _showAddSubTaskSheet(context),
                 backgroundColor: AppTheme.primaryColor,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
               ),
             )
-          : null,
+          : (_activeCategoryIndex == 1 && _selectedBudget != null)
+              ? Padding(
+                  padding: EdgeInsets.only(bottom: bottomPadding + 68),
+                  child: FloatingActionButton.small(
+                    heroTag: null,
+                    onPressed: () => _showAddTransactionSheet(context),
+                    backgroundColor: AppTheme.primaryColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                  ),
+                )
+              : null,
     );
   }
 
@@ -435,7 +435,14 @@ class _ManagementScreenState extends State<ManagementScreen> {
       case 0:
         return _buildMilestonesContent();
       case 1:
-        return _buildBudgetContent();
+        return BudgetTab(
+          selectedBudgetId: _selectedBudget?.id,
+          onBudgetChanged: (budget) {
+            setState(() {
+              _selectedBudget = budget;
+            });
+          },
+        );
       case 2:
         return _buildDietContent();
       case 3:
@@ -601,210 +608,25 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
-  // -------------------- 2. BUDGET --------------------
+  void _showAddTransactionSheet(BuildContext context) {
+    final budget = _selectedBudget;
+    if (budget == null) return;
 
-  Widget _buildBudgetContent() {
-    double totalLimit = 0;
-    double totalSpent = 0;
-    for (var b in _budgets) {
-      totalLimit += b.limit;
-      totalSpent += b.spent;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Personal Budget', style: AppTheme.headingSmall),
-            ElevatedButton.icon(
-              onPressed: _showAddBudgetDialog,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        // Total Summary Card
-        Card(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Total Spent', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Text('\$${totalSpent.toStringAsFixed(1)}', style: AppTheme.headingMedium),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Total Limit', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Text('\$${totalLimit.toStringAsFixed(1)}', style: AppTheme.headingSmall.copyWith(color: AppTheme.primaryLight)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const VGapSm(),
-        if (_budgets.isEmpty)
-          _buildEmptyState('No budget limits added yet.')
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _budgets.length,
-            itemBuilder: (context, index) {
-              final budget = _budgets[index];
-              final percent = budget.limit > 0 ? (budget.spent / budget.limit).clamp(0.0, 1.0) : 0.0;
-              final isOverBudget = budget.spent > budget.limit;
-
-              return Card(
-                color: AppTheme.surfaceColor.withValues(alpha: 0.3),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(budget.category, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 18),
-                            onPressed: () {
-                              setState(() {
-                                _budgets.removeAt(index);
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Spent: \$${budget.spent.toStringAsFixed(1)}',
-                            style: TextStyle(color: isOverBudget ? AppTheme.errorColor : AppTheme.textSecondary, fontSize: 12),
-                          ),
-                          Text(
-                            'Limit: \$${budget.limit.toStringAsFixed(1)}',
-                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: percent,
-                          backgroundColor: Colors.white.withValues(alpha: 0.05),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            isOverBudget ? AppTheme.errorColor : AppTheme.primaryColor,
-                          ),
-                          minHeight: 6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  void _showAddBudgetDialog() {
-    final catController = TextEditingController();
-    final limitController = TextEditingController();
-    final spentController = TextEditingController();
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Add Budget Category'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: catController,
-                decoration: const InputDecoration(
-                  hintText: 'e.g., Groceries, Transport',
-                  labelText: 'Category Name',
-                ),
-              ),
-              const VGapSm(),
-              TextField(
-                controller: limitController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  hintText: 'Enter limit (e.g. 150)',
-                  labelText: 'Budget Limit',
-                ),
-              ),
-              const VGapSm(),
-              TextField(
-                controller: spentController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  hintText: 'Enter spent amount (e.g. 50)',
-                  labelText: 'Already Spent',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-            ),
-            TextButton(
-              onPressed: () {
-                final limit = double.tryParse(limitController.text) ?? 0.0;
-                final spent = double.tryParse(spentController.text) ?? 0.0;
-                if (catController.text.isNotEmpty && limit > 0) {
-                  setState(() {
-                    _budgets.add(BudgetItem(
-                      category: catController.text,
-                      limit: limit,
-                      spent: spent,
-                    ));
-                  });
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Add', style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddTransactionSheet(
+        budgetId: budget.id,
+        categoryName: budget.category,
+        onAddTransaction: (tag, desc, amount, date) async {
+          await _firebaseService.addExpenseToBudget(budget.id, tag, desc, amount, timestamp: date);
+        },
+      ),
     );
   }
+
+  // -------------------- 2. BUDGET (MODULARIZED OUT TO BUDGET_TAB) --------------------
 
   // -------------------- 3. DIET --------------------
 

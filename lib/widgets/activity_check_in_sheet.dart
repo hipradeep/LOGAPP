@@ -675,6 +675,17 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                   ),
                 );
               }
+              // Also add mock check-in!
+              final exists = FirebaseService.mockCheckIns.any((c) => c.activityId == widget.activity.id && c.subTaskName == item.name);
+              if (!exists) {
+                FirebaseService.mockCheckIns.add(CheckIn(
+                  id: 'c-sub-${DateTime.now().millisecondsSinceEpoch}',
+                  activityId: widget.activity.id,
+                  timestamp: DateTime.now(),
+                  checked: true,
+                  subTaskName: item.name,
+                ));
+              }
             } else {
               try {
                 if (item.subTaskId != null) {
@@ -1179,6 +1190,30 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         });
         FirebaseService.notifySubTasksChanged();
       }
+      if (newChecked) {
+        final exists = FirebaseService.mockCheckIns.any((c) =>
+            c.activityId == widget.activity.id && c.subTaskName == item.name);
+        if (!exists) {
+          DateTime taskTimestamp = DateTime.now();
+          if (item.subTaskId != null) {
+            final idx = FirebaseService.mockSubTasks.indexWhere((s) => s.id == item.subTaskId);
+            if (idx != -1) {
+              taskTimestamp = FirebaseService.mockSubTasks[idx].timestamp;
+            }
+          }
+          FirebaseService.mockCheckIns.add(CheckIn(
+            id: 'c-sub-${DateTime.now().millisecondsSinceEpoch}',
+            activityId: widget.activity.id,
+            timestamp: taskTimestamp,
+            checked: true,
+            subTaskName: item.name,
+          ));
+        }
+      } else {
+        FirebaseService.mockCheckIns.removeWhere((c) =>
+            c.activityId == widget.activity.id && c.subTaskName == item.name);
+      }
+      FirebaseService.notifyCheckInsChanged();
     } else {
       try {
         if (item.subTaskId != null) {
@@ -1198,9 +1233,17 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   void _deleteSubTask(String id, bool isLive) async {
     if (!isLive) {
       setState(() {
-        FirebaseService.mockSubTasks.removeWhere((s) => s.id == id);
+        final idx = FirebaseService.mockSubTasks.indexWhere((s) => s.id == id);
+        if (idx != -1) {
+          final subTask = FirebaseService.mockSubTasks[idx];
+          FirebaseService.mockSubTasks.removeAt(idx);
+          FirebaseService.mockCheckIns.removeWhere((c) =>
+              c.activityId == subTask.activityId &&
+              c.subTaskName == subTask.subTaskName);
+        }
       });
       FirebaseService.notifySubTasksChanged();
+      FirebaseService.notifyCheckInsChanged();
     } else {
       try {
         await _firebaseService.deleteSubTask(id);

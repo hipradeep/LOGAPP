@@ -5,6 +5,7 @@ import '../models/log_entry.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/sub_task.dart';
+import '../models/budget_item.dart';
 
 class FirebaseService {
   final CollectionReference _logsCollection =
@@ -19,11 +20,27 @@ class FirebaseService {
   final CollectionReference _subtasksCollection =
       FirebaseFirestore.instance.collection('subtasks');
 
+  final CollectionReference _budgetsCollection =
+      FirebaseFirestore.instance.collection('budgets');
+
+  final DocumentReference _budgetSettingsDoc =
+      FirebaseFirestore.instance.collection('metadata').doc('budget_settings');
+
   // ==================== REACTIVE OFFLINE STREAM CONTROLLERS ====================
   static final StreamController<List<Activity>> _mockActivitiesController = StreamController<List<Activity>>.broadcast();
   static final StreamController<List<CheckIn>> _mockCheckInsController = StreamController<List<CheckIn>>.broadcast();
   static final StreamController<List<SubTask>> _mockSubTasksController = StreamController<List<SubTask>>.broadcast();
   static final StreamController<List<LogEntry>> _mockLogsController = StreamController<List<LogEntry>>.broadcast();
+  static final StreamController<double> _mockSalaryController = StreamController<double>.broadcast();
+  static final StreamController<List<BudgetItem>> _mockBudgetsController = StreamController<List<BudgetItem>>.broadcast();
+
+  static void notifySalaryChanged() {
+    _mockSalaryController.add(mockMonthlySalary);
+  }
+
+  static void notifyBudgetsChanged() {
+    _mockBudgetsController.add(List.from(mockBudgets));
+  }
 
   static void notifyActivitiesChanged() {
     _mockActivitiesController.add(List.from(mockActivities));
@@ -42,6 +59,41 @@ class FirebaseService {
   }
 
   // ==================== STATIC MOCK STORAGE (OFFLINE SYNC) ====================
+  static double mockMonthlySalary = 3000.0;
+
+  static final List<BudgetItem> mockBudgets = [
+    BudgetItem(
+      id: 'b-1',
+      category: 'Food & Groceries',
+      limit: 200,
+      period: 'monthly',
+      expenses: [
+        BudgetExpense(id: 'e-1', tag: 'Grocery', description: 'Supermarket', amount: 45.0, timestamp: DateTime.now().subtract(const Duration(days: 2))),
+        BudgetExpense(id: 'e-2', tag: 'Dinner', description: 'Restaurant', amount: 100.0, timestamp: DateTime.now().subtract(const Duration(days: 1))),
+      ],
+      checked: true,
+    ),
+    BudgetItem(
+      id: 'b-2',
+      category: 'Transport',
+      limit: 80,
+      period: 'weekly',
+      expenses: [
+        BudgetExpense(id: 'e-3', tag: 'Fuel', description: 'Gas station', amount: 40.0, timestamp: DateTime.now()),
+      ],
+      checked: false,
+    ),
+    BudgetItem(
+      id: 'b-3',
+      category: 'Entertainment',
+      limit: 100,
+      period: 'monthly',
+      expenses: [
+        BudgetExpense(id: 'e-4', tag: 'Other', description: 'Movie night', amount: 110.0, timestamp: DateTime.now().subtract(const Duration(days: 5))),
+      ],
+      checked: false,
+    ),
+  ];
   
   static final List<LogEntry> mockEntries = [
     LogEntry(
@@ -92,28 +144,33 @@ class FirebaseService {
 
   // ==================== LOGS OPERATIONS ====================
 
+  // Expose mock streams explicitly for offline reactive rendering
+  Stream<List<LogEntry>> getMockLogsStream() {
+    late StreamController<List<LogEntry>> controller;
+    StreamSubscription? sub;
+    controller = StreamController<List<LogEntry>>(
+      onListen: () {
+        final sorted = List<LogEntry>.from(mockEntries);
+        sorted.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        controller.add(sorted);
+        sub = _mockLogsController.stream.listen((data) {
+          final s = List<LogEntry>.from(data);
+          s.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          controller.add(s);
+        });
+      },
+      onCancel: () {
+        sub?.cancel();
+        controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
   // Stream of log entries ordered by timestamp descending
   Stream<List<LogEntry>> getLogsStream() {
     if (Firebase.apps.isEmpty) {
-      late StreamController<List<LogEntry>> controller;
-      StreamSubscription? sub;
-      controller = StreamController<List<LogEntry>>(
-        onListen: () {
-          final sorted = List<LogEntry>.from(mockEntries);
-          sorted.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-          controller.add(sorted);
-          sub = _mockLogsController.stream.listen((data) {
-            final s = List<LogEntry>.from(data);
-            s.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-            controller.add(s);
-          });
-        },
-        onCancel: () {
-          sub?.cancel();
-          controller.close();
-        },
-      );
-      return controller.stream;
+      return getMockLogsStream();
     }
     return _logsCollection
         .orderBy('timestamp', descending: true)
@@ -153,24 +210,29 @@ class FirebaseService {
 
   // ==================== ACTIVITIES OPERATIONS ====================
 
+  // Expose mock streams explicitly for offline reactive rendering
+  Stream<List<Activity>> getMockActivitiesStream() {
+    late StreamController<List<Activity>> controller;
+    StreamSubscription? sub;
+    controller = StreamController<List<Activity>>(
+      onListen: () {
+        controller.add(List.from(mockActivities));
+        sub = _mockActivitiesController.stream.listen((data) {
+          controller.add(data);
+        });
+      },
+      onCancel: () {
+        sub?.cancel();
+        controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
   // Stream of all activities ordered by timestamp ascending
   Stream<List<Activity>> getActivitiesStream() {
     if (Firebase.apps.isEmpty) {
-      late StreamController<List<Activity>> controller;
-      StreamSubscription? sub;
-      controller = StreamController<List<Activity>>(
-        onListen: () {
-          controller.add(List.from(mockActivities));
-          sub = _mockActivitiesController.stream.listen((data) {
-            controller.add(data);
-          });
-        },
-        onCancel: () {
-          sub?.cancel();
-          controller.close();
-        },
-      );
-      return controller.stream;
+      return getMockActivitiesStream();
     }
     return _activitiesCollection
         .orderBy('timestamp', descending: false)
@@ -312,28 +374,33 @@ class FirebaseService {
     });
   }
 
+  // Expose mock streams explicitly for offline reactive rendering
+  Stream<List<CheckIn>> getMockCheckInsStream() {
+    late StreamController<List<CheckIn>> controller;
+    StreamSubscription? sub;
+    controller = StreamController<List<CheckIn>>(
+      onListen: () {
+        final sorted = List<CheckIn>.from(mockCheckIns);
+        sorted.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        controller.add(sorted);
+        sub = _mockCheckInsController.stream.listen((data) {
+          final s = List<CheckIn>.from(data);
+          s.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          controller.add(s);
+        });
+      },
+      onCancel: () {
+        sub?.cancel();
+        controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
   // Stream of checked (selected) activities only
   Stream<List<CheckIn>> getCheckedActivitiesCheckInsStream() {
     if (Firebase.apps.isEmpty) {
-      late StreamController<List<CheckIn>> controller;
-      StreamSubscription? sub;
-      controller = StreamController<List<CheckIn>>(
-        onListen: () {
-          final sorted = List<CheckIn>.from(mockCheckIns);
-          sorted.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-          controller.add(sorted);
-          sub = _mockCheckInsController.stream.listen((data) {
-            final s = List<CheckIn>.from(data);
-            s.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-            controller.add(s);
-          });
-        },
-        onCancel: () {
-          sub?.cancel();
-          controller.close();
-        },
-      );
-      return controller.stream;
+      return getMockCheckInsStream();
     }
     return _checkinsCollection
         .orderBy('timestamp', descending: true)
@@ -458,6 +525,7 @@ class FirebaseService {
   }
 
   // Create new sub-task check-in
+  // Create new sub-task check-in
   Future<void> createSubTask(String activityId, String subTaskName, DateTime timestamp, bool checked) async {
     final newSubTask = SubTask(
       id: Firebase.apps.isEmpty ? 'sub-${DateTime.now().millisecondsSinceEpoch}' : '',
@@ -469,9 +537,32 @@ class FirebaseService {
     if (Firebase.apps.isEmpty) {
       mockSubTasks.add(newSubTask);
       notifySubTasksChanged();
+      if (checked) {
+        final exists = mockCheckIns.any((c) => c.activityId == activityId && c.subTaskName == subTaskName);
+        if (!exists) {
+          mockCheckIns.add(CheckIn(
+            id: 'c-sub-${DateTime.now().millisecondsSinceEpoch}',
+            activityId: activityId,
+            timestamp: timestamp,
+            checked: true,
+            subTaskName: subTaskName,
+          ));
+          notifyCheckInsChanged();
+        }
+      }
       return;
     }
     await _subtasksCollection.add(newSubTask.toFirestore());
+    if (checked) {
+      final checkIn = CheckIn(
+        id: '',
+        activityId: activityId,
+        timestamp: timestamp,
+        checked: true,
+        subTaskName: subTaskName,
+      );
+      await _checkinsCollection.add(checkIn.toFirestore());
+    }
   }
 
   // Toggle sub-task check-in status
@@ -479,23 +570,356 @@ class FirebaseService {
     if (Firebase.apps.isEmpty) {
       final idx = mockSubTasks.indexWhere((s) => s.id == id);
       if (idx != -1) {
+        final subTask = mockSubTasks[idx];
         mockSubTasks[idx] = mockSubTasks[idx].copyWith(checked: checked);
         notifySubTasksChanged();
+
+        if (checked) {
+          final exists = mockCheckIns.any((c) =>
+              c.activityId == subTask.activityId &&
+              c.subTaskName == subTask.subTaskName);
+          if (!exists) {
+            mockCheckIns.add(CheckIn(
+              id: 'c-sub-${DateTime.now().millisecondsSinceEpoch}',
+              activityId: subTask.activityId,
+              timestamp: subTask.timestamp,
+              checked: true,
+              subTaskName: subTask.subTaskName,
+            ));
+            notifyCheckInsChanged();
+          }
+        } else {
+          mockCheckIns.removeWhere((c) =>
+              c.activityId == subTask.activityId &&
+              c.subTaskName == subTask.subTaskName);
+          notifyCheckInsChanged();
+        }
       }
       return;
     }
-    await _subtasksCollection.doc(id).update({
-      'checked': checked,
-    });
+
+    final doc = await _subtasksCollection.doc(id).get();
+    if (doc.exists) {
+      final subTask = SubTask.fromFirestore(doc);
+      await _subtasksCollection.doc(id).update({
+        'checked': checked,
+      });
+
+      if (checked) {
+        final existingQuery = await _checkinsCollection
+            .where('activityId', isEqualTo: subTask.activityId)
+            .where('subTaskName', isEqualTo: subTask.subTaskName)
+            .get();
+        if (existingQuery.docs.isEmpty) {
+          final checkIn = CheckIn(
+            id: '',
+            activityId: subTask.activityId,
+            timestamp: subTask.timestamp,
+            checked: true,
+            subTaskName: subTask.subTaskName,
+          );
+          await _checkinsCollection.add(checkIn.toFirestore());
+        }
+      } else {
+        final existingQuery = await _checkinsCollection
+            .where('activityId', isEqualTo: subTask.activityId)
+            .where('subTaskName', isEqualTo: subTask.subTaskName)
+            .get();
+        for (var doc in existingQuery.docs) {
+          await doc.reference.delete();
+        }
+      }
+    }
   }
 
   // Delete a sub-task check-in
   Future<void> deleteSubTask(String id) async {
     if (Firebase.apps.isEmpty) {
-      mockSubTasks.removeWhere((s) => s.id == id);
-      notifySubTasksChanged();
+      final idx = mockSubTasks.indexWhere((s) => s.id == id);
+      if (idx != -1) {
+        final subTask = mockSubTasks[idx];
+        mockSubTasks.removeAt(idx);
+        notifySubTasksChanged();
+
+        mockCheckIns.removeWhere((c) =>
+            c.activityId == subTask.activityId &&
+            c.subTaskName == subTask.subTaskName);
+        notifyCheckInsChanged();
+      }
       return;
     }
-    await _subtasksCollection.doc(id).delete();
+
+    final doc = await _subtasksCollection.doc(id).get();
+    if (doc.exists) {
+      final subTask = SubTask.fromFirestore(doc);
+      await _subtasksCollection.doc(id).delete();
+
+      final existingQuery = await _checkinsCollection
+          .where('activityId', isEqualTo: subTask.activityId)
+          .where('subTaskName', isEqualTo: subTask.subTaskName)
+          .get();
+      for (var doc in existingQuery.docs) {
+        await doc.reference.delete();
+      }
+    }
+  }
+
+  // ==================== BUDGET OPERATIONS ====================
+
+  Stream<double> getMockSalaryStream() {
+    late StreamController<double> controller;
+    StreamSubscription? sub;
+    controller = StreamController<double>(
+      onListen: () {
+        controller.add(mockMonthlySalary);
+        sub = _mockSalaryController.stream.listen((data) {
+          controller.add(data);
+        });
+      },
+      onCancel: () {
+        sub?.cancel();
+        controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
+  Stream<double> getSalaryStream() {
+    if (Firebase.apps.isEmpty) {
+      return getMockSalaryStream();
+    }
+    return _budgetSettingsDoc.snapshots().map((snapshot) {
+      if (snapshot.exists) {
+        final data = snapshot.data() as Map<String, dynamic>? ?? {};
+        return (data['monthlySalary'] as num?)?.toDouble() ?? 3000.0;
+      }
+      return 3000.0;
+    });
+  }
+
+  Future<void> updateSalary(double salary) async {
+    if (Firebase.apps.isEmpty) {
+      mockMonthlySalary = salary;
+      notifySalaryChanged();
+      return;
+    }
+    await _budgetSettingsDoc.set({'monthlySalary': salary}, SetOptions(merge: true));
+  }
+
+  Stream<List<BudgetItem>> getMockBudgetsStream() {
+    late StreamController<List<BudgetItem>> controller;
+    StreamSubscription? sub;
+    controller = StreamController<List<BudgetItem>>(
+      onListen: () {
+        controller.add(List.from(mockBudgets));
+        sub = _mockBudgetsController.stream.listen((data) {
+          controller.add(data);
+        });
+      },
+      onCancel: () {
+        sub?.cancel();
+        controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
+  Stream<List<BudgetItem>> getBudgetsStream() {
+    if (Firebase.apps.isEmpty) {
+      return getMockBudgetsStream();
+    }
+    return _budgetsCollection.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => BudgetItem.fromFirestore(doc)).toList();
+    });
+  }  Future<void> _deactivateOtherFirestoreBudgets(String activeBudgetId) async {
+    final query = await _budgetsCollection.where('checked', isEqualTo: true).get();
+    for (var doc in query.docs) {
+      if (doc.id != activeBudgetId) {
+        await doc.reference.update({'checked': false});
+      }
+    }
+  }
+
+  Future<void> createBudget(
+    String category,
+    double limit,
+    String period, {
+    String description = '',
+    DateTime? startDate,
+    DateTime? endDate,
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    bool repeat = true,
+    bool checked = true,
+  }) async {
+    final newItem = BudgetItem(
+      id: Firebase.apps.isEmpty ? 'b-${DateTime.now().millisecondsSinceEpoch}' : '',
+      category: category,
+      limit: limit,
+      period: period,
+      expenses: const [],
+      description: description,
+      startDate: startDate,
+      endDate: endDate,
+      repeatDays: repeatDays,
+      scheduledTime: scheduledTime,
+      repeat: repeat,
+      checked: checked,
+    );
+    if (Firebase.apps.isEmpty) {
+      if (checked) {
+        for (int i = 0; i < mockBudgets.length; i++) {
+          mockBudgets[i] = mockBudgets[i].copyWith(checked: false);
+        }
+      }
+      mockBudgets.add(newItem);
+      notifyBudgetsChanged();
+      return;
+    }
+    final docRef = await _budgetsCollection.add(newItem.toFirestore());
+    if (checked) {
+      await _deactivateOtherFirestoreBudgets(docRef.id);
+    }
+  }
+
+  Future<void> updateBudget(
+    String budgetId, {
+    double? limit,
+    String? period,
+    String? description,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<int>? repeatDays,
+    String? scheduledTime,
+    bool? repeat,
+    bool? checked,
+  }) async {
+    if (Firebase.apps.isEmpty) {
+      final idx = mockBudgets.indexWhere((b) => b.id == budgetId);
+      if (idx != -1) {
+        mockBudgets[idx] = mockBudgets[idx].copyWith(
+          limit: limit,
+          period: period,
+          description: description,
+          startDate: startDate,
+          endDate: endDate,
+          repeatDays: repeatDays,
+          scheduledTime: scheduledTime,
+          repeat: repeat,
+          checked: checked,
+        );
+        if (checked == true) {
+          for (int i = 0; i < mockBudgets.length; i++) {
+            if (mockBudgets[i].id != budgetId) {
+              mockBudgets[i] = mockBudgets[i].copyWith(checked: false);
+            }
+          }
+        }
+        notifyBudgetsChanged();
+      }
+      return;
+    }
+    final Map<String, dynamic> updates = {};
+    if (limit != null) updates['limit'] = limit;
+    if (period != null) updates['period'] = period;
+    if (description != null) updates['description'] = description;
+    if (startDate != null) updates['startDate'] = Timestamp.fromDate(startDate);
+    if (endDate != null) updates['endDate'] = Timestamp.fromDate(endDate);
+    if (repeatDays != null) updates['repeatDays'] = repeatDays;
+    if (scheduledTime != null) updates['scheduledTime'] = scheduledTime;
+    if (repeat != null) updates['repeat'] = repeat;
+    if (checked != null) updates['checked'] = checked;
+    await _budgetsCollection.doc(budgetId).update(updates);
+    if (checked == true) {
+      await _deactivateOtherFirestoreBudgets(budgetId);
+    }
+  }
+
+  Future<void> toggleBudget(String budgetId, bool checked) async {
+    if (Firebase.apps.isEmpty) {
+      final idx = mockBudgets.indexWhere((b) => b.id == budgetId);
+      if (idx != -1) {
+        mockBudgets[idx] = mockBudgets[idx].copyWith(checked: checked);
+        if (checked) {
+          for (int i = 0; i < mockBudgets.length; i++) {
+            if (mockBudgets[i].id != budgetId) {
+              mockBudgets[i] = mockBudgets[i].copyWith(checked: false);
+            }
+          }
+        }
+        notifyBudgetsChanged();
+      }
+      return;
+    }
+    await _budgetsCollection.doc(budgetId).update({'checked': checked});
+    if (checked) {
+      await _deactivateOtherFirestoreBudgets(budgetId);
+    }
+  }
+
+  Future<void> deleteBudget(String budgetId) async {
+    if (Firebase.apps.isEmpty) {
+      mockBudgets.removeWhere((b) => b.id == budgetId);
+      notifyBudgetsChanged();
+      return;
+    }
+    await _budgetsCollection.doc(budgetId).delete();
+  }
+
+  Future<void> addExpenseToBudget(String budgetId, String tag, String description, double amount, {DateTime? timestamp}) async {
+    final expenseTime = timestamp ?? DateTime.now();
+    if (Firebase.apps.isEmpty) {
+      final idx = mockBudgets.indexWhere((b) => b.id == budgetId);
+      if (idx != -1) {
+        final list = List<BudgetExpense>.from(mockBudgets[idx].expenses);
+        list.add(BudgetExpense(
+          id: 'e-${DateTime.now().millisecondsSinceEpoch}',
+          tag: tag,
+          description: description,
+          amount: amount,
+          timestamp: expenseTime,
+        ));
+        mockBudgets[idx] = mockBudgets[idx].copyWith(expenses: list);
+        notifyBudgetsChanged();
+      }
+      return;
+    }
+    final doc = await _budgetsCollection.doc(budgetId).get();
+    if (doc.exists) {
+      final budget = BudgetItem.fromFirestore(doc);
+      final list = List<BudgetExpense>.from(budget.expenses);
+      list.add(BudgetExpense(
+        id: 'e-${DateTime.now().millisecondsSinceEpoch}',
+        tag: tag,
+        description: description,
+        amount: amount,
+        timestamp: expenseTime,
+      ));
+      await _budgetsCollection.doc(budgetId).update({
+        'expenses': list.map((e) => e.toMap()).toList(),
+      });
+    }
+  }
+
+  Future<void> deleteExpenseFromBudget(String budgetId, String expenseId) async {
+    if (Firebase.apps.isEmpty) {
+      final idx = mockBudgets.indexWhere((b) => b.id == budgetId);
+      if (idx != -1) {
+        final list = List<BudgetExpense>.from(mockBudgets[idx].expenses);
+        list.removeWhere((e) => e.id == expenseId);
+        mockBudgets[idx] = mockBudgets[idx].copyWith(expenses: list);
+        notifyBudgetsChanged();
+      }
+      return;
+    }
+    final doc = await _budgetsCollection.doc(budgetId).get();
+    if (doc.exists) {
+      final budget = BudgetItem.fromFirestore(doc);
+      final list = List<BudgetExpense>.from(budget.expenses);
+      list.removeWhere((e) => e.id == expenseId);
+      await _budgetsCollection.doc(budgetId).update({
+        'expenses': list.map((e) => e.toMap()).toList(),
+      });
+    }
   }
 }
