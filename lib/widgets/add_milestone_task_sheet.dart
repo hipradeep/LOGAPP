@@ -8,13 +8,17 @@ import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
 class AddMilestoneSubTaskSheet extends StatefulWidget {
-  final Activity activity;
-  final Future<void> Function(Activity activity, String subTaskName, DateTime timestamp) onAddSubTask;
+  final List<Activity> milestones;
+  final Future<void> Function(Activity activity, String subTaskName, DateTime timestamp)? onAddSubTask;
+  final Task? editTask;
+  final Future<void> Function(Task task)? onEditSubTask;
 
   const AddMilestoneSubTaskSheet({
     super.key,
-    required this.activity,
-    required this.onAddSubTask,
+    required this.milestones,
+    this.onAddSubTask,
+    this.editTask,
+    this.onEditSubTask,
   });
 
   @override
@@ -27,6 +31,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   final ActivityService _firebaseService = ActivityService();
   late Stream<List<Task>> _subTasksStream;
+  late String _selectedMilestoneId;
   String? _deletingSubTaskId;
   TimeOfDay? _selectedTime;
   DateTime _selectedDate = DateTime.now();
@@ -35,8 +40,31 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
   @override
   void initState() {
     super.initState();
-    _subTasksStream = _firebaseService.getSubTasksForActivityStream(widget.activity.id);
+    _selectedMilestoneId = widget.milestones.first.id;
+    if (widget.editTask != null) {
+      final task = widget.editTask!;
+      _controller.text = task.taskName;
+      _selectedDate = task.timestamp;
+      if (task.scheduledTime != null) {
+        final parts = task.scheduledTime!.split(':');
+        if (parts.length == 2) {
+          _selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        }
+      }
+    }
+    _subTasksStream = _firebaseService.getSubTasksForActivityStream(_selectedMilestoneId);
   }
+
+  void _onMilestoneChanged(String? id) {
+    if (id == null) return;
+    setState(() {
+      _selectedMilestoneId = id;
+      _subTasksStream = _firebaseService.getSubTasksForActivityStream(id);
+    });
+  }
+
+  Activity get _selectedMilestone =>
+      widget.milestones.firstWhere((m) => m.id == _selectedMilestoneId);
 
   @override
   void dispose() {
@@ -69,12 +97,29 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
 
     setState(() => _isSaving = true);
     try {
-      await widget.onAddSubTask(widget.activity, taskName, subTaskDateTime);
-      if (mounted) {
-        _controller.clear();
-        setState(() {
-          _selectedTime = null;
-        });
+      if (widget.editTask != null) {
+        final task = widget.editTask!;
+        final updatedTask = Task(
+          id: task.id,
+          activityId: task.activityId,
+          taskName: rawName,
+          timestamp: subTaskDateTime,
+          checked: task.checked,
+          scheduledTime: _selectedTime != null
+              ? _formatTimeOfDay(_selectedTime!)
+              : null,
+          completionTime: task.completionTime,
+        );
+        await widget.onEditSubTask?.call(updatedTask);
+        if (mounted) Navigator.pop(context);
+      } else {
+        await widget.onAddSubTask?.call(_selectedMilestone, taskName, subTaskDateTime);
+        if (mounted) {
+          _controller.clear();
+          setState(() {
+            _selectedTime = null;
+          });
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -91,24 +136,10 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
     }
   }
 
-  Future<void> _toggleSubTask(Task subTask) async {
-    final newChecked = !subTask.checked;
-    try {
-      await _firebaseService.toggleSubTask(subTask.id, newChecked);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to toggle sub-task: $e'),
-          backgroundColor: AppTheme.errorColor,
-        ),
-      );
-    }
-  }
-
   Future<void> _deleteSubTask(String id) async {
     try {
       await _firebaseService.deleteSubTask(id);
+      if (mounted && widget.editTask != null) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -118,19 +149,6 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
         ),
       );
     }
-  }
-
-  String _formatSelectedDateHeader(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final tomorrow = today.add(const Duration(days: 1));
-    final compareDate = DateTime(date.year, date.month, date.day);
-
-    if (compareDate == today) return 'Today';
-    if (compareDate == yesterday) return 'Yesterday';
-    if (compareDate == tomorrow) return 'Tomorrow';
-    return DateFormat('MMMM d, yyyy').format(date);
   }
 
   String _formatTimeString(String time24h) {
@@ -146,27 +164,6 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
     }
   }
 
-
-  Future<void> _pickSubTaskTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime ?? const TimeOfDay(hour: 8, minute: 0),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
-    }
-  }
 
   Future<void> _pickCustomDate() async {
     final today = DateTime.now();
@@ -258,20 +255,43 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                         padding: const EdgeInsets.symmetric(horizontal: 28),
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      widget.activity.name,
+                                      widget.editTask != null ? 'Edit Task' : 'Add Task',
                                       style: AppTheme.headingMedium.copyWith(fontSize: 24),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    Text(
-                                      'Add Sub-task',
-                                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
+                                    const SizedBox(height: 4),
+                                    DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                      value: _selectedMilestoneId,
+                                      dropdownColor: AppTheme.surfaceColor,
+                                      isDense: true,
+                                      items: widget.milestones.map((m) {
+                                        return DropdownMenuItem<String>(
+                                          value: m.id,
+                                          child: Text(
+                                            m.name,
+                                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: widget.editTask != null ? null : _onMilestoneChanged,
+                                      style: const TextStyle(
+                                        color: AppTheme.primaryLight,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      icon: const Icon(
+                                        Icons.arrow_drop_down_rounded,
+                                        color: AppTheme.primaryLight,
+                                        size: 18,
+                                      ),
+                                    ),
                                     ),
                                   ],
                                 ),
@@ -301,93 +321,72 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                           ),
                           const VGapLg(),
                           Text(
-                            'Sub-task Title',
+                            widget.editTask != null ? 'Edit Task' : 'Add Task',
                             style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
                           ),
                           const VGapMd(),
+                          TextField(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            minLines: 1,
+                            maxLines: 5,
+                            onTap: () {
+                              _sheetController.animateTo(
+                                0.95,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOut,
+                              );
+                            },
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'Add milestone sub-task...',
+                              hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: 0.02),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: AppTheme.primaryColor),
+                              ),
+                            ),
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _saveSubTask(),
+                          ),
+                          const VGapMd(),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _controller,
-                                  focusNode: _focusNode,
-                                  onTap: () {
-                                    _sheetController.animateTo(
-                                      0.95,
-                                      duration: const Duration(milliseconds: 300),
-                                      curve: Curves.easeOut,
-                                    );
-                                  },
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'Add milestone sub-task...',
-                                    hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                                    enabledBorder: const UnderlineInputBorder(
-                                      borderSide: BorderSide(color: Colors.white24, width: 1),
+                              if (widget.editTask != null) ...[
+                                GestureDetector(
+                                  onTap: () => _deleteSubTask(widget.editTask!.id),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.errorColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
-                                    focusedBorder: const UnderlineInputBorder(
-                                      borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+                                    child: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 18,
+                                      color: AppTheme.errorColor,
                                     ),
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
                                   ),
-                                  textInputAction: TextInputAction.done,
-                                  onSubmitted: (_) => _saveSubTask(),
                                 ),
-                              ),
-                              if (_selectedTime != null) ...[
                                 const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _formatTimeForDisplay(_selectedTime!),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      GestureDetector(
-                                        onTap: () => setState(() => _selectedTime = null),
-                                        child: const Icon(
-                                          Icons.close_rounded,
-                                          size: 12,
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ],
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: _pickSubTaskTime,
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Icon(
-                                    Icons.access_time_rounded,
-                                    color: _selectedTime != null ? AppTheme.primaryLight : AppTheme.textSecondary,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
                               GestureDetector(
                                 onTap: _saveSubTask,
                                 child: Container(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                   decoration: BoxDecoration(
                                     color: AppTheme.primaryColor.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(10),
@@ -401,15 +400,19 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                                             color: AppTheme.primaryLight,
                                           ),
                                         )
-                                      : const Icon(
-                                          Icons.add_rounded,
-                                          color: AppTheme.primaryLight,
-                                          size: 18,
+                                      : const Text(
+                                          'SAVE',
+                                          style: TextStyle(
+                                            color: AppTheme.primaryLight,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
                                 ),
                               ),
                             ],
                           ),
+                          if (widget.editTask == null) ...[
                           const VGapLg(),
                           StreamBuilder<List<Task>>(
                             stream: _subTasksStream,
@@ -439,7 +442,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Sub-tasks for ${_formatSelectedDateHeader(_selectedDate)}',
+                                    'Tasks',
                                     style: AppTheme.headingSmall.copyWith(
                                       fontSize: 15,
                                       color: AppTheme.textSecondary,
@@ -465,10 +468,11 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                                         return _buildSubTaskRow(subTask);
                                       }).toList(),
                                     ),
-                                ],
-                              );
-                            },
+                              ],
+                            );
+                          },
                           ),
+                          ],
                           const VGapXxl(),
                         ],
                       ),
@@ -617,7 +621,6 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                         decoration: subTask.checked ? TextDecoration.lineThrough : null,
                         fontSize: 13,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (hasTime && timeString != null) ...[
@@ -661,52 +664,11 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
           ),
           const HGapMd(),
           GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (isDeletingThis) {
-                _deleteSubTask(subTask.id);
-                setState(() {
-                  _deletingSubTaskId = null;
-                });
-              } else {
-                _toggleSubTask(subTask);
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: isDeletingThis
-                  ? const Icon(
-                      Icons.close_rounded,
-                      size: 20,
-                      color: AppTheme.errorColor,
-                    )
-                  : AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(5),
-                        color: subTask.checked ? AppTheme.primaryColor : Colors.transparent,
-                        border: Border.all(
-                          color: subTask.checked 
-                              ? AppTheme.primaryColor 
-                              : AppTheme.textSecondary.withValues(alpha: 0.5),
-                          width: 2,
-                        ),
-                      ),
-                      child: subTask.checked
-                          ? const Icon(Icons.check, size: 12, color: Colors.white)
-                          : null,
-                    ),
-            ),
-          ),
-          const HGapMd(),
-          GestureDetector(
             onTap: () => _deleteSubTask(subTask.id),
             child: Icon(
-              Icons.close_rounded,
+              Icons.delete_outline_rounded,
               color: AppTheme.errorColor.withValues(alpha: 0.7),
-              size: 16,
+              size: 18,
             ),
           ),
         ],

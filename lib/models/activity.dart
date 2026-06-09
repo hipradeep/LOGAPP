@@ -23,10 +23,13 @@ class Activity {
   final String? category;
   final String? symbolType;
   final String? symbolValue;
+  final bool? _skippable;
 
   /// Whether this activity type supports sub-tasks.
   /// Derived from trackingType: routine & goal have sub-tasks, habit does not.
   bool get hasSubTasks => trackingType == 'multiple' || trackingType == 'milestone';
+
+  bool get skippable => _skippable ?? false;
 
   Activity({
     required this.id,
@@ -44,7 +47,8 @@ class Activity {
     this.category,
     this.symbolType,
     this.symbolValue,
-  });
+    bool? skippable = false,
+  }) : _skippable = skippable;
 
   // Convert to Firestore Map
   Map<String, dynamic> toFirestore() {
@@ -63,6 +67,7 @@ class Activity {
       'category': category,
       'symbolType': symbolType,
       'symbolValue': symbolValue,
+      'skippable': skippable,
     };
   }
 
@@ -110,6 +115,7 @@ class Activity {
       category: data['category'] as String?,
       symbolType: data['symbolType'] as String?,
       symbolValue: data['symbolValue'] as String?,
+      skippable: data['skippable'] as bool? ?? false,
     );
   }
 
@@ -130,6 +136,7 @@ class Activity {
     String? category,
     String? symbolType,
     String? symbolValue,
+    bool? skippable,
   }) {
     return Activity(
       id: id ?? this.id,
@@ -147,6 +154,7 @@ class Activity {
       category: category ?? this.category,
       symbolType: symbolType ?? this.symbolType,
       symbolValue: symbolValue ?? this.symbolValue,
+      skippable: skippable ?? this.skippable,
     );
   }
 }

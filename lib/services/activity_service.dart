@@ -49,6 +49,7 @@ class ActivityService {
     String? category,
     String? symbolType,
     String? symbolValue,
+    bool skippable = false,
   }) async {
     final newActivity = Activity(
       id: '',
@@ -66,6 +67,7 @@ class ActivityService {
       category: category,
       symbolType: symbolType,
       symbolValue: symbolValue,
+      skippable: skippable,
     );
     await _activitiesCollection.add(newActivity.toFirestore());
   }
@@ -87,6 +89,7 @@ class ActivityService {
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
     String? description,
+    bool? skippable,
   }) async {
     final Map<String, dynamic> updates = {
       'name': name,
@@ -98,6 +101,9 @@ class ActivityService {
       'endDate': endDate != null ? Timestamp.fromDate(endDate) : null,
       'subTaskTemplates': subTaskTemplates,
     };
+    if (skippable != null) {
+      updates['skippable'] = skippable;
+    }
     if (description != null) {
       updates['description'] = description;
     }

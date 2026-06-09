@@ -6,7 +6,7 @@ class CheckIn {
   final DateTime timestamp;
   final bool checked;
   final String? subTaskName;
-  final bool skipped;
+  final bool? _skipped;
 
   CheckIn({
     required this.id,
@@ -14,8 +14,10 @@ class CheckIn {
     required this.timestamp,
     required this.checked,
     this.subTaskName,
-    this.skipped = false,
-  });
+    bool? skipped = false,
+  }) : _skipped = skipped;
+
+  bool get skipped => _skipped ?? false;
 
   // Convert to Firestore Map
   Map<String, dynamic> toFirestore() {

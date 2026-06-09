@@ -30,19 +30,27 @@ class CheckInService {
 
   Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked, {bool skipped = false}) async {
     if (checked) {
-      final todayStart = DateTime(timestamp.year, timestamp.month, timestamp.day);
-      final todayEnd = todayStart.add(const Duration(days: 1));
       try {
-        final skippedQuery = await _checkinsCollection
+        final query = await _checkinsCollection
             .where('activityId', isEqualTo: activityId)
-            .where('skipped', isEqualTo: true)
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-            .where('timestamp', isLessThan: Timestamp.fromDate(todayEnd))
             .get();
-        for (var doc in skippedQuery.docs) {
-          await doc.reference.delete();
+        for (var doc in query.docs) {
+          final data = doc.data() as Map<String, dynamic>? ?? {};
+          final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
+          if (firestoreTimestamp != null) {
+            final dateTime = firestoreTimestamp.toDate();
+            final isToday = dateTime.year == timestamp.year &&
+                dateTime.month == timestamp.month &&
+                dateTime.day == timestamp.day;
+            final isSkippedDoc = data['skipped'] as bool? ?? false;
+            if (isToday && isSkippedDoc) {
+              await doc.reference.delete();
+            }
+          }
         }
-      } catch (_) {}
+      } catch (e) {
+        print("Error deleting skipped checkin: $e");
+      }
     }
 
     final newCheckIn = CheckIn(
@@ -67,16 +75,26 @@ class CheckInService {
 
   Future<void> deleteSkippedCheckInForToday(String activityId) async {
     final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final todayEnd = todayStart.add(const Duration(days: 1));
-    final query = await _checkinsCollection
-        .where('activityId', isEqualTo: activityId)
-        .where('skipped', isEqualTo: true)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(todayEnd))
-        .get();
-    for (var doc in query.docs) {
-      await doc.reference.delete();
+    try {
+      final query = await _checkinsCollection
+          .where('activityId', isEqualTo: activityId)
+          .get();
+      for (var doc in query.docs) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
+        if (firestoreTimestamp != null) {
+          final dateTime = firestoreTimestamp.toDate();
+          final isToday = dateTime.year == now.year &&
+              dateTime.month == now.month &&
+              dateTime.day == now.day;
+          final isSkippedDoc = data['skipped'] as bool? ?? false;
+          if (isToday && isSkippedDoc) {
+            await doc.reference.delete();
+          }
+        }
+      }
+    } catch (e) {
+      print("Error deleting skipped checkin for today: $e");
     }
   }
 }

@@ -10,7 +10,7 @@ import '../models/task.dart';
 import '../models/budget_item.dart';
 import '../widgets/budget_tab.dart';
 import '../widgets/milestones_tab.dart';
-import '../widgets/add_milestone_sub_task_sheet.dart';
+import '../widgets/add_milestone_task_sheet.dart';
 import '../widgets/add_transaction_sheet.dart';
 import '../services/activity_service.dart';
 import '../services/budget_service.dart';
@@ -72,6 +72,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
   // Selected milestone activity
   Activity? _selectedMilestoneActivity;
+  List<Activity> _milestoneActivities = [];
   bool _shouldSelectDefaultMilestone = true;
 
   // Selected budget category
@@ -470,9 +471,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
         }
 
         final allActivities = snapshot.data ?? [];
-        final milestoneActivities = allActivities
+        _milestoneActivities = allActivities
             .where((a) => a.trackingType == 'milestone')
             .toList();
+        final milestoneActivities = _milestoneActivities;
         
         final activeMilestones = milestoneActivities.where((a) => a.checked).toList();
         final selectedActivity = _getDefaultMilestoneActivity(activeMilestones);
@@ -522,6 +524,20 @@ class _ManagementScreenState extends State<ManagementScreen> {
               },
               onDeleteSubTask: (task) async {
                 await _activityService.deleteSubTask(task.id);
+              },
+              onEditSubTask: (task) {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => AddMilestoneSubTaskSheet(
+                    milestones: _milestoneActivities,
+                    editTask: task,
+                    onEditSubTask: (updatedTask) async {
+                      await _activityService.updateSubTask(updatedTask);
+                    },
+                  ),
+                );
               },
               onUpdateSubTaskSymbols: (task, symbolType, symbolValue) async {
                 await _activityService.updateSubTaskSymbols(
@@ -581,7 +597,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AddMilestoneSubTaskSheet(
-        activity: activity,
+        milestones: _milestoneActivities,
         onAddSubTask: _addMilestoneSubTask,
       ),
     );

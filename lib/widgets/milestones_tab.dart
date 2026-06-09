@@ -18,6 +18,7 @@ class MilestonesTab extends StatefulWidget {
   final Function(Activity, String?, String?, String?) onUpdateActivitySymbols;
   final Function(Activity, String, DateTime) onAddSubTask;
   final Function(Task) onDeleteSubTask;
+  final Function(Task) onEditSubTask;
   final Function(Task, String?, String?) onUpdateSubTaskSymbols;
 
   const MilestonesTab({
@@ -32,6 +33,7 @@ class MilestonesTab extends StatefulWidget {
     required this.onUpdateActivitySymbols,
     required this.onAddSubTask,
     required this.onDeleteSubTask,
+    required this.onEditSubTask,
     required this.onUpdateSubTaskSymbols,
   });
 
@@ -552,11 +554,11 @@ class _MilestonesTabState extends State<MilestonesTab> {
                         ),
                       ),
                       TextButton.icon(
-                        onPressed: () => widget.onDeleteSubTask(st),
-                        icon: const Icon(Icons.delete_forever_rounded, size: 14, color: AppTheme.errorColor),
-                        label: const Text('Delete Task', style: TextStyle(color: AppTheme.errorColor, fontSize: 11)),
+                        onPressed: () => widget.onEditSubTask(st),
+                        icon: const Icon(Icons.edit_outlined, size: 14, color: AppTheme.primaryLight),
+                        label: const Text('Edit', style: TextStyle(color: AppTheme.primaryLight, fontSize: 11)),
                         style: TextButton.styleFrom(
-                          backgroundColor: AppTheme.errorColor.withValues(alpha: 0.08),
+                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.08),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           minimumSize: Size.zero,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

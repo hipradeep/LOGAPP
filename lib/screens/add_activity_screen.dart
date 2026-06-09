@@ -15,6 +15,7 @@ class AddActivityScreen extends StatefulWidget {
     DateTime? endDate,
     List<String> subTaskTemplates,
     String? description,
+    bool skippable,
   }) onAdd;
   final Activity? initialActivity;
   final Function(String name, String trackingType, int targetCount, {
@@ -24,6 +25,7 @@ class AddActivityScreen extends StatefulWidget {
     DateTime? endDate,
     List<String> subTaskTemplates,
     String? description,
+    bool skippable,
   })? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleComplete;
@@ -51,6 +53,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
   bool _canUnfocus = false;
   final Set<int> _draggedIndices = {};
   bool _dragSelectMode = true;
+  bool _skippable = false;
 
   // Schedule fields
   List<int> _repeatDays = [1, 2, 3, 4, 5, 6, 7];
@@ -84,6 +87,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       if (a.subTaskTemplates.isNotEmpty) {
         _subTasks.addAll(a.subTaskTemplates);
       }
+      _skippable = a.skippable;
     }
     // Request focus on start
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -166,6 +170,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         endDate: _endDate,
         subTaskTemplates: finalSubTasks,
         description: descriptionStr,
+        skippable: _skippable,
       );
     } else {
       widget.onAdd(
@@ -178,6 +183,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         endDate: _endDate,
         subTaskTemplates: finalSubTasks,
         description: descriptionStr,
+        skippable: _skippable,
       );
     }
     Navigator.pop(context);
@@ -388,6 +394,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           ],
           const VGapLg(),
 
+          // Options
+          _buildSectionLabel('OPTIONS'),
+          const VGapSm(),
+          _buildSkippableToggle(),
+          const VGapLg(),
+
           // Description
           _buildSectionLabel('DESCRIPTION'),
           const VGapSm(),
@@ -437,6 +449,62 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             width: 1.5,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSkippableToggle() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.06),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Icon(
+                  Icons.skip_next_rounded,
+                  color: _skippable ? AppTheme.warningColor : AppTheme.textSecondary,
+                  size: 20,
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Skippable',
+                        style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const VGapXs(),
+                      Text(
+                        'Allow skipping this activity for the day',
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _skippable,
+            onChanged: (val) {
+              setState(() {
+                _skippable = val;
+              });
+            },
+            activeColor: AppTheme.primaryColor,
+          ),
+        ],
       ),
     );
   }

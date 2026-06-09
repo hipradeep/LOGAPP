@@ -164,11 +164,9 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          isMultiple
+                          isMultiple || widget.activity.trackingType == 'milestone'
                               ? 'Target: $targetCount times per day (Today: $todayCount)'
-                              : (widget.activity.trackingType == 'milestone'
-                                  ? 'Goal milestone'
-                                  : 'Daily check-in'),
+                              : 'Daily check-in',
                           style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary, fontSize: 13),
                         ),
                         if ((widget.activity.trackingType == 'single' ||
@@ -225,13 +223,13 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             children: [
               // 1. Current Check-In Section
-              if (widget.activity.trackingType != 'multiple') ...[
+              if (widget.activity.trackingType == 'single') ...[
                 _buildCurrentCheckInCard(isCompleted, todayCount, targetCount, isMultiple, todayCheckIns, subTasks),
                 const VGapLg(),
               ],
               
-              // Progress indicator for multiple check-ins
-              if (isMultiple) ...[
+              // Progress indicator for multiple/milestone check-ins
+              if (isMultiple || widget.activity.trackingType == 'milestone') ...[
                 _buildProgressBar(todayCount, targetCount),
                 const VGapLg(),
               ],
@@ -294,7 +292,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  isMultiple ? 'Daily Routine Log' : (widget.activity.trackingType == 'milestone' ? 'Goal Milestone' : 'Daily Habit Check-in'),
+                  isMultiple || widget.activity.trackingType == 'milestone' ? 'Daily Progress' : 'Daily Habit Check-in',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
@@ -303,7 +301,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 ),
                 const VGapXs(),
                 Text(
-                  isMultiple
+                  isMultiple || widget.activity.trackingType == 'milestone'
                       ? '$todayCount of $targetCount logged today'
                       : (isCompleted ? 'Checked in today at $formattedTime' : 'Not checked in yet today'),
                   style: AppTheme.bodySmall.copyWith(
@@ -316,27 +314,28 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           const HGapMd(),
           
           // Action Checkbox/Button on the right
-          GestureDetector(
-            onTap: () => _handleTodayCheckIn(isCompleted, todayCheckIns, subTasks),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isCompleted ? AppTheme.primaryColor : Colors.transparent,
-                border: Border.all(
-                  color: isCompleted ? AppTheme.primaryColor : AppTheme.textSecondary.withValues(alpha: 0.5),
-                  width: 2,
+          if (widget.activity.trackingType != 'milestone')
+            GestureDetector(
+              onTap: () => _handleTodayCheckIn(isCompleted, todayCheckIns, subTasks),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isCompleted ? AppTheme.primaryColor : Colors.transparent,
+                  border: Border.all(
+                    color: isCompleted ? AppTheme.primaryColor : AppTheme.textSecondary.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
                 ),
+                child: Icon(
+                Icons.add,
+                size: 14,
+                color: isCompleted ? Colors.white : AppTheme.primaryLight,
               ),
-              child: Icon(
-              Icons.add,
-              size: 14,
-              color: isCompleted ? Colors.white : AppTheme.primaryLight,
+              ),
             ),
-            ),
-          ),
         ],
       ),
     );
@@ -712,6 +711,11 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       }
     }
 
+    // For milestone, show only active (unchecked) tasks
+    final displayItems = widget.activity.trackingType == 'milestone'
+        ? uiItems.where((i) => !i.checked).toList()
+        : uiItems;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -732,7 +736,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         const VGapSm(),
 
         // Underline Input Row
-        if (widget.activity.trackingType != 'multiple')
+        if (widget.activity.trackingType == 'single')
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -830,21 +834,23 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         const VGapSm(),
 
         // List of sub-tasks
-        if (uiItems.isEmpty)
+        if (displayItems.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
               child: Text(
-                widget.activity.trackingType == 'multiple'
-                    ? 'No sub-tasks defined for this activity.'
-                    : 'No sub-tasks yet today. Add one above!',
+                widget.activity.trackingType == 'milestone'
+                    ? 'No pending tasks for today.'
+                    : (widget.activity.trackingType == 'multiple'
+                        ? 'No sub-tasks defined for this activity.'
+                        : 'No sub-tasks yet today. Add one above!'),
                 style: AppTheme.bodySmall.copyWith(fontStyle: FontStyle.italic),
               ),
             ),
           )
         else
           Column(
-            children: uiItems.map((item) {
+            children: displayItems.map((item) {
               final isMilestoneCustom = widget.activity.trackingType == 'milestone' && !item.isTemplate && item.subTaskId != null;
 
               final Widget itemContainer = Container(

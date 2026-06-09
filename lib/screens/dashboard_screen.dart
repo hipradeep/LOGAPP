@@ -7,6 +7,7 @@ import '../widgets/glow_blob.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/activity_check_in_sheet.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/activity_chip.dart';
 
 import '../models/activity.dart';
 import '../models/check_in.dart';
@@ -30,6 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Stream<List<Activity>> _checkedActivitiesStream;
   late Stream<List<CheckIn>> _checkInsStream;
   late Stream<List<Task>> _subTasksStream;
+
+  final Set<String> _selectedActivityIds = {};
 
   final List<Map<String, String>> _moods = [
     {'emoji': '😊', 'label': 'Happy'},
@@ -135,16 +138,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
                       final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp) && s.checked).toList();
 
-                      // Classify activities into pending and completed today
+                      // Classify activities into pending, completed, and skipped today
                       final List<Activity> pendingActivities = [];
                       final List<Activity> completedActivities = [];
+                      final List<Activity> skippedActivities = [];
                       
                       for (var activity in checkedActivities) {
                         final bool isSkipped = checkIns.any((c) =>
                             _isToday(c.timestamp) &&
                             c.activityId == activity.id &&
                             c.skipped == true);
-                        if (isSkipped) continue;
+                        if (isSkipped) {
+                          skippedActivities.add(activity);
+                          continue;
+                        }
                         final int todayCount;
                         if (activity.trackingType == 'multiple') {
                           todayCount = todaySubTasks.where((s) => s.activityId == activity.id).length;
@@ -200,14 +207,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       pendingActivities.sort(compareActivities);
                       completedActivities.sort(compareActivities);
+                      skippedActivities.sort(compareActivities);
                       
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildCheckedActivitiesList(pendingActivities, todayCheckIns, todaySubTasks, isCompletedList: false),
+                          _buildCheckedActivitiesList(context, pendingActivities, todayCheckIns, subTasks, isCompletedList: false),
+                          if (skippedActivities.isNotEmpty) ...[
+                            const VGapSm(),
+                            _buildCheckedActivitiesList(context, skippedActivities, todayCheckIns, subTasks, isCompletedList: false, isSkippedList: true),
+                          ],
                           if (completedActivities.isNotEmpty) ...[
                             const VGapSm(),
-                            _buildCheckedActivitiesList(completedActivities, todayCheckIns, todaySubTasks, isCompletedList: true),
+                            _buildCheckedActivitiesList(context, completedActivities, todayCheckIns, subTasks, isCompletedList: true),
                           ],
                           const VGapSm(),
                           _buildDailySummaryCard(checkedActivities, checkIns, subTasks),
@@ -230,10 +242,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildCheckedActivitiesList(
+    BuildContext context,
     List<Activity> activities,
     List<CheckIn> todayCheckIns,
-    List<Task> todaySubTasks, {
+    List<Task> allSubTasks, {
     required bool isCompletedList,
+    bool isSkippedList = false,
   }) {
     if (activities.isEmpty) return const SizedBox.shrink();
 
@@ -241,14 +255,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isCompletedList 
-            ? AppTheme.successColor.withOpacity(0.04)
-            : AppTheme.surfaceColor.withOpacity(0.2),
+        color: isSkippedList
+            ? AppTheme.warningColor.withValues(alpha: 0.04)
+            : (isCompletedList 
+                ? AppTheme.successColor.withValues(alpha: 0.04)
+                : AppTheme.surfaceColor.withValues(alpha: 0.2)),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: isCompletedList
-              ? AppTheme.successColor.withOpacity(0.15)
-              : Colors.white.withOpacity(0.02),
+          color: isSkippedList
+              ? AppTheme.warningColor.withValues(alpha: 0.15)
+              : (isCompletedList
+                  ? AppTheme.successColor.withValues(alpha: 0.15)
+                  : Colors.white.withValues(alpha: 0.02)),
           width: 1,
         ),
       ),
@@ -256,21 +274,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                isCompletedList ? Icons.check_circle_rounded : Icons.star_rounded, 
-                color: isCompletedList ? AppTheme.successColor : Colors.amber, 
-                size: 16,
+              Row(
+                children: [
+                  Icon(
+                    isSkippedList
+                        ? Icons.next_plan_rounded
+                        : (isCompletedList ? Icons.check_circle_rounded : Icons.star_rounded), 
+                    color: isSkippedList
+                        ? AppTheme.warningColor
+                        : (isCompletedList ? AppTheme.successColor : Colors.amber), 
+                    size: 16,
+                  ),
+                  const HGapSm(),
+                  Text(
+                    (isSkippedList
+                        ? 'Skipped Today'
+                        : (isCompletedList ? 'Completed Today' : 'Active Activities')).toUpperCase(),
+                    style: AppTheme.bodySmall.copyWith(
+                      color: isSkippedList
+                          ? AppTheme.warningColor
+                          : (isCompletedList ? AppTheme.successColor : AppTheme.textPrimary),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
               ),
-              const HGapSm(),
-              Text(
-                (isCompletedList ? 'Completed Today' : 'Active Activities').toUpperCase(),
-                style: AppTheme.bodySmall.copyWith(
-                  color: isCompletedList ? AppTheme.successColor : AppTheme.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
+              if (!isCompletedList && !isSkippedList && _selectedActivityIds.isNotEmpty)
+                GestureDetector(
+                  onTap: () => _handleSkipSelected(context, activities),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppTheme.warningColor.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.skip_next_rounded, 
+                          color: AppTheme.warningColor, 
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Skip',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppTheme.warningColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              if (isSkippedList && _selectedActivityIds.isNotEmpty)
+                GestureDetector(
+                  onTap: () => _handleActivateSelected(context, activities),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppTheme.successColor.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.undo_rounded, 
+                          color: AppTheme.successColor, 
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Activate',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppTheme.successColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
           const VGapSm(),
@@ -279,12 +378,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             runSpacing: 8,
             children: activities.map((activity) {
               final int count = activity.trackingType == 'multiple'
-                  ? todaySubTasks.where((s) => s.activityId == activity.id).length
+                  ? allSubTasks.where((s) => s.activityId == activity.id && s.checked && _isToday(s.timestamp)).length
                   : todayCheckIns.where((c) => c.activityId == activity.id).length;
 
-              return _DashboardActivityChip(
+              return ActivityChip(
                 activity: activity,
                 todayCount: count,
+                isSkipped: isSkippedList,
+                isSelected: _selectedActivityIds.contains(activity.id),
                 onTap: () {
                   showModalBottomSheet(
                     context: context,
@@ -297,7 +398,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     setState(() {});
                   });
                 },
-                onLongPress: (globalPosition) => _handleSkipActivity(activity, globalPosition),
+                onLongPress: () {
+                  setState(() {
+                    if (_selectedActivityIds.contains(activity.id)) {
+                      _selectedActivityIds.remove(activity.id);
+                    } else {
+                      _selectedActivityIds.add(activity.id);
+                    }
+                  });
+                },
               );
             }).toList(),
           ),
@@ -312,10 +421,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: AppTheme.defaultCardPadding,
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withOpacity(0.4),
+        color: AppTheme.surfaceColor.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           width: 1,
         ),
       ),
@@ -343,10 +452,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       width: 54,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor.withOpacity(0.7),
+                        color: AppTheme.surfaceColor.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha: 0.05),
                           width: 1,
                         ),
                       ),
@@ -365,69 +474,157 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _handleSkipActivity(Activity activity, Offset globalPosition) async {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
-    final relativeRect = RelativeRect.fromRect(
-      Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
-      Offset.zero & overlay.size,
-    );
+  void _handleSkipSelected(BuildContext context, List<Activity> sectionActivities) {
+    final toSkip = sectionActivities.where((a) => _selectedActivityIds.contains(a.id) && a.skippable).toList();
+    if (toSkip.isEmpty) return;
+    for (var activity in toSkip) {
+      _executeSkipActivity(context, activity);
+    }
+    setState(() => _selectedActivityIds.clear());
+  }
 
-    final selected = await showMenu<String>(
-      context: context,
-      position: relativeRect,
-      color: AppTheme.surfaceColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      items: [
-        const PopupMenuItem<String>(
-          value: 'skip',
-          child: Row(
-            children: [
-              Icon(Icons.skip_next_rounded, color: AppTheme.warningColor, size: 18),
-              SizedBox(width: 8),
-              Text('Skip', style: TextStyle(color: Colors.white)),
-            ],
-          ),
-        ),
-      ],
-    );
+  void _handleActivateSelected(BuildContext context, List<Activity> sectionActivities) {
+    final toActivate = sectionActivities.where((a) => _selectedActivityIds.contains(a.id)).toList();
+    if (toActivate.isEmpty) return;
+    for (var activity in toActivate) {
+      _executeActivateActivity(context, activity);
+    }
+    setState(() => _selectedActivityIds.clear());
+  }
 
-    if (selected == 'skip') {
-      try {
-        await _checkInService.createCheckIn(activity.id, DateTime.now(), false, skipped: true);
-        if (!mounted) return;
-        AppToast.show(
-          context: context,
-          message: '"${activity.name}" marked as skipped',
-          backgroundColor: AppTheme.warningColor,
-          actionLabel: 'UNDO',
-          onActionPressed: () async {
-            try {
-              await _checkInService.deleteSkippedCheckInForToday(activity.id);
-              if (!mounted) return;
-              AppToast.show(
-                context: context,
-                message: 'Skip undone successfully',
-                backgroundColor: AppTheme.successColor,
-              );
-            } catch (e) {
-              if (!mounted) return;
-              AppToast.show(
-                context: context,
-                message: 'Failed to undo: $e',
-                backgroundColor: AppTheme.errorColor,
-              );
-            }
-          },
-        );
-      } catch (e) {
-        if (!mounted) return;
-        AppToast.show(
-          context: context,
-          message: 'Failed to skip: $e',
-          backgroundColor: AppTheme.errorColor,
-        );
+  void _executeActivateActivity(BuildContext context, Activity activity) async {
+    try {
+      await _checkInService.deleteSkippedCheckInForToday(activity.id);
+      await _logService.createEntry(
+        'Activated "${activity.name}"',
+        'Activated a previously skipped activity.',
+        '↩️',
+        ['Activate'],
+      );
+      if (!mounted) return;
+      AppToast.show(
+        context: context,
+        message: '"${activity.name}" activated',
+        backgroundColor: AppTheme.successColor,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(
+        context: context,
+        message: 'Failed to activate: $e',
+        backgroundColor: AppTheme.errorColor,
+      );
+    }
+  }
+
+  void _executeSkipActivity(BuildContext context, Activity activity) async {
+    try {
+      await _checkInService.createCheckIn(activity.id, DateTime.now(), false, skipped: true);
+      await _logService.createEntry(
+        'Skipped "${activity.name}"',
+        'Marked activity as skipped for the day.',
+        '⏭️',
+        ['Skip'],
+      );
+      if (!mounted) return;
+      AppToast.show(
+        context: context,
+        message: '"${activity.name}" marked as skipped',
+        backgroundColor: AppTheme.warningColor,
+        actionLabel: 'UNDO',
+        onActionPressed: () async {
+          try {
+            await _checkInService.deleteSkippedCheckInForToday(activity.id);
+            if (!mounted) return;
+            await _logService.createEntry(
+              'Undo skip: "${activity.name}"',
+              'Reversed the skipped status.',
+              '↩️',
+              ['UndoSkip'],
+            );
+            if (!mounted) return;
+            AppToast.show(
+              context: context,
+              message: 'Skip undone successfully',
+              backgroundColor: AppTheme.successColor,
+            );
+          } catch (e) {
+            if (!mounted) return;
+            AppToast.show(
+              context: context,
+              message: 'Failed to undo: $e',
+              backgroundColor: AppTheme.errorColor,
+            );
+          }
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(
+        context: context,
+        message: 'Failed to skip: $e',
+        backgroundColor: AppTheme.errorColor,
+      );
+    }
+  }
+
+  void _handleQuickCheckIn(BuildContext context, Activity activity, List<CheckIn> todayCheckIns, List<Task> allSubTasks) async {
+    final targetCount = activity.targetCount;
+    final int currentCount = activity.trackingType == 'multiple'
+        ? allSubTasks.where((s) => s.activityId == activity.id && s.checked && _isToday(s.timestamp)).length
+        : todayCheckIns.where((c) => c.activityId == activity.id).length;
+
+    if (activity.trackingType == 'single' && currentCount >= targetCount) {
+      AppToast.show(
+        context: context,
+        message: 'Already checked in today!',
+        backgroundColor: Colors.orange,
+      );
+      return;
+    }
+
+    try {
+      if (activity.trackingType == 'multiple') {
+        final todaySubTasks = allSubTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp)).toList();
+        final List<String> templates = activity.subTaskTemplates;
+        
+        String? nextTemplate;
+        for (var temp in templates) {
+          final isChecked = todaySubTasks.any((s) => s.taskName == temp && s.checked);
+          if (!isChecked) {
+            nextTemplate = temp;
+            break;
+          }
+        }
+
+        if (nextTemplate != null) {
+          final existing = todaySubTasks.firstWhere(
+            (s) => s.taskName == nextTemplate,
+            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+          );
+          if (existing.id.isNotEmpty) {
+            await _activityService.toggleSubTask(existing.id, true);
+          } else {
+            await _activityService.createSubTask(activity.id, nextTemplate, DateTime.now(), true);
+          }
+        }
       }
+
+      await _checkInService.createCheckIn(activity.id, DateTime.now(), true);
+      
+      if (!mounted) return;
+      AppToast.show(
+        context: context,
+        message: '"${activity.name}" checked in successfully',
+        backgroundColor: AppTheme.successColor,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.show(
+        context: context,
+        message: 'Failed to check in: $e',
+        backgroundColor: AppTheme.errorColor,
+      );
     }
   }
 
@@ -462,10 +659,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withOpacity(0.3),
+          color: AppTheme.surfaceColor.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
           border: Border.all(
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha: 0.05),
             width: 1,
           ),
         ),
@@ -481,7 +678,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(
               'Go to Settings > Track Activities to choose activities for your daily layout.',
               textAlign: TextAlign.center,
-              style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary.withOpacity(0.7)),
+              style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary.withValues(alpha: 0.7)),
             ),
           ],
         ),
@@ -514,17 +711,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (completionRate >= 0.5 && completionRate < 1.0) {
       motivationalMessage = 'More than halfway there! Almost done!';
     } else if (completionRate == 1.0) {
-      motivationalMessage = 'Perfect day! You\'ve completed all active activities! 🎉';
+      motivationalMessage = 'Perfect day! You\'ve completed all active activities! ðŸŽ‰';
     }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withOpacity(0.4),
+        color: AppTheme.surfaceColor.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: Colors.white.withOpacity(0.08),
+          color: Colors.white.withValues(alpha: 0.08),
         ),
       ),
       child: Row(
@@ -564,7 +761,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: CircularProgressIndicator(
                   value: completionRate,
                   strokeWidth: 8,
-                  backgroundColor: Colors.white.withOpacity(0.05),
+                  backgroundColor: Colors.white.withValues(alpha: 0.05),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     completionRate >= 1.0 ? AppTheme.successColor : AppTheme.primaryColor,
                   ),
@@ -605,10 +802,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withOpacity(0.4),
+        color: AppTheme.surfaceColor.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           width: 1,
         ),
       ),
@@ -692,7 +889,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     final Color progressColor = isCompleted
         ? AppTheme.successColor
-        : (progress > 0 ? AppTheme.primaryColor : Colors.white.withOpacity(0.1));
+        : (progress > 0 ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.1));
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -712,7 +909,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.35),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.35),
                       blurRadius: 12,
                       spreadRadius: 1,
                     ),
@@ -729,8 +926,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   value: isFuture ? 0.0 : (progress > 0 ? progress : 0.0),
                   strokeWidth: 3,
                   backgroundColor: isFuture
-                      ? Colors.white.withOpacity(0.03)
-                      : Colors.white.withOpacity(0.08),
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : Colors.white.withValues(alpha: 0.08),
                   valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                 ),
               ),
@@ -740,7 +937,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: isToday
                       ? Colors.white
                       : (isFuture
-                          ? AppTheme.textSecondary.withOpacity(0.4)
+                          ? AppTheme.textSecondary.withValues(alpha: 0.4)
                           : AppTheme.textSecondary),
                   fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                   fontSize: 11,
@@ -760,7 +957,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             boxShadow: isToday
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.5),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.5),
                       blurRadius: 4,
                       spreadRadius: 1,
                     ),
@@ -773,133 +970,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _DashboardActivityChip extends StatelessWidget {
-  final Activity activity;
-  final int todayCount;
-  final VoidCallback onTap;
-  final Function(Offset)? onLongPress;
-
-  const _DashboardActivityChip({
-    Key? key,
-    required this.activity,
-    required this.todayCount,
-    required this.onTap,
-    this.onLongPress,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final targetCount = activity.targetCount;
-    final isMultiple = targetCount > 1;
-    final isCompleted = todayCount >= targetCount;
-    final double progress = targetCount > 0 ? (todayCount / targetCount).clamp(0.0, 1.0) : 0.0;
-
-    final Color typeColor;
-    switch (activity.trackingType) {
-      case 'multiple':
-        typeColor = AppTheme.secondaryColor;
-        break;
-      case 'milestone':
-        typeColor = AppTheme.warningColor;
-        break;
-      case 'single':
-      default:
-        typeColor = AppTheme.primaryColor;
-        break;
-    }
-
-    final Color accentColor = isCompleted ? AppTheme.successColor : typeColor;
-
-    return GestureDetector(
-      onTap: onTap,
-      onLongPressStart: onLongPress != null 
-          ? (details) => onLongPress!(details.globalPosition)
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: typeColor.withValues(alpha: isCompleted ? 0.12 : 0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: accentColor.withValues(alpha: isCompleted ? 0.35 : 0.2),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: typeColor.withValues(alpha: isCompleted ? 0.15 : 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Mini circular progress ring
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 2.5,
-                    backgroundColor: Colors.white.withValues(alpha: 0.08),
-                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                  ),
-                  if (isCompleted)
-                    Icon(
-                      Icons.check_rounded,
-                      color: accentColor,
-                      size: 12,
-                    )
-                  else
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.7),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Activity name
-            Text(
-              activity.name,
-              style: AppTheme.bodySmall.copyWith(
-                color: isCompleted
-                    ? AppTheme.successColor.withValues(alpha: 0.9)
-                    : AppTheme.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-              ),
-            ),
-            // Count badge for multi-target activities
-            if (isMultiple) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '$todayCount/$targetCount',
-                  style: TextStyle(
-                    color: accentColor,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -549,6 +549,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             DateTime? endDate,
             List<String> subTaskTemplates = const [],
             String? description,
+            bool skippable = false,
           }) {
             _addActivity(
               name, trackingType, targetCount,
@@ -558,6 +559,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               endDate: endDate,
               subTaskTemplates: subTaskTemplates,
               description: description,
+              skippable: skippable,
             );
           },
         ),
@@ -577,6 +579,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             DateTime? endDate,
             List<String> subTaskTemplates = const [],
             String? description,
+            bool skippable = false,
           }) {},
           initialActivity: activity,
           onEdit: (name, trackingType, targetCount, {
@@ -586,6 +589,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             DateTime? endDate,
             List<String> subTaskTemplates = const [],
             String? description,
+            bool skippable = false,
           }) {
             _editActivity(
               activity.id, name, trackingType, targetCount,
@@ -595,6 +599,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               endDate: endDate,
               subTaskTemplates: subTaskTemplates,
               description: description,
+              skippable: skippable,
             );
           },
           onDelete: () async {
@@ -622,6 +627,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
     String? description,
+    bool skippable = false,
   }) async {
     try {
       await _activityService.createActivity(
@@ -634,6 +640,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         endDate: endDate,
         subTaskTemplates: subTaskTemplates,
         description: description ?? '',
+        skippable: skippable,
       );
     } catch (e) {
       if (mounted) {
@@ -652,6 +659,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     DateTime? endDate,
     List<String> subTaskTemplates = const [],
     String? description,
+    bool skippable = false,
   }) async {
     try {
       await _activityService.updateActivity(
@@ -662,6 +670,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         endDate: endDate,
         subTaskTemplates: subTaskTemplates,
         description: description,
+        skippable: skippable,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

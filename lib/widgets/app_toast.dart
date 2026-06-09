@@ -20,6 +20,7 @@ class AppToast {
             color: Colors.white,
           ),
         ),
+        duration: const Duration(seconds: 3),
         backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
         elevation: 6,
