@@ -6,6 +6,7 @@ class CheckIn {
   final DateTime timestamp;
   final bool checked;
   final String? subTaskName;
+  final bool skipped;
 
   CheckIn({
     required this.id,
@@ -13,6 +14,7 @@ class CheckIn {
     required this.timestamp,
     required this.checked,
     this.subTaskName,
+    this.skipped = false,
   });
 
   // Convert to Firestore Map
@@ -21,6 +23,7 @@ class CheckIn {
       'activityId': activityId,
       'timestamp': Timestamp.fromDate(timestamp),
       'checked': checked,
+      'skipped': skipped,
     };
     if (subTaskName != null) {
       data['subTaskName'] = subTaskName;
@@ -43,6 +46,7 @@ class CheckIn {
       timestamp: dateTime,
       checked: data['checked'] as bool? ?? false,
       subTaskName: data['subTaskName'] as String?,
+      skipped: data['skipped'] as bool? ?? false,
     );
   }
 
@@ -52,6 +56,7 @@ class CheckIn {
     DateTime? timestamp,
     bool? checked,
     String? subTaskName,
+    bool? skipped,
   }) {
     return CheckIn(
       id: id ?? this.id,
@@ -59,6 +64,7 @@ class CheckIn {
       timestamp: timestamp ?? this.timestamp,
       checked: checked ?? this.checked,
       subTaskName: subTaskName ?? this.subTaskName,
+      skipped: skipped ?? this.skipped,
     );
   }
 }

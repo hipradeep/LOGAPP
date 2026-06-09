@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget_item.dart';
-import '../services/firebase_service.dart';
+import '../services/budget_service.dart';
+import '../services/sms_transaction_service.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import '../screens/sms_import_sheet.dart';
 
 class BudgetTab extends StatefulWidget {
   final String? selectedBudgetId;
@@ -20,7 +22,7 @@ class BudgetTab extends StatefulWidget {
 }
 
 class _BudgetTabState extends State<BudgetTab> {
-  final FirebaseService _firebaseService = FirebaseService();
+  final BudgetService _budgetService = BudgetService();
   String? _selectedBudgetId;
   String? _deletingExpenseId;
 
@@ -42,13 +44,13 @@ class _BudgetTabState extends State<BudgetTab> {
 
 
   void _deleteExpense(BudgetItem budget, String expenseId) async {
-    await _firebaseService.deleteExpenseFromBudget(budget.id, expenseId);
+    await _budgetService.deleteExpenseFromBudget(budget.id, expenseId);
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<BudgetItem>>(
-      stream: _firebaseService.getBudgetsStream(),
+      stream: _budgetService.getBudgetsStream(),
       builder: (context, budgetsSnapshot) {
         if (budgetsSnapshot.connectionState == ConnectionState.waiting && !budgetsSnapshot.hasData) {
           return const Center(
@@ -107,6 +109,8 @@ class _BudgetTabState extends State<BudgetTab> {
             _buildCalendarButton(context, selectedBudget),
             const HGapSm(),
             _buildProgressButton(context, selectedBudget),
+            const HGapSm(),
+            _buildSmsImportButton(context, selectedBudget),
             const Spacer(),
           ],
         ),
@@ -647,6 +651,54 @@ class _BudgetTabState extends State<BudgetTab> {
     );
   }
 
+  Widget _buildSmsImportButton(BuildContext context, BudgetItem? budget) {
+    return Tooltip(
+      message: 'Import from SMS',
+      child: GestureDetector(
+        onTap: () async {
+          if (budget == null) return;
+          final granted = await SmsTransactionService().requestPermission();
+          if (!mounted) return;
+          if (!granted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('SMS permission is required to read transactions'),
+                backgroundColor: AppTheme.errorColor,
+              ),
+            );
+            return;
+          }
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => SmsImportSheet(
+              budgetId: budget.id,
+              existingExpenses: budget.expenses,
+            ),
+          );
+        },
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppTheme.primaryColor.withValues(alpha: 0.25),
+              width: 1,
+            ),
+          ),
+          child: const Icon(
+            Icons.sms_rounded,
+            color: AppTheme.primaryLight,
+            size: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
   IconData _getCategoryIcon(String category) {
     final cat = category.toLowerCase();
     if (cat.contains('food') || cat.contains('eat') || cat.contains('restaurant') || cat.contains('cafe')) {
@@ -736,6 +788,7 @@ class _BudgetTabState extends State<BudgetTab> {
 
   static const _tagIcons = <String, IconData>{
     'bill': Icons.receipt_long_rounded,
+    'credit card': Icons.credit_card_rounded,
     'dinner': Icons.dinner_dining_rounded,
     'drink': Icons.local_cafe_rounded,
     'fuel': Icons.local_gas_station_rounded,
@@ -749,6 +802,7 @@ class _BudgetTabState extends State<BudgetTab> {
 
   static const _tagColors = <String, Color>{
     'bill': Colors.redAccent,
+    'credit card': Colors.indigo,
     'dinner': Colors.amber,
     'drink': Colors.brown,
     'fuel': Colors.blue,
@@ -764,7 +818,10 @@ class _BudgetTabState extends State<BudgetTab> {
     final key = description.toLowerCase();
     for (final entry in _tagIcons.entries) {
       if (key.contains(entry.key)) {
-        return entry.key[0].toUpperCase() + entry.key.substring(1);
+        return entry.key
+            .split(' ')
+            .map((w) => w[0].toUpperCase() + w.substring(1))
+            .join(' ');
       }
     }
     return 'Other';

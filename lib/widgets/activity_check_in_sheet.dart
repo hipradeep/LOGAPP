@@ -6,17 +6,16 @@ import 'app_spacers.dart';
 import 'app_icons.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
-import '../models/sub_task.dart';
-import '../services/firebase_service.dart';
+import '../models/task.dart';
+import '../services/activity_service.dart';
+import '../services/check_in_service.dart';
 
 class ActivityCheckInSheet extends StatefulWidget {
   final Activity activity;
-  final bool useMockData;
 
   const ActivityCheckInSheet({
     super.key,
     required this.activity,
-    required this.useMockData,
   });
 
   @override
@@ -24,12 +23,13 @@ class ActivityCheckInSheet extends StatefulWidget {
 }
 
 class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
-  final FirebaseService _firebaseService = FirebaseService();
+  final ActivityService _activityService = ActivityService();
+  final CheckInService _checkInService = CheckInService();
   final DateTime _now = DateTime.now();
   final TextEditingController _subTaskTextController = TextEditingController();
   final FocusNode _subTaskFocusNode = FocusNode();
   late Stream<List<CheckIn>> _checkInsStream;
-  late Stream<List<SubTask>> _subTasksStream;
+  late Stream<List<Task>> _subTasksStream;
   TimeOfDay? _subTaskTime;
   String? _deletingSubTaskId;
 
@@ -41,8 +41,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   @override
   void initState() {
     super.initState();
-    _checkInsStream = _firebaseService.getCheckInsStream(widget.activity.id);
-    _subTasksStream = _firebaseService.getSubTasksForActivityStream(widget.activity.id);
+    _checkInsStream = _checkInService.getCheckInsStream(widget.activity.id);
+    _subTasksStream = _activityService.getSubTasksForActivityStream(widget.activity.id);
   }
 
   @override
@@ -79,42 +79,40 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: widget.useMockData
-                  ? _buildSheetContent(scrollController, _getLocalCheckIns(), _getLocalSubTasks())
-                  : StreamBuilder<List<CheckIn>>(
-                      stream: _checkInsStream,
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError) {
+              child: StreamBuilder<List<CheckIn>>(
+                  stream: _checkInsStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Center(
+                        child: Text('Error loading history', style: TextStyle(color: AppTheme.errorColor)),
+                      );
+                    }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+                      );
+                    }
+                    final checkIns = snapshot.data ?? [];
+
+                    return StreamBuilder<List<Task>>(
+                      stream: _subTasksStream,
+                      builder: (context, subtaskSnapshot) {
+                        if (subtaskSnapshot.hasError) {
                           return const Center(
-                            child: Text('Error loading history', style: TextStyle(color: AppTheme.errorColor)),
+                            child: Text('Error loading sub-tasks', style: TextStyle(color: AppTheme.errorColor)),
                           );
                         }
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (subtaskSnapshot.connectionState == ConnectionState.waiting) {
                           return const Center(
                             child: CircularProgressIndicator(color: AppTheme.primaryColor),
                           );
                         }
-                        final checkIns = snapshot.data ?? [];
-
-                        return StreamBuilder<List<SubTask>>(
-                          stream: _subTasksStream,
-                          builder: (context, subtaskSnapshot) {
-                            if (subtaskSnapshot.hasError) {
-                              return const Center(
-                                child: Text('Error loading sub-tasks', style: TextStyle(color: AppTheme.errorColor)),
-                              );
-                            }
-                            if (subtaskSnapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(
-                                child: CircularProgressIndicator(color: AppTheme.primaryColor),
-                              );
-                            }
-                            final subTasks = subtaskSnapshot.data ?? [];
-                            return _buildSheetContent(scrollController, checkIns, subTasks);
-                          },
-                        );
+                        final subTasks = subtaskSnapshot.data ?? [];
+                        return _buildSheetContent(scrollController, checkIns, subTasks);
                       },
-                    ),
+                    );
+                  },
+                ),
               ),
             ),
           );
@@ -123,25 +121,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     );
   }
 
-  List<CheckIn> _getLocalCheckIns() {
-    final checkIns = FirebaseService.mockCheckIns
-        .where((c) => c.activityId == widget.activity.id)
-        .toList();
-    // Sort descending by timestamp
-    checkIns.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return checkIns;
-  }
-
-  List<SubTask> _getLocalSubTasks() {
-    final subTasks = FirebaseService.mockSubTasks
-        .where((s) => s.activityId == widget.activity.id)
-        .toList();
-    // Sort descending by timestamp
-    subTasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return subTasks;
-  }
-
-  Widget _buildSheetContent(ScrollController scrollController, List<CheckIn> checkIns, List<SubTask> subTasks) {
+  Widget _buildSheetContent(ScrollController scrollController, List<CheckIn> checkIns, List<Task> subTasks) {
     // Calculate today's completed check-ins
     final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
     final todayCount = widget.activity.trackingType == 'multiple'
@@ -260,7 +240,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
 
               // Sub-tasks checklist section (if activity has sub-tasks enabled)
               if (widget.activity.hasSubTasks) ...[
-                _buildSubTasksSection(subTasks, !widget.useMockData),
+                _buildSubTasksSection(subTasks),
                 const VGapLg(),
               ],
 
@@ -297,7 +277,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   // CURRENT DATE & TIME CHECK-IN WIDGET
-  Widget _buildCurrentCheckInCard(bool isCompleted, int todayCount, int targetCount, bool isMultiple, List<CheckIn> todayCheckIns, List<SubTask> subTasks) {
+  Widget _buildCurrentCheckInCard(bool isCompleted, int todayCount, int targetCount, bool isMultiple, List<CheckIn> todayCheckIns, List<Task> subTasks) {
     final formattedTime = todayCheckIns.isNotEmpty
         ? DateFormat('h:mm a').format(todayCheckIns.first.timestamp)
         : DateFormat('h:mm a').format(_now);
@@ -410,7 +390,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   // HISTORY CHECKLIST LIST VIEW
-  Widget _buildHistorySection(List<CheckIn> checkIns, List<SubTask> subTasks) {
+  Widget _buildHistorySection(List<CheckIn> checkIns, List<Task> subTasks) {
     final List<_HistoryItem> historyItems = [];
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
@@ -436,7 +416,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           id: s.id,
           timestamp: s.timestamp,
           checked: s.checked,
-          subTaskName: s.subTaskName,
+          subTaskName: s.taskName,
           isSubTask: true,
           originalObject: s,
         ));
@@ -450,7 +430,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     // Sort descending by timestamp
     historyItems.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    return _buildHistoryList(historyItems, isLive: !widget.useMockData);
+    return _buildHistoryList(historyItems);
   }
 
   String _formatHistoryDate(DateTime timestamp) {
@@ -471,7 +451,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  Widget _buildHistoryList(List<_HistoryItem> items, {required bool isLive}) {
+  Widget _buildHistoryList(List<_HistoryItem> items) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -537,7 +517,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               const HGapMd(),
               // Delete Check-in
               GestureDetector(
-                onTap: () => _deleteHistoryItem(item, isLive),
+                onTap: () => _deleteHistoryItem(item),
                 child: const Icon(
                    Icons.delete_outline_rounded,
                   color: AppTheme.errorColor,
@@ -552,11 +532,11 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
 
-  void _deleteHistoryItem(_HistoryItem item, bool isLive) async {
+  void _deleteHistoryItem(_HistoryItem item) async {
     if (item.isSubTask) {
-      _deleteSubTask(item.id, isLive);
+      _deleteSubTask(item.id);
     } else {
-      _deleteCheckIn(item.id, isLive);
+      _deleteCheckIn(item.id);
     }
   }
 
@@ -611,7 +591,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   // ACTIONS
-  void _handleTodayCheckIn(bool isCompleted, List<CheckIn> todayCheckIns, List<SubTask> subTasks) async {
+  void _handleTodayCheckIn(bool isCompleted, List<CheckIn> todayCheckIns, List<Task> subTasks) async {
     // For single check-ins, limit to 1 per day
     if (widget.activity.trackingType == 'single' && isCompleted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -631,8 +611,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
 
       for (var template in widget.activity.subTaskTemplates) {
         final match = todaySubTasks.firstWhere(
-          (s) => s.subTaskName == template,
-          orElse: () => SubTask(id: '', activityId: '', subTaskName: '', timestamp: DateTime.now(), checked: false),
+          (s) => s.taskName == template,
+          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
         );
         uiItems.add(_SubTaskUiItem(
           name: template,
@@ -643,9 +623,9 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       }
 
       for (var s in todaySubTasks) {
-        if (!widget.activity.subTaskTemplates.contains(s.subTaskName)) {
+        if (!widget.activity.subTaskTemplates.contains(s.taskName)) {
           uiItems.add(_SubTaskUiItem(
-            name: s.subTaskName,
+            name: s.taskName,
             checked: s.checked,
             subTaskId: s.id,
             isTemplate: false,
@@ -658,106 +638,50 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         // Also check the subtask checkboxes (all subtasks)
         for (var item in uiItems) {
           if (!item.checked) {
-            if (widget.useMockData) {
+            try {
               if (item.subTaskId != null) {
-                final idx = FirebaseService.mockSubTasks.indexWhere((s) => s.id == item.subTaskId);
-                if (idx != -1) {
-                  FirebaseService.mockSubTasks[idx] = FirebaseService.mockSubTasks[idx].copyWith(checked: true);
-                }
+                await _activityService.toggleSubTask(item.subTaskId!, true);
               } else {
-                FirebaseService.mockSubTasks.add(
-                  SubTask(
-                    id: 'sub-${DateTime.now().millisecondsSinceEpoch}',
-                    activityId: widget.activity.id,
-                    timestamp: DateTime.now(),
-                    checked: true,
-                    subTaskName: item.name,
-                  ),
-                );
+                await _activityService.createSubTask(widget.activity.id, item.name, DateTime.now(), true);
               }
-              // Also add mock check-in!
-              final exists = FirebaseService.mockCheckIns.any((c) => c.activityId == widget.activity.id && c.subTaskName == item.name);
-              if (!exists) {
-                FirebaseService.mockCheckIns.add(CheckIn(
-                  id: 'c-sub-${DateTime.now().millisecondsSinceEpoch}',
-                  activityId: widget.activity.id,
-                  timestamp: DateTime.now(),
-                  checked: true,
-                  subTaskName: item.name,
-                ));
-              }
-            } else {
-              try {
-                if (item.subTaskId != null) {
-                  await _firebaseService.toggleSubTask(item.subTaskId!, true);
-                } else {
-                  await _firebaseService.createSubTask(widget.activity.id, item.name, DateTime.now(), true);
-                }
-              } catch (e) {
-                // Ignore errors
-              }
+            } catch (e) {
+              // Ignore errors
             }
           }
-        }
-        if (widget.useMockData) {
-          FirebaseService.notifySubTasksChanged();
         }
       }
     }
 
     if (!mounted) return;
     final checkInNow = DateTime.now();
-    if (widget.useMockData) {
-      FirebaseService.mockCheckIns.add(
-        CheckIn(
-          id: 'c-${DateTime.now().millisecondsSinceEpoch}',
-          activityId: widget.activity.id,
-          timestamp: checkInNow,
-          checked: true,
-        ),
-      );
+    try {
+      await _checkInService.createCheckIn(widget.activity.id, checkInNow, true);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logged check-in locally.'), duration: Duration(seconds: 1)),
+        const SnackBar(content: Text('Logged check-in to Firestore.'), duration: Duration(seconds: 1)),
       );
-      setState(() {});
-      FirebaseService.notifyCheckInsChanged();
-    } else {
-      try {
-        await _firebaseService.createCheckIn(widget.activity.id, checkInNow, true);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Logged check-in to Firestore.'), duration: Duration(seconds: 1)),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to check in: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to check in: $e'), backgroundColor: AppTheme.errorColor),
+      );
     }
   }
 
 
-  void _deleteCheckIn(String id, bool isLive) async {
-    if (!isLive) {
-      setState(() {
-        FirebaseService.mockCheckIns.removeWhere((c) => c.id == id);
-      });
-      FirebaseService.notifyCheckInsChanged();
-    } else {
-      try {
-        await _firebaseService.deleteCheckIn(id);
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete check-in: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
+  void _deleteCheckIn(String id) async {
+    try {
+      await _checkInService.deleteCheckIn(id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete check-in: $e'), backgroundColor: AppTheme.errorColor),
+      );
     }
   }
 
   // SUB-TASKS UI SECTION
-  Widget _buildSubTasksSection(List<SubTask> subTasks, bool isLive) {
+  Widget _buildSubTasksSection(List<Task> subTasks) {
     final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp)).toList();
 
     final List<_SubTaskUiItem> uiItems = [];
@@ -765,8 +689,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     // 1. Add template sub-tasks
     for (var template in widget.activity.subTaskTemplates) {
       final match = todaySubTasks.firstWhere(
-        (s) => s.subTaskName == template,
-        orElse: () => SubTask(id: '', activityId: '', subTaskName: '', timestamp: DateTime.now(), checked: false),
+        (s) => s.taskName == template,
+        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
       );
       uiItems.add(_SubTaskUiItem(
         name: template,
@@ -778,9 +702,9 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
 
     // 2. Add custom sub-tasks
     for (var s in todaySubTasks) {
-      if (!widget.activity.subTaskTemplates.contains(s.subTaskName)) {
+      if (!widget.activity.subTaskTemplates.contains(s.taskName)) {
         uiItems.add(_SubTaskUiItem(
-          name: s.subTaskName,
+          name: s.taskName,
           checked: s.checked,
           subTaskId: s.id,
           isTemplate: false,
@@ -833,7 +757,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                     textInputAction: TextInputAction.done,
-                    onSubmitted: (value) => _addSubTask(value, isLive),
+                    onSubmitted: (value) => _addSubTask(value),
                   ),
                 ),
                 if (_subTaskTime != null) ...[
@@ -886,7 +810,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 ),
                 const SizedBox(width: 4),
                 GestureDetector(
-                  onTap: () => _addSubTask(_subTaskTextController.text, isLive),
+                  onTap: () => _addSubTask(_subTaskTextController.text),
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -1007,12 +931,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       onTap: () {
                         final isDeletingThis = _deletingSubTaskId == item.subTaskId && item.subTaskId != null;
                         if (isDeletingThis) {
-                          _deleteSubTask(item.subTaskId!, isLive);
+                          _deleteSubTask(item.subTaskId!);
                           setState(() {
                             _deletingSubTaskId = null;
                           });
                         } else {
-                          _toggleSubTask(item, isLive);
+                          _toggleSubTask(item);
                         }
                       },
                       child: Padding(
@@ -1046,7 +970,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                     if (!item.isTemplate && widget.activity.trackingType != 'milestone') ...[
                       const HGapMd(),
                       GestureDetector(
-                        onTap: () => _deleteSubTask(item.subTaskId!, isLive),
+                        onTap: () => _deleteSubTask(item.subTaskId!),
                         child: Icon(
                           Icons.close_rounded,
                           color: AppTheme.errorColor.withValues(alpha: 0.7),
@@ -1079,7 +1003,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     );
   }
 
-  void _addSubTask(String name, bool isLive) async {
+  void _addSubTask(String name) async {
     name = name.trim();
     if (name.isEmpty) return;
     final taskNameWithSchedule = _subTaskTime != null
@@ -1088,32 +1012,16 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     _subTaskTextController.clear();
     
     final timestamp = DateTime.now();
-    if (!isLive) {
+    try {
+      await _activityService.createSubTask(widget.activity.id, taskNameWithSchedule, timestamp, false);
       setState(() {
-        FirebaseService.mockSubTasks.add(
-          SubTask(
-            id: 'sub-${DateTime.now().millisecondsSinceEpoch}',
-            activityId: widget.activity.id,
-            timestamp: timestamp,
-            checked: false,
-            subTaskName: taskNameWithSchedule,
-          ),
-        );
         _subTaskTime = null;
       });
-      FirebaseService.notifySubTasksChanged();
-    } else {
-      try {
-        await _firebaseService.createSubTask(widget.activity.id, taskNameWithSchedule, timestamp, false);
-        setState(() {
-          _subTaskTime = null;
-        });
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add sub-task: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add sub-task: $e'), backgroundColor: AppTheme.errorColor),
+      );
     }
   }
 
@@ -1165,94 +1073,30 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  void _toggleSubTask(_SubTaskUiItem item, bool isLive) async {
+  void _toggleSubTask(_SubTaskUiItem item) async {
     final newChecked = !item.checked;
-    if (!isLive) {
+    try {
       if (item.subTaskId != null) {
-        setState(() {
-          final idx = FirebaseService.mockSubTasks.indexWhere((s) => s.id == item.subTaskId);
-          if (idx != -1) {
-            FirebaseService.mockSubTasks[idx] = FirebaseService.mockSubTasks[idx].copyWith(checked: newChecked);
-          }
-        });
-        FirebaseService.notifySubTasksChanged();
+        await _activityService.toggleSubTask(item.subTaskId!, newChecked);
       } else {
-        setState(() {
-          FirebaseService.mockSubTasks.add(
-            SubTask(
-              id: 'sub-${DateTime.now().millisecondsSinceEpoch}',
-              activityId: widget.activity.id,
-              timestamp: DateTime.now(),
-              checked: newChecked,
-              subTaskName: item.name,
-            ),
-          );
-        });
-        FirebaseService.notifySubTasksChanged();
+        await _activityService.createSubTask(widget.activity.id, item.name, DateTime.now(), newChecked);
       }
-      if (newChecked) {
-        final exists = FirebaseService.mockCheckIns.any((c) =>
-            c.activityId == widget.activity.id && c.subTaskName == item.name);
-        if (!exists) {
-          DateTime taskTimestamp = DateTime.now();
-          if (item.subTaskId != null) {
-            final idx = FirebaseService.mockSubTasks.indexWhere((s) => s.id == item.subTaskId);
-            if (idx != -1) {
-              taskTimestamp = FirebaseService.mockSubTasks[idx].timestamp;
-            }
-          }
-          FirebaseService.mockCheckIns.add(CheckIn(
-            id: 'c-sub-${DateTime.now().millisecondsSinceEpoch}',
-            activityId: widget.activity.id,
-            timestamp: taskTimestamp,
-            checked: true,
-            subTaskName: item.name,
-          ));
-        }
-      } else {
-        FirebaseService.mockCheckIns.removeWhere((c) =>
-            c.activityId == widget.activity.id && c.subTaskName == item.name);
-      }
-      FirebaseService.notifyCheckInsChanged();
-    } else {
-      try {
-        if (item.subTaskId != null) {
-          await _firebaseService.toggleSubTask(item.subTaskId!, newChecked);
-        } else {
-          await _firebaseService.createSubTask(widget.activity.id, item.name, DateTime.now(), newChecked);
-        }
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to toggle sub-task: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to toggle sub-task: $e'), backgroundColor: AppTheme.errorColor),
+      );
     }
   }
 
-  void _deleteSubTask(String id, bool isLive) async {
-    if (!isLive) {
-      setState(() {
-        final idx = FirebaseService.mockSubTasks.indexWhere((s) => s.id == id);
-        if (idx != -1) {
-          final subTask = FirebaseService.mockSubTasks[idx];
-          FirebaseService.mockSubTasks.removeAt(idx);
-          FirebaseService.mockCheckIns.removeWhere((c) =>
-              c.activityId == subTask.activityId &&
-              c.subTaskName == subTask.subTaskName);
-        }
-      });
-      FirebaseService.notifySubTasksChanged();
-      FirebaseService.notifyCheckInsChanged();
-    } else {
-      try {
-        await _firebaseService.deleteSubTask(id);
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete sub-task: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
+  void _deleteSubTask(String id) async {
+    try {
+      await _activityService.deleteSubTask(id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete sub-task: $e'), backgroundColor: AppTheme.errorColor),
+      );
     }
   }
 }

@@ -20,6 +20,10 @@ class Activity {
   // Description
   final String? description;
 
+  final String? category;
+  final String? symbolType;
+  final String? symbolValue;
+
   /// Whether this activity type supports sub-tasks.
   /// Derived from trackingType: routine & goal have sub-tasks, habit does not.
   bool get hasSubTasks => trackingType == 'multiple' || trackingType == 'milestone';
@@ -37,6 +41,9 @@ class Activity {
     this.endDate,
     this.subTaskTemplates = const [],
     this.description,
+    this.category,
+    this.symbolType,
+    this.symbolValue,
   });
 
   // Convert to Firestore Map
@@ -53,6 +60,9 @@ class Activity {
       'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
       'subTaskTemplates': subTaskTemplates,
       'description': description,
+      'category': category,
+      'symbolType': symbolType,
+      'symbolValue': symbolValue,
     };
   }
 
@@ -97,6 +107,9 @@ class Activity {
       endDate: firestoreEndDate?.toDate(),
       subTaskTemplates: parsedSubTaskTemplates,
       description: data['description'] as String?,
+      category: data['category'] as String?,
+      symbolType: data['symbolType'] as String?,
+      symbolValue: data['symbolValue'] as String?,
     );
   }
 
@@ -114,6 +127,9 @@ class Activity {
     DateTime? endDate,
     List<String>? subTaskTemplates,
     String? description,
+    String? category,
+    String? symbolType,
+    String? symbolValue,
   }) {
     return Activity(
       id: id ?? this.id,
@@ -128,6 +144,9 @@ class Activity {
       endDate: endDate ?? this.endDate,
       subTaskTemplates: subTaskTemplates ?? this.subTaskTemplates,
       description: description ?? this.description,
+      category: category ?? this.category,
+      symbolType: symbolType ?? this.symbolType,
+      symbolValue: symbolValue ?? this.symbolValue,
     );
   }
 }

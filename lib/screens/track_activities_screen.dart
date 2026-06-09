@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
@@ -7,8 +6,9 @@ import '../widgets/app_spacers.dart';
 import 'add_activity_screen.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
-import '../models/sub_task.dart';
-import '../services/firebase_service.dart';
+import '../models/task.dart';
+import '../services/activity_service.dart';
+import '../services/check_in_service.dart';
 
 class TrackActivitiesScreen extends StatefulWidget {
   const TrackActivitiesScreen({super.key});
@@ -18,17 +18,14 @@ class TrackActivitiesScreen extends StatefulWidget {
 }
 
 class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
-  final FirebaseService _firebaseService = FirebaseService();
+  final ActivityService _activityService = ActivityService();
+  final CheckInService _checkInService = CheckInService();
   
-  bool _useMockData = false;
-  List<Activity> get _mockActivities => FirebaseService.mockActivities;
-
   static const _dayLabelsShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   void initState() {
     super.initState();
-    _useMockData = Firebase.apps.isEmpty;
   }
 
   @override
@@ -83,76 +80,13 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                   ),
                 ),
               ),
-              const HGapSm(),
-              GestureDetector(
-                onTap: () {
-                  if (Firebase.apps.isNotEmpty) {
-                    setState(() {
-                      _useMockData = !_useMockData;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(_useMockData 
-                            ? 'Switched to local offline simulator mode.' 
-                            : 'Switched to Firebase live stream mode.'),
-                        backgroundColor: AppTheme.primaryColor,
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Firebase is not initialized. Locked in offline simulator mode.'),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _useMockData 
-                        ? AppTheme.warningColor.withValues(alpha: 0.15) 
-                        : AppTheme.successColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _useMockData 
-                          ? AppTheme.warningColor.withValues(alpha: 0.4) 
-                          : AppTheme.successColor.withValues(alpha: 0.4),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const HGapSm(),
-                      Text(
-                        _useMockData ? 'OFFLINE' : 'LIVE',
-                        style: TextStyle(
-                          color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),
         const VGapMd(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _useMockData ? _buildLocalList() : _buildFirestoreList(),
+          child: _buildFirestoreList(),
         ),
       ],
     );
@@ -160,17 +94,12 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
 
   Widget _buildFirestoreList() {
     return StreamBuilder<List<Activity>>(
-      stream: _firebaseService.getActivitiesStream(),
+      stream: _activityService.getActivitiesStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!_useMockData) {
-              setState(() {
-                _useMockData = true;
-              });
-            }
-          });
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: Text('Error loading activities', style: TextStyle(color: AppTheme.errorColor)),
+          );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -185,14 +114,14 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         }
 
         return StreamBuilder<List<CheckIn>>(
-          stream: _firebaseService.getCheckedActivitiesCheckInsStream(),
+          stream: _checkInService.getCheckedActivitiesCheckInsStream(),
           builder: (context, checkinSnapshot) {
             final checkIns = checkinSnapshot.data ?? [];
-            return StreamBuilder<List<SubTask>>(
-              stream: _firebaseService.getSubTasksStream(),
+            return StreamBuilder<List<Task>>(
+              stream: _activityService.getSubTasksStream(),
               builder: (context, subtaskSnapshot) {
                 final subTasks = subtaskSnapshot.data ?? [];
-                return _buildList(activities, checkIns, subTasks, isLive: true);
+                return _buildList(activities, checkIns, subTasks);
               },
             );
           },
@@ -201,14 +130,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
-  Widget _buildLocalList() {
-    if (_mockActivities.isEmpty) {
-      return _buildEmptyState();
-    }
-    return _buildList(_mockActivities, FirebaseService.mockCheckIns, FirebaseService.mockSubTasks, isLive: false);
-  }
-
-  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, List<SubTask> subTasks, {required bool isLive}) {
+  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, List<Task> subTasks) {
     final active = activities.where((a) => a.checked).toList();
     final completed = activities.where((a) => !a.checked).toList();
 
@@ -235,7 +157,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           final parts = template.split('|');
           if (parts.length > 1) {
             final timeStr = parts.last;
-            final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.subTaskName == template);
+            final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.taskName == template);
             if (!isCheckedIn) {
               return timeStr;
             }
@@ -307,7 +229,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           const VGapSm(),
           ...active.map((a) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _buildActivityCard(a, isLive),
+            child: _buildActivityCard(a),
           )),
           const VGapMd(),
         ],
@@ -316,7 +238,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           const VGapSm(),
           ...completed.map((a) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _buildActivityCard(a, isLive),
+            child: _buildActivityCard(a),
           )),
           const VGapMd(),
         ],
@@ -384,7 +306,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     }
   }
 
-  Widget _buildActivityCard(Activity activity, bool isLive) {
+  Widget _buildActivityCard(Activity activity) {
     final isActive = activity.checked;
     final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
     final typeBadge = _getTypeBadge(activity.trackingType);
@@ -410,7 +332,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     }
 
     return GestureDetector(
-      onTap: () => _navigateToEditActivity(activity, isLive),
+      onTap: () => _navigateToEditActivity(activity),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -530,7 +452,6 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                                 ),
                               ],
                             ),
-
                           ],
                         ),
                       ),
@@ -573,8 +494,6 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       ),
     );
   }
-
-
 
   Widget _buildActivityProgressIcon(Activity activity) {
     final isActive = activity.checked;
@@ -632,7 +551,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             String? description,
           }) {
             _addActivity(
-              name, trackingType, targetCount, _useMockData,
+              name, trackingType, targetCount,
               repeatDays: repeatDays,
               scheduledTime: scheduledTime,
               startDate: startDate,
@@ -646,7 +565,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
-  void _navigateToEditActivity(Activity activity, bool isLive) {
+  void _navigateToEditActivity(Activity activity) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -669,7 +588,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             String? description,
           }) {
             _editActivity(
-              activity.id, name, trackingType, targetCount, isLive,
+              activity.id, name, trackingType, targetCount,
               repeatDays: repeatDays,
               scheduledTime: scheduledTime,
               startDate: startDate,
@@ -679,13 +598,13 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             );
           },
           onDelete: () async {
-            final deleted = await _confirmDeleteActivity(activity, isLive);
+            final deleted = await _confirmDeleteActivity(activity);
             if (deleted && context.mounted) {
               Navigator.pop(context);
             }
           },
           onToggleComplete: () {
-            _toggleActivity(activity, isLive);
+            _toggleActivity(activity);
             if (context.mounted) {
               Navigator.pop(context);
             }
@@ -696,7 +615,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   }
 
   void _addActivity(
-    String name, String trackingType, int targetCount, bool isMock, {
+    String name, String trackingType, int targetCount, {
     List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     String? scheduledTime,
     DateTime? startDate,
@@ -704,51 +623,29 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     List<String> subTaskTemplates = const [],
     String? description,
   }) async {
-    if (isMock) {
-      setState(() {
-        _mockActivities.add(
-          Activity(
-            id: 'mock-${DateTime.now().millisecondsSinceEpoch}',
-            name: name,
-            checked: true,
-            timestamp: DateTime.now(),
-            trackingType: trackingType,
-            targetCount: targetCount,
-            repeatDays: repeatDays,
-            scheduledTime: scheduledTime,
-            startDate: startDate,
-            endDate: endDate,
-            subTaskTemplates: subTaskTemplates,
-            description: description,
-          ),
+    try {
+      await _activityService.createActivity(
+        name,
+        trackingType: trackingType,
+        targetCount: targetCount,
+        repeatDays: repeatDays,
+        scheduledTime: scheduledTime,
+        startDate: startDate,
+        endDate: endDate,
+        subTaskTemplates: subTaskTemplates,
+        description: description ?? '',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add activity: $e'), backgroundColor: AppTheme.errorColor),
         );
-      });
-      FirebaseService.notifyActivitiesChanged();
-    } else {
-      try {
-        await _firebaseService.createActivity(
-          name,
-          trackingType: trackingType,
-          targetCount: targetCount,
-          repeatDays: repeatDays,
-          scheduledTime: scheduledTime,
-          startDate: startDate,
-          endDate: endDate,
-          subTaskTemplates: subTaskTemplates,
-          description: description,
-        );
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to add activity: $e'), backgroundColor: AppTheme.errorColor),
-          );
-        }
       }
     }
   }
 
   void _editActivity(
-    String id, String name, String trackingType, int targetCount, bool isLive, {
+    String id, String name, String trackingType, int targetCount, {
     List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     String? scheduledTime,
     DateTime? startDate,
@@ -756,82 +653,44 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     List<String> subTaskTemplates = const [],
     String? description,
   }) async {
-    if (!isLive) {
-      setState(() {
-        final idx = _mockActivities.indexWhere((item) => item.id == id);
-        if (idx != -1) {
-          _mockActivities[idx] = _mockActivities[idx].copyWith(
-            name: name,
-            trackingType: trackingType,
-            targetCount: targetCount,
-            repeatDays: repeatDays,
-            scheduledTime: scheduledTime,
-            startDate: startDate,
-            endDate: endDate,
-            subTaskTemplates: subTaskTemplates,
-            description: description,
-          );
-        }
-      });
-      FirebaseService.notifyActivitiesChanged();
+    try {
+      await _activityService.updateActivity(
+        id, name, trackingType, targetCount,
+        repeatDays: repeatDays,
+        scheduledTime: scheduledTime,
+        startDate: startDate,
+        endDate: endDate,
+        subTaskTemplates: subTaskTemplates,
+        description: description,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity updated locally.')),
+          const SnackBar(content: Text('Activity updated in Firestore.')),
         );
       }
-    } else {
-      try {
-        await _firebaseService.updateActivity(
-          id, name, trackingType, targetCount,
-          repeatDays: repeatDays,
-          scheduledTime: scheduledTime,
-          startDate: startDate,
-          endDate: endDate,
-          subTaskTemplates: subTaskTemplates,
-          description: description,
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
         );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Activity updated in Firestore.')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
-          );
-        }
       }
     }
   }
 
-  void _toggleActivity(Activity activity, bool isLive) async {
+  void _toggleActivity(Activity activity) async {
     final newChecked = !activity.checked;
-    if (!isLive) {
-      setState(() {
-        final idx = _mockActivities.indexWhere((item) => item.id == activity.id);
-        if (idx != -1) {
-          _mockActivities[idx] = _mockActivities[idx].copyWith(
-            checked: newChecked,
-            timestamp: DateTime.now(),
-          );
-        }
-      });
-      FirebaseService.notifyActivitiesChanged();
-    } else {
-      try {
-        await _firebaseService.toggleActivity(activity.id, newChecked);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
-          );
-        }
+    try {
+      await _activityService.toggleActivity(activity.id, newChecked);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
+        );
       }
     }
   }
 
-  Future<bool> _confirmDeleteActivity(Activity activity, bool isLive) async {
+  Future<bool> _confirmDeleteActivity(Activity activity) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -852,32 +711,20 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
 
     if (confirmed == true) {
-      if (!isLive) {
-        setState(() {
-          _mockActivities.removeWhere((item) => item.id == activity.id);
-        });
-        FirebaseService.notifyActivitiesChanged();
+      try {
+        await _activityService.deleteActivity(activity.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Activity deleted locally.')),
+            const SnackBar(content: Text('Activity deleted from Firestore.')),
           );
         }
-      } else {
-        try {
-          await _firebaseService.deleteActivity(activity.id);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Activity deleted from Firestore.')),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to delete activity: $e'), backgroundColor: AppTheme.errorColor),
-            );
-          }
-          return false;
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete activity: $e'), backgroundColor: AppTheme.errorColor),
+          );
         }
+        return false;
       }
       return true;
     }

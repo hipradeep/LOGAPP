@@ -6,7 +6,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../models/budget_item.dart';
-import '../services/firebase_service.dart';
+import '../services/budget_service.dart';
 import 'add_budget_screen.dart';
 
 class ManageBudgetScreen extends StatefulWidget {
@@ -17,19 +17,13 @@ class ManageBudgetScreen extends StatefulWidget {
 }
 
 class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
-  final FirebaseService _firebaseService = FirebaseService();
-  bool _useMockData = false;
+  final BudgetService _budgetService = BudgetService();
 
-  @override
-  void initState() {
-    super.initState();
-    _useMockData = Firebase.apps.isEmpty;
-  }
   void _navigateToAddBudget() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddBudgetScreen(useMockData: _useMockData),
+        builder: (context) => const AddBudgetScreen(),
       ),
     );
   }
@@ -39,7 +33,6 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => AddBudgetScreen(
-          useMockData: _useMockData,
           existingBudget: budget,
         ),
       ),
@@ -48,9 +41,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final budgetsStream = _useMockData 
-        ? _firebaseService.getMockBudgetsStream() 
-        : _firebaseService.getBudgetsStream();
+    final budgetsStream = _budgetService.getBudgetsStream();
 
     return FullScreenPage(
       showScaffold: true,
@@ -91,7 +82,6 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Text(
@@ -99,62 +89,6 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
                   style: AppTheme.bodySmall.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              const HGapSm(),
-              GestureDetector(
-                onTap: () {
-                  if (Firebase.apps.isNotEmpty) {
-                    setState(() {
-                      _useMockData = !_useMockData;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(_useMockData 
-                            ? 'Switched to local offline simulator mode.' 
-                            : 'Switched to Firebase live stream mode.'),
-                        backgroundColor: AppTheme.primaryColor,
-                      ),
-                    );
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _useMockData 
-                        ? AppTheme.warningColor.withValues(alpha: 0.15) 
-                        : AppTheme.successColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _useMockData 
-                          ? AppTheme.warningColor.withValues(alpha: 0.4) 
-                          : AppTheme.successColor.withValues(alpha: 0.4),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const HGapSm(),
-                      Text(
-                        _useMockData ? 'OFFLINE' : 'LIVE',
-                        style: TextStyle(
-                          color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),

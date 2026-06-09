@@ -6,13 +6,14 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../models/activity.dart';
-import '../models/sub_task.dart';
+import '../models/task.dart';
 import '../models/budget_item.dart';
 import '../widgets/budget_tab.dart';
-import '../services/firebase_service.dart';
 import '../widgets/milestones_tab.dart';
 import '../widgets/add_milestone_sub_task_sheet.dart';
 import '../widgets/add_transaction_sheet.dart';
+import '../services/activity_service.dart';
+import '../services/budget_service.dart';
 
 // ==================== LOCAL DATA MODELS ====================
 
@@ -62,7 +63,8 @@ class ManagementScreen extends StatefulWidget {
 }
 
 class _ManagementScreenState extends State<ManagementScreen> {
-  final FirebaseService _firebaseService = FirebaseService();
+  final ActivityService _activityService = ActivityService();
+  final BudgetService _budgetService = BudgetService();
 
   // Current active category (0: Milestones, 1: Budget, 2: Diet, 3: Reminders, 4: Study)
   int _activeCategoryIndex = 0;
@@ -75,9 +77,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   // Selected budget category
   BudgetItem? _selectedBudget;
 
-  late final Stream<List<Activity>> _activitiesStream = _firebaseService.getActivitiesStream();
-  Stream<List<SubTask>>? _subTasksStream;
-  Activity? _lastStreamedActivity;
+  late final Stream<List<Activity>> _activitiesStream = _activityService.getActivitiesStream();
 
   final List<DietItem> _dietItems = [
     DietItem(foodName: 'Oatmeal with Berries', calories: 350, mealType: 'Breakfast'),
@@ -202,7 +202,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       ),
       floatingActionButton: _activeCategoryIndex == 0 && _selectedMilestoneActivity != null
           ? Padding(
-              padding: EdgeInsets.only(bottom: bottomPadding + 68),
+              padding: EdgeInsets.only(bottom: bottomPadding + 16),
               child: FloatingActionButton.small(
                 heroTag: null,
                 onPressed: () => _showAddSubTaskSheet(context),
@@ -213,7 +213,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
             )
           : (_activeCategoryIndex == 1 && _selectedBudget != null)
               ? Padding(
-                  padding: EdgeInsets.only(bottom: bottomPadding + 68),
+                  padding: EdgeInsets.only(bottom: bottomPadding + 16),
                   child: FloatingActionButton.small(
                     heroTag: null,
                     onPressed: () => _showAddTransactionSheet(context),
@@ -471,9 +471,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
         final allActivities = snapshot.data ?? [];
         final milestoneActivities = allActivities
-            .where((a) => a.trackingType == 'milestone' && a.checked)
+            .where((a) => a.trackingType == 'milestone')
             .toList();
-        final selectedActivity = _getDefaultMilestoneActivity(milestoneActivities);
+        
+        final activeMilestones = milestoneActivities.where((a) => a.checked).toList();
+        final selectedActivity = _getDefaultMilestoneActivity(activeMilestones);
 
         if (selectedActivity != null &&
             _selectedMilestoneActivity?.id != selectedActivity.id) {
@@ -482,81 +484,54 @@ class _ManagementScreenState extends State<ManagementScreen> {
               setState(() {
                 _selectedMilestoneActivity = selectedActivity;
                 _shouldSelectDefaultMilestone = false;
-                _subTasksStream = _firebaseService.getSubTasksForActivityStream(selectedActivity.id);
-                _lastStreamedActivity = selectedActivity;
               });
             }
           });
         }
 
-        // Fetch subtasks for the selected activity
-        if (selectedActivity != null) {
-          if (_subTasksStream == null || _lastStreamedActivity?.id != selectedActivity.id) {
-            _subTasksStream = _firebaseService.getSubTasksForActivityStream(selectedActivity.id);
-            _lastStreamedActivity = selectedActivity;
-          }
+        return StreamBuilder<List<Task>>(
+          stream: _activityService.getSubTasksStream(),
+          builder: (context, subtaskSnapshot) {
+            final subTasks = subtaskSnapshot.data ?? [];
 
-          return StreamBuilder<List<SubTask>>(
-            stream: _subTasksStream!,
-            builder: (context, subtaskSnapshot) {
-              if (subtaskSnapshot.connectionState == ConnectionState.waiting &&
-                  !subtaskSnapshot.hasData) {
-                return MilestonesTab(
-                  milestoneActivities: milestoneActivities,
-                  selectedActivity: selectedActivity,
-                  subTasks: const [],
-                  isLoadingSubTasks: true,
-                  onActivitySelected: (activity) {
-                    setState(() {
-                      _selectedMilestoneActivity = activity;
-                      _shouldSelectDefaultMilestone = false;
-                      if (activity != null) {
-                        _subTasksStream = _firebaseService.getSubTasksForActivityStream(activity.id);
-                        _lastStreamedActivity = activity;
-                      }
-                    });
-                  },
-                  onToggleSubTask: _toggleSubTask,
+            return MilestonesTab(
+              milestoneActivities: milestoneActivities,
+              selectedActivity: _selectedMilestoneActivity,
+              subTasks: subTasks,
+              isLoadingSubTasks: subtaskSnapshot.connectionState == ConnectionState.waiting && !subtaskSnapshot.hasData,
+              onActivitySelected: (activity) {
+                setState(() {
+                  _selectedMilestoneActivity = activity;
+                  _shouldSelectDefaultMilestone = false;
+                });
+              },
+              onToggleSubTask: _toggleSubTask,
+              onToggleActivity: (activity, checked) async {
+                await _activityService.toggleActivity(activity.id, checked);
+              },
+              onUpdateActivitySymbols: (activity, symbolType, symbolValue, category) async {
+                await _activityService.updateActivitySymbols(
+                  activity.id,
+                  symbolType: symbolType,
+                  symbolValue: symbolValue,
+                  category: category,
                 );
-              }
-
-              final subTasks = subtaskSnapshot.data ?? [];
-
-              return MilestonesTab(
-                milestoneActivities: milestoneActivities,
-                selectedActivity: selectedActivity,
-                subTasks: subTasks,
-                onActivitySelected: (activity) {
-                  setState(() {
-                    _selectedMilestoneActivity = activity;
-                    _shouldSelectDefaultMilestone = false;
-                    if (activity != null) {
-                      _subTasksStream = _firebaseService.getSubTasksForActivityStream(activity.id);
-                      _lastStreamedActivity = activity;
-                    }
-                  });
-                },
-                onToggleSubTask: _toggleSubTask,
-              );
-            },
-          );
-        }
-
-        return MilestonesTab(
-          milestoneActivities: milestoneActivities,
-          selectedActivity: selectedActivity,
-          subTasks: const [],
-          onActivitySelected: (activity) {
-            setState(() {
-              _selectedMilestoneActivity = activity;
-              _shouldSelectDefaultMilestone = false;
-              if (activity != null) {
-                _subTasksStream = _firebaseService.getSubTasksForActivityStream(activity.id);
-                _lastStreamedActivity = activity;
-              }
-            });
+              },
+              onAddSubTask: (activity, name, timestamp) async {
+                await _activityService.createSubTask(activity.id, name, timestamp, false);
+              },
+              onDeleteSubTask: (task) async {
+                await _activityService.deleteSubTask(task.id);
+              },
+              onUpdateSubTaskSymbols: (task, symbolType, symbolValue) async {
+                await _activityService.updateSubTaskSymbols(
+                  task.id,
+                  symbolType: symbolType,
+                  symbolValue: symbolValue,
+                );
+              },
+            );
           },
-          onToggleSubTask: _toggleSubTask,
         );
       },
     );
@@ -581,7 +556,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   }
 
   Future<void> _addMilestoneSubTask(Activity activity, String subTaskName, DateTime timestamp) async {
-    await _firebaseService.createSubTask(
+    await _activityService.createSubTask(
       activity.id,
       subTaskName,
       timestamp,
@@ -589,8 +564,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
   }
 
-  Future<void> _toggleSubTask(SubTask subTask, bool checked) async {
-    await _firebaseService.toggleSubTask(subTask.id, checked);
+  Future<void> _toggleSubTask(Task task, bool checked) async {
+    final updated = task.copyWith(
+      checked: checked,
+      completionTime: checked ? DateTime.now() : null,
+    );
+    await _activityService.updateSubTask(updated);
   }
 
   void _showAddSubTaskSheet(BuildContext context) {
@@ -620,7 +599,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
         budgetId: budget.id,
         categoryName: budget.category,
         onAddTransaction: (tag, desc, amount, date) async {
-          await _firebaseService.addExpenseToBudget(budget.id, tag, desc, amount, timestamp: date);
+          await _budgetService.addExpenseToBudget(budget.id, tag, desc, amount, timestamp: date);
         },
       ),
     );

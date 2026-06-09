@@ -1,56 +1,18 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/log_entry.dart';
 import '../models/activity.dart';
-import '../models/check_in.dart';
 import '../models/task.dart';
-import '../models/budget_item.dart';
+import '../models/check_in.dart';
 
-class FirebaseService {
-  final CollectionReference _logsCollection =
-      FirebaseFirestore.instance.collection('logs');
-
+class ActivityService {
   final CollectionReference _activitiesCollection =
       FirebaseFirestore.instance.collection('activities');
-
-  final CollectionReference _checkinsCollection =
-      FirebaseFirestore.instance.collection('checkins');
 
   final CollectionReference _subtasksCollection =
       FirebaseFirestore.instance.collection('subtasks');
 
-  final CollectionReference _budgetsCollection =
-      FirebaseFirestore.instance.collection('budgets');
-
-  final DocumentReference _budgetSettingsDoc =
-      FirebaseFirestore.instance.collection('metadata').doc('budget_settings');
-
-  // ==================== LOGS OPERATIONS ====================
-
-  Stream<List<LogEntry>> getLogsStream() {
-    return _logsCollection
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => LogEntry.fromFirestore(doc)).toList();
-    });
-  }
-
-  Future<void> createEntry(String title, String content, String mood, List<String> tags) async {
-    final newEntry = LogEntry(
-      id: '',
-      title: title,
-      content: content,
-      timestamp: DateTime.now(),
-      mood: mood,
-      tags: tags,
-    );
-    await _logsCollection.add(newEntry.toFirestore());
-  }
-
-  Future<void> deleteEntry(String id) async {
-    await _logsCollection.doc(id).delete();
-  }
+  final CollectionReference _checkinsCollection =
+      FirebaseFirestore.instance.collection('checkins');
 
   // ==================== ACTIVITIES OPERATIONS ====================
 
@@ -75,10 +37,9 @@ class FirebaseService {
   }
 
   Future<void> createActivity(
-    String name,
-    bool checked,
-    String trackingType,
-    int targetCount, {
+    String name, {
+    required String trackingType,
+    required int targetCount,
     List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     String? scheduledTime,
     DateTime? startDate,
@@ -92,7 +53,7 @@ class FirebaseService {
     final newActivity = Activity(
       id: '',
       name: name,
-      checked: checked,
+      checked: true,
       timestamp: DateTime.now(),
       trackingType: trackingType,
       targetCount: targetCount,
@@ -115,6 +76,34 @@ class FirebaseService {
     });
   }
 
+  Future<void> updateActivity(
+    String id,
+    String name,
+    String trackingType,
+    int targetCount, {
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subTaskTemplates = const [],
+    String? description,
+  }) async {
+    final Map<String, dynamic> updates = {
+      'name': name,
+      'trackingType': trackingType,
+      'targetCount': targetCount,
+      'repeatDays': repeatDays,
+      'scheduledTime': scheduledTime,
+      'startDate': startDate != null ? Timestamp.fromDate(startDate) : null,
+      'endDate': endDate != null ? Timestamp.fromDate(endDate) : null,
+      'subTaskTemplates': subTaskTemplates,
+    };
+    if (description != null) {
+      updates['description'] = description;
+    }
+    await _activitiesCollection.doc(id).update(updates);
+  }
+
   Future<void> deleteActivity(String id) async {
     await _activitiesCollection.doc(id).delete();
   }
@@ -131,37 +120,6 @@ class FirebaseService {
     if (category != null) updates['category'] = category;
 
     await _activitiesCollection.doc(id).update(updates);
-  }
-
-  // ==================== CHECK-INS OPERATIONS ====================
-
-  Stream<List<CheckIn>> getCheckedActivitiesCheckInsStream() {
-    return _checkinsCollection
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
-    });
-  }
-
-  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked) async {
-    final newCheckIn = CheckIn(
-      id: '',
-      activityId: activityId,
-      timestamp: timestamp,
-      checked: checked,
-    );
-    await _checkinsCollection.add(newCheckIn.toFirestore());
-  }
-
-  Future<void> toggleCheckIn(String id, bool checked) async {
-    await _checkinsCollection.doc(id).update({
-      'checked': checked,
-    });
-  }
-
-  Future<void> deleteCheckIn(String id) async {
-    await _checkinsCollection.doc(id).delete();
   }
 
   // ==================== SUB-TASKS OPERATIONS ====================
@@ -331,138 +289,5 @@ class FirebaseService {
     if (symbolValue != null) updates['symbolValue'] = symbolValue;
 
     await _subtasksCollection.doc(id).update(updates);
-  }
-
-  // ==================== BUDGET OPERATIONS ====================
-
-  Stream<double> getSalaryStream() {
-    return _budgetSettingsDoc.snapshots().map((snapshot) {
-      if (snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>? ?? {};
-        return (data['monthlySalary'] as num?)?.toDouble() ?? 3000.0;
-      }
-      return 3000.0;
-    });
-  }
-
-  Future<void> updateSalary(double salary) async {
-    await _budgetSettingsDoc.set({'monthlySalary': salary}, SetOptions(merge: true));
-  }
-
-  Stream<List<BudgetItem>> getBudgetsStream() {
-    return _budgetsCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => BudgetItem.fromFirestore(doc)).toList();
-    });
-  }
-
-  Future<void> _deactivateOtherFirestoreBudgets(String activeBudgetId) async {
-    final query = await _budgetsCollection.where('checked', isEqualTo: true).get();
-    for (var doc in query.docs) {
-      if (doc.id != activeBudgetId) {
-        await doc.reference.update({'checked': false});
-      }
-    }
-  }
-
-  Future<void> createBudget(
-    String category,
-    double limit,
-    String period, {
-    String description = '',
-    DateTime? startDate,
-    DateTime? endDate,
-    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
-    String? scheduledTime,
-    bool repeat = true,
-    bool checked = true,
-  }) async {
-    final newItem = BudgetItem(
-      id: '',
-      category: category,
-      limit: limit,
-      period: period,
-      expenses: const [],
-      description: description,
-      startDate: startDate,
-      endDate: endDate,
-      repeatDays: repeatDays,
-      scheduledTime: scheduledTime,
-      repeat: repeat,
-      checked: checked,
-    );
-    final docRef = await _budgetsCollection.add(newItem.toFirestore());
-    if (checked) {
-      await _deactivateOtherFirestoreBudgets(docRef.id);
-    }
-  }
-
-  Future<void> updateBudget(
-    String budgetId, {
-    double? limit,
-    String? period,
-    String? description,
-    DateTime? startDate,
-    DateTime? endDate,
-    List<int>? repeatDays,
-    String? scheduledTime,
-    bool? repeat,
-    bool? checked,
-  }) async {
-    final Map<String, dynamic> updates = {};
-    if (limit != null) updates['limit'] = limit;
-    if (period != null) updates['period'] = period;
-    if (description != null) updates['description'] = description;
-    if (startDate != null) updates['startDate'] = Timestamp.fromDate(startDate);
-    if (endDate != null) updates['endDate'] = Timestamp.fromDate(endDate);
-    if (repeatDays != null) updates['repeatDays'] = repeatDays;
-    if (scheduledTime != null) updates['scheduledTime'] = scheduledTime;
-    if (repeat != null) updates['repeat'] = repeat;
-    if (checked != null) updates['checked'] = checked;
-    await _budgetsCollection.doc(budgetId).update(updates);
-    if (checked == true) {
-      await _deactivateOtherFirestoreBudgets(budgetId);
-    }
-  }
-
-  Future<void> toggleBudget(String budgetId, bool checked) async {
-    await _budgetsCollection.doc(budgetId).update({'checked': checked});
-    if (checked) {
-      await _deactivateOtherFirestoreBudgets(budgetId);
-    }
-  }
-
-  Future<void> deleteBudget(String budgetId) async {
-    await _budgetsCollection.doc(budgetId).delete();
-  }
-
-  Future<void> addExpenseToBudget(String budgetId, String tag, String description, double amount, {DateTime? timestamp}) async {
-    final expenseTime = timestamp ?? DateTime.now();
-    final doc = await _budgetsCollection.doc(budgetId).get();
-    if (doc.exists) {
-      final budget = BudgetItem.fromFirestore(doc);
-      final list = List<BudgetExpense>.from(budget.expenses);
-      list.add(BudgetExpense(
-        id: 'e-${DateTime.now().millisecondsSinceEpoch}',
-        tag: tag,
-        description: description,
-        amount: amount,
-        timestamp: expenseTime,
-      ));
-      await _budgetsCollection.doc(budgetId).update({
-        'expenses': list.map((e) => e.toMap()).toList(),
-      });
-    }
-  }
-
-  Future<void> deleteExpenseFromBudget(String budgetId, String expenseId) async {
-    final doc = await _budgetsCollection.doc(budgetId).get();
-    if (doc.exists) {
-      final budget = BudgetItem.fromFirestore(doc);
-      final list = List<BudgetExpense>.from(budget.expenses);
-      list.removeWhere((e) => e.id == expenseId);
-      await _budgetsCollection.doc(budgetId).update({
-        'expenses': list.map((e) => e.toMap()).toList(),
-      });
-    }
   }
 }

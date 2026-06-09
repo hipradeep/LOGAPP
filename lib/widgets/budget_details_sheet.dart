@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget_item.dart';
-import '../services/firebase_service.dart';
+import '../services/budget_service.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
@@ -15,7 +15,7 @@ class BudgetDetailsSheet extends StatefulWidget {
 }
 
 class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
-  final FirebaseService _firebaseService = FirebaseService();
+  final BudgetService _budgetService = BudgetService();
   final _limitController = TextEditingController();
   final _expenseDescController = TextEditingController();
   final _expenseAmountController = TextEditingController();
@@ -40,7 +40,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
   void _saveBudgetSettings() async {
     final limit = double.tryParse(_limitController.text) ?? 0.0;
     if (limit > 0) {
-      await _firebaseService.updateBudget(
+      await _budgetService.updateBudget(
         widget.budget.id,
         limit: limit,
         period: _selectedPeriod,
@@ -71,7 +71,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
     if (amount <= 0) return;
     final descText = _expenseDescController.text.trim();
 
-    await _firebaseService.addExpenseToBudget(
+    await _budgetService.addExpenseToBudget(
       widget.budget.id,
       _extractTag(descText),
       descText,
@@ -106,7 +106,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
     );
 
     if (confirm == true && mounted) {
-      await _firebaseService.deleteBudget(widget.budget.id);
+      await _budgetService.deleteBudget(widget.budget.id);
       Navigator.pop(context);
     }
   }
@@ -116,7 +116,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     
     return StreamBuilder<List<BudgetItem>>(
-      stream: _firebaseService.getBudgetsStream(),
+      stream: _budgetService.getBudgetsStream(),
       builder: (context, snapshot) {
         final budgets = snapshot.data ?? [];
         final budget = budgets.firstWhere((b) => b.id == widget.budget.id, orElse: () => widget.budget);
@@ -437,7 +437,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                               constraints: const BoxConstraints(),
                               icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 18),
                               onPressed: () {
-                                _firebaseService.deleteExpenseFromBudget(budget.id, expense.id);
+                                _budgetService.deleteExpenseFromBudget(budget.id, expense.id);
                               },
                             ),
                           ],

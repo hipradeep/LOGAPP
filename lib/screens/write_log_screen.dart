@@ -6,12 +6,10 @@ import '../models/log_entry.dart';
 
 class WriteLogScreen extends StatefulWidget {
   final LogEntry? existingEntry;
-  final bool useMockData;
 
   const WriteLogScreen({
     Key? key,
     this.existingEntry,
-    required this.useMockData,
   }) : super(key: key);
 
   @override

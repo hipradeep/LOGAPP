@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_core/firebase_core.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/activity_check_in_sheet.dart';
+import '../widgets/app_toast.dart';
 
-import '../models/log_entry.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
-import '../models/sub_task.dart';
-import '../services/firebase_service.dart';
+import '../models/task.dart';
+import '../services/activity_service.dart';
+import '../services/check_in_service.dart';
+import '../services/log_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -22,12 +23,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final FirebaseService _firebaseService = FirebaseService();
-  bool _useMockData = false;
+  final ActivityService _activityService = ActivityService();
+  final CheckInService _checkInService = CheckInService();
+  final LogService _logService = LogService();
   
   late Stream<List<Activity>> _checkedActivitiesStream;
   late Stream<List<CheckIn>> _checkInsStream;
-  late Stream<List<SubTask>> _subTasksStream;
+  late Stream<List<Task>> _subTasksStream;
 
   final List<Map<String, String>> _moods = [
     {'emoji': '😊', 'label': 'Happy'},
@@ -41,14 +43,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _useMockData = Firebase.apps.isEmpty;
     _initStreams();
   }
 
   void _initStreams() {
-    _checkedActivitiesStream = _firebaseService.getCheckedActivitiesStream();
-    _checkInsStream = _firebaseService.getCheckedActivitiesCheckInsStream();
-    _subTasksStream = _firebaseService.getSubTasksStream();
+    _checkedActivitiesStream = _activityService.getCheckedActivitiesStream();
+    _checkInsStream = _checkInService.getCheckedActivitiesCheckInsStream();
+    _subTasksStream = _activityService.getSubTasksStream();
   }
 
   bool _isToday(DateTime date) {
@@ -86,7 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
         children: [
-          // Subheader indicating date and connection status
+          // Subheader indicating date
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
@@ -98,69 +99,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: AppTheme.primaryLight,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.5,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    if (Firebase.apps.isNotEmpty) {
-                      setState(() {
-                        _useMockData = !_useMockData;
-                        _initStreams();
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(_useMockData 
-                              ? 'Switched to local offline simulator mode.' 
-                              : 'Switched to Firebase live stream mode.'),
-                          backgroundColor: AppTheme.primaryColor,
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Firebase is not initialized. Locked in offline simulator mode.'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _useMockData 
-                          ? AppTheme.warningColor.withOpacity(0.15) 
-                          : AppTheme.successColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _useMockData 
-                            ? AppTheme.warningColor.withOpacity(0.4) 
-                            : AppTheme.successColor.withOpacity(0.4),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const HGapSm(),
-                        Text(
-                          _useMockData ? 'OFFLINE' : 'LIVE',
-                          style: TextStyle(
-                            color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
@@ -189,7 +127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 builder: (context, checkinSnapshot) {
                   final checkIns = checkinSnapshot.data ?? [];
                   
-                  return StreamBuilder<List<SubTask>>(
+                  return StreamBuilder<List<Task>>(
                     stream: _subTasksStream,
                     builder: (context, subtaskSnapshot) {
                       final subTasks = subtaskSnapshot.data ?? [];
@@ -202,6 +140,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       final List<Activity> completedActivities = [];
                       
                       for (var activity in checkedActivities) {
+                        final bool isSkipped = checkIns.any((c) =>
+                            _isToday(c.timestamp) &&
+                            c.activityId == activity.id &&
+                            c.skipped == true);
+                        if (isSkipped) continue;
                         final int todayCount;
                         if (activity.trackingType == 'multiple') {
                           todayCount = todaySubTasks.where((s) => s.activityId == activity.id).length;
@@ -223,7 +166,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             final parts = template.split('|');
                             if (parts.length > 1) {
                               final timeStr = parts.last;
-                              final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.subTaskName == template);
+                              final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.taskName == template);
                               if (!isCheckedIn) {
                                 return timeStr;
                               }
@@ -289,7 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildCheckedActivitiesList(
     List<Activity> activities,
     List<CheckIn> todayCheckIns,
-    List<SubTask> todaySubTasks, {
+    List<Task> todaySubTasks, {
     required bool isCompletedList,
   }) {
     if (activities.isEmpty) return const SizedBox.shrink();
@@ -349,13 +292,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     backgroundColor: Colors.transparent,
                     builder: (context) => ActivityCheckInSheet(
                       activity: activity,
-                      useMockData: _useMockData,
                     ),
                   ).then((_) {
-                    // Refresh dashboard state when bottom sheet is dismissed
                     setState(() {});
                   });
                 },
+                onLongPress: (globalPosition) => _handleSkipActivity(activity, globalPosition),
               );
             }).toList(),
           ),
@@ -423,55 +365,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // QUICK MOOD LOGGING ACTION
-  void _handleQuickMood(String emoji, String label) async {
-    if (_useMockData) {
-      setState(() {
-        FirebaseService.mockEntries.insert(
-          0,
-          LogEntry(
-            id: 'mock-${DateTime.now().millisecondsSinceEpoch}',
-            title: 'Feeling $label',
-            content: 'Logged a quick check-in.',
-            timestamp: DateTime.now(),
-            mood: emoji,
-            tags: ['QuickCheck'],
+  void _handleSkipActivity(Activity activity, Offset globalPosition) async {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    
+    final relativeRect = RelativeRect.fromRect(
+      Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+      Offset.zero & overlay.size,
+    );
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: relativeRect,
+      color: AppTheme.surfaceColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'skip',
+          child: Row(
+            children: [
+              Icon(Icons.skip_next_rounded, color: AppTheme.warningColor, size: 18),
+              SizedBox(width: 8),
+              Text('Skip', style: TextStyle(color: Colors.white)),
+            ],
           ),
-        );
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Quick check-in logged locally: Feeling $label $emoji'),
-          backgroundColor: AppTheme.primaryColor,
         ),
-      );
-      FirebaseService.notifyLogsChanged();
-    } else {
+      ],
+    );
+
+    if (selected == 'skip') {
       try {
-        await _firebaseService.createEntry(
-          'Feeling $label',
-          'Logged a quick check-in.',
-          emoji,
-          ['QuickCheck'],
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Quick check-in logged: Feeling $label $emoji'),
-            backgroundColor: AppTheme.primaryColor,
-          ),
+        await _checkInService.createCheckIn(activity.id, DateTime.now(), false, skipped: true);
+        if (!mounted) return;
+        AppToast.show(
+          context: context,
+          message: '"${activity.name}" marked as skipped',
+          backgroundColor: AppTheme.warningColor,
+          actionLabel: 'UNDO',
+          onActionPressed: () async {
+            try {
+              await _checkInService.deleteSkippedCheckInForToday(activity.id);
+              if (!mounted) return;
+              AppToast.show(
+                context: context,
+                message: 'Skip undone successfully',
+                backgroundColor: AppTheme.successColor,
+              );
+            } catch (e) {
+              if (!mounted) return;
+              AppToast.show(
+                context: context,
+                message: 'Failed to undo: $e',
+                backgroundColor: AppTheme.errorColor,
+              );
+            }
+          },
         );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save to Firestore. Check connection. ($e)'),
-            backgroundColor: AppTheme.errorColor,
-          ),
+        if (!mounted) return;
+        AppToast.show(
+          context: context,
+          message: 'Failed to skip: $e',
+          backgroundColor: AppTheme.errorColor,
         );
       }
     }
   }
 
-  Widget _buildDailySummaryCard(List<Activity> activities, List<CheckIn> checkIns, List<SubTask> subTasks) {
+  // QUICK MOOD LOGGING ACTION
+  void _handleQuickMood(String emoji, String label) async {
+    try {
+      await _logService.createEntry(
+        'Feeling $label',
+        'Logged a quick check-in.',
+        emoji,
+        ['QuickCheck'],
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Quick check-in logged: Feeling $label $emoji'),
+          backgroundColor: AppTheme.primaryColor,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save to Firestore. Check connection. ($e)'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    }
+  }
+
+  Widget _buildDailySummaryCard(List<Activity> activities, List<CheckIn> checkIns, List<Task> subTasks) {
     if (activities.isEmpty) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -602,7 +587,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ==================== WEEKLY CALENDAR VIEW ====================
 
-  Widget _buildWeeklyCalendarCard(List<Activity> activities, List<CheckIn> checkIns, List<SubTask> subTasks) {
+  Widget _buildWeeklyCalendarCard(List<Activity> activities, List<CheckIn> checkIns, List<Task> subTasks) {
     if (activities.isEmpty) return const SizedBox.shrink();
 
     final now = DateTime.now();
@@ -792,12 +777,14 @@ class _DashboardActivityChip extends StatelessWidget {
   final Activity activity;
   final int todayCount;
   final VoidCallback onTap;
+  final Function(Offset)? onLongPress;
 
   const _DashboardActivityChip({
     Key? key,
     required this.activity,
     required this.todayCount,
     required this.onTap,
+    this.onLongPress,
   }) : super(key: key);
 
   @override
@@ -825,6 +812,9 @@ class _DashboardActivityChip extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPressStart: onLongPress != null 
+          ? (details) => onLongPress!(details.globalPosition)
+          : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(

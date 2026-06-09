@@ -2,16 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../models/activity.dart';
-import '../models/sub_task.dart';
+import '../models/task.dart';
 import 'app_spacers.dart';
 
 class MilestonesTab extends StatefulWidget {
   final List<Activity> milestoneActivities;
   final Activity? selectedActivity;
-  final List<SubTask> subTasks;
+  final List<Task> subTasks;
   final Function(Activity?) onActivitySelected;
-  final Function(SubTask, bool) onToggleSubTask;
+  final Function(Task, bool) onToggleSubTask;
   final bool isLoadingSubTasks;
+  
+  // Callback functions for interactivity
+  final Function(Activity, bool) onToggleActivity;
+  final Function(Activity, String?, String?, String?) onUpdateActivitySymbols;
+  final Function(Activity, String, DateTime) onAddSubTask;
+  final Function(Task) onDeleteSubTask;
+  final Function(Task, String?, String?) onUpdateSubTaskSymbols;
 
   const MilestonesTab({
     super.key,
@@ -21,6 +28,11 @@ class MilestonesTab extends StatefulWidget {
     required this.onActivitySelected,
     required this.onToggleSubTask,
     this.isLoadingSubTasks = false,
+    required this.onToggleActivity,
+    required this.onUpdateActivitySymbols,
+    required this.onAddSubTask,
+    required this.onDeleteSubTask,
+    required this.onUpdateSubTaskSymbols,
   });
 
   @override
@@ -28,552 +40,972 @@ class MilestonesTab extends StatefulWidget {
 }
 
 class _MilestonesTabState extends State<MilestonesTab> {
-  late DateTime _currentEndDate;
+  String _selectedCategory = 'All';
+  String? _expandedSubTaskId;
+  final Map<String, TextEditingController> _nestedControllers = {};
+
+  // Accordion open/close state
+  bool _todayExpanded = true;
+  bool _futureExpanded = true;
+  bool _completedExpanded = true;
 
   @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    _currentEndDate = DateTime(now.year, now.month, now.day);
-  }
-
-  @override
-  void didUpdateWidget(covariant MilestonesTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedActivity?.id != widget.selectedActivity?.id) {
-      final now = DateTime.now();
-      _currentEndDate = DateTime(now.year, now.month, now.day);
+  void dispose() {
+    for (var controller in _nestedControllers.values) {
+      controller.dispose();
     }
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final start = _currentEndDate.subtract(const Duration(days: 6));
-    final end = _currentEndDate;
-    final DateFormat formatter = DateFormat('MMM d');
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final isFutureWeek = _currentEndDate.isAfter(today);
+    // 1. Dynamic Category Tags from milestone activities
+    final Set<String> uniqueActivityNames = widget.milestoneActivities.map((a) => a.name).toSet();
+    final List<String> categories = ['All', ...uniqueActivityNames];
 
-    String rangeText;
-    if (isFutureWeek) {
-      rangeText = '${formatter.format(start)} to ${formatter.format(end)}';
-    } else {
-      final endDay = DateTime(end.year, end.month, end.day);
-      if (endDay == today) {
-        rangeText = 'Today to ${formatter.format(start)}';
-      } else {
-        rangeText = '${formatter.format(end)} to ${formatter.format(start)}';
-      }
+    // Ensure selected category is still valid
+    if (!categories.contains(_selectedCategory)) {
+      _selectedCategory = 'All';
     }
 
-    // Generate rangeDays conditionally:
-    // Ascending for future weeks, Descending for current/past weeks.
-
-    final List<DateTime> rangeDays = [];
-    if (isFutureWeek) {
-      // Ascending (earliest to latest): e.g. Jun 8 to Jun 14
-      for (int i = 6; i >= 0; i--) {
-        final day = _currentEndDate.subtract(Duration(days: i));
-        rangeDays.add(DateTime(day.year, day.month, day.day));
-      }
-    } else {
-      // Descending (latest to earliest): e.g. Today to Jun 1
-      for (int i = 0; i < 7; i++) {
-        final day = _currentEndDate.subtract(Duration(days: i));
-        rangeDays.add(DateTime(day.year, day.month, day.day));
-      }
-    }
-
-    final filteredSubTasks = widget.subTasks.where((st) {
-      final stDate = DateTime(st.timestamp.year, st.timestamp.month, st.timestamp.day);
-      return rangeDays.contains(stDate);
+    // 2. Filter Subtasks by Category selection
+    final List<Task> filteredSubTasks = widget.subTasks.where((st) {
+      // Find parent activity
+      final parent = widget.milestoneActivities.firstWhere(
+        (a) => a.id == st.activityId,
+        orElse: () => Activity(
+          id: '',
+          name: '',
+          checked: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      if (parent.id.isEmpty) return false;
+      if (_selectedCategory == 'All') return true;
+      return parent.name == _selectedCategory;
     }).toList();
 
-    filteredSubTasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    // Group subtasks by day date (Y-M-D)
-    final Map<DateTime, List<SubTask>> grouped = {};
-    for (var dayKey in rangeDays) {
-      grouped[dayKey] = [];
-    }
+    // 3. Classify Subtasks
+    final List<Task> todayTasks = [];
+    final List<Task> futureTasks = [];
+    final List<Task> completedTasks = [];
 
     for (var st in filteredSubTasks) {
-      final dateKey = DateTime(st.timestamp.year, st.timestamp.month, st.timestamp.day);
-      if (grouped.containsKey(dateKey)) {
-        grouped[dateKey]!.add(st);
+      if (_isToday(st.timestamp)) {
+        todayTasks.add(st);
+      } else if (st.checked) {
+        completedTasks.add(st);
+      } else {
+        futureTasks.add(st);
       }
     }
+
+    // Sort sections (Today: completed/checked tasks on top first)
+    todayTasks.sort((a, b) {
+      if (a.checked && !b.checked) return -1;
+      if (!a.checked && b.checked) return 1;
+      return a.timestamp.compareTo(b.timestamp);
+    });
+    
+    futureTasks.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    completedTasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Dropdown to select a milestone activity
-        Row(
-          children: [
-            SizedBox(
-              width: 180,
-              child: _buildActivityDropdown(context),
-            ),
-            const HGapSm(),
-            _buildCalendarButton(context),
-            const HGapSm(),
-            _buildProgressButton(context),
-            const Spacer(),
-          ],
-        ),
+        // Category Capsule list
+        _buildCategoryBar(categories),
         const VGapMd(),
-        
-        // Date range pagination header
-        if (widget.selectedActivity != null) ...[
-          _buildTasksHeaderRow(rangeText),
-          const VGapSm(),
-        ],
 
-        // Subtasks list for the selected activity
-        if (widget.selectedActivity == null)
-          _buildEmptyState('Select a milestone activity above.')
-        else if (widget.isLoadingSubTasks)
+        if (widget.isLoadingSubTasks)
           const Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+              padding: EdgeInsets.symmetric(vertical: 40),
               child: CircularProgressIndicator(color: AppTheme.primaryColor),
             ),
           )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: rangeDays.length,
-            itemBuilder: (context, dateIndex) {
-              final dateKey = rangeDays[dateIndex];
-              final daySubTasks = grouped[dateKey]!;
-              final dayName = _getDayName(dateKey);
+        else if (filteredSubTasks.isEmpty)
+          _buildEmptyState('No tasks found. Tap the FAB (+) to add a task!')
+        else ...[
+          // Today section
+          if (todayTasks.isNotEmpty) ...[
+            _buildSectionHeader(
+              title: 'Today',
+              count: todayTasks.length,
+              isExpanded: _todayExpanded,
+              onToggle: () => setState(() => _todayExpanded = !_todayExpanded),
+            ),
+            if (_todayExpanded) ...[
+              ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: todayTasks.length,
+                itemBuilder: (context, idx) => _buildTaskCard(todayTasks[idx]),
+              ),
+              const VGapMd(),
+            ],
+          ],
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12, bottom: 6, left: 4),
-                    child: Text(
-                      dayName,
-                      style: TextStyle(
-                        color: AppTheme.primaryLight.withValues(alpha: 0.9),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  if (daySubTasks.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                      child: Text(
-                        'No subtasks',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary.withValues(alpha: 0.4),
-                          fontStyle: FontStyle.italic,
-                          fontSize: 12,
-                        ),
-                      ),
-                    )
-                  else
-                    ...daySubTasks.map((st) {
-                      final hasSchedule = st.subTaskName.contains('|');
-                      final nameToShow = hasSchedule ? st.subTaskName.split('|').first : st.subTaskName;
-                      final scheduleTimeStr = hasSchedule ? st.subTaskName.split('|').last : null;
+          // Future section
+          if (futureTasks.isNotEmpty) ...[
+            _buildSectionHeader(
+              title: 'Future',
+              count: futureTasks.length,
+              isExpanded: _futureExpanded,
+              onToggle: () => setState(() => _futureExpanded = !_futureExpanded),
+            ),
+            if (_futureExpanded) ...[
+              ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: futureTasks.length,
+                itemBuilder: (context, idx) => _buildTaskCard(futureTasks[idx]),
+              ),
+              const VGapMd(),
+            ],
+          ],
 
-                      return GestureDetector(
-                        onTap: () => widget.onToggleSubTask(st, !st.checked),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppTheme.surfaceColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: st.checked
-                                  ? AppTheme.primaryColor.withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.02),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        nameToShow,
-                                        style: TextStyle(
-                                          color: st.checked ? AppTheme.textSecondary : Colors.white,
-                                          decoration: st.checked ? TextDecoration.lineThrough : null,
-                                          decorationColor: AppTheme.textSecondary.withValues(alpha: 0.7),
-                                          fontSize: 13,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (hasSchedule) ...[
-                                      const HGapSm(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: st.checked
-                                              ? Colors.white.withValues(alpha: 0.02)
-                                              : AppTheme.primaryColor.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.access_time_rounded,
-                                              size: 10,
-                                              color: st.checked
-                                                  ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                                                  : AppTheme.primaryLight,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _formatTimeString(scheduleTimeStr!),
-                                              style: TextStyle(
-                                                color: st.checked
-                                                    ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                                                    : AppTheme.primaryLight,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              const HGapMd(),
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(5),
-                                  color: st.checked ? AppTheme.primaryColor : Colors.transparent,
-                                  border: Border.all(
-                                    color: st.checked 
-                                        ? AppTheme.primaryColor 
-                                        : AppTheme.textSecondary.withValues(alpha: 0.5),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: st.checked
-                                    ? const Icon(Icons.check, size: 12, color: Colors.white)
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                ],
-              );
-            },
+          // Completed section
+          if (completedTasks.isNotEmpty) ...[
+            _buildSectionHeader(
+              title: 'Completed',
+              count: completedTasks.length,
+              isExpanded: _completedExpanded,
+              onToggle: () => setState(() => _completedExpanded = !_completedExpanded),
+            ),
+            if (_completedExpanded) ...[
+              ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: completedTasks.length,
+                itemBuilder: (context, idx) => _buildTaskCard(completedTasks[idx]),
+              ),
+              const VGapMd(),
+            ],
+          ],
+
+          // Check all completed tasks link
+          Center(
+            child: TextButton(
+              onPressed: () {
+                setState(() {
+                  _selectedCategory = 'All';
+                  _completedExpanded = true;
+                });
+              },
+              child: Text(
+                'Check all completed tasks',
+                style: TextStyle(
+                  color: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                  decorationColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
           ),
+        ],
       ],
     );
   }
 
-  Widget _buildTasksHeaderRow(String rangeText) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Tasks',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-          ),
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
+  Widget _buildCategoryBar(List<String> categories) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: categories.map((cat) {
+          final isSelected = _selectedCategory == cat;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(
+                cat,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (val) {
+                if (val) {
+                  setState(() {
+                    _selectedCategory = cat;
+                    // Also update active activity in parent screen if matches
+                    if (cat != 'All') {
+                      final act = widget.milestoneActivities.firstWhere((a) => a.name == cat);
+                      widget.onActivitySelected(act);
+                    } else {
+                      widget.onActivitySelected(null);
+                    }
+                  });
+                }
+              },
+              selectedColor: AppTheme.secondaryColor,
+              backgroundColor: AppTheme.surfaceColor.withValues(alpha: 0.4),
+              showCheckmark: false,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: isSelected 
+                      ? AppTheme.secondaryColor.withValues(alpha: 0.5) 
+                      : Colors.white.withValues(alpha: 0.05),
+                  width: 1,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required String title,
+    required int count,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+  }) {
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
           children: [
             Text(
-              rangeText,
-              style: TextStyle(
-                color: AppTheme.textSecondary.withValues(alpha: 0.7),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
               ),
             ),
             const HGapSm(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-              ),
+            Icon(
+              isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+              color: Colors.white60,
+              size: 16,
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskCard(Task st) {
+    final parent = widget.milestoneActivities.firstWhere(
+      (a) => a.id == st.activityId,
+      orElse: () => Activity(
+        id: '',
+        name: '',
+        checked: false,
+        timestamp: DateTime.now(),
+      ),
+    );
+
+    final isExpanded = _expandedSubTaskId == st.id;
+    final timeStr = st.scheduledTime;
+    final totalCount = st.subTasks.length;
+    final completedCount = st.subTasks.where((i) => i.checked).length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: st.checked
+            ? AppTheme.surfaceColor.withValues(alpha: 0.15)
+            : AppTheme.surfaceColor.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isExpanded
+              ? AppTheme.primaryColor.withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.04),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedSubTaskId = null;
+                } else {
+                  _expandedSubTaskId = st.id;
+                  widget.onActivitySelected(parent);
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 1. Left Checkbox
                   GestureDetector(
                     onTap: () {
-                      setState(() {
-                        _currentEndDate = _currentEndDate.subtract(const Duration(days: 7));
-                      });
+                      widget.onToggleSubTask(st, !st.checked);
                     },
-                    child: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 16),
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: st.checked 
+                            ? const Color(0xFF64748B) // Slate 500
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: st.checked 
+                              ? const Color(0xFF64748B)
+                              : Colors.white30,
+                          width: 2,
+                        ),
+                      ),
+                      child: st.checked
+                          ? const Icon(Icons.check, size: 14, color: Colors.white)
+                          : null,
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                  Container(width: 1, height: 12, color: Colors.white12),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 14),
+                  
+                  // 2. Middle Content (Title + Subtitle)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          st.taskName,
+                          style: TextStyle(
+                            color: st.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            decoration: st.checked ? TextDecoration.lineThrough : null,
+                            decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        if (timeStr != null || totalCount > 0 || !_isToday(st.timestamp) || parent.repeatDays.length < 7) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              // Subtask ratio branch badge
+                              if (totalCount > 0) ...[
+                                const Icon(
+                                  Icons.account_tree_outlined,
+                                  size: 12,
+                                  color: Colors.white38,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$completedCount/$totalCount',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white38,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              // Alarm time badge
+                              if (timeStr != null) ...[
+                                const Icon(
+                                  Icons.notifications_none_rounded,
+                                  size: 12,
+                                  color: Colors.white38,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _formatTimeString(timeStr),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white38,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              // Repeat arrows badge
+                              if (parent.repeatDays.length < 7) ...[
+                                const Icon(
+                                  Icons.repeat_rounded,
+                                  size: 12,
+                                  color: Colors.white38,
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              // Date badge (if not today)
+                              if (!_isToday(st.timestamp)) ...[
+                                const Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 10,
+                                  color: Colors.white38,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  DateFormat('dd-MM').format(st.timestamp),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white38,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  
+                  // 3. Right Symbol Indicator
                   GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _currentEndDate = _currentEndDate.add(const Duration(days: 7));
-                      });
-                    },
-                    child: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 16),
+                    onTap: () => _showSymbolSelectionDialog(st),
+                    child: _buildSymbolIndicator(st),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Expanded panel showing nested items and actions
+          if (isExpanded) ...[
+            const Divider(color: Colors.white10, height: 1, indent: 14, endIndent: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nested Checklist items
+                  if (st.subTasks.isNotEmpty) ...[
+                    const Text(
+                      'Checklist Items:',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...List.generate(st.subTasks.length, (idx) {
+                      final item = st.subTasks[idx];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: item.checked,
+                              activeColor: AppTheme.primaryColor,
+                              visualDensity: VisualDensity.compact,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  _toggleNestedItem(st, idx, val);
+                                }
+                              },
+                            ),
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: TextStyle(
+                                  color: item.checked ? AppTheme.textSecondary : Colors.white70,
+                                  fontSize: 12,
+                                  decoration: item.checked ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 16, color: AppTheme.errorColor),
+                              onPressed: () => _deleteNestedItem(st, idx),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Inline Add Nested Item form
+                  _buildAddNestedItemForm(st),
+                  const VGapSm(),
+
+                  // Subtask Meta actions (Date selection & Delete Subtask)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _pickSubTaskDate(st),
+                        icon: const Icon(Icons.calendar_month_rounded, size: 14, color: AppTheme.primaryLight),
+                        label: Text(
+                          DateFormat('MMM d, yyyy').format(st.timestamp),
+                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.03),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => widget.onDeleteSubTask(st),
+                        icon: const Icon(Icons.delete_forever_rounded, size: 14, color: AppTheme.errorColor),
+                        label: const Text('Delete Task', style: TextStyle(color: AppTheme.errorColor, fontSize: 11)),
+                        style: TextButton.styleFrom(
+                          backgroundColor: AppTheme.errorColor.withValues(alpha: 0.08),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSymbolIndicator(Task st) {
+    const double size = 26;
+
+    if (st.symbolType == 'flag') {
+      final flagColor = _getFlagColor(st.symbolValue);
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: flagColor.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.flag_rounded, color: flagColor, size: 16),
+      );
+    } else if (st.symbolType == 'number') {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.5), width: 1.5),
+        ),
+        child: Center(
+          child: Text(
+            st.symbolValue ?? '1',
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    } else if (st.symbolType == 'progress') {
+      final double progress = double.tryParse(st.symbolValue ?? '0') ?? 0;
+      return SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(
+          painter: PieChartPainter(
+            progress: progress,
+            color: AppTheme.secondaryColor,
+            backgroundColor: Colors.white10,
+          ),
+        ),
+      );
+    } else if (st.symbolType == 'mood') {
+      return Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        child: Text(
+          st.symbolValue ?? '😄',
+          style: const TextStyle(fontSize: 16),
+        ),
+      );
+    } else {
+      // Default fallback: draw the subtasks checklist progress pie chart if items exist
+      final totalCount = st.subTasks.length;
+      final completedCount = st.subTasks.where((i) => i.checked).length;
+      final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
+      if (totalCount > 0) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: CustomPaint(
+            painter: PieChartPainter(
+              progress: progress,
+              color: AppTheme.secondaryColor,
+              backgroundColor: Colors.white10,
+            ),
+          ),
+        );
+      }
+      return Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          color: Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.flag_outlined, color: Colors.white30, size: 16),
+      );
+    }
+  }
+
+  Widget _buildAddNestedItemForm(Task st) {
+    if (!_nestedControllers.containsKey(st.id)) {
+      _nestedControllers[st.id] = TextEditingController();
+    }
+    final controller = _nestedControllers[st.id]!;
+
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+            decoration: InputDecoration(
+              hintText: 'Add checklist sub-item...',
+              hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.02),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppTheme.primaryColor),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        ElevatedButton(
+          onPressed: () {
+            final text = controller.text.trim();
+            if (text.isNotEmpty) {
+              _addNestedItem(st, text);
+              controller.clear();
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+            foregroundColor: AppTheme.primaryLight,
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 0,
+          ),
+          child: const Text('Add', style: TextStyle(fontSize: 12)),
         ),
       ],
     );
   }
 
-  String _getDayName(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final compareDate = DateTime(date.year, date.month, date.day);
+  void _addNestedItem(Task st, String label) {
+    final newList = List<SubTask>.from(st.subTasks);
+    newList.add(SubTask(
+      id: 'item-${DateTime.now().millisecondsSinceEpoch}',
+      title: label,
+      checked: false,
+    ));
+    widget.onToggleSubTask(st.copyWith(subTasks: newList), st.checked);
+  }
 
-    if (compareDate == today) {
-      return 'Today';
-    } else if (compareDate == yesterday) {
-      return 'Yesterday';
-    } else {
-      return DateFormat('EEEE, MMM d').format(date);
+  void _toggleNestedItem(Task st, int index, bool val) {
+    final newList = List<SubTask>.from(st.subTasks);
+    newList[index] = newList[index].copyWith(checked: val);
+    widget.onToggleSubTask(st.copyWith(subTasks: newList), st.checked);
+  }
+
+  void _deleteNestedItem(Task st, int index) {
+    final newList = List<SubTask>.from(st.subTasks);
+    newList.removeAt(index);
+    widget.onToggleSubTask(st.copyWith(subTasks: newList), st.checked);
+  }
+
+  Future<void> _pickSubTaskDate(Task st) async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: st.timestamp,
+      firstDate: today.subtract(const Duration(days: 365)),
+      lastDate: today.add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryColor,
+              surface: AppTheme.surfaceColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final newDate = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        st.timestamp.hour,
+        st.timestamp.minute,
+      );
+      widget.onToggleSubTask(st.copyWith(timestamp: newDate), st.checked);
     }
   }
 
-
-  Widget _buildCalendarButton(BuildContext context) {
-    final activity = widget.selectedActivity;
-    final hasDates = activity != null && (activity.startDate != null || activity.endDate != null);
-
-    return Tooltip(
-      message: hasDates ? 'View Milestone Dates' : 'No Dates Set',
-      child: GestureDetector(
-        onTap: () {
-          if (activity == null) return;
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              backgroundColor: AppTheme.surfaceColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text(activity.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (activity.description?.isNotEmpty == true) ...[
-                    Text(
-                      activity.description!,
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+  void _showSymbolSelectionDialog(Task st) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: AppTheme.surfaceColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Mark with symbol',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                     ),
-                    const VGapMd(),
+                    TextButton(
+                      onPressed: () {
+                        widget.onUpdateSubTaskSymbols(st, '', '');
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Clear', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                    ),
                   ],
-                  Row(
-                    children: [
-                      const Icon(Icons.date_range_rounded, color: AppTheme.primaryLight, size: 18),
-                      const HGapSm(),
-                      Text(
-                        activity.startDate != null
-                            ? 'Start: ${DateFormat('MMM d, yyyy').format(activity.startDate!)}'
-                            : 'Start: Not set',
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  const VGapSm(),
-                  Row(
-                    children: [
-                      const Icon(Icons.event_available_rounded, color: AppTheme.successColor, size: 18),
-                      const HGapSm(),
-                      Text(
-                        activity.endDate != null
-                            ? 'End: ${DateFormat('MMM d, yyyy').format(activity.endDate!)}'
-                            : 'End: Not set',
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close', style: TextStyle(color: AppTheme.primaryColor)),
+                ),
+                const SizedBox(height: 12),
+                
+                _buildDialogLabel('Flag'),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildFlagOption(st, 'red', Colors.redAccent),
+                    _buildFlagOption(st, 'yellow', Colors.amber),
+                    _buildFlagOption(st, 'purple', Colors.purpleAccent),
+                    _buildFlagOption(st, 'blue', Colors.blueAccent),
+                    _buildFlagOption(st, 'green', Colors.greenAccent),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                _buildDialogLabel('Number'),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(5, (index) {
+                    final numStr = '${index + 1}';
+                    return _buildNumberOption(st, numStr);
+                  }),
+                ),
+                const SizedBox(height: 14),
+
+                _buildDialogLabel('Progress'),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildProgressOption(st, '0.0', 0.0),
+                    _buildProgressOption(st, '0.25', 0.25),
+                    _buildProgressOption(st, '0.5', 0.5),
+                    _buildProgressOption(st, '0.75', 0.75),
+                    _buildProgressOption(st, '1.0', 1.0),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                _buildDialogLabel('Mood'),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildMoodOption(st, '😄'),
+                    _buildMoodOption(st, '🙂'),
+                    _buildMoodOption(st, '😐'),
+                    _buildMoodOption(st, '😔'),
+                    _buildMoodOption(st, '😫'),
+                  ],
                 ),
               ],
             ),
-          );
-        },
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: hasDates
-                ? AppTheme.primaryColor.withValues(alpha: 0.15)
-                : AppTheme.surfaceColor.withValues(alpha: 0.25),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: hasDates
-                  ? AppTheme.primaryColor.withValues(alpha: 0.25)
-                  : Colors.white.withValues(alpha: 0.08),
-              width: 1,
-            ),
           ),
-          child: Icon(
-            Icons.calendar_today_rounded,
-            color: hasDates ? AppTheme.primaryLight : AppTheme.textSecondary.withValues(alpha: 0.5),
-            size: 16,
-          ),
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: AppTheme.textSecondary.withValues(alpha: 0.8),
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
       ),
     );
   }
 
-  Widget _buildProgressButton(BuildContext context) {
-    final total = widget.subTasks.length;
-    final completed = widget.subTasks.where((st) => st.checked).length;
-    final percent = total > 0 ? completed / total : 0.0;
-
-    return Tooltip(
-      message: 'Progress: $completed/$total completed (${(percent * 100).toStringAsFixed(0)}%)',
-      child: GestureDetector(
-        onTap: () {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Milestone Progress: $completed of $total subtasks completed (${(percent * 100).toStringAsFixed(0)}%)',
-                style: const TextStyle(color: Colors.white),
-              ),
-              backgroundColor: AppTheme.surfaceColor,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        },
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppTheme.primaryColor.withValues(alpha: 0.25),
-              width: 1,
-            ),
-          ),
-          child: Center(
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                value: percent,
-                strokeWidth: 2.5,
-                backgroundColor: Colors.white.withValues(alpha: 0.1),
-                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.successColor),
-              ),
-            ),
+  Widget _buildFlagOption(Task st, String value, Color color) {
+    final isSelected = st.symbolType == 'flag' && st.symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        widget.onUpdateSubTaskSymbols(st, 'flag', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.02),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? color : Colors.white.withValues(alpha: 0.05),
+            width: 1.5,
           ),
         ),
+        child: Icon(Icons.flag_rounded, color: color, size: 20),
       ),
     );
   }
 
-  Widget _buildActivityDropdown(BuildContext context) {
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.primaryColor.withValues(alpha: 0.25),
-          width: 1,
+  Widget _buildNumberOption(Task st, String value) {
+    final isSelected = st.symbolType == 'number' && st.symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        widget.onUpdateSubTaskSymbols(st, 'number', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.02),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.05),
+            width: 1.5,
+          ),
         ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          dropdownColor: AppTheme.surfaceColor,
-          isExpanded: true,
-          isDense: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.textSecondary.withValues(alpha: 0.7), size: 20),
-          value: widget.selectedActivity?.id,
-          hint: Text(
-            widget.milestoneActivities.isEmpty ? 'No milestone activities' : 'Select a milestone activity',
+        child: Center(
+          child: Text(
+            value,
             style: TextStyle(
-              color: AppTheme.textSecondary.withValues(alpha: 0.6),
-              fontSize: 12,
+              color: isSelected ? AppTheme.primaryLight : Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          items: widget.milestoneActivities.map((activity) {
-            return DropdownMenuItem<String>(
-              value: activity.id,
-              child: Text(
-                activity.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            );
-          }).toList(),
-          onChanged: (id) {
-            if (id != null) {
-              final activity = widget.milestoneActivities.firstWhere((a) => a.id == id);
-              widget.onActivitySelected(activity);
-            }
-          },
         ),
       ),
     );
   }
 
-  Widget _buildEmptyState(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: Text(
-          text,
-          style: TextStyle(
-            color: AppTheme.textSecondary.withValues(alpha: 0.6),
-            fontStyle: FontStyle.italic,
+  Widget _buildProgressOption(Task st, String value, double progress) {
+    final isSelected = st.symbolType == 'progress' && st.symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        widget.onUpdateSubTaskSymbols(st, 'progress', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.secondaryColor.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.02),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppTheme.secondaryColor : Colors.white.withValues(alpha: 0.05),
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CustomPaint(
+              painter: PieChartPainter(
+                progress: progress,
+                color: AppTheme.secondaryColor,
+                backgroundColor: Colors.white12,
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  String _formatTimeForDisplay(TimeOfDay t) {
-    final hour = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
-    final minute = t.minute.toString().padLeft(2, '0');
-    final period = t.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$hour:$minute $period';
+  Widget _buildMoodOption(Task st, String value) {
+    final isSelected = st.symbolType == 'mood' && st.symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        widget.onUpdateSubTaskSymbols(st, 'mood', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.02),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? Colors.white54 : Colors.white.withValues(alpha: 0.05),
+            width: 1.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          value,
+          style: const TextStyle(fontSize: 18),
+        ),
+      ),
+    );
+  }
+
+  Color _getFlagColor(String? value) {
+    switch (value) {
+      case 'red':
+        return Colors.redAccent;
+      case 'yellow':
+        return Colors.amber;
+      case 'purple':
+        return Colors.purpleAccent;
+      case 'blue':
+        return Colors.blueAccent;
+      case 'green':
+        return Colors.greenAccent;
+      default:
+        return Colors.white30;
+    }
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
   String _formatTimeString(String time24h) {
@@ -582,10 +1014,77 @@ class _MilestonesTabState extends State<MilestonesTab> {
       if (parts.length != 2) return time24h;
       final hour = int.parse(parts[0]);
       final minute = int.parse(parts[1]);
-      final time = TimeOfDay(hour: hour, minute: minute);
-      return _formatTimeForDisplay(time);
+      
+      final hourOfPeriod = hour % 12 == 0 ? 12 : hour % 12;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final minuteStr = minute.toString().padLeft(2, '0');
+      
+      return '$hourOfPeriod:$minuteStr $period';
     } catch (_) {
       return time24h;
     }
+  }
+
+  Widget _buildEmptyState(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.playlist_add_check_rounded, size: 48, color: AppTheme.textSecondary.withValues(alpha: 0.3)),
+            const SizedBox(height: 12),
+            Text(
+              text,
+              style: TextStyle(
+                color: AppTheme.textSecondary.withValues(alpha: 0.5),
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class PieChartPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final Color backgroundColor;
+
+  PieChartPainter({
+    required this.progress,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    paint.color = backgroundColor;
+    canvas.drawCircle(center, radius, paint);
+
+    if (progress > 0) {
+      paint.color = color;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -3.141592653589793 / 2,
+        progress * 2 * 3.141592653589793,
+        true,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant PieChartPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.backgroundColor != backgroundColor;
   }
 }

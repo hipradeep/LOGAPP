@@ -2,8 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/activity.dart';
-import '../models/sub_task.dart';
-import '../services/firebase_service.dart';
+import '../models/task.dart';
+import '../services/activity_service.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
@@ -25,8 +25,8 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
-  final FirebaseService _firebaseService = FirebaseService();
-  late Stream<List<SubTask>> _subTasksStream;
+  final ActivityService _firebaseService = ActivityService();
+  late Stream<List<Task>> _subTasksStream;
   String? _deletingSubTaskId;
   TimeOfDay? _selectedTime;
   DateTime _selectedDate = DateTime.now();
@@ -91,7 +91,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
     }
   }
 
-  Future<void> _toggleSubTask(SubTask subTask) async {
+  Future<void> _toggleSubTask(Task subTask) async {
     final newChecked = !subTask.checked;
     try {
       await _firebaseService.toggleSubTask(subTask.id, newChecked);
@@ -411,7 +411,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                             ],
                           ),
                           const VGapLg(),
-                          StreamBuilder<List<SubTask>>(
+                          StreamBuilder<List<Task>>(
                             stream: _subTasksStream,
                             builder: (context, snapshot) {
                               if (snapshot.hasError) {
@@ -575,10 +575,10 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
     );
   }
 
-  Widget _buildSubTaskRow(SubTask subTask) {
-    final hasTime = subTask.subTaskName.contains('|');
-    final displayName = subTask.subTaskName.split('|').first;
-    final timeString = hasTime ? subTask.subTaskName.split('|').last : null;
+  Widget _buildSubTaskRow(Task subTask) {
+    final displayName = subTask.taskName;
+    final timeString = subTask.scheduledTime;
+    final hasTime = timeString != null;
     final isDeletingThis = _deletingSubTaskId == subTask.id;
 
     final Widget itemContainer = Container(

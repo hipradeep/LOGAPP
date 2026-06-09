@@ -6,16 +6,14 @@ import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../models/budget_item.dart';
-import '../services/firebase_service.dart';
+import '../services/budget_service.dart';
 
 class AddBudgetScreen extends StatefulWidget {
   final BudgetItem? existingBudget;
-  final bool? useMockData;
 
   const AddBudgetScreen({
     super.key,
     this.existingBudget,
-    this.useMockData,
   });
 
   @override
@@ -24,7 +22,7 @@ class AddBudgetScreen extends StatefulWidget {
 
 class _AddBudgetScreenState extends State<AddBudgetScreen> {
   final _formKey = GlobalKey<FormState>();
-  final FirebaseService _firebaseService = FirebaseService();
+  final BudgetService _budgetService = BudgetService();
 
   late TextEditingController _categoryController;
   late TextEditingController _limitController;
@@ -36,12 +34,10 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   late bool _repeat;
   late List<int> _repeatDays;
   TimeOfDay? _scheduledTime;
-  late bool _useMockData;
 
   @override
   void initState() {
     super.initState();
-    _useMockData = widget.useMockData ?? Firebase.apps.isEmpty;
 
     final budget = widget.existingBudget;
     _categoryController = TextEditingController(text: budget?.category ?? '');
@@ -117,12 +113,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     );
 
     if (confirm == true && mounted) {
-      if (_useMockData) {
-        FirebaseService.mockBudgets.removeWhere((b) => b.id == widget.existingBudget!.id);
-        FirebaseService.notifyBudgetsChanged();
-      } else {
-        await _firebaseService.deleteBudget(widget.existingBudget!.id);
-      }
+      await _budgetService.deleteBudget(widget.existingBudget!.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -139,15 +130,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     if (widget.existingBudget == null) return;
     final newChecked = !widget.existingBudget!.checked;
 
-    if (_useMockData) {
-      final idx = FirebaseService.mockBudgets.indexWhere((b) => b.id == widget.existingBudget!.id);
-      if (idx != -1) {
-        FirebaseService.mockBudgets[idx] = FirebaseService.mockBudgets[idx].copyWith(checked: newChecked);
-        FirebaseService.notifyBudgetsChanged();
-      }
-    } else {
-      await _firebaseService.toggleBudget(widget.existingBudget!.id, newChecked);
-    }
+    await _budgetService.toggleBudget(widget.existingBudget!.id, newChecked);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -170,34 +153,17 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     final isEditing = widget.existingBudget != null;
 
     if (isEditing) {
-      if (_useMockData) {
-        final idx = FirebaseService.mockBudgets.indexWhere((b) => b.id == widget.existingBudget!.id);
-        if (idx != -1) {
-          FirebaseService.mockBudgets[idx] = FirebaseService.mockBudgets[idx].copyWith(
-            limit: limit,
-            period: _selectedPeriod,
-            description: _descriptionController.text.trim(),
-            startDate: _startDate,
-            endDate: _endDate,
-            repeatDays: _repeatDays,
-            scheduledTime: timeStr,
-            repeat: _repeat,
-          );
-          FirebaseService.notifyBudgetsChanged();
-        }
-      } else {
-        await _firebaseService.updateBudget(
-          widget.existingBudget!.id,
-          limit: limit,
-          period: _selectedPeriod,
-          description: _descriptionController.text.trim(),
-          startDate: _startDate,
-          endDate: _endDate,
-          repeatDays: _repeatDays,
-          scheduledTime: timeStr,
-          repeat: _repeat,
-        );
-      }
+      await _budgetService.updateBudget(
+        widget.existingBudget!.id,
+        limit: limit,
+        period: _selectedPeriod,
+        description: _descriptionController.text.trim(),
+        startDate: _startDate,
+        endDate: _endDate,
+        repeatDays: _repeatDays,
+        scheduledTime: timeStr,
+        repeat: _repeat,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -211,35 +177,17 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
       final category = _categoryController.text.trim();
       if (category.isEmpty) return;
 
-      if (_useMockData) {
-        final newItem = BudgetItem(
-          id: 'b-${DateTime.now().millisecondsSinceEpoch}',
-          category: category,
-          limit: limit,
-          period: _selectedPeriod,
-          expenses: const [],
-          description: _descriptionController.text.trim(),
-          startDate: _startDate,
-          endDate: _endDate,
-          repeatDays: _repeatDays,
-          scheduledTime: timeStr,
-          repeat: _repeat,
-        );
-        FirebaseService.mockBudgets.add(newItem);
-        FirebaseService.notifyBudgetsChanged();
-      } else {
-        await _firebaseService.createBudget(
-          category,
-          limit,
-          _selectedPeriod,
-          description: _descriptionController.text.trim(),
-          startDate: _startDate,
-          endDate: _endDate,
-          repeatDays: _repeatDays,
-          scheduledTime: timeStr,
-          repeat: _repeat,
-        );
-      }
+      await _budgetService.createBudget(
+        category,
+        limit,
+        _selectedPeriod,
+        description: _descriptionController.text.trim(),
+        startDate: _startDate,
+        endDate: _endDate,
+        repeatDays: _repeatDays,
+        scheduledTime: timeStr,
+        repeat: _repeat,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

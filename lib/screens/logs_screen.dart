@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/monthly_calendar.dart';
 import '../models/activity.dart';
 import '../models/log_entry.dart';
 import '../models/check_in.dart';
-import '../services/firebase_service.dart';
+import '../services/activity_service.dart';
+import '../services/check_in_service.dart';
+import '../services/log_service.dart';
 import 'write_log_screen.dart';
 
 class LogsScreen extends StatefulWidget {
@@ -20,285 +22,18 @@ class LogsScreen extends StatefulWidget {
 }
 
 class _LogsScreenState extends State<LogsScreen> {
-  final FirebaseService _firebaseService = FirebaseService();
-  bool _useMockData = false;
+  final ActivityService _activityService = ActivityService();
+  final CheckInService _checkInService = CheckInService();
+  final LogService _logService = LogService();
+
   DateTime _selectedDate = DateTime.now();
-  DateTime _currentMonth = DateTime.now();
-  late final Stream<List<Activity>> _activitiesStream = _firebaseService.getActivitiesStream();
-  late final Stream<List<LogEntry>> _logsStream = _firebaseService.getLogsStream();
-  late final Stream<List<CheckIn>> _checkInsStream = _firebaseService.getCheckedActivitiesCheckInsStream();
+  late final Stream<List<Activity>> _activitiesStream = _activityService.getActivitiesStream();
+  late final Stream<List<LogEntry>> _logsStream = _logService.getLogsStream();
+  late final Stream<List<CheckIn>> _checkInsStream = _checkInService.getCheckedActivitiesCheckInsStream();
 
   @override
   void initState() {
     super.initState();
-    _useMockData = Firebase.apps.isEmpty;
-    _currentMonth = _selectedDate;
-  }
-
-
-  List<DateTime?> _generateMonthGridDates(DateTime monthDate) {
-    final firstDayOfMonth = DateTime(monthDate.year, monthDate.month, 1);
-    final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
-    
-    final startPadding = firstDayOfMonth.weekday == 7 ? 0 : firstDayOfMonth.weekday;
-    
-    final List<DateTime?> gridDates = [];
-    for (int i = 0; i < startPadding; i++) {
-      gridDates.add(null);
-    }
-    
-    final totalDays = lastDayOfMonth.day;
-    for (int i = 1; i <= totalDays; i++) {
-      gridDates.add(DateTime(monthDate.year, monthDate.month, i));
-    }
-    
-    while (gridDates.length % 7 != 0) {
-      gridDates.add(null);
-    }
-    
-    return gridDates;
-  }
-
-
-
-  bool _isFutureDay(DateTime date) {
-    final today = DateTime.now();
-    final todayMidnight = DateTime(today.year, today.month, today.day);
-    final dateMidnight = DateTime(date.year, date.month, date.day);
-    return dateMidnight.isAfter(todayMidnight);
-  }
-
-  Widget _buildCalendarHeader() {
-    final dateStr = DateFormat('d MMM, yy').format(_selectedDate);
-    final weekdayStr = DateFormat('EEEE').format(_selectedDate);
-    
-    return Padding(
-      padding: const EdgeInsets.only(left: 10, right: 2, top: 4, bottom: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  dateStr,
-                  style: AppTheme.headingSmall.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    weekdayStr,
-                    style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textSecondary.withValues(alpha: 0.8),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  setState(() {
-                    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
-                  });
-                },
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
-                ),
-              ),
-              const SizedBox(width: 2),
-              Text(
-                DateFormat('MMM yyyy').format(_currentMonth),
-                style: AppTheme.bodySmall.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(width: 2),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  setState(() {
-                    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
-                  });
-                },
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
-                ),
-              ),
-
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeekdaysHeader() {
-    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: weekdays.map((day) {
-          return SizedBox(
-            width: 32,
-            child: Text(
-              day,
-              textAlign: TextAlign.center,
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary.withValues(alpha: 0.6),
-                fontWeight: FontWeight.bold,
-                fontSize: 10,
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildDayCell(DateTime date, DateTime today, List<LogEntry> logs, List<CheckIn> checkIns) {
-    final isSelected = _isSameDay(date, _selectedDate);
-    final isTodayDate = _isSameDay(date, today);
-    final isFuture = _isFutureDay(date);
-    
-    final hasLog = logs.any((l) => _isSameDay(l.timestamp, date));
-    final hasCheckIn = checkIns.any((c) => _isSameDay(c.timestamp, date) && c.checked);
-    
-    final dayNumber = DateFormat('d').format(date);
-    
-    return GestureDetector(
-      onTap: isFuture
-          ? null
-          : () {
-              setState(() {
-                _selectedDate = date;
-                _currentMonth = date;
-              });
-            },
-      child: Opacity(
-        opacity: isFuture ? 0.3 : 1.0,
-        child: Container(
-          width: 32,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
-            shape: BoxShape.circle,
-            border: isTodayDate && !isSelected
-                ? Border.all(color: AppTheme.primaryColor, width: 1.2)
-                : null,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                dayNumber,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected || isTodayDate ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected
-                      ? AppTheme.backgroundColor
-                      : Colors.white.withValues(alpha: 0.9),
-                ),
-              ),
-              const SizedBox(height: 0.5),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (hasLog)
-                    Container(
-                      width: 2.5,
-                      height: 2.5,
-                      margin: const EdgeInsets.only(right: 1),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isSelected ? AppTheme.primaryDark : AppTheme.primaryLight,
-                      ),
-                    ),
-                  if (hasCheckIn)
-                    Container(
-                      width: 2.5,
-                      height: 2.5,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppTheme.successColor,
-                      ),
-                    ),
-                  if (!hasLog && !hasCheckIn)
-                    const SizedBox(height: 2.5),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMonthGrid(List<LogEntry> logs, List<CheckIn> checkIns) {
-    final gridDates = _generateMonthGridDates(_currentMonth);
-    final today = DateTime.now();
-    
-    final List<Widget> rows = [];
-    for (int i = 0; i < gridDates.length; i += 7) {
-      final weekDates = gridDates.sublist(i, i + 7);
-      rows.add(
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: weekDates.map((date) {
-            if (date == null) {
-              return const SizedBox(width: 32, height: 32);
-            }
-            return _buildDayCell(date, today, logs, checkIns);
-          }).toList(),
-        ),
-      );
-      if (i + 7 < gridDates.length) {
-        rows.add(const SizedBox(height: 4));
-      }
-    }
-    
-    return Column(
-      children: rows,
-    );
-  }
-
-  Widget _buildCalendarView(List<LogEntry> logs, List<CheckIn> checkIns) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
-      ),
-      child: Column(
-        children: [
-          _buildCalendarHeader(),
-          _buildWeekdaysHeader(),
-          const SizedBox(height: 4),
-          _buildMonthGrid(logs, checkIns),
-        ],
-      ),
-    );
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -311,7 +46,6 @@ class _LogsScreenState extends State<LogsScreen> {
       MaterialPageRoute(
         builder: (context) => WriteLogScreen(
           existingEntry: existingEntry,
-          useMockData: _useMockData,
         ),
       ),
     );
@@ -322,53 +56,25 @@ class _LogsScreenState extends State<LogsScreen> {
       final mood = result['mood'] as String;
       final tags = result['tags'] as List<String>;
 
-      if (_useMockData) {
-        setState(() {
-          if (existingEntry != null) {
-            final idx = FirebaseService.mockEntries.indexWhere((item) => item.id == existingEntry.id);
-            if (idx != -1) {
-              FirebaseService.mockEntries[idx] = FirebaseService.mockEntries[idx].copyWith(
-                title: title,
-                content: content,
-                mood: mood,
-                tags: tags,
-              );
-            }
-          } else {
-            FirebaseService.mockEntries.insert(
-              0,
-              LogEntry(
-                id: 'mock-${DateTime.now().millisecondsSinceEpoch}',
-                title: title,
-                content: content,
-                timestamp: DateTime.now(),
-                mood: mood,
-                tags: tags,
-              ),
-            );
-          }
-        });
-        FirebaseService.notifyLogsChanged();
-      } else {
-        try {
-          if (existingEntry != null) {
-            await _firebaseService.updateEntry(existingEntry.id, title, content, mood, tags);
-          } else {
-            await _firebaseService.createEntry(title, content, mood, tags);
-          }
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to save to Firestore. ($e)'),
-              backgroundColor: AppTheme.errorColor,
-            ),
-          );
+      try {
+        if (existingEntry != null) {
+          await _logService.updateEntry(existingEntry.id, title, content, mood, tags);
+        } else {
+          await _logService.createEntry(title, content, mood, tags);
         }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save to Firestore. ($e)'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
       }
     }
   }
 
-  void _handleDelete(String id, bool isLive) async {
+  void _handleDelete(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -393,25 +99,17 @@ class _LogsScreenState extends State<LogsScreen> {
     );
 
     if (confirmed == true) {
-      if (!isLive) {
-        setState(() {
-          FirebaseService.mockEntries.removeWhere((item) => item.id == id);
-        });
+      try {
+        await _logService.deleteEntry(id);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Log deleted locally.')),
+          const SnackBar(content: Text('Log deleted from Firestore.')),
         );
-        FirebaseService.notifyLogsChanged();
-      } else {
-        try {
-          await _firebaseService.deleteEntry(id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Log deleted from Firestore.')),
-          );
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting entry: $e'), backgroundColor: AppTheme.errorColor),
-          );
-        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting entry: $e'), backgroundColor: AppTheme.errorColor),
+        );
       }
     }
   }
@@ -443,66 +141,17 @@ class _LogsScreenState extends State<LogsScreen> {
           ),
         ],
         children: [
-          // Mode toggle header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-              Expanded(
-                child: Text(
-                  'Journal & Check-ins'.toUpperCase(),
-                  style: AppTheme.bodySmall.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              const HGapSm(),
-              GestureDetector(
-                  onTap: () {
-                    if (Firebase.apps.isNotEmpty) {
-                      setState(() {
-                        _useMockData = !_useMockData;
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _useMockData
-                          ? AppTheme.warningColor.withValues(alpha: 0.15)
-                          : AppTheme.successColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _useMockData
-                            ? AppTheme.warningColor.withValues(alpha: 0.4)
-                            : AppTheme.successColor.withValues(alpha: 0.4),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const HGapSm(),
-                        Text(
-                          _useMockData ? 'OFFLINE' : 'LIVE',
-                          style: TextStyle(
-                            color: _useMockData ? AppTheme.warningColor : AppTheme.successColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
+                Expanded(
+                  child: Text(
+                    'Journal & Check-ins'.toUpperCase(),
+                    style: AppTheme.bodySmall.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ),
@@ -512,7 +161,7 @@ class _LogsScreenState extends State<LogsScreen> {
           const VGapSm(),
 
           // Dynamic Logs Content
-          _useMockData ? _buildLocalTimeline() : _buildFirestoreTimeline(),
+          _buildFirestoreTimeline(),
         ],
       ),
       floatingActionButton: Padding(
@@ -597,29 +246,6 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
-  // LOCAL OFFLINE SIMULATION
-  Widget _buildLocalTimeline() {
-    return StreamBuilder<List<CheckIn>>(
-      stream: _firebaseService.getMockCheckInsStream(),
-      builder: (context, checkinsSnapshot) {
-        final checkIns = checkinsSnapshot.data ?? FirebaseService.mockCheckIns;
-        return StreamBuilder<List<LogEntry>>(
-          stream: _firebaseService.getMockLogsStream(),
-          builder: (context, logsSnapshot) {
-            final logs = logsSnapshot.data ?? FirebaseService.mockEntries;
-            return StreamBuilder<List<Activity>>(
-              stream: _firebaseService.getMockActivitiesStream(),
-              builder: (context, activitiesSnapshot) {
-                final activities = activitiesSnapshot.data ?? FirebaseService.mockActivities;
-                return _buildTimelineList(activities, logs, checkIns);
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
   // TIMELINE BUILDER
   Widget _buildTimelineList(
     List<Activity> activities,
@@ -651,7 +277,16 @@ class _LogsScreenState extends State<LogsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCalendarView(logs, checkIns),
+        MonthlyCalendar(
+          selectedDate: _selectedDate,
+          logs: logs,
+          checkIns: checkIns,
+          onDateSelected: (date) {
+            setState(() {
+              _selectedDate = date;
+            });
+          },
+        ),
         const VGapMd(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -727,10 +362,9 @@ class _LogsScreenState extends State<LogsScreen> {
   // BUILD JOURNAL ENTRY CARD
   Widget _buildJournalCard(LogEntry entry) {
     final timeStr = DateFormat('h:mm a').format(entry.timestamp);
-    final isLive = !_useMockData;
     
     return GestureDetector(
-      onLongPress: () => _showJournalOptionsBottomSheet(entry, isLive),
+      onLongPress: () => _showJournalOptionsBottomSheet(entry),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -813,7 +447,7 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
-  void _showJournalOptionsBottomSheet(LogEntry entry, bool isLive) {
+  void _showJournalOptionsBottomSheet(LogEntry entry) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -877,7 +511,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   title: Text('Delete Entry', style: AppTheme.bodyLarge.copyWith(color: AppTheme.errorColor)),
                   onTap: () {
                     Navigator.pop(context);
-                    _handleDelete(entry.id, isLive);
+                    _handleDelete(entry.id);
                   },
                 ),
                 const VGapSm(),
