@@ -248,17 +248,30 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         showBackButton: true,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         actions: [
-          TextButton(
-            onPressed: _submit,
-            child: const Text(
-              'Save',
-              style: TextStyle(
-                color: AppTheme.primaryLight,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+          if (widget.initialActivity == null || widget.initialActivity!.checked)
+            TextButton(
+              onPressed: _submit,
+              child: const Text(
+                'Save',
+                style: TextStyle(
+                  color: AppTheme.primaryLight,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            )
+          else if (widget.onToggleComplete != null)
+            TextButton(
+              onPressed: widget.onToggleComplete,
+              child: const Text(
+                'Activate',
+                style: TextStyle(
+                  color: AppTheme.successColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
-          ),
           if (widget.initialActivity != null) ...[
             const SizedBox(width: 8),
             Transform.translate(

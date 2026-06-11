@@ -12,6 +12,7 @@ import '../widgets/budget_tab.dart';
 import '../widgets/milestones_tab.dart';
 import '../widgets/add_milestone_task_sheet.dart';
 import '../widgets/add_transaction_sheet.dart';
+import 'activity_details_screen.dart';
 import '../services/activity_service.dart';
 import '../services/budget_service.dart';
 
@@ -544,6 +545,17 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   task.id,
                   symbolType: symbolType,
                   symbolValue: symbolValue,
+                );
+              },
+              onOpenActivityDetails: (activity) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ActivityDetailsScreen(
+                      activityId: activity.id,
+                      showEditIcon: false,
+                    ),
+                  ),
                 );
               },
             );

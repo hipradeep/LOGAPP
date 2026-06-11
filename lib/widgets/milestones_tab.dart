@@ -20,6 +20,7 @@ class MilestonesTab extends StatefulWidget {
   final Function(Task) onDeleteSubTask;
   final Function(Task) onEditSubTask;
   final Function(Task, String?, String?) onUpdateSubTaskSymbols;
+  final Function(Activity) onOpenActivityDetails;
 
   const MilestonesTab({
     super.key,
@@ -35,6 +36,7 @@ class MilestonesTab extends StatefulWidget {
     required this.onDeleteSubTask,
     required this.onEditSubTask,
     required this.onUpdateSubTaskSymbols,
+    required this.onOpenActivityDetails,
   });
 
   @override
@@ -126,12 +128,24 @@ class _MilestonesTabState extends State<MilestonesTab> {
     futureTasks.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     completedTasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
+    final Activity? activeActivity = _selectedCategory == 'All'
+        ? null
+        : widget.milestoneActivities.firstWhere(
+            (a) => a.name == _selectedCategory,
+            orElse: () => Activity(id: '', name: '', checked: false, timestamp: DateTime.now()),
+          );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Category Capsule list
         _buildCategoryBar(categories),
         const VGapMd(),
+
+        if (activeActivity != null && activeActivity.id.isNotEmpty) ...[
+          _buildMilestoneHeaderCard(activeActivity),
+          const VGapSm(),
+        ],
 
         if (widget.isLoadingSubTasks)
           const Center(
@@ -225,6 +239,107 @@ class _MilestonesTabState extends State<MilestonesTab> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildMilestoneHeaderCard(Activity activity) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.warningColor.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Left Icon with Background Glow
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppTheme.warningColor, AppTheme.warningColor.withValues(alpha: 0.6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.warningColor.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+          ),
+          const HGapMd(),
+          
+          // Middle Details Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activity.name,
+                  style: AppTheme.headingSmall.copyWith(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const VGapXs(),
+                Text(
+                  'View trends, consistency, & history',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const HGapSm(),
+          
+          // Right Arrow Button
+          GestureDetector(
+            onTap: () => widget.onOpenActivityDetails(activity),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.warningColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppTheme.warningColor.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Details',
+                    style: TextStyle(
+                      color: AppTheme.warningColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 10,
+                    color: AppTheme.warningColor,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

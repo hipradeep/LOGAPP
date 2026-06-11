@@ -10,14 +10,17 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
+import '../widgets/activity_graph.dart';
 import 'add_activity_screen.dart';
 
 class ActivityDetailsScreen extends StatefulWidget {
   final String activityId;
+  final bool showEditIcon;
 
   const ActivityDetailsScreen({
     super.key,
     required this.activityId,
+    this.showEditIcon = true,
   });
 
   @override
@@ -36,7 +39,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   void initState() {
     super.initState();
     _activityStream = _activityService.getActivityStream(widget.activityId);
-    _checkInsStream = _checkInService.getCheckInsStreamForLast7Days(widget.activityId);
+    _checkInsStream = _checkInService.getCheckInsStreamForActivity(widget.activityId);
     _subTasksStream = _activityService.getSubTasksForActivityStream(widget.activityId);
   }
 
@@ -166,19 +169,21 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       isScrollable: true,
       title: 'Activity Details',
       showBackButton: true,
-      actions: [
-        GestureDetector(
-          onTap: () => _navigateToEditActivity(activity),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
-          ),
-        ),
-      ],
+      actions: widget.showEditIcon
+          ? [
+              GestureDetector(
+                onTap: () => _navigateToEditActivity(activity),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+            ]
+          : null,
       backgroundWidgets: const [
         GlowBlob(
           top: -40,
@@ -297,8 +302,18 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         _buildScheduleDetailsCard(activity),
         const VGapLg(),
 
-        // 3. Analytics Section Placeholder
-        _buildAnalyticsPlaceholder(),
+        // 3. Tasks Checklist Section
+        if (activity.hasSubTasks) ...[
+          _buildTaskListSection(activity, subTasks),
+          const VGapLg(),
+        ],
+
+        // 4. Analytics Section
+        ActivityGraphCard(
+          activity: activity,
+          checkIns: checkIns,
+          tasks: subTasks,
+        ),
         const VGapLg(),
 
         // 4. Timeline Section
@@ -379,6 +394,181 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
+  Widget _buildTaskListSection(Activity activity, List<Task> subTasks) {
+    List<Widget> taskWidgets = [];
+
+    if (activity.trackingType == 'multiple') {
+      for (var template in activity.subTaskTemplates) {
+        final parts = template.split('|');
+        final title = parts.first;
+        final timeStr = parts.length > 1 ? parts.last : null;
+        final formattedTime = timeStr != null ? _formatScheduledTime(timeStr) : null;
+
+        taskWidgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: AppTheme.secondaryColor.withValues(alpha: 0.6),
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (formattedTime != null) ...[
+                  const HGapSm(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 10,
+                          color: AppTheme.primaryLight,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          formattedTime,
+                          style: const TextStyle(
+                            color: AppTheme.primaryLight,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }
+    } else if (activity.trackingType == 'milestone') {
+      final activeTasks = subTasks.where((t) => !t.checked).toList();
+      for (var t in activeTasks) {
+        final totalCount = t.subTasks.length;
+        final completedCount = t.subTasks.where((st) => st.checked).length;
+
+        taskWidgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: AppTheme.warningColor.withValues(alpha: 0.6),
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Text(
+                    t.taskName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (totalCount > 0) ...[
+                  const HGapSm(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondaryColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppTheme.secondaryColor.withValues(alpha: 0.25),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.account_tree_outlined,
+                          size: 9,
+                          color: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '$completedCount/$totalCount',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: AppTheme.secondaryColor.withValues(alpha: 0.9),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }
+    }
+
+    if (taskWidgets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.03),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.playlist_add_check_rounded,
+                color: AppTheme.primaryLight,
+                size: 16,
+              ),
+              const HGapSm(),
+              Text(
+                'Tasks List'.toUpperCase(),
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.primaryLight,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const VGapMd(),
+          ...taskWidgets,
+        ],
+      ),
+    );
+  }
+
   Widget _buildDetailRow({
     required IconData icon,
     required String label,
@@ -420,85 +610,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
-  Widget _buildAnalyticsPlaceholder() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.primaryColor.withValues(alpha: 0.12),
-            AppTheme.secondaryColor.withValues(alpha: 0.04),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.secondaryColor.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.analytics_rounded,
-                  color: AppTheme.secondaryColor,
-                  size: 20,
-                ),
-              ),
-              const HGapMd(),
-              Text(
-                'Analytics & Performance',
-                style: AppTheme.headingSmall.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const VGapLg(),
-          SizedBox(
-            height: 100,
-            child: Stack(
-              children: [
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(4, (index) => Container(
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.04),
-                  )),
-                ),
-                CustomPaint(
-                  size: const Size(double.infinity, 100),
-                  painter: MockGraphPainter(),
-                ),
-              ],
-            ),
-          ),
-          const VGapMd(),
-          Center(
-            child: Text(
-              'Weekly performance graphs and insights coming soon!',
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary.withValues(alpha: 0.7),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildHistoryTimeline(Activity activity, List<CheckIn> checkIns, List<Task> subTasks) {
     final List<DateTime> last7Days = List.generate(7, (index) {
@@ -643,8 +755,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                 children: dayCheckIns.map((c) {
                                   final name = c.subTaskName ?? 'Task';
                                   final cleanName = name.contains('|') ? name.split('|').first : name;
-                                  final timeStr = _getTaskScheduledTime(cleanName, day, subTasks, activity);
-                                  final formattedTime = timeStr != null ? _formatScheduledTime(timeStr) : null;
                                   return Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
@@ -655,44 +765,13 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                         width: 1,
                                       ),
                                     ),
-                                    child: Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      spacing: 6,
-                                      runSpacing: 4,
-                                      children: [
-                                        Text(
-                                          cleanName,
-                                          style: const TextStyle(
-                                            color: AppTheme.primaryLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        if (formattedTime != null)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.primaryColor.withValues(alpha: 0.15),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              formattedTime,
-                                              style: TextStyle(
-                                                color: AppTheme.primaryLight.withValues(alpha: 0.8),
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        GestureDetector(
-                                          onTap: () => _deleteCheckInItem(c, subTasks, activity),
-                                          child: Icon(
-                                            Icons.close_rounded,
-                                            size: 12,
-                                            color: AppTheme.errorColor.withValues(alpha: 0.8),
-                                          ),
-                                        ),
-                                      ],
+                                    child: Text(
+                                      cleanName,
+                                      style: const TextStyle(
+                                        color: AppTheme.primaryLight,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   );
                                 }).toList(),
@@ -714,28 +793,13 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                         width: 1,
                                       ),
                                     ),
-                                    child: Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      spacing: 6,
-                                      runSpacing: 4,
-                                      children: [
-                                        Text(
-                                          'Checked at $timeStr',
-                                          style: const TextStyle(
-                                            color: AppTheme.successColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        GestureDetector(
-                                          onTap: () => _deleteCheckInItem(c, subTasks, activity),
-                                          child: Icon(
-                                            Icons.close_rounded,
-                                            size: 12,
-                                            color: AppTheme.errorColor.withValues(alpha: 0.8),
-                                          ),
-                                        ),
-                                      ],
+                                    child: Text(
+                                      'Checked at $timeStr',
+                                      style: const TextStyle(
+                                        color: AppTheme.successColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   );
                                 }).toList(),
@@ -764,84 +828,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
-  String? _getTaskScheduledTime(String taskTitle, DateTime day, List<Task> subTasks, Activity activity) {
-    if (activity.trackingType == 'multiple') {
-      final containerTask = subTasks.firstWhere(
-        (s) => s.timestamp.year == day.year &&
-               s.timestamp.month == day.month &&
-               s.timestamp.day == day.day &&
-               s.subTasks.isNotEmpty,
-        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
-      );
-      if (containerTask.id.isNotEmpty) {
-        final matching = containerTask.subTasks.firstWhere(
-          (st) => st.title == taskTitle,
-          orElse: () => SubTask(id: '', title: '', checked: false),
-        );
-        if (matching.id.isNotEmpty && matching.scheduledTime != null) {
-          return matching.scheduledTime;
-        }
-      }
-      for (var template in activity.subTaskTemplates) {
-        final parts = template.split('|');
-        if (parts.first == taskTitle && parts.length > 1) {
-          return parts.last;
-        }
-      }
-    } else if (activity.trackingType == 'milestone') {
-      final matching = subTasks.firstWhere(
-        (s) => s.timestamp.year == day.year &&
-               s.timestamp.month == day.month &&
-               s.timestamp.day == day.day &&
-               s.taskName == taskTitle,
-        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
-      );
-      if (matching.id.isNotEmpty) {
-        return matching.scheduledTime;
-      }
-    }
-    return null;
-  }
 
-  void _deleteCheckInItem(CheckIn checkIn, List<Task> subTasks, Activity activity) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await _checkInService.deleteCheckIn(checkIn.id);
 
-      if (activity.trackingType == 'multiple') {
-        // Find the corresponding container Task in loaded subTasks
-        final taskForDay = subTasks.firstWhere(
-          (s) => _isSameDay(s.timestamp, checkIn.timestamp) && s.subTasks.isNotEmpty,
-          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: checkIn.timestamp, checked: false),
-        );
-        if (taskForDay.id.isNotEmpty) {
-          final List<SubTask> updatedSubTasks = List<SubTask>.from(taskForDay.subTasks);
-          final index = updatedSubTasks.indexWhere((st) {
-            final cleanTitle = st.title.contains('|') ? st.title.split('|').first : st.title;
-            return cleanTitle == checkIn.subTaskName;
-          });
-          if (index != -1) {
-            updatedSubTasks[index] = updatedSubTasks[index].copyWith(checked: false);
 
-            final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
-            final updatedTask = taskForDay.copyWith(subTasks: updatedSubTasks, checked: allChecked);
-            await _activityService.updateSubTask(updatedTask);
-          }
-        }
-      }
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Log entry removed.')),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to delete history item: $e'), backgroundColor: AppTheme.errorColor),
-      );
-    }
-  }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.day == b.day && a.month == b.month && a.year == b.year;
-  }
 
   void _navigateToEditActivity(Activity activity) {
     Navigator.push(
@@ -954,52 +944,4 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   }
 }
 
-class MockGraphPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paintLine = Paint()
-      ..color = AppTheme.primaryColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
 
-    final paintShadow = Paint()
-      ..color = AppTheme.primaryColor.withValues(alpha: 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-    final path = Path();
-    path.moveTo(0, size.height * 0.7);
-    path.cubicTo(
-      size.width * 0.2, size.height * 0.8,
-      size.width * 0.35, size.height * 0.2,
-      size.width * 0.5, size.height * 0.4,
-    );
-    path.cubicTo(
-      size.width * 0.65, size.height * 0.6,
-      size.width * 0.8, size.height * 0.1,
-      size.width, size.height * 0.3,
-    );
-
-    canvas.drawPath(path, paintShadow);
-    canvas.drawPath(path, paintLine);
-
-    // Draw glowing data points
-    final pointPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    final pointOuterPaint = Paint()
-      ..color = AppTheme.secondaryColor
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.4), 6, pointOuterPaint);
-    canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.4), 3, pointPaint);
-
-    canvas.drawCircle(Offset(size.width, size.height * 0.3), 6, pointOuterPaint);
-    canvas.drawCircle(Offset(size.width, size.height * 0.3), 3, pointPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

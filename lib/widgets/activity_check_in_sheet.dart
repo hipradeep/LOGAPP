@@ -28,7 +28,6 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   final DateTime _now = DateTime.now();
   late Stream<List<CheckIn>> _checkInsStream;
   late Stream<List<Task>> _subTasksStream;
-  String? _deletingSubTaskId;
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
@@ -525,7 +524,9 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                             const VGapXs(),
                             Text(
                               item.subTaskName!.contains('|')
-                                  ? 'Task: ${item.subTaskName!.split('|').first} (${_formatTimeString(item.subTaskName!.split('|').last)})'
+                                  ? (widget.activity.trackingType == 'multiple'
+                                      ? 'Task: ${item.subTaskName!.split('|').first} (${_formatTimeString(item.subTaskName!.split('|').last)})'
+                                      : 'Task: ${item.subTaskName!.split('|').first}')
                                   : 'Task: ${item.subTaskName}',
                               style: const TextStyle(
                                 color: AppTheme.primaryLight,
@@ -879,7 +880,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (item.scheduledTime != null && item.scheduledTime!.isNotEmpty) ...[
+                            if (widget.activity.trackingType == 'multiple' && item.scheduledTime != null && item.scheduledTime!.isNotEmpty) ...[
                               const HGapSm(),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

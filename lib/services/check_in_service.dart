@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/check_in.dart';
 
 class CheckInService {
@@ -40,6 +41,18 @@ class CheckInService {
     });
   }
 
+  Stream<List<CheckIn>> getCheckInsStreamForActivity(String activityId) {
+    return _checkinsCollection
+        .where('activityId', isEqualTo: activityId)
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return list;
+    });
+  }
+
+
   Stream<List<CheckIn>> getCheckedActivitiesCheckInsStream() {
     return _checkinsCollection
         .orderBy('timestamp', descending: true)
@@ -77,7 +90,7 @@ class CheckInService {
           }
         }
       } catch (e) {
-        print("Error deleting skipped checkin: $e");
+        debugPrint("Error deleting skipped checkin: $e");
       }
     }
 
@@ -123,7 +136,7 @@ class CheckInService {
         }
       }
     } catch (e) {
-      print("Error deleting skipped checkin for today: $e");
+      debugPrint("Error deleting skipped checkin for today: $e");
     }
   }
 }

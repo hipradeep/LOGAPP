@@ -386,9 +386,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             spacing: 8,
             runSpacing: 8,
             children: activities.map((activity) {
-              final int count = activity.trackingType == 'multiple'
-                  ? allSubTasks.where((s) => s.activityId == activity.id && s.checked && _isToday(s.timestamp)).length
-                  : todayCheckIns.where((c) => c.activityId == activity.id).length;
+              final int count;
+              if (activity.trackingType == 'multiple') {
+                final todayTask = allSubTasks.firstWhere(
+                  (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
+                  orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+                );
+                count = todayTask.subTasks.where((st) => st.checked).length;
+              } else {
+                count = todayCheckIns.where((c) => c.activityId == activity.id).length;
+              }
 
               return ActivityChip(
                 activity: activity,

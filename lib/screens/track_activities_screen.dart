@@ -398,37 +398,14 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const HGapSm(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: typeBadge.color.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: typeBadge.color.withValues(alpha: 0.3),
-                                      width: 1,
-                                    ),
+                                if (activity.skippable) ...[
+                                  const HGapSm(),
+                                  Icon(
+                                    Icons.double_arrow_rounded,
+                                    size: 20,
+                                    color: AppTheme.warningColor.withValues(alpha: 0.8),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        typeBadge.icon,
-                                        size: 12,
-                                        color: typeBadge.color.withValues(alpha: 0.8),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        typeBadge.label,
-                                        style: TextStyle(
-                                          color: typeBadge.color.withValues(alpha: 0.8),
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                ],
                               ],
                             ),
                             const VGapSm(),
@@ -460,15 +437,6 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                                     ],
                                   ),
                                 ),
-                                if (activity.skippable)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Icon(
-                                      Icons.double_arrow_rounded,
-                                      size: 20,
-                                      color: AppTheme.warningColor.withValues(alpha: 0.5),
-                                    ),
-                                  ),
                               ],
                             ),
                           ],
@@ -518,6 +486,21 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   Widget _buildActivityProgressIcon(Activity activity) {
     final isActive = activity.checked;
     final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
+    
+    IconData typeIcon;
+    switch (activity.trackingType) {
+      case 'multiple':
+        typeIcon = Icons.repeat_rounded;
+        break;
+      case 'milestone':
+        typeIcon = Icons.flag_rounded;
+        break;
+      case 'single':
+      default:
+        typeIcon = Icons.bolt_rounded;
+        break;
+    }
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: 24,
@@ -527,7 +510,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         color: accentColor,
         border: Border.all(color: accentColor, width: 2),
       ),
-      child: const Icon(Icons.check, size: 14, color: Colors.white),
+      child: Icon(typeIcon, size: 14, color: Colors.white),
     );
   }
 
