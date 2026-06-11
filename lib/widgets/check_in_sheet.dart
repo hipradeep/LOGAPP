@@ -44,12 +44,14 @@ class _CheckInSheetState extends State<CheckInSheet> {
 
       // Handle AM/PM for both parts
       if (!startPart.contains('AM') && !startPart.contains('PM')) {
-        if (fullStr.contains('AM')) startPart += ' AM';
-        else if (fullStr.contains('PM')) startPart += ' PM';
+        if (fullStr.contains('AM')) {
+          startPart += ' AM';
+        } else if (fullStr.contains('PM')) startPart += ' PM';
       }
       if (endPart != null && !endPart.contains('AM') && !endPart.contains('PM')) {
-        if (fullStr.contains('AM')) endPart += ' AM';
-        else if (fullStr.contains('PM')) endPart += ' PM';
+        if (fullStr.contains('AM')) {
+          endPart += ' AM';
+        } else if (fullStr.contains('PM')) endPart += ' PM';
       }
 
       final formats = [

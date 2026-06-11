@@ -131,7 +131,7 @@ class _ActivityChipState extends State<ActivityChip>
             ),
             if (isSkipped)
               Icon(
-                Icons.skip_next_rounded,
+                Icons.double_arrow_rounded,
                 color: accentColor,
                 size: 12,
               )

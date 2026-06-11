@@ -213,7 +213,12 @@ class FirebaseService {
     return getSubTasksForActivityStream(activity.id).map(filterAndSort);
   }
 
-  Future<void> createSubTask(String activityId, String subTaskName, DateTime timestamp, bool checked) async {
+  Future<void> createSubTask(
+    String activityId, 
+    String subTaskName, 
+    DateTime timestamp, 
+    bool checked,
+  ) async {
     final hasTime = subTaskName.contains('|');
     final cleanName = hasTime ? subTaskName.split('|').first : subTaskName;
     final timeStr = hasTime ? subTaskName.split('|').last : null;

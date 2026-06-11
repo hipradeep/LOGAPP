@@ -8,9 +8,9 @@ class WriteLogScreen extends StatefulWidget {
   final LogEntry? existingEntry;
 
   const WriteLogScreen({
-    Key? key,
+    super.key,
     this.existingEntry,
-  }) : super(key: key);
+  });
 
   @override
   State<WriteLogScreen> createState() => _WriteLogScreenState();

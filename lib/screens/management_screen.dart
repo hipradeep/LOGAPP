@@ -581,9 +581,16 @@ class _ManagementScreenState extends State<ManagementScreen> {
   }
 
   Future<void> _toggleSubTask(Task task, bool checked) async {
+    List<SubTask> updatedSubTasks = task.subTasks;
+    if (checked != task.checked) {
+      updatedSubTasks = task.subTasks
+          .map((subTask) => subTask.copyWith(checked: checked))
+          .toList();
+    }
     final updated = task.copyWith(
       checked: checked,
       completionTime: checked ? DateTime.now() : null,
+      subTasks: updatedSubTasks,
     );
     await _activityService.updateSubTask(updated);
   }

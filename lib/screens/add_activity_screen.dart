@@ -31,13 +31,13 @@ class AddActivityScreen extends StatefulWidget {
   final VoidCallback? onToggleComplete;
 
   const AddActivityScreen({
-    Key? key,
+    super.key,
     required this.onAdd,
     this.initialActivity,
     this.onEdit,
     this.onDelete,
     this.onToggleComplete,
-  }) : super(key: key);
+  });
 
   @override
   State<AddActivityScreen> createState() => _AddActivityScreenState();
@@ -89,10 +89,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       }
       _skippable = a.skippable;
     }
-    // Request focus on start
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-    });
+
   }
 
   @override
@@ -471,7 +468,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             child: Row(
               children: [
                 Icon(
-                  Icons.skip_next_rounded,
+                  Icons.double_arrow_rounded,
                   color: _skippable ? AppTheme.warningColor : AppTheme.textSecondary,
                   size: 20,
                 ),
@@ -502,7 +499,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 _skippable = val;
               });
             },
-            activeColor: AppTheme.primaryColor,
+            activeThumbColor: AppTheme.primaryColor,
           ),
         ],
       ),
@@ -532,7 +529,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         TextField(
           controller: _activityNameController,
           focusNode: _focusNode,
-          autofocus: true,
+          autofocus: false,
           style: GoogleFonts.outfit(
             color: Colors.white,
             fontSize: 20,

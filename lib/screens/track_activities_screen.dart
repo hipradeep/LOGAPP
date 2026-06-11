@@ -429,27 +429,43 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                               ],
                             ),
                             const VGapSm(),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                if (activity.targetCount > 1)
-                                  _buildMetaChip(
-                                    icon: Icons.repeat_rounded,
-                                    label: '${activity.targetCount}x/day',
-                                    color: AppTheme.secondaryColor,
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    children: [
+                                      if (activity.targetCount > 1)
+                                        _buildMetaChip(
+                                          icon: Icons.repeat_rounded,
+                                          label: '${activity.targetCount}x/day',
+                                          color: AppTheme.secondaryColor,
+                                        ),
+                                      if (activity.scheduledTime != null)
+                                        _buildMetaChip(
+                                          icon: Icons.access_time_rounded,
+                                          label: _formatScheduledTime(activity.scheduledTime!),
+                                          color: AppTheme.primaryLight,
+                                        ),
+                                      _buildMetaChip(
+                                        icon: Icons.calendar_view_week_rounded,
+                                        label: _getRepeatDaysLabel(activity.repeatDays),
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ],
                                   ),
-                                if (activity.scheduledTime != null)
-                                  _buildMetaChip(
-                                    icon: Icons.access_time_rounded,
-                                    label: _formatScheduledTime(activity.scheduledTime!),
-                                    color: AppTheme.primaryLight,
-                                  ),
-                                _buildMetaChip(
-                                  icon: Icons.calendar_view_week_rounded,
-                                  label: _getRepeatDaysLabel(activity.repeatDays),
-                                  color: AppTheme.textSecondary,
                                 ),
+                                if (activity.skippable)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      Icons.double_arrow_rounded,
+                                      size: 20,
+                                      color: AppTheme.warningColor.withValues(alpha: 0.5),
+                                    ),
+                                  ),
                               ],
                             ),
                           ],
@@ -459,6 +475,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                   ],
                 ),
               ),
+
             ],
           ),
         ),

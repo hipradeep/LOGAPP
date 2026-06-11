@@ -36,6 +36,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
   TimeOfDay? _selectedTime;
   DateTime _selectedDate = DateTime.now();
   bool _isSaving = false;
+  bool _wasKeyboardVisible = false;
 
   @override
   void initState() {
@@ -45,6 +46,9 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
       final task = widget.editTask!;
       _controller.text = task.taskName;
       _selectedDate = task.timestamp;
+      if (widget.milestones.any((m) => m.id == task.activityId)) {
+        _selectedMilestoneId = task.activityId;
+      }
       if (task.scheduledTime != null) {
         final parts = task.scheduledTime!.split(':');
         if (parts.length == 2) {
@@ -105,10 +109,13 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
           taskName: rawName,
           timestamp: subTaskDateTime,
           checked: task.checked,
+          symbolType: task.symbolType,
+          symbolValue: task.symbolValue,
           scheduledTime: _selectedTime != null
               ? _formatTimeOfDay(_selectedTime!)
               : null,
           completionTime: task.completionTime,
+          subTasks: task.subTasks,
         );
         await widget.onEditSubTask?.call(updatedTask);
         if (mounted) Navigator.pop(context);
@@ -167,10 +174,16 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
 
   Future<void> _pickCustomDate() async {
     final today = DateTime.now();
-    final firstDate = DateTime(today.year, today.month, today.day).subtract(const Duration(days: 3));
-    final lastDate = DateTime(today.year, today.month, today.day).add(const Duration(days: 7));
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+    final isEditing = widget.editTask != null;
+    final firstDate = isEditing 
+        ? todayMidnight.subtract(const Duration(days: 365)) 
+        : todayMidnight.subtract(const Duration(days: 3));
+    final lastDate = isEditing 
+        ? todayMidnight.add(const Duration(days: 365 * 2)) 
+        : todayMidnight.add(const Duration(days: 7));
 
-    var initialDate = _selectedDate;
+    var initialDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     if (initialDate.isBefore(firstDate)) {
       initialDate = firstDate;
     } else if (initialDate.isAfter(lastDate)) {
@@ -207,8 +220,41 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
     }
   }
 
+  Future<void> _pickCustomTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryColor,
+              surface: AppTheme.surfaceColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedTime = picked;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    if (_wasKeyboardVisible && !isKeyboardVisible && _focusNode.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.unfocus();
+        }
+      });
+    }
+    _wasKeyboardVisible = isKeyboardVisible;
+
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
@@ -312,7 +358,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                           const VGapLg(),
                           Text(
                             'Select Date',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
+                            style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondary),
                           ),
                           const VGapMd(),
                           SingleChildScrollView(
@@ -321,8 +367,8 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                           ),
                           const VGapLg(),
                           Text(
-                            widget.editTask != null ? 'Edit Task' : 'Add Task',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
+                            'Task Name',
+                            style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondary),
                           ),
                           const VGapMd(),
                           TextField(
@@ -503,6 +549,8 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
         _buildDateChip('Tomorrow', tomorrow, isTomorrow),
         const HGapSm(),
         _buildCustomDateChip(isCustom),
+        const HGapSm(),
+        _buildTimeSelectorChip(),
       ],
     );
   }
@@ -512,7 +560,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
       onTap: () => setState(() => _selectedDate = date),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isSelected 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
@@ -528,7 +576,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
           label,
           style: TextStyle(
             color: isSelected ? Colors.white : AppTheme.textSecondary,
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
@@ -544,7 +592,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
       onTap: _pickCustomDate,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isCustom 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
@@ -561,7 +609,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
           children: [
             Icon(
               Icons.calendar_month_rounded, 
-              size: 14, 
+              size: 13, 
               color: isCustom ? AppTheme.primaryLight : AppTheme.textSecondary,
             ),
             const SizedBox(width: 4),
@@ -569,10 +617,68 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
               label,
               style: TextStyle(
                 color: isCustom ? Colors.white : AppTheme.textSecondary,
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: isCustom ? FontWeight.bold : FontWeight.normal,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSelectorChip() {
+    final hasTime = _selectedTime != null;
+    final label = hasTime ? _formatTimeForDisplay(_selectedTime!) : null;
+
+    return GestureDetector(
+      onTap: _pickCustomTime,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: hasTime 
+              ? AppTheme.primaryColor.withValues(alpha: 0.15) 
+              : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: hasTime 
+                ? AppTheme.primaryColor.withValues(alpha: 0.3) 
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.access_time_rounded, 
+              size: 13, 
+              color: hasTime ? AppTheme.primaryLight : AppTheme.textSecondary,
+            ),
+            if (hasTime) ...[
+              const SizedBox(width: 4),
+              Text(
+                label!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedTime = null;
+                  });
+                },
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 12,
+                  color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -623,7 +729,7 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                       ),
                     ),
                   ),
-                  if (hasTime && timeString != null) ...[
+                  if (hasTime) ...[
                     const HGapSm(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

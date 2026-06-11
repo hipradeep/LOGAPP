@@ -4,11 +4,13 @@ class SubTask {
   final String id;
   final String title;
   final bool checked;
+  final int? durationMinutes;
 
   SubTask({
     required this.id,
     required this.title,
     required this.checked,
+    this.durationMinutes,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -16,6 +18,7 @@ class SubTask {
       'id': id,
       'title': title,
       'checked': checked,
+      'durationMinutes': durationMinutes,
     };
   }
 
@@ -24,6 +27,7 @@ class SubTask {
       id: data['id'] as String? ?? '',
       title: data['title'] as String? ?? '',
       checked: data['checked'] as bool? ?? false,
+      durationMinutes: data['durationMinutes'] as int?,
     );
   }
 
@@ -31,11 +35,13 @@ class SubTask {
     String? id,
     String? title,
     bool? checked,
+    int? durationMinutes,
   }) {
     return SubTask(
       id: id ?? this.id,
       title: title ?? this.title,
       checked: checked ?? this.checked,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
     );
   }
 }

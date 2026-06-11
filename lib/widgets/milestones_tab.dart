@@ -45,6 +45,9 @@ class _MilestonesTabState extends State<MilestonesTab> {
   String _selectedCategory = 'All';
   String? _expandedSubTaskId;
   final Map<String, TextEditingController> _nestedControllers = {};
+  String? _deletingNestedItemId;
+  final FocusNode _nestedFocusNode = FocusNode();
+  bool _wasKeyboardVisible = false;
 
   // Accordion open/close state
   bool _todayExpanded = true;
@@ -56,11 +59,22 @@ class _MilestonesTabState extends State<MilestonesTab> {
     for (var controller in _nestedControllers.values) {
       controller.dispose();
     }
+    _nestedFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    if (_wasKeyboardVisible && !isKeyboardVisible && _nestedFocusNode.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _nestedFocusNode.unfocus();
+        }
+      });
+    }
+    _wasKeyboardVisible = isKeyboardVisible;
+
     // 1. Dynamic Category Tags from milestone activities
     final Set<String> uniqueActivityNames = widget.milestoneActivities.map((a) => a.name).toSet();
     final List<String> categories = ['All', ...uniqueActivityNames];
@@ -313,9 +327,11 @@ class _MilestonesTabState extends State<MilestonesTab> {
     );
 
     final isExpanded = _expandedSubTaskId == st.id;
-    final timeStr = st.scheduledTime;
     final totalCount = st.subTasks.length;
     final completedCount = st.subTasks.where((i) => i.checked).length;
+    final totalDuration = st.subTasks
+        .where((i) => i.durationMinutes != null)
+        .fold<int>(0, (sum, i) => sum + i.durationMinutes!);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -348,30 +364,34 @@ class _MilestonesTabState extends State<MilestonesTab> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 1. Left Checkbox
-                  GestureDetector(
-                    onTap: () {
-                      widget.onToggleSubTask(st, !st.checked);
-                    },
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: st.checked 
-                            ? const Color(0xFF64748B) // Slate 500
-                            : Colors.transparent,
-                        border: Border.all(
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: GestureDetector(
+                      onTap: () {
+                        widget.onToggleSubTask(st, !st.checked);
+                      },
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
                           color: st.checked 
-                              ? const Color(0xFF64748B)
-                              : Colors.white30,
-                          width: 2,
+                              ? const Color(0xFF64748B) // Slate 500
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: st.checked 
+                                ? const Color(0xFF64748B)
+                                : Colors.white30,
+                            width: 2,
+                          ),
                         ),
+                        child: st.checked
+                            ? const Icon(Icons.check, size: 14, color: Colors.white)
+                            : null,
                       ),
-                      child: st.checked
-                          ? const Icon(Icons.check, size: 14, color: Colors.white)
-                          : null,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -391,72 +411,76 @@ class _MilestonesTabState extends State<MilestonesTab> {
                             decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
                           ),
                         ),
-                        if (timeStr != null || totalCount > 0 || !_isToday(st.timestamp) || parent.repeatDays.length < 7) ...[
+                        if (parent.repeatDays.length < 7 || totalCount > 0) ...[
                           const SizedBox(height: 6),
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              // Subtask ratio branch badge
-                              if (totalCount > 0) ...[
-                                const Icon(
-                                  Icons.account_tree_outlined,
-                                  size: 12,
-                                  color: Colors.white38,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$completedCount/$totalCount',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white38,
-                                    fontWeight: FontWeight.w500,
+                              if (totalCount > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.secondaryColor.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: AppTheme.secondaryColor.withValues(alpha: 0.25),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.account_tree_outlined,
+                                        size: 9,
+                                        color: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '$completedCount/$totalCount',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: AppTheme.secondaryColor.withValues(alpha: 0.9),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (totalDuration > 0) ...[
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          '•',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: AppTheme.secondaryColor.withValues(alpha: 0.4),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Icon(
+                                          Icons.timer_outlined,
+                                          size: 9,
+                                          color: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '${totalDuration}m',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: AppTheme.secondaryColor.withValues(alpha: 0.9),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                              ],
-                              // Alarm time badge
-                              if (timeStr != null) ...[
-                                const Icon(
-                                  Icons.notifications_none_rounded,
-                                  size: 12,
-                                  color: Colors.white38,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _formatTimeString(timeStr),
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white38,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                              ],
                               // Repeat arrows badge
-                              if (parent.repeatDays.length < 7) ...[
+                              if (parent.repeatDays.length < 7)
                                 const Icon(
                                   Icons.repeat_rounded,
                                   size: 12,
                                   color: Colors.white38,
                                 ),
-                                const SizedBox(width: 12),
-                              ],
-                              // Date badge (if not today)
-                              if (!_isToday(st.timestamp)) ...[
-                                const Icon(
-                                  Icons.calendar_today_rounded,
-                                  size: 10,
-                                  color: Colors.white38,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  DateFormat('dd-MM').format(st.timestamp),
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white38,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                         ],
@@ -466,9 +490,12 @@ class _MilestonesTabState extends State<MilestonesTab> {
                   const SizedBox(width: 14),
                   
                   // 3. Right Symbol Indicator
-                  GestureDetector(
-                    onTap: () => _showSymbolSelectionDialog(st),
-                    child: _buildSymbolIndicator(st),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: GestureDetector(
+                      onTap: () => _showSymbolSelectionDialog(st),
+                      child: _buildSymbolIndicator(st),
+                    ),
                   ),
                 ],
               ),
@@ -483,6 +510,40 @@ class _MilestonesTabState extends State<MilestonesTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Parent milestone label
+                  if (parent.name.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.secondaryColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: AppTheme.secondaryColor.withValues(alpha: 0.25),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.flag_rounded,
+                            size: 9,
+                            color: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            parent.name,
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: AppTheme.secondaryColor.withValues(alpha: 0.9),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   // Nested Checklist items
                   if (st.subTasks.isNotEmpty) ...[
                     const Text(
@@ -496,35 +557,79 @@ class _MilestonesTabState extends State<MilestonesTab> {
                     const SizedBox(height: 6),
                     ...List.generate(st.subTasks.length, (idx) {
                       final item = st.subTasks[idx];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          children: [
-                            Checkbox(
-                              value: item.checked,
-                              activeColor: AppTheme.primaryColor,
-                              visualDensity: VisualDensity.compact,
-                              onChanged: (val) {
-                                if (val != null) {
-                                  _toggleNestedItem(st, idx, val);
-                                }
-                              },
-                            ),
-                            Expanded(
-                              child: Text(
-                                item.title,
-                                style: TextStyle(
-                                  color: item.checked ? AppTheme.textSecondary : Colors.white70,
-                                  fontSize: 12,
-                                  decoration: item.checked ? TextDecoration.lineThrough : null,
+                      final isDeleting = _deletingNestedItemId == item.id;
+
+                      return GestureDetector(
+                        onLongPress: () {
+                          setState(() {
+                            if (isDeleting) {
+                              _deletingNestedItemId = null;
+                            } else {
+                              _deletingNestedItemId = item.id;
+                            }
+                          });
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 1),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: item.checked,
+                                activeColor: AppTheme.primaryColor,
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                onChanged: (val) {
+                                  if (isDeleting) {
+                                    setState(() {
+                                      _deletingNestedItemId = null;
+                                    });
+                                  } else if (val != null) {
+                                    _toggleNestedItem(st, idx, val);
+                                  }
+                                },
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    if (isDeleting) {
+                                      setState(() {
+                                        _deletingNestedItemId = null;
+                                      });
+                                    }
+                                  },
+                                  child: Text(
+                                    item.title,
+                                    style: TextStyle(
+                                      color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Colors.white70,
+                                      fontSize: 12,
+                                      decoration: item.checked ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 16, color: AppTheme.errorColor),
-                              onPressed: () => _deleteNestedItem(st, idx),
-                            ),
-                          ],
+                              if (isDeleting)
+                                GestureDetector(
+                                  onTap: () {
+                                    _deleteNestedItem(st, idx);
+                                    setState(() {
+                                      _deletingNestedItemId = null;
+                                    });
+                                  },
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    child: Icon(
+                                      Icons.delete_outline,
+                                      size: 16,
+                                      color: AppTheme.errorColor,
+                                    ),
+                                  ),
+                                )
+                              else
+                                _buildChecklistItemDurationMenu(st, idx, item),
+                            ],
+                          ),
                         ),
                       );
                     }),
@@ -535,22 +640,32 @@ class _MilestonesTabState extends State<MilestonesTab> {
                   _buildAddNestedItemForm(st),
                   const VGapSm(),
 
-                  // Subtask Meta actions (Date selection & Delete Subtask)
+                  // Subtask Meta actions (Date/Time badge & Edit button)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      TextButton.icon(
-                        onPressed: () => _pickSubTaskDate(st),
-                        icon: const Icon(Icons.calendar_month_rounded, size: 14, color: AppTheme.primaryLight),
-                        label: Text(
-                          DateFormat('MMM d, yyyy').format(st.timestamp),
-                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.03),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            width: 1,
+                          ),
                         ),
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.03),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          minimumSize: Size.zero,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_month_rounded, size: 14, color: AppTheme.primaryLight),
+                            const SizedBox(width: 6),
+                            Text(
+                              st.scheduledTime != null
+                                  ? '${DateFormat('MMM d, yyyy').format(st.timestamp)} • ${_formatTimeString(st.scheduledTime!)}'
+                                  : DateFormat('MMM d, yyyy').format(st.timestamp),
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ],
                         ),
                       ),
                       TextButton.icon(
@@ -669,6 +784,7 @@ class _MilestonesTabState extends State<MilestonesTab> {
         Expanded(
           child: TextField(
             controller: controller,
+            focusNode: _nestedFocusNode,
             style: const TextStyle(color: Colors.white, fontSize: 12),
             decoration: InputDecoration(
               hintText: 'Add checklist sub-item...',
@@ -690,6 +806,14 @@ class _MilestonesTabState extends State<MilestonesTab> {
                 borderSide: const BorderSide(color: AppTheme.primaryColor),
               ),
             ),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (val) {
+              final text = val.trim();
+              if (text.isNotEmpty) {
+                _addNestedItem(st, text);
+                controller.clear();
+              }
+            },
           ),
         ),
         const SizedBox(width: 6),
@@ -737,37 +861,102 @@ class _MilestonesTabState extends State<MilestonesTab> {
     widget.onToggleSubTask(st.copyWith(subTasks: newList), st.checked);
   }
 
-  Future<void> _pickSubTaskDate(Task st) async {
-    final today = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: st.timestamp,
-      firstDate: today.subtract(const Duration(days: 365)),
-      lastDate: today.add(const Duration(days: 365 * 2)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      final newDate = DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        st.timestamp.hour,
-        st.timestamp.minute,
-      );
-      widget.onToggleSubTask(st.copyWith(timestamp: newDate), st.checked);
-    }
+  void _updateNestedItemDuration(Task st, int index, int? duration) {
+    final newList = List<SubTask>.from(st.subTasks);
+    newList[index] = newList[index].copyWith(durationMinutes: duration);
+    widget.onToggleSubTask(st.copyWith(subTasks: newList), st.checked);
   }
+
+  Widget _buildChecklistItemDurationMenu(Task st, int index, SubTask item) {
+    return PopupMenuButton<String>(
+      tooltip: 'Change duration or delete',
+      onSelected: (val) {
+        if (val == 'delete') {
+          _deleteNestedItem(st, index);
+        } else {
+          final int? duration = val == 'none' ? null : int.tryParse(val);
+          _updateNestedItemDuration(st, index, duration);
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem<String>(
+          value: 'none',
+          child: Text('No limit', style: TextStyle(color: Colors.white, fontSize: 13)),
+        ),
+        const PopupMenuItem<String>(
+          value: '10',
+          child: Text('10 minutes', style: TextStyle(color: Colors.white, fontSize: 13)),
+        ),
+        const PopupMenuItem<String>(
+          value: '30',
+          child: Text('30 minutes', style: TextStyle(color: Colors.white, fontSize: 13)),
+        ),
+        const PopupMenuItem<String>(
+          value: '60',
+          child: Text('1 hour', style: TextStyle(color: Colors.white, fontSize: 13)),
+        ),
+        const PopupMenuDivider(height: 1),
+        const PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 16, color: AppTheme.errorColor),
+              SizedBox(width: 8),
+              Text('Delete Item', style: TextStyle(color: AppTheme.errorColor, fontSize: 13)),
+            ],
+          ),
+        ),
+      ],
+      offset: const Offset(0, 30),
+      color: AppTheme.surfaceColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: item.durationMinutes != null
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: item.checked
+                      ? Colors.white.withValues(alpha: 0.02)
+                      : AppTheme.primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 10,
+                      color: item.checked
+                          ? AppTheme.textSecondary.withValues(alpha: 0.4)
+                          : AppTheme.primaryLight,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${item.durationMinutes}m',
+                      style: TextStyle(
+                        color: item.checked
+                            ? AppTheme.textSecondary.withValues(alpha: 0.4)
+                            : AppTheme.primaryLight,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Icon(
+                Icons.timer_outlined,
+                size: 16,
+                color: item.checked
+                    ? AppTheme.textSecondary.withValues(alpha: 0.2)
+                    : Colors.white24,
+              ),
+      ),
+    );
+  }
+
+
 
   void _showSymbolSelectionDialog(Task st) {
     showDialog(

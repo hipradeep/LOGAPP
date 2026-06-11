@@ -17,7 +17,7 @@ import '../services/check_in_service.dart';
 import '../services/log_service.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  const DashboardScreen({super.key});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -251,6 +251,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     if (activities.isEmpty) return const SizedBox.shrink();
 
+    final hasSelection = activities.any((activity) => _selectedActivityIds.contains(activity.id));
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       padding: const EdgeInsets.all(12),
@@ -302,7 +304,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
-              if (!isCompletedList && !isSkippedList && _selectedActivityIds.isNotEmpty)
+              if (!isCompletedList && !isSkippedList && hasSelection)
                 GestureDetector(
                   onTap: () => _handleSkipSelected(context, activities),
                   child: Container(
@@ -319,7 +321,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(
-                          Icons.skip_next_rounded, 
+                          Icons.double_arrow_rounded, 
                           color: AppTheme.warningColor, 
                           size: 12,
                         ),
@@ -336,7 +338,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                 ),
-              if (isSkippedList && _selectedActivityIds.isNotEmpty)
+              if (isSkippedList && hasSelection)
                 GestureDetector(
                   onTap: () => _handleActivateSelected(context, activities),
                   child: Container(
@@ -387,6 +389,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 isSkipped: isSkippedList,
                 isSelected: _selectedActivityIds.contains(activity.id),
                 onTap: () {
+                  // In multi-select mode: tap toggles selection (not for completed section)
+                  if (_selectedActivityIds.isNotEmpty && !isCompletedList) {
+                    setState(() {
+                      if (_selectedActivityIds.contains(activity.id)) {
+                        _selectedActivityIds.remove(activity.id);
+                      } else {
+                        _selectedActivityIds.add(activity.id);
+                      }
+                    });
+                    return;
+                  }
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
@@ -398,7 +411,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     setState(() {});
                   });
                 },
-                onLongPress: () {
+                // Disable long press for completed section (no action available)
+                onLongPress: isCompletedList ? null : () {
                   setState(() {
                     if (_selectedActivityIds.contains(activity.id)) {
                       _selectedActivityIds.remove(activity.id);
@@ -475,11 +489,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _handleSkipSelected(BuildContext context, List<Activity> sectionActivities) {
-    final toSkip = sectionActivities.where((a) => _selectedActivityIds.contains(a.id) && a.skippable).toList();
-    if (toSkip.isEmpty) return;
+    final selected = sectionActivities.where((a) => _selectedActivityIds.contains(a.id)).toList();
+    final toSkip = selected.where((a) => a.skippable).toList();
+    final nonSkippable = selected.where((a) => !a.skippable).toList();
+
+    if (nonSkippable.isNotEmpty && toSkip.isEmpty) {
+      AppToast.show(
+        context: context,
+        message: nonSkippable.length == 1
+            ? '"${nonSkippable.first.name}" is not skippable'
+            : '${nonSkippable.length} activities are not skippable',
+        backgroundColor: AppTheme.warningColor,
+      );
+      setState(() => _selectedActivityIds.clear());
+      return;
+    }
+
     for (var activity in toSkip) {
       _executeSkipActivity(context, activity);
     }
+
+    if (nonSkippable.isNotEmpty) {
+      AppToast.show(
+        context: context,
+        message: '${nonSkippable.length} skipped (${nonSkippable.map((a) => a.name).join(", ")} not skippable)',
+        backgroundColor: AppTheme.warningColor,
+      );
+    }
+
     setState(() => _selectedActivityIds.clear());
   }
 

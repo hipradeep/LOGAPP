@@ -251,11 +251,19 @@ class FullScreenPage extends StatelessWidget {
       ),
     );
 
-    if (!showScaffold) return body;
+    final mainBody = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: body,
+    );
+
+    if (!showScaffold) return mainBody;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: body,
+      body: mainBody,
     );
   }
 }
