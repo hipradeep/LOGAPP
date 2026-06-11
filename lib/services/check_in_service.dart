@@ -9,8 +9,29 @@ class CheckInService {
   // ==================== CHECK-INS OPERATIONS ====================
 
   Stream<List<CheckIn>> getCheckInsStream(String activityId) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final cutoff = todayStart.subtract(const Duration(days: 2));
+
     return _checkinsCollection
         .where('activityId', isEqualTo: activityId)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return list;
+    });
+  }
+
+  Stream<List<CheckIn>> getCheckInsStreamForLast7Days(String activityId) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final cutoff = todayStart.subtract(const Duration(days: 6)); // last 7 calendar days including today
+
+    return _checkinsCollection
+        .where('activityId', isEqualTo: activityId)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
@@ -28,7 +49,14 @@ class CheckInService {
     });
   }
 
-  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked, {bool skipped = false}) async {
+  Future<List<CheckIn>> getCheckInsForActivity(String activityId) async {
+    final snapshot = await _checkinsCollection
+        .where('activityId', isEqualTo: activityId)
+        .get();
+    return snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+  }
+
+  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked, {bool skipped = false, String? subTaskName}) async {
     if (checked) {
       try {
         final query = await _checkinsCollection
@@ -59,6 +87,7 @@ class CheckInService {
       timestamp: timestamp,
       checked: checked,
       skipped: skipped,
+      subTaskName: subTaskName,
     );
     await _checkinsCollection.add(newCheckIn.toFirestore());
   }

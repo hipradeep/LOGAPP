@@ -25,6 +25,13 @@ class ActivityService {
     });
   }
 
+  Stream<Activity?> getActivityStream(String id) {
+    return _activitiesCollection.doc(id).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return Activity.fromFirestore(doc);
+    });
+  }
+
   Stream<List<Activity>> getCheckedActivitiesStream() {
     return _activitiesCollection
         .where('checked', isEqualTo: true)
@@ -69,7 +76,32 @@ class ActivityService {
       symbolValue: symbolValue,
       skippable: skippable,
     );
-    await _activitiesCollection.add(newActivity.toFirestore());
+    final docRef = await _activitiesCollection.add(newActivity.toFirestore());
+
+    if (trackingType == 'multiple' && subTaskTemplates.isNotEmpty) {
+      final List<SubTask> initialSubTasks = subTaskTemplates.map((template) {
+        final parts = template.split('|');
+        final title = parts.first;
+        final timeStr = parts.length > 1 ? parts.last : null;
+        return SubTask(
+          id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${subTaskTemplates.indexOf(template)}',
+          title: title,
+          checked: false,
+          scheduledTime: timeStr,
+        );
+      }).toList();
+
+      final newTask = Task(
+        id: '',
+        activityId: docRef.id,
+        taskName: name,
+        timestamp: DateTime.now(),
+        checked: false,
+        scheduledTime: null,
+        subTasks: initialSubTasks,
+      );
+      await _subtasksCollection.add(newTask.toFirestore());
+    }
   }
 
   Future<void> toggleActivity(String id, bool checked) async {
@@ -108,6 +140,83 @@ class ActivityService {
       updates['description'] = description;
     }
     await _activitiesCollection.doc(id).update(updates);
+
+    if (trackingType == 'multiple' && subTaskTemplates.isNotEmpty) {
+      final todayQuery = await _subtasksCollection
+          .where('activityId', isEqualTo: id)
+          .get();
+      
+      final now = DateTime.now();
+      bool isToday(DateTime date) =>
+          date.day == now.day && date.month == now.month && date.year == now.year;
+      
+      DocumentSnapshot? todayDoc;
+      for (var doc in todayQuery.docs) {
+        final task = Task.fromFirestore(doc);
+        if (isToday(task.timestamp) && task.subTasks.isNotEmpty) {
+          todayDoc = doc;
+          break;
+        }
+      }
+
+      if (todayDoc == null) {
+        final List<SubTask> initialSubTasks = subTaskTemplates.map((template) {
+          final parts = template.split('|');
+          final title = parts.first;
+          final timeStr = parts.length > 1 ? parts.last : null;
+          return SubTask(
+            id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${subTaskTemplates.indexOf(template)}',
+            title: title,
+            checked: false,
+            scheduledTime: timeStr,
+          );
+        }).toList();
+
+        final newTask = Task(
+          id: '',
+          activityId: id,
+          taskName: name,
+          timestamp: DateTime.now(),
+          checked: false,
+          scheduledTime: null,
+          subTasks: initialSubTasks,
+        );
+        await _subtasksCollection.add(newTask.toFirestore());
+      } else {
+        final existingTask = Task.fromFirestore(todayDoc);
+        final List<SubTask> updatedSubTasks = [];
+        
+        for (var template in subTaskTemplates) {
+          final parts = template.split('|');
+          final title = parts.first;
+          final timeStr = parts.length > 1 ? parts.last : null;
+          
+          final existing = existingTask.subTasks.firstWhere(
+            (st) => st.title == title,
+            orElse: () => SubTask(id: '', title: '', checked: false),
+          );
+          
+          if (existing.id.isNotEmpty) {
+            updatedSubTasks.add(existing.copyWith(scheduledTime: timeStr));
+          } else {
+            updatedSubTasks.add(SubTask(
+              id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${subTaskTemplates.indexOf(template)}',
+              title: title,
+              checked: false,
+              scheduledTime: timeStr,
+            ));
+          }
+        }
+        
+        final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
+        final updatedTask = existingTask.copyWith(
+          taskName: name,
+          subTasks: updatedSubTasks,
+          checked: allChecked,
+        );
+        await _subtasksCollection.doc(todayDoc.id).set(updatedTask.toFirestore(), SetOptions(merge: true));
+      }
+    }
   }
 
   Future<void> deleteActivity(String id) async {
@@ -181,8 +290,9 @@ class ActivityService {
     String activityId, 
     String subTaskName, 
     DateTime timestamp, 
-    bool checked,
-  ) async {
+    bool checked, {
+    List<SubTask> subTasks = const [],
+  }) async {
     final hasTime = subTaskName.contains('|');
     final cleanName = hasTime ? subTaskName.split('|').first : subTaskName;
     final timeStr = hasTime ? subTaskName.split('|').last : null;
@@ -194,14 +304,14 @@ class ActivityService {
       timestamp: timestamp,
       checked: checked,
       scheduledTime: timeStr,
-      subTasks: const [],
+      subTasks: subTasks,
     );
     await _subtasksCollection.add(newSubTask.toFirestore());
     if (checked) {
       final checkIn = CheckIn(
         id: '',
         activityId: activityId,
-        timestamp: timestamp,
+        timestamp: DateTime.now(),
         checked: true,
         subTaskName: cleanName,
       );
@@ -221,7 +331,7 @@ class ActivityService {
         final checkIn = CheckIn(
           id: '',
           activityId: task.activityId,
-          timestamp: task.timestamp,
+          timestamp: DateTime.now(),
           checked: true,
           subTaskName: task.taskName,
         );
@@ -256,7 +366,7 @@ class ActivityService {
           final checkIn = CheckIn(
             id: '',
             activityId: subTask.activityId,
-            timestamp: subTask.timestamp,
+            timestamp: DateTime.now(),
             checked: true,
             subTaskName: subTask.taskName,
           );

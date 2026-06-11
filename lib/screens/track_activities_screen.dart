@@ -4,6 +4,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import 'add_activity_screen.dart';
+import 'activity_details_screen.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
@@ -149,15 +150,17 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       return date.day == now.day && date.month == now.month && date.year == now.year;
     }
 
-    final todaySubTasks = subTasks.where((s) => isToday(s.timestamp) && s.checked).toList();
-
     String? getSortingTime(Activity activity) {
       if (activity.trackingType == 'multiple') {
+        final todayTask = subTasks.firstWhere(
+          (s) => s.activityId == activity.id && isToday(s.timestamp) && s.subTasks.isNotEmpty,
+          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+        );
         for (var template in activity.subTaskTemplates) {
           final parts = template.split('|');
           if (parts.length > 1) {
             final timeStr = parts.last;
-            final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.taskName == template);
+            final isCheckedIn = todayTask.subTasks.any((st) => st.title == parts.first && st.checked);
             if (!isCheckedIn) {
               return timeStr;
             }
@@ -332,7 +335,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     }
 
     return GestureDetector(
-      onTap: () => _navigateToEditActivity(activity),
+      onTap: () => _navigateToActivityDetails(activity),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -584,53 +587,12 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
-  void _navigateToEditActivity(Activity activity) {
+  void _navigateToActivityDetails(Activity activity) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddActivityScreen(
-          onAdd: (name, trackingType, targetCount, {
-            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
-            String? scheduledTime,
-            DateTime? startDate,
-            DateTime? endDate,
-            List<String> subTaskTemplates = const [],
-            String? description,
-            bool skippable = false,
-          }) {},
-          initialActivity: activity,
-          onEdit: (name, trackingType, targetCount, {
-            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
-            String? scheduledTime,
-            DateTime? startDate,
-            DateTime? endDate,
-            List<String> subTaskTemplates = const [],
-            String? description,
-            bool skippable = false,
-          }) {
-            _editActivity(
-              activity.id, name, trackingType, targetCount,
-              repeatDays: repeatDays,
-              scheduledTime: scheduledTime,
-              startDate: startDate,
-              endDate: endDate,
-              subTaskTemplates: subTaskTemplates,
-              description: description,
-              skippable: skippable,
-            );
-          },
-          onDelete: () async {
-            final deleted = await _confirmDeleteActivity(activity);
-            if (deleted && context.mounted) {
-              Navigator.pop(context);
-            }
-          },
-          onToggleComplete: () {
-            _toggleActivity(activity);
-            if (context.mounted) {
-              Navigator.pop(context);
-            }
-          },
+        builder: (context) => ActivityDetailsScreen(
+          activityId: activity.id,
         ),
       ),
     );
@@ -666,94 +628,5 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         );
       }
     }
-  }
-
-  void _editActivity(
-    String id, String name, String trackingType, int targetCount, {
-    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
-    String? scheduledTime,
-    DateTime? startDate,
-    DateTime? endDate,
-    List<String> subTaskTemplates = const [],
-    String? description,
-    bool skippable = false,
-  }) async {
-    try {
-      await _activityService.updateActivity(
-        id, name, trackingType, targetCount,
-        repeatDays: repeatDays,
-        scheduledTime: scheduledTime,
-        startDate: startDate,
-        endDate: endDate,
-        subTaskTemplates: subTaskTemplates,
-        description: description,
-        skippable: skippable,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity updated in Firestore.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
-    }
-  }
-
-  void _toggleActivity(Activity activity) async {
-    final newChecked = !activity.checked;
-    try {
-      await _activityService.toggleActivity(activity.id, newChecked);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update activity: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
-    }
-  }
-
-  Future<bool> _confirmDeleteActivity(Activity activity) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
-        title: Text('Delete "${activity.name}"?', style: AppTheme.headingSmall),
-        content: const Text('Are you sure you want to delete this activity? All associated daily progress will be removed.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: AppTheme.bodyMedium),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppTheme.errorColor)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await _activityService.deleteActivity(activity.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Activity deleted from Firestore.')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete activity: $e'), backgroundColor: AppTheme.errorColor),
-          );
-        }
-        return false;
-      }
-      return true;
-    }
-    return false;
   }
 }

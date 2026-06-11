@@ -26,11 +26,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   final ActivityService _activityService = ActivityService();
   final CheckInService _checkInService = CheckInService();
   final DateTime _now = DateTime.now();
-  final TextEditingController _subTaskTextController = TextEditingController();
-  final FocusNode _subTaskFocusNode = FocusNode();
   late Stream<List<CheckIn>> _checkInsStream;
   late Stream<List<Task>> _subTasksStream;
-  TimeOfDay? _subTaskTime;
   String? _deletingSubTaskId;
 
   bool _isToday(DateTime date) {
@@ -47,8 +44,6 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
 
   @override
   void dispose() {
-    _subTaskTextController.dispose();
-    _subTaskFocusNode.dispose();
     super.dispose();
   }
 
@@ -99,7 +94,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       builder: (context, subtaskSnapshot) {
                         if (subtaskSnapshot.hasError) {
                           return const Center(
-                            child: Text('Error loading sub-tasks', style: TextStyle(color: AppTheme.errorColor)),
+                            child: Text('Error loading tasks', style: TextStyle(color: AppTheme.errorColor)),
                           );
                         }
                         if (subtaskSnapshot.connectionState == ConnectionState.waiting) {
@@ -124,10 +119,24 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   Widget _buildSheetContent(ScrollController scrollController, List<CheckIn> checkIns, List<Task> subTasks) {
     // Calculate today's completed check-ins
     final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
+    
+    final todayTask = widget.activity.trackingType == 'multiple'
+        ? subTasks.firstWhere(
+            (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
+            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+          )
+        : null;
+
     final todayCount = widget.activity.trackingType == 'multiple'
-        ? subTasks.where((s) => _isToday(s.timestamp) && s.checked).length
-        : todayCheckIns.length;
-    final targetCount = widget.activity.targetCount;
+        ? todayTask!.subTasks.where((s) => s.checked).length
+        : (widget.activity.trackingType == 'milestone'
+            ? subTasks.where((s) => _isToday(s.timestamp) && s.checked).length
+            : todayCheckIns.length);
+
+    final targetCount = widget.activity.trackingType == 'multiple'
+        ? (todayTask!.id.isNotEmpty ? todayTask.subTasks.length : widget.activity.subTaskTemplates.length)
+        : widget.activity.targetCount;
+
     final isMultiple = targetCount > 1;
     final bool isCompleted = todayCount >= targetCount;
 
@@ -236,7 +245,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               
 
 
-              // Sub-tasks checklist section (if activity has sub-tasks enabled)
+              // Tasks checklist section (if activity has tasks enabled)
               if (widget.activity.hasSubTasks) ...[
                 _buildSubTasksSection(subTasks),
                 const VGapLg(),
@@ -263,7 +272,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                   ),
                 ],
               ),
-              const VGapSm(),
+              const VGapMd(),
 
               // 3. History Checklist List
               _buildHistorySection(checkIns, subTasks),
@@ -387,38 +396,56 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       ],
     );
   }
-
   // HISTORY CHECKLIST LIST VIEW
   Widget _buildHistorySection(List<CheckIn> checkIns, List<Task> subTasks) {
     final List<_HistoryItem> historyItems = [];
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final limitDate = todayStart.subtract(const Duration(days: 2)); // Last 3 calendar days (today, yesterday, day before)
     
-    // Add checked main checkins
-    for (var c in checkIns) {
-      if (c.checked && c.timestamp.isAfter(limitDate)) {
-        historyItems.add(_HistoryItem(
-          id: c.id,
-          timestamp: c.timestamp,
-          checked: c.checked,
-          isSubTask: false,
-          originalObject: c,
-        ));
+    // Sort a copy of the checkIns list descending by timestamp
+    final List<CheckIn> sortedCheckIns = List<CheckIn>.from(checkIns);
+    sortedCheckIns.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Get the 3 most recent unique calendar dates with logged activity
+    final List<DateTime> uniqueDates = [];
+    for (var c in sortedCheckIns) {
+      if (c.checked) {
+        final date = DateTime(c.timestamp.year, c.timestamp.month, c.timestamp.day);
+        bool alreadyAdded = false;
+        for (var ud in uniqueDates) {
+          if (ud.year == date.year && ud.month == date.month && ud.day == date.day) {
+            alreadyAdded = true;
+            break;
+          }
+        }
+        if (!alreadyAdded) {
+          uniqueDates.add(date);
+          if (uniqueDates.length == 3) {
+            break;
+          }
+        }
       }
     }
-    
-    // Add checked subtask completions
-    for (var s in subTasks) {
-      if (s.checked && s.timestamp.isAfter(limitDate)) {
-        historyItems.add(_HistoryItem(
-          id: s.id,
-          timestamp: s.timestamp,
-          checked: s.checked,
-          subTaskName: s.taskName,
-          isSubTask: true,
-          originalObject: s,
-        ));
+
+    // Add checked check-ins that fall on one of these 3 most recent dates
+    for (var c in sortedCheckIns) {
+      if (c.checked) {
+        final date = DateTime(c.timestamp.year, c.timestamp.month, c.timestamp.day);
+        bool match = false;
+        for (var ud in uniqueDates) {
+          if (ud.year == date.year && ud.month == date.month && ud.day == date.day) {
+            match = true;
+            break;
+          }
+        }
+        if (match) {
+          historyItems.add(_HistoryItem(
+            id: c.id,
+            timestamp: c.timestamp,
+            checked: c.checked,
+            subTaskName: c.subTaskName,
+            isSubTask: c.subTaskName != null && c.subTaskName!.isNotEmpty,
+            originalObject: c,
+          ));
+        }
       }
     }
 
@@ -429,7 +456,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     // Sort descending by timestamp
     historyItems.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    return _buildHistoryList(historyItems);
+    return _buildHistoryList(historyItems, subTasks);
   }
 
   String _formatHistoryDate(DateTime timestamp) {
@@ -450,7 +477,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  Widget _buildHistoryList(List<_HistoryItem> items) {
+  Widget _buildHistoryList(List<_HistoryItem> items, List<Task> subTasks) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -460,7 +487,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         final formattedDate = _formatHistoryDate(item.timestamp);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: AppTheme.surfaceColor.withValues(alpha: 0.2),
@@ -498,8 +525,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                             const VGapXs(),
                             Text(
                               item.subTaskName!.contains('|')
-                                  ? 'Sub-task: ${item.subTaskName!.split('|').first} (${_formatTimeString(item.subTaskName!.split('|').last)})'
-                                  : 'Sub-task: ${item.subTaskName}',
+                                  ? 'Task: ${item.subTaskName!.split('|').first} (${_formatTimeString(item.subTaskName!.split('|').last)})'
+                                  : 'Task: ${item.subTaskName}',
                               style: const TextStyle(
                                 color: AppTheme.primaryLight,
                                 fontSize: 11,
@@ -516,7 +543,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               const HGapMd(),
               // Delete Check-in
               GestureDetector(
-                onTap: () => _deleteHistoryItem(item),
+                onTap: () => _deleteHistoryItem(item, subTasks),
                 child: const Icon(
                    Icons.delete_outline_rounded,
                   color: AppTheme.errorColor,
@@ -530,10 +557,38 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     );
   }
 
-
-  void _deleteHistoryItem(_HistoryItem item) async {
+  void _deleteHistoryItem(_HistoryItem item, List<Task> subTasks) async {
     if (item.isSubTask) {
-      _deleteSubTask(item.id);
+      try {
+        await _checkInService.deleteCheckIn(item.id);
+        
+        if (widget.activity.trackingType == 'multiple') {
+          // Find the corresponding container Task in loaded subTasks
+          final taskForDay = subTasks.firstWhere(
+            (s) => _isSameDay(s.timestamp, item.timestamp) && s.subTasks.isNotEmpty,
+            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: item.timestamp, checked: false),
+          );
+          if (taskForDay.id.isNotEmpty) {
+            final List<SubTask> updatedSubTasks = List<SubTask>.from(taskForDay.subTasks);
+            final index = updatedSubTasks.indexWhere((st) {
+              final cleanTitle = st.title.contains('|') ? st.title.split('|').first : st.title;
+              return cleanTitle == item.subTaskName;
+            });
+            if (index != -1) {
+              updatedSubTasks[index] = updatedSubTasks[index].copyWith(checked: false);
+              
+              final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
+              final updatedTask = taskForDay.copyWith(subTasks: updatedSubTasks, checked: allChecked);
+              await _activityService.updateSubTask(updatedTask);
+            }
+          }
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete history item: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
     } else {
       _deleteCheckIn(item.id);
     }
@@ -603,56 +658,71 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       return;
     }
 
+    final checkInNow = DateTime.now();
+
     // For multiple activity sync subtasks logic
     if (widget.activity.trackingType == 'multiple') {
-      final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp)).toList();
-      final List<_SubTaskUiItem> uiItems = [];
+      final todayTask = subTasks.firstWhere(
+        (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
+        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+      );
 
-      for (var template in widget.activity.subTaskTemplates) {
-        final match = todaySubTasks.firstWhere(
-          (s) => s.taskName == template,
-          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+      if (todayTask.id.isEmpty) {
+        // Create today's container and check all subtasks
+        final List<SubTask> initialSubTasks = widget.activity.subTaskTemplates.map((template) {
+          final parts = template.split('|');
+          final title = parts.first;
+          final timeStr = parts.length > 1 ? parts.last : null;
+          return SubTask(
+            id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}',
+            title: title,
+            checked: true,
+            scheduledTime: timeStr,
+          );
+        }).toList();
+
+        await _activityService.createSubTask(
+          widget.activity.id,
+          widget.activity.name,
+          DateTime.now(),
+          true,
+          subTasks: initialSubTasks,
         );
-        uiItems.add(_SubTaskUiItem(
-          name: template,
-          checked: match.id.isNotEmpty ? match.checked : false,
-          subTaskId: match.id.isNotEmpty ? match.id : null,
-          isTemplate: true,
-        ));
-      }
 
-      for (var s in todaySubTasks) {
-        if (!widget.activity.subTaskTemplates.contains(s.taskName)) {
-          uiItems.add(_SubTaskUiItem(
-            name: s.taskName,
-            checked: s.checked,
-            subTaskId: s.id,
-            isTemplate: false,
-          ));
+        // Create check-in entries for each subtask
+        for (var st in initialSubTasks) {
+          await _checkInService.createCheckIn(
+            widget.activity.id,
+            checkInNow,
+            true,
+            subTaskName: st.title,
+          );
         }
-      }
+      } else {
+        // Toggle all unchecked subtasks to checked
+        final List<SubTask> updatedSubTasks = List<SubTask>.from(todayTask.subTasks);
+        bool modified = false;
+        for (int i = 0; i < updatedSubTasks.length; i++) {
+          if (!updatedSubTasks[i].checked) {
+            updatedSubTasks[i] = updatedSubTasks[i].copyWith(checked: true);
+            modified = true;
 
-      final newCheckInCount = todayCheckIns.length + 1;
-      if (newCheckInCount >= uiItems.length && uiItems.isNotEmpty) {
-        // Also check the subtask checkboxes (all subtasks)
-        for (var item in uiItems) {
-          if (!item.checked) {
-            try {
-              if (item.subTaskId != null) {
-                await _activityService.toggleSubTask(item.subTaskId!, true);
-              } else {
-                await _activityService.createSubTask(widget.activity.id, item.name, DateTime.now(), true);
-              }
-            } catch (e) {
-              // Ignore errors
-            }
+            await _checkInService.createCheckIn(
+              widget.activity.id,
+              checkInNow,
+              true,
+              subTaskName: updatedSubTasks[i].title,
+            );
           }
+        }
+        if (modified) {
+          final updatedTask = todayTask.copyWith(subTasks: updatedSubTasks, checked: true);
+          await _activityService.updateSubTask(updatedTask);
         }
       }
     }
 
     if (!mounted) return;
-    final checkInNow = DateTime.now();
     try {
       await _checkInService.createCheckIn(widget.activity.id, checkInNow, true);
       if (!mounted) return;
@@ -667,7 +737,6 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-
   void _deleteCheckIn(String id) async {
     try {
       await _checkInService.deleteCheckIn(id);
@@ -679,34 +748,54 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  // SUB-TASKS UI SECTION
+  // TASKS UI SECTION
   Widget _buildSubTasksSection(List<Task> subTasks) {
-    final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp)).toList();
-
     final List<_SubTaskUiItem> uiItems = [];
 
-    // 1. Add template sub-tasks
-    for (var template in widget.activity.subTaskTemplates) {
-      final match = todaySubTasks.firstWhere(
-        (s) => s.taskName == template,
+    if (widget.activity.trackingType == 'multiple') {
+      // Find today's container Task document
+      final todayTask = subTasks.firstWhere(
+        (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
       );
-      uiItems.add(_SubTaskUiItem(
-        name: template,
-        checked: match.id.isNotEmpty ? match.checked : false,
-        subTaskId: match.id.isNotEmpty ? match.id : null,
-        isTemplate: true,
-      ));
-    }
 
-    // 2. Add custom sub-tasks
-    for (var s in todaySubTasks) {
-      if (!widget.activity.subTaskTemplates.contains(s.taskName)) {
+      if (todayTask.id.isEmpty) {
+        // Container not created in Firestore yet: show templates as unchecked
+        for (var template in widget.activity.subTaskTemplates) {
+          final parts = template.split('|');
+          final title = parts.first;
+          final timeStr = parts.length > 1 ? parts.last : null;
+          uiItems.add(_SubTaskUiItem(
+            name: title,
+            checked: false,
+            subTaskId: null,
+            isTemplate: true,
+            scheduledTime: timeStr,
+          ));
+        }
+      } else {
+        // Show subtasks from today's container Task
+        for (var st in todayTask.subTasks) {
+          final isTemplate = widget.activity.subTaskTemplates.any((t) => t.split('|').first == st.title);
+          uiItems.add(_SubTaskUiItem(
+            name: st.title,
+            checked: st.checked,
+            subTaskId: st.id,
+            isTemplate: isTemplate,
+            scheduledTime: st.scheduledTime,
+          ));
+        }
+      }
+    } else {
+      // Milestone: show today's tasks
+      final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp)).toList();
+      for (var s in todaySubTasks) {
         uiItems.add(_SubTaskUiItem(
           name: s.taskName,
           checked: s.checked,
           subTaskId: s.id,
           isTemplate: false,
+          scheduledTime: s.scheduledTime,
         ));
       }
     }
@@ -724,7 +813,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
             const IconSm(Icons.playlist_add_check_rounded, color: AppTheme.textSecondary),
             const HGapSm(),
             Text(
-              'Sub-tasks Checklist'.toUpperCase(),
+              'Tasks Checklist'.toUpperCase(),
               style: AppTheme.bodySmall.copyWith(
                 color: AppTheme.textSecondary,
                 fontWeight: FontWeight.bold,
@@ -733,105 +822,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
             ),
           ],
         ),
-        const VGapSm(),
-
-        // Underline Input Row
-        if (widget.activity.trackingType == 'single')
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _subTaskTextController,
-                    focusNode: _subTaskFocusNode,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: widget.activity.trackingType == 'milestone'
-                          ? 'Add milestone sub-task...'
-                          : 'Add daily sub-task...',
-                      hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                      enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white24, width: 1),
-                      ),
-                      focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-                      ),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (value) => _addSubTask(value),
-                  ),
-                ),
-                if (_subTaskTime != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _formatTimeForDisplay(_subTaskTime!),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () => setState(() => _subTaskTime = null),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _pickSubTaskTime,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.access_time_rounded,
-                      color: _subTaskTime != null ? AppTheme.primaryLight : AppTheme.textSecondary,
-                      size: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: () => _addSubTask(_subTaskTextController.text),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      color: AppTheme.primaryLight,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const VGapSm(),
+        const VGapMd(),
 
         // List of sub-tasks
         if (displayItems.isEmpty)
@@ -841,49 +832,45 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               child: Text(
                 widget.activity.trackingType == 'milestone'
                     ? 'No pending tasks for today.'
-                    : (widget.activity.trackingType == 'multiple'
-                        ? 'No sub-tasks defined for this activity.'
-                        : 'No sub-tasks yet today. Add one above!'),
+                    : 'No tasks defined for this activity.',
                 style: AppTheme.bodySmall.copyWith(fontStyle: FontStyle.italic),
               ),
             ),
           )
         else
-          Column(
-            children: displayItems.map((item) {
-              final isMilestoneCustom = widget.activity.trackingType == 'milestone' && !item.isTemplate && item.subTaskId != null;
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
+            child: Column(
+              children: displayItems.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                final isLast = index == displayItems.length - 1;
+                final isMilestoneCustom = widget.activity.trackingType == 'milestone' && !item.isTemplate && item.subTaskId != null;
 
-              final Widget itemContainer = Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+                final Widget itemContainer = Container(
+                  margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
                     color: item.checked 
-                        ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-                        : Colors.white.withValues(alpha: 0.02),
-                    width: 1,
+                        ? AppTheme.primaryColor.withValues(alpha: 0.08) 
+                        : AppTheme.surfaceColor.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: item.checked 
+                          ? AppTheme.primaryColor.withValues(alpha: 0.25) 
+                          : Colors.white.withValues(alpha: 0.05),
+                      width: 1,
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          if (_deletingSubTaskId != null) {
-                            setState(() {
-                              _deletingSubTaskId = null;
-                            });
-                          }
-                        },
+                  child: Row(
+                    children: [
+                      Expanded(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Flexible(
                               child: Text(
-                                item.name.split('|').first,
+                                item.name,
                                 style: TextStyle(
                                   color: item.checked ? AppTheme.textSecondary : Colors.white,
                                   decoration: item.checked ? TextDecoration.lineThrough : null,
@@ -892,7 +879,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (item.name.contains('|')) ...[
+                            if (item.scheduledTime != null && item.scheduledTime!.isNotEmpty) ...[
                               const HGapSm(),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -914,7 +901,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      _formatTimeString(item.name.split('|').last),
+                                      _formatTimeString(item.scheduledTime!),
                                       style: TextStyle(
                                         color: item.checked
                                             ? AppTheme.textSecondary.withValues(alpha: 0.4)
@@ -930,112 +917,52 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                           ],
                         ),
                       ),
-                    ),
-                    const HGapMd(),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        final isDeletingThis = _deletingSubTaskId == item.subTaskId && item.subTaskId != null;
-                        if (isDeletingThis) {
-                          _deleteSubTask(item.subTaskId!);
-                          setState(() {
-                            _deletingSubTaskId = null;
-                          });
-                        } else {
-                          _toggleSubTask(item);
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: _deletingSubTaskId == item.subTaskId && item.subTaskId != null
-                            ? const Icon(
-                                Icons.close_rounded,
-                                size: 20,
-                                color: AppTheme.errorColor,
-                              )
-                            : AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(5),
-                                  color: item.checked ? AppTheme.primaryColor : Colors.transparent,
-                                  border: Border.all(
-                                    color: item.checked 
-                                        ? AppTheme.primaryColor 
-                                        : AppTheme.textSecondary.withValues(alpha: 0.5),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: item.checked
-                                    ? const Icon(Icons.check, size: 12, color: Colors.white)
-                                    : null,
-                              ),
-                      ),
-                    ),
-                    if (!item.isTemplate && widget.activity.trackingType != 'milestone') ...[
                       const HGapMd(),
                       GestureDetector(
-                        onTap: () => _deleteSubTask(item.subTaskId!),
-                        child: Icon(
-                          Icons.close_rounded,
-                          color: AppTheme.errorColor.withValues(alpha: 0.7),
-                          size: 16,
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          _toggleSubTask(item, subTasks);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(5),
+                              color: item.checked ? AppTheme.primaryColor : Colors.transparent,
+                              border: Border.all(
+                                color: item.checked 
+                                    ? AppTheme.primaryColor 
+                                    : AppTheme.textSecondary.withValues(alpha: 0.5),
+                                width: 2,
+                              ),
+                            ),
+                            child: item.checked
+                                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                                : null,
+                          ),
                         ),
                       ),
                     ],
-                  ],
-                ),
-              );
-
-              if (isMilestoneCustom) {
-                return GestureDetector(
-                  onLongPress: () {
-                    setState(() {
-                      if (_deletingSubTaskId == item.subTaskId) {
-                        _deletingSubTaskId = null;
-                      } else {
-                        _deletingSubTaskId = item.subTaskId;
-                      }
-                    });
-                  },
-                  child: itemContainer,
+                  ),
                 );
-              }
-              return itemContainer;
-            }).toList(),
+
+                if (isMilestoneCustom) {
+                  return GestureDetector(
+                    onLongPress: () {
+                      // Custom milestone details are managed on Milestones Tab, here we just show/check it.
+                    },
+                    child: itemContainer,
+                  );
+                }
+                return itemContainer;
+              }).toList(),
+            ),
           ),
       ],
     );
-  }
-
-  void _addSubTask(String name) async {
-    name = name.trim();
-    if (name.isEmpty) return;
-    final taskNameWithSchedule = _subTaskTime != null
-        ? '$name|${_formatTimeOfDay(_subTaskTime)}'
-        : name;
-    _subTaskTextController.clear();
-    
-    final timestamp = DateTime.now();
-    try {
-      await _activityService.createSubTask(widget.activity.id, taskNameWithSchedule, timestamp, false);
-      setState(() {
-        _subTaskTime = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to add sub-task: $e'), backgroundColor: AppTheme.errorColor),
-      );
-    }
-  }
-
-  String? _formatTimeOfDay(TimeOfDay? t) {
-    if (t == null) return null;
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m';
   }
 
   String _formatTimeForDisplay(TimeOfDay t) {
@@ -1058,52 +985,106 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  Future<void> _pickSubTaskTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _subTaskTime ?? const TimeOfDay(hour: 8, minute: 0),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _subTaskTime = picked);
-    }
-  }
-
-  void _toggleSubTask(_SubTaskUiItem item) async {
+  void _toggleSubTask(_SubTaskUiItem item, List<Task> subTasks) async {
     final newChecked = !item.checked;
-    try {
+    final checkInNow = DateTime.now();
+
+    if (widget.activity.trackingType == 'multiple') {
+      // Find today's container Task
+      final todayTask = subTasks.firstWhere(
+        (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
+        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+      );
+
+      try {
+        if (todayTask.id.isEmpty) {
+          // Create a new Task container for today with all templates
+          final List<SubTask> initialSubTasks = widget.activity.subTaskTemplates.map((template) {
+            final parts = template.split('|');
+            final title = parts.first;
+            final timeStr = parts.length > 1 ? parts.last : null;
+            final isToggled = title == item.name && timeStr == item.scheduledTime;
+
+            return SubTask(
+              id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}',
+              title: title,
+              checked: isToggled,
+              scheduledTime: timeStr,
+            );
+          }).toList();
+
+          final allChecked = initialSubTasks.every((st) => st.checked);
+
+          await _activityService.createSubTask(
+            widget.activity.id,
+            widget.activity.name,
+            DateTime.now(),
+            allChecked,
+            subTasks: initialSubTasks,
+          );
+
+          if (newChecked) {
+            await _checkInService.createCheckIn(
+              widget.activity.id,
+              checkInNow,
+              true,
+              subTaskName: item.name,
+            );
+          }
+        } else {
+          // Toggle the subtask inside the existing container
+          final List<SubTask> updatedSubTasks = List<SubTask>.from(todayTask.subTasks);
+          final index = updatedSubTasks.indexWhere((st) {
+            if (item.subTaskId != null) {
+              return st.id == item.subTaskId;
+            } else {
+              return st.title == item.name && st.scheduledTime == item.scheduledTime;
+            }
+          });
+
+          if (index != -1) {
+            updatedSubTasks[index] = updatedSubTasks[index].copyWith(checked: newChecked);
+            
+            final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
+            final updatedTask = todayTask.copyWith(subTasks: updatedSubTasks, checked: allChecked);
+            await _activityService.updateSubTask(updatedTask);
+
+            // Create or delete check-in log entry
+            if (newChecked) {
+              await _checkInService.createCheckIn(
+                widget.activity.id,
+                checkInNow,
+                true,
+                subTaskName: item.name,
+              );
+            } else {
+              final existing = await _checkInService.getCheckInsForActivity(widget.activity.id);
+              final todayCheckIn = existing.firstWhere(
+                (c) => _isToday(c.timestamp) && c.subTaskName == item.name && c.checked,
+                orElse: () => CheckIn(id: '', activityId: '', timestamp: DateTime.now(), checked: false),
+              );
+              if (todayCheckIn.id.isNotEmpty) {
+                await _checkInService.deleteCheckIn(todayCheckIn.id);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to toggle sub-task: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    } else {
+      // Milestone standard toggle
       if (item.subTaskId != null) {
         await _activityService.toggleSubTask(item.subTaskId!, newChecked);
-      } else {
-        await _activityService.createSubTask(widget.activity.id, item.name, DateTime.now(), newChecked);
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to toggle sub-task: $e'), backgroundColor: AppTheme.errorColor),
-      );
     }
   }
 
-  void _deleteSubTask(String id) async {
-    try {
-      await _activityService.deleteSubTask(id);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete sub-task: $e'), backgroundColor: AppTheme.errorColor),
-      );
-    }
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.day == b.day && a.month == b.month && a.year == b.year;
   }
 }
 
@@ -1112,12 +1093,14 @@ class _SubTaskUiItem {
   final bool checked;
   final String? subTaskId;
   final bool isTemplate;
+  final String? scheduledTime;
 
   _SubTaskUiItem({
     required this.name,
     required this.checked,
     this.subTaskId,
     required this.isTemplate,
+    this.scheduledTime,
   });
 }
 

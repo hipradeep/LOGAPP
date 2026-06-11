@@ -140,7 +140,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     if (_trackingType == 'multiple' && _subTasks.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('At least one recurring sub-task is required for Multiple activities.'),
+          content: Text('At least one recurring task is required for Multiple activities.'),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -353,15 +353,15 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           const VGapSm(),
           _buildTypeChips(),
 
-          // Show recurring sub-tasks input for Multiple, or informational label for Milestone
+          // Show recurring tasks input for Multiple, or informational label for Milestone
           if (_trackingType == 'multiple') ...[
             const VGapLg(),
-            _buildSectionLabel('RECURRING SUB-TASKS (REQUIRED)'),
+            _buildSectionLabel('RECURRING TASKS (REQUIRED)'),
             const VGapSm(),
             _buildSubTaskTemplatesField(),
           ] else if (_trackingType == 'milestone') ...[
             const VGapLg(),
-            _buildSectionLabel('MILESTONE SUB-TASKS'),
+            _buildSectionLabel('MILESTONE TASKS'),
             const VGapSm(),
             _buildMilestoneInfoLabel(),
           ],
@@ -1000,7 +1000,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           const HGapMd(),
           const Expanded(
             child: Text(
-              'daily sub tasks will create',
+              'Tasks for milestone activities are added and managed on the Milestones Tab.',
               style: TextStyle(
                 color: AppTheme.textSecondary,
                 fontSize: 13,
@@ -1038,7 +1038,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                     onSubmitted: (_) => _addSubTask(),
                     decoration: const InputDecoration(
-                      hintText: 'Add sub-task...',
+                      hintText: 'Add task...',
                       hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                       enabledBorder: UnderlineInputBorder(
                         borderSide: BorderSide(color: Colors.white24, width: 1),

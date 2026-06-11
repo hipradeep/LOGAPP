@@ -136,7 +136,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       final subTasks = subtaskSnapshot.data ?? [];
                       
                       final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
-                      final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp) && s.checked).toList();
 
                       // Classify activities into pending, completed, and skipped today
                       final List<Activity> pendingActivities = [];
@@ -154,7 +153,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         }
                         final int todayCount;
                         if (activity.trackingType == 'multiple') {
-                          todayCount = todaySubTasks.where((s) => s.activityId == activity.id).length;
+                           final todayTask = subTasks.firstWhere(
+                             (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
+                             orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+                           );
+                          todayCount = todayTask.subTasks.where((st) => st.checked).length;
                         } else {
                           todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
                         }
@@ -169,11 +172,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       String? getSortingTime(Activity activity) {
                         if (activity.trackingType == 'multiple') {
+                          final todayTask = subTasks.firstWhere(
+                            (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
+                            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+                          );
                           for (var template in activity.subTaskTemplates) {
                             final parts = template.split('|');
                             if (parts.length > 1) {
                               final timeStr = parts.last;
-                              final isCheckedIn = todaySubTasks.any((s) => s.activityId == activity.id && s.taskName == template);
+                              final isCheckedIn = todayTask.subTasks.any((st) => st.title == parts.first && st.checked);
                               if (!isCheckedIn) {
                                 return timeStr;
                               }
@@ -605,65 +612,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _handleQuickCheckIn(BuildContext context, Activity activity, List<CheckIn> todayCheckIns, List<Task> allSubTasks) async {
-    final targetCount = activity.targetCount;
-    final int currentCount = activity.trackingType == 'multiple'
-        ? allSubTasks.where((s) => s.activityId == activity.id && s.checked && _isToday(s.timestamp)).length
-        : todayCheckIns.where((c) => c.activityId == activity.id).length;
 
-    if (activity.trackingType == 'single' && currentCount >= targetCount) {
-      AppToast.show(
-        context: context,
-        message: 'Already checked in today!',
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
-
-    try {
-      if (activity.trackingType == 'multiple') {
-        final todaySubTasks = allSubTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp)).toList();
-        final List<String> templates = activity.subTaskTemplates;
-        
-        String? nextTemplate;
-        for (var temp in templates) {
-          final isChecked = todaySubTasks.any((s) => s.taskName == temp && s.checked);
-          if (!isChecked) {
-            nextTemplate = temp;
-            break;
-          }
-        }
-
-        if (nextTemplate != null) {
-          final existing = todaySubTasks.firstWhere(
-            (s) => s.taskName == nextTemplate,
-            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
-          );
-          if (existing.id.isNotEmpty) {
-            await _activityService.toggleSubTask(existing.id, true);
-          } else {
-            await _activityService.createSubTask(activity.id, nextTemplate, DateTime.now(), true);
-          }
-        }
-      }
-
-      await _checkInService.createCheckIn(activity.id, DateTime.now(), true);
-      
-      if (!mounted) return;
-      AppToast.show(
-        context: context,
-        message: '"${activity.name}" checked in successfully',
-        backgroundColor: AppTheme.successColor,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.show(
-        context: context,
-        message: 'Failed to check in: $e',
-        backgroundColor: AppTheme.errorColor,
-      );
-    }
-  }
 
   // QUICK MOOD LOGGING ACTION
   void _handleQuickMood(String emoji, String label) async {
@@ -726,12 +675,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final totalActivities = activities.length;
 
     final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
-    final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp) && s.checked).toList();
 
     for (var activity in activities) {
       final int todayCount;
       if (activity.trackingType == 'multiple') {
-        todayCount = todaySubTasks.where((s) => s.activityId == activity.id).length;
+        final todayTask = subTasks.firstWhere(
+          (s) => s.activityId == activity.id && _isToday(s.timestamp),
+          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+        );
+        todayCount = todayTask.subTasks.where((st) => st.checked).length;
       } else {
         todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
       }
@@ -880,12 +832,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               for (var activity in activities) {
                 final int todayCount;
                 if (activity.trackingType == 'multiple') {
-                  todayCount = subTasks
-                      .where((s) =>
-                          s.activityId == activity.id &&
-                          _isSameDay(s.timestamp, day) &&
-                          s.checked)
-                      .length;
+                  final dayTask = subTasks.firstWhere(
+                    (s) => s.activityId == activity.id && _isSameDay(s.timestamp, day),
+                    orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
+                  );
+                  todayCount = dayTask.subTasks.where((st) => st.checked).length;
                 } else {
                   todayCount = checkIns
                       .where((c) =>
