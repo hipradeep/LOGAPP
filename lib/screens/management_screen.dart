@@ -17,6 +17,8 @@ import '../widgets/add_transaction_sheet.dart';
 import 'activity_details_screen.dart';
 import '../services/activity_service.dart';
 import '../services/budget_service.dart';
+import '../controllers/milestones_controller.dart';
+import '../widgets/app_provider.dart';
 
 // ==================== LOCAL DATA MODELS ====================
 
@@ -72,11 +74,19 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
   // Current active category (0: Milestones, 1: Budget, 2: Diet, 3: Reminders, 4: Study)
   int _activeCategoryIndex = 0;
+  late final MilestonesController _milestonesController;
 
   @override
   void initState() {
     super.initState();
+    _milestonesController = MilestonesController();
     _loadCachedTab();
+  }
+
+  @override
+  void dispose() {
+    _milestonesController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCachedTab() async {
@@ -96,12 +106,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
   // Selected milestone activity
   Activity? _selectedMilestoneActivity;
   List<Activity> _milestoneActivities = [];
-  bool _shouldSelectDefaultMilestone = true;
 
   // Selected budget category
   BudgetItem? _selectedBudget;
 
-  late final Stream<List<Activity>> _activitiesStream = _activityService.getActivitiesStream();
 
   final List<DietItem> _dietItems = [
     DietItem(foodName: 'Oatmeal with Berries', calories: 350, mealType: 'Breakfast'),
@@ -597,7 +605,12 @@ class _ManagementScreenState extends State<ManagementScreen> {
   Widget _buildActiveContent() {
     switch (_activeCategoryIndex) {
       case 0:
-        return _buildMilestonesContent();
+        return AppProvider<MilestonesController>(
+          notifier: _milestonesController,
+          child: Builder(
+            builder: (context) => _buildMilestonesContent(context),
+          ),
+        );
       case 1:
         return BudgetTab(
           selectedBudgetId: _selectedBudget?.id,
@@ -618,132 +631,70 @@ class _ManagementScreenState extends State<ManagementScreen> {
     }
   }
 
-  // -------------------- 1. MILESTONES --------------------
+  Widget _buildMilestonesContent(BuildContext context) {
+    final controller = AppProvider.watch<MilestonesController>(context);
 
-  Widget _buildMilestonesContent() {
-    return StreamBuilder<List<Activity>>(
-      stream: _activitiesStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(color: AppTheme.primaryColor),
+    // Keep the local variables in ManagementScreen updated for sheets and floating buttons
+    _milestoneActivities = controller.milestoneActivities;
+    _selectedMilestoneActivity = controller.selectedMilestoneActivity;
+
+    return MilestonesTab(
+      onActivitySelected: (activity) {
+        controller.selectActivity(activity);
+      },
+      onToggleSubTask: _toggleSubTask,
+      onToggleActivity: (activity, checked) async {
+        await _activityService.toggleActivity(activity.id, checked);
+      },
+      onUpdateActivitySymbols: (activity, symbolType, symbolValue, category) async {
+        await _activityService.updateActivitySymbols(
+          activity.id,
+          symbolType: symbolType,
+          symbolValue: symbolValue,
+          category: category,
+        );
+      },
+      onAddSubTask: (activity, name, timestamp) async {
+        await _activityService.createSubTask(activity.id, name, timestamp, false);
+      },
+      onDeleteSubTask: (task) async {
+        await _activityService.deleteSubTask(task.id);
+      },
+      onEditSubTask: (task) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => AddMilestoneSubTaskSheet(
+            milestones: controller.milestoneActivities,
+            editTask: task,
+            onEditSubTask: (updatedTask) async {
+              await _activityService.updateSubTask(updatedTask);
+            },
+          ),
+        );
+      },
+      onUpdateSubTaskSymbols: (task, symbolType, symbolValue) async {
+        await _activityService.updateSubTaskSymbols(
+          task.id,
+          symbolType: symbolType,
+          symbolValue: symbolValue,
+        );
+      },
+      onOpenActivityDetails: (activity) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ActivityDetailsScreen(
+              activityId: activity.id,
+              showEditIcon: false,
             ),
-          );
-        }
-
-        final allActivities = snapshot.data ?? [];
-        _milestoneActivities = allActivities
-            .where((a) => a.trackingType == 'milestone')
-            .toList();
-        final milestoneActivities = _milestoneActivities;
-        
-        final activeMilestones = milestoneActivities.where((a) => a.checked).toList();
-        final selectedActivity = _getDefaultMilestoneActivity(activeMilestones);
-
-        if (selectedActivity != null &&
-            _selectedMilestoneActivity?.id != selectedActivity.id) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _selectedMilestoneActivity = selectedActivity;
-                _shouldSelectDefaultMilestone = false;
-              });
-            }
-          });
-        }
-
-        return StreamBuilder<List<Task>>(
-          stream: _activityService.getSubTasksStream(),
-          builder: (context, subtaskSnapshot) {
-            final subTasks = subtaskSnapshot.data ?? [];
-
-            return MilestonesTab(
-              milestoneActivities: milestoneActivities,
-              selectedActivity: _selectedMilestoneActivity,
-              subTasks: subTasks,
-              isLoadingSubTasks: subtaskSnapshot.connectionState == ConnectionState.waiting && !subtaskSnapshot.hasData,
-              onActivitySelected: (activity) {
-                setState(() {
-                  _selectedMilestoneActivity = activity;
-                  _shouldSelectDefaultMilestone = false;
-                });
-              },
-              onToggleSubTask: _toggleSubTask,
-              onToggleActivity: (activity, checked) async {
-                await _activityService.toggleActivity(activity.id, checked);
-              },
-              onUpdateActivitySymbols: (activity, symbolType, symbolValue, category) async {
-                await _activityService.updateActivitySymbols(
-                  activity.id,
-                  symbolType: symbolType,
-                  symbolValue: symbolValue,
-                  category: category,
-                );
-              },
-              onAddSubTask: (activity, name, timestamp) async {
-                await _activityService.createSubTask(activity.id, name, timestamp, false);
-              },
-              onDeleteSubTask: (task) async {
-                await _activityService.deleteSubTask(task.id);
-              },
-              onEditSubTask: (task) {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => AddMilestoneSubTaskSheet(
-                    milestones: _milestoneActivities,
-                    editTask: task,
-                    onEditSubTask: (updatedTask) async {
-                      await _activityService.updateSubTask(updatedTask);
-                    },
-                  ),
-                );
-              },
-              onUpdateSubTaskSymbols: (task, symbolType, symbolValue) async {
-                await _activityService.updateSubTaskSymbols(
-                  task.id,
-                  symbolType: symbolType,
-                  symbolValue: symbolValue,
-                );
-              },
-              onOpenActivityDetails: (activity) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ActivityDetailsScreen(
-                      activityId: activity.id,
-                      showEditIcon: false,
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+          ),
         );
       },
     );
   }
 
-  Activity? _getDefaultMilestoneActivity(List<Activity> milestoneActivities) {
-    if (milestoneActivities.isEmpty) {
-      return null;
-    }
-
-    if (_shouldSelectDefaultMilestone) {
-      return milestoneActivities.first;
-    }
-
-    for (final activity in milestoneActivities) {
-      if (activity.id == _selectedMilestoneActivity?.id) {
-        return activity;
-      }
-    }
-
-    return milestoneActivities.first;
-  }
 
   Future<void> _addMilestoneSubTask(Activity activity, String subTaskName, DateTime timestamp) async {
     await _activityService.createSubTask(

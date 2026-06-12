@@ -3,15 +3,13 @@ import '../theme/app_theme.dart';
 import '../models/activity.dart';
 import '../models/task.dart';
 import 'app_spacers.dart';
-import 'task_card.dart';
+import 'milestone_section.dart';
+import '../controllers/milestones_controller.dart';
+import 'app_provider.dart';
 
 class MilestonesTab extends StatefulWidget {
-  final List<Activity> milestoneActivities;
-  final Activity? selectedActivity;
-  final List<Task> subTasks;
   final Function(Activity?) onActivitySelected;
   final Function(Task, bool) onToggleSubTask;
-  final bool isLoadingSubTasks;
   
   // Callback functions for interactivity
   final Function(Activity, bool) onToggleActivity;
@@ -24,12 +22,8 @@ class MilestonesTab extends StatefulWidget {
 
   const MilestonesTab({
     super.key,
-    required this.milestoneActivities,
-    required this.selectedActivity,
-    required this.subTasks,
     required this.onActivitySelected,
     required this.onToggleSubTask,
-    this.isLoadingSubTasks = false,
     required this.onToggleActivity,
     required this.onUpdateActivitySymbols,
     required this.onAddSubTask,
@@ -44,7 +38,6 @@ class MilestonesTab extends StatefulWidget {
 }
 
 class _MilestonesTabState extends State<MilestonesTab> {
-  String _selectedCategory = 'All';
   String? _expandedSubTaskId;
 
   // Accordion open/close state
@@ -54,67 +47,15 @@ class _MilestonesTabState extends State<MilestonesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = AppProvider.watch<MilestonesController>(context);
+
     // 1. Dynamic Category Tags from milestone activities
-    final Set<String> uniqueActivityNames = widget.milestoneActivities.map((a) => a.name).toSet();
+    final Set<String> uniqueActivityNames = controller.milestoneActivities.map((a) => a.name).toSet();
     final List<String> categories = ['All', ...uniqueActivityNames];
-
-    // Ensure selected category is still valid
-    if (!categories.contains(_selectedCategory)) {
-      _selectedCategory = 'All';
-    }
-
-    // 2. Filter Subtasks by Category selection
-    final List<Task> filteredSubTasks = widget.subTasks.where((st) {
-      // Find parent activity
-      final parent = widget.milestoneActivities.firstWhere(
-        (a) => a.id == st.activityId,
-        orElse: () => Activity(
-          id: '',
-          name: '',
-          checked: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-      if (parent.id.isEmpty) return false;
-      if (_selectedCategory == 'All') return true;
-      return parent.name == _selectedCategory;
-    }).toList();
-
-    // 3. Classify Subtasks
-    final List<Task> todayTasks = [];
-    final List<Task> futureTasks = [];
-    final List<Task> completedTasks = [];
-
-    for (var st in filteredSubTasks) {
-      if (_isToday(st.timestamp)) {
-        todayTasks.add(st);
-      } else if (st.checked) {
-        completedTasks.add(st);
-      } else {
-        futureTasks.add(st);
-      }
-    }
-
-    // Sort sections (Today: completed/checked tasks on top first)
-    todayTasks.sort((a, b) {
-      if (a.checked && !b.checked) return -1;
-      if (!a.checked && b.checked) return 1;
-      return a.timestamp.compareTo(b.timestamp);
-    });
-    
-    futureTasks.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    completedTasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    final Activity? activeActivity = _selectedCategory == 'All'
-        ? null
-        : widget.milestoneActivities.firstWhere(
-            (a) => a.name == _selectedCategory,
-            orElse: () => Activity(id: '', name: '', checked: false, timestamp: DateTime.now()),
-          );
 
     final List<Widget> sectionWidgets = [];
 
-    if (widget.isLoadingSubTasks) {
+    if (controller.isLoading) {
       sectionWidgets.add(
         const Center(
           child: Padding(
@@ -123,79 +64,73 @@ class _MilestonesTabState extends State<MilestonesTab> {
           ),
         ),
       );
-    } else if (filteredSubTasks.isEmpty) {
+    } else if (controller.todayTasks.isEmpty &&
+        controller.futureTasks.isEmpty &&
+        controller.completedTasks.isEmpty) {
       sectionWidgets.add(_buildEmptyState('No tasks found. Tap the FAB (+) to add a task!'));
     } else {
-      if (todayTasks.isNotEmpty) {
+      // Today Section
+      if (controller.todayTasks.isNotEmpty) {
         sectionWidgets.add(
-          _buildSectionHeader(
+          MilestoneSection(
             title: 'Today',
-            count: todayTasks.length,
+            tasks: controller.todayTasks,
             isExpanded: _todayExpanded,
             onToggle: () => setState(() => _todayExpanded = !_todayExpanded),
+            expandedSubTaskId: _expandedSubTaskId,
+            milestoneActivities: controller.milestoneActivities,
+            onSubTaskExpansionChanged: (id) => setState(() => _expandedSubTaskId = id),
+            onActivitySelected: widget.onActivitySelected,
+            onToggleSubTask: widget.onToggleSubTask,
+            onEditSubTask: widget.onEditSubTask,
+            onUpdateSubTaskSymbols: widget.onUpdateSubTaskSymbols,
           ),
         );
-        if (_todayExpanded) {
-          sectionWidgets.add(
-            ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: todayTasks.length,
-              itemBuilder: (context, idx) => _buildTaskCardItem(todayTasks[idx]),
-            ),
-          );
-        }
       }
 
-      if (futureTasks.isNotEmpty) {
-        if (sectionWidgets.isNotEmpty && todayTasks.isNotEmpty) {
+      // Future Section
+      if (controller.futureTasks.isNotEmpty) {
+        if (sectionWidgets.isNotEmpty && controller.todayTasks.isNotEmpty) {
           sectionWidgets.add(const VGapMd());
         }
         sectionWidgets.add(
-          _buildSectionHeader(
+          MilestoneSection(
             title: 'Future',
-            count: futureTasks.length,
+            tasks: controller.futureTasks,
             isExpanded: _futureExpanded,
             onToggle: () => setState(() => _futureExpanded = !_futureExpanded),
+            expandedSubTaskId: _expandedSubTaskId,
+            milestoneActivities: controller.milestoneActivities,
+            onSubTaskExpansionChanged: (id) => setState(() => _expandedSubTaskId = id),
+            onActivitySelected: widget.onActivitySelected,
+            onToggleSubTask: widget.onToggleSubTask,
+            onEditSubTask: widget.onEditSubTask,
+            onUpdateSubTaskSymbols: widget.onUpdateSubTaskSymbols,
           ),
         );
-        if (_futureExpanded) {
-          sectionWidgets.add(
-            ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: futureTasks.length,
-              itemBuilder: (context, idx) => _buildTaskCardItem(futureTasks[idx]),
-            ),
-          );
-        }
       }
 
-      if (completedTasks.isNotEmpty) {
-        if (sectionWidgets.isNotEmpty && (todayTasks.isNotEmpty || futureTasks.isNotEmpty)) {
+      // Completed Section
+      if (controller.completedTasks.isNotEmpty) {
+        if (sectionWidgets.isNotEmpty &&
+            (controller.todayTasks.isNotEmpty || controller.futureTasks.isNotEmpty)) {
           sectionWidgets.add(const VGapMd());
         }
         sectionWidgets.add(
-          _buildSectionHeader(
+          MilestoneSection(
             title: 'Completed',
-            count: completedTasks.length,
+            tasks: controller.completedTasks,
             isExpanded: _completedExpanded,
             onToggle: () => setState(() => _completedExpanded = !_completedExpanded),
+            expandedSubTaskId: _expandedSubTaskId,
+            milestoneActivities: controller.milestoneActivities,
+            onSubTaskExpansionChanged: (id) => setState(() => _expandedSubTaskId = id),
+            onActivitySelected: widget.onActivitySelected,
+            onToggleSubTask: widget.onToggleSubTask,
+            onEditSubTask: widget.onEditSubTask,
+            onUpdateSubTaskSymbols: widget.onUpdateSubTaskSymbols,
           ),
         );
-        if (_completedExpanded) {
-          sectionWidgets.add(
-            ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: completedTasks.length,
-              itemBuilder: (context, idx) => _buildTaskCardItem(completedTasks[idx]),
-            ),
-          );
-        }
       }
 
       // Check all completed tasks link
@@ -204,8 +139,8 @@ class _MilestonesTabState extends State<MilestonesTab> {
         Center(
           child: TextButton(
             onPressed: () {
+              controller.selectActivity(null);
               setState(() {
-                _selectedCategory = 'All';
                 _completedExpanded = true;
               });
             },
@@ -227,11 +162,12 @@ class _MilestonesTabState extends State<MilestonesTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Category Capsule list
-        _buildCategoryBar(categories),
+        _buildCategoryBar(categories, controller),
         const VGapMd(),
 
-        if (activeActivity != null && activeActivity.id.isNotEmpty) ...[
-          _buildMilestoneHeaderCard(activeActivity),
+        if (controller.selectedMilestoneActivity != null &&
+            controller.selectedMilestoneActivity!.id.isNotEmpty) ...[
+          _buildMilestoneHeaderCard(controller.selectedMilestoneActivity!),
           const VGapMd(),
         ],
 
@@ -341,13 +277,13 @@ class _MilestonesTabState extends State<MilestonesTab> {
     );
   }
 
-  Widget _buildCategoryBar(List<String> categories) {
+  Widget _buildCategoryBar(List<String> categories, MilestonesController controller) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: categories.map((cat) {
-          final isSelected = _selectedCategory == cat;
+          final isSelected = controller.selectedCategory == cat;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
@@ -362,16 +298,14 @@ class _MilestonesTabState extends State<MilestonesTab> {
               selected: isSelected,
               onSelected: (val) {
                 if (val) {
-                  setState(() {
-                    _selectedCategory = cat;
-                    // Also update active activity in parent screen if matches
-                    if (cat != 'All') {
-                      final act = widget.milestoneActivities.firstWhere((a) => a.name == cat);
-                      widget.onActivitySelected(act);
-                    } else {
-                      widget.onActivitySelected(null);
-                    }
-                  });
+                  if (cat != 'All') {
+                    final act = controller.milestoneActivities.firstWhere((a) => a.name == cat);
+                    controller.selectActivity(act);
+                    widget.onActivitySelected(act);
+                  } else {
+                    controller.selectActivity(null);
+                    widget.onActivitySelected(null);
+                  }
                 }
               },
               selectedColor: AppTheme.secondaryColor,
@@ -394,99 +328,6 @@ class _MilestonesTabState extends State<MilestonesTab> {
         }).toList(),
       ),
     );
-  }
-
-  Widget _buildSectionHeader({
-    required String title,
-    required int count,
-    required bool isExpanded,
-    required VoidCallback onToggle,
-  }) {
-    return InkWell(
-      onTap: onToggle,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: AppTheme.headingSmall.copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white.withValues(alpha: 0.85),
-              ),
-            ),
-            const HGapSm(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                  width: 0.5,
-                ),
-              ),
-              child: Text(
-                '$count',
-                style: const TextStyle(
-                  color: AppTheme.primaryLight,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const HGapXs(),
-            Icon(
-              isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-              color: Colors.white54,
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTaskCardItem(Task st) {
-    final parent = widget.milestoneActivities.firstWhere(
-      (a) => a.id == st.activityId,
-      orElse: () => Activity(
-        id: '',
-        name: '',
-        checked: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-
-    return TaskCard(
-      task: st,
-      milestoneActivities: widget.milestoneActivities,
-      isExpanded: _expandedSubTaskId == st.id,
-      onTap: () {
-        setState(() {
-          if (_expandedSubTaskId == st.id) {
-            _expandedSubTaskId = null;
-          } else {
-            _expandedSubTaskId = st.id;
-            if (parent.id.isNotEmpty) {
-              widget.onActivitySelected(parent);
-            }
-          }
-        });
-      },
-      onActivitySelected: widget.onActivitySelected,
-      onToggleSubTask: widget.onToggleSubTask,
-      onEditSubTask: widget.onEditSubTask,
-      onUpdateSubTaskSymbols: widget.onUpdateSubTaskSymbols,
-    );
-  }
-
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
   Widget _buildEmptyState(String text) {
