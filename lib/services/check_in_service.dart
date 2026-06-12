@@ -53,6 +53,19 @@ class CheckInService {
   }
 
 
+  Stream<List<CheckIn>> getCheckInsStreamForCurrentWeek() {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    final cutoff = monday.subtract(const Duration(days: 1));
+
+    return _checkinsCollection
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+    });
+  }
+
   Stream<List<CheckIn>> getCheckedActivitiesCheckInsStream() {
     return _checkinsCollection
         .orderBy('timestamp', descending: true)

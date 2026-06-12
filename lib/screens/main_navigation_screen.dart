@@ -51,6 +51,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Scaffold(
       backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
       extendBody: true,
       body: IndexedStack(
         index: _currentIndex,

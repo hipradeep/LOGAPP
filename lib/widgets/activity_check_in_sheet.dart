@@ -9,6 +9,7 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
+import 'burn_chart.dart';
 
 class ActivityCheckInSheet extends StatefulWidget {
   final Activity activity;
@@ -37,7 +38,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   @override
   void initState() {
     super.initState();
-    _checkInsStream = _checkInService.getCheckInsStream(widget.activity.id);
+    _checkInsStream = _checkInService.getCheckInsStreamForActivity(widget.activity.id);
     _subTasksStream = _activityService.getSubTasksForActivityStream(widget.activity.id);
   }
 
@@ -236,8 +237,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 const VGapLg(),
               ],
               
-              // Progress indicator for multiple/milestone check-ins
-              if (isMultiple || widget.activity.trackingType == 'milestone') ...[
+              // Progress indicator for check-ins (single, multiple, or milestone)
+              if (widget.activity.trackingType == 'single' || isMultiple || widget.activity.trackingType == 'milestone') ...[
                 _buildProgressBar(todayCount, targetCount),
                 const VGapLg(),
               ],
@@ -255,6 +256,14 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 _buildDescriptionSection(widget.activity.description!),
                 const VGapLg(),
               ],
+              
+              // Activity details graph
+              BurnChart(
+                activity: widget.activity,
+                checkIns: checkIns,
+                tasks: subTasks,
+              ),
+              const VGapLg(),
               
               // 2. History Section Title
               Row(
@@ -330,18 +339,23 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  shape: widget.activity.trackingType == 'single' ? BoxShape.rectangle : BoxShape.circle,
+                  borderRadius: widget.activity.trackingType == 'single' ? BorderRadius.circular(6) : null,
                   color: isCompleted ? AppTheme.primaryColor : Colors.transparent,
                   border: Border.all(
                     color: isCompleted ? AppTheme.primaryColor : AppTheme.textSecondary.withValues(alpha: 0.5),
                     width: 2,
                   ),
                 ),
-                child: Icon(
-                Icons.add,
-                size: 14,
-                color: isCompleted ? Colors.white : AppTheme.primaryLight,
-              ),
+                child: widget.activity.trackingType == 'single'
+                    ? (isCompleted
+                        ? const Icon(Icons.check, size: 14, color: Colors.white)
+                        : null)
+                    : Icon(
+                        Icons.add,
+                        size: 14,
+                        color: isCompleted ? Colors.white : AppTheme.primaryLight,
+                      ),
               ),
             ),
         ],
@@ -403,39 +417,16 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     final List<CheckIn> sortedCheckIns = List<CheckIn>.from(checkIns);
     sortedCheckIns.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    // Get the 3 most recent unique calendar dates with logged activity
-    final List<DateTime> uniqueDates = [];
-    for (var c in sortedCheckIns) {
-      if (c.checked) {
-        final date = DateTime(c.timestamp.year, c.timestamp.month, c.timestamp.day);
-        bool alreadyAdded = false;
-        for (var ud in uniqueDates) {
-          if (ud.year == date.year && ud.month == date.month && ud.day == date.day) {
-            alreadyAdded = true;
-            break;
-          }
-        }
-        if (!alreadyAdded) {
-          uniqueDates.add(date);
-          if (uniqueDates.length == 3) {
-            break;
-          }
-        }
-      }
-    }
+    // Get the last 3 calendar days (Today, Yesterday, 2 Days Ago)
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final limitDate = today.subtract(const Duration(days: 2));
 
-    // Add checked check-ins that fall on one of these 3 most recent dates
+    // Add checked check-ins that fall within the last 3 calendar days
     for (var c in sortedCheckIns) {
       if (c.checked) {
         final date = DateTime(c.timestamp.year, c.timestamp.month, c.timestamp.day);
-        bool match = false;
-        for (var ud in uniqueDates) {
-          if (ud.year == date.year && ud.month == date.month && ud.day == date.day) {
-            match = true;
-            break;
-          }
-        }
-        if (match) {
+        if (!date.isBefore(limitDate)) {
           historyItems.add(_HistoryItem(
             id: c.id,
             timestamp: c.timestamp,
@@ -543,14 +534,17 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               ),
               const HGapMd(),
               // Delete Check-in
-              GestureDetector(
-                onTap: () => _deleteHistoryItem(item, subTasks),
-                child: const Icon(
-                   Icons.delete_outline_rounded,
-                  color: AppTheme.errorColor,
-                  size: 20,
-                ),
-              ),
+              if (_isToday(item.timestamp))
+                GestureDetector(
+                  onTap: () => _deleteHistoryItem(item, subTasks),
+                  child: const Icon(
+                     Icons.delete_outline_rounded,
+                    color: AppTheme.errorColor,
+                    size: 20,
+                  ),
+                )
+              else
+                const SizedBox(width: 20),
             ],
           ),
         );
@@ -559,6 +553,15 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   void _deleteHistoryItem(_HistoryItem item, List<Task> subTasks) async {
+    if (!_isToday(item.timestamp)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot delete previous day\'s log entry.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
     if (item.isSubTask) {
       try {
         await _checkInService.deleteCheckIn(item.id);

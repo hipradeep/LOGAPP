@@ -13,8 +13,14 @@ import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
 import '../services/activity_service.dart';
-import '../services/check_in_service.dart';
 import '../services/log_service.dart';
+import '../services/check_in_service.dart';
+import '../services/cache_service.dart';
+import 'write_log_screen.dart';
+import '../controllers/dashboard_controller.dart';
+import '../widgets/app_provider.dart';
+import '../widgets/focus_timer_sheet.dart';
+import '../widgets/calorie_log_sheet.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,12 +33,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final ActivityService _activityService = ActivityService();
   final CheckInService _checkInService = CheckInService();
   final LogService _logService = LogService();
+  final CacheService _cacheService = CacheService();
   
-  late Stream<List<Activity>> _checkedActivitiesStream;
-  late Stream<List<CheckIn>> _checkInsStream;
-  late Stream<List<Task>> _subTasksStream;
-
   final Set<String> _selectedActivityIds = {};
+  late final DashboardController _controller;
 
   final List<Map<String, String>> _moods = [
     {'emoji': '😊', 'label': 'Happy'},
@@ -43,21 +47,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     {'emoji': '💤', 'label': 'Tired'},
   ];
 
+  late final Widget _moodSection;
+  late DateTime _today;
+
   @override
   void initState() {
     super.initState();
-    _initStreams();
+    _controller = DashboardController();
+    _moodSection = _buildQuickMoodSection();
   }
 
-  void _initStreams() {
-    _checkedActivitiesStream = _activityService.getCheckedActivitiesStream();
-    _checkInsStream = _checkInService.getCheckedActivitiesCheckInsStream();
-    _subTasksStream = _activityService.getSubTasksStream();
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.day == now.day && date.month == now.month && date.year == now.year;
+    return date.day == _today.day && date.month == _today.month && date.year == _today.year;
   }
 
   bool _isSameDay(DateTime d1, DateTime d2) {
@@ -66,184 +73,96 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    _today = DateTime(now.year, now.month, now.day);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: FullScreenPage(
-        showScaffold: false,
-        isScrollable: true,
-        title: 'Your Daily LOG',
-        padding: EdgeInsets.zero,
-        backgroundWidgets: [
-          const GlowBlob(
-            top: -50,
-            left: -50,
-            size: 250,
-            color: AppTheme.primaryColor,
-            opacity: 0.12,
-          ),
-          GlowBlob(
-            bottom: Responsive.heightPercent(context, 20),
-            right: -60,
-            size: 300,
-            color: AppTheme.primaryLight,
-            opacity: 0.06,
-          ),
-        ],
-        children: [
-          // Subheader indicating date
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  DateFormat('EEEE, MMM d').format(DateTime.now()).toUpperCase(),
-                  style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.primaryLight,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
+      body: AppProvider<DashboardController>(
+        notifier: _controller,
+        child: Builder(
+          builder: (context) {
+            final controller = AppProvider.watch<DashboardController>(context);
+            if (controller.isLoading) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryColor),
+              );
+            }
+            return FullScreenPage(
+              showScaffold: false,
+              isScrollable: true,
+              title: 'Your Daily LOG',
+              padding: EdgeInsets.zero,
+              backgroundWidgets: [
+                const GlowBlob(
+                  top: -50,
+                  left: -50,
+                  size: 250,
+                  color: AppTheme.primaryColor,
+                  opacity: 0.12,
+                ),
+                GlowBlob(
+                  bottom: Responsive.heightPercent(context, 20),
+                  right: -60,
+                  size: 300,
+                  color: AppTheme.primaryLight,
+                  opacity: 0.06,
                 ),
               ],
-            ),
-          ),
-          const VGapMd(),
-          
-          // Quick Mood Check-in
-          _buildQuickMoodSection(),
-          const VGapSm(),
+              children: [
+                // Subheader indicating date
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        DateFormat('EEEE, MMM d').format(DateTime.now()).toUpperCase(),
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.primaryLight,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const VGapMd(),
+                
+                // Quick Mood Check-in
+                _moodSection,
+                const VGapSm(),
 
-          // Unified Checked Activities & Summary Section
-          StreamBuilder<List<Activity>>(
-            stream: _checkedActivitiesStream,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const SizedBox.shrink();
-              }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox.shrink();
-              }
-              final checkedActivities = snapshot.data ?? [];
-              
-              return StreamBuilder<List<CheckIn>>(
-                stream: _checkInsStream,
-                builder: (context, checkinSnapshot) {
-                  final checkIns = checkinSnapshot.data ?? [];
-                  
-                  return StreamBuilder<List<Task>>(
-                    stream: _subTasksStream,
-                    builder: (context, subtaskSnapshot) {
-                      final subTasks = subtaskSnapshot.data ?? [];
-                      
-                      final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
+                // Quick Actions
+                _buildQuickActionsSection(),
+                const VGapSm(),
 
-                      // Classify activities into pending, completed, and skipped today
-                      final List<Activity> pendingActivities = [];
-                      final List<Activity> completedActivities = [];
-                      final List<Activity> skippedActivities = [];
-                      
-                      for (var activity in checkedActivities) {
-                        final bool isSkipped = checkIns.any((c) =>
-                            _isToday(c.timestamp) &&
-                            c.activityId == activity.id &&
-                            c.skipped == true);
-                        if (isSkipped) {
-                          skippedActivities.add(activity);
-                          continue;
-                        }
-                        final int todayCount;
-                        if (activity.trackingType == 'multiple') {
-                           final todayTask = subTasks.firstWhere(
-                             (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
-                             orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
-                           );
-                          todayCount = todayTask.subTasks.where((st) => st.checked).length;
-                        } else {
-                          todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
-                        }
-                        final bool isCompleted = todayCount >= activity.targetCount;
-                            
-                        if (isCompleted) {
-                          completedActivities.add(activity);
-                        } else {
-                          pendingActivities.add(activity);
-                        }
-                      }
-
-                      String? getSortingTime(Activity activity) {
-                        if (activity.trackingType == 'multiple') {
-                          final todayTask = subTasks.firstWhere(
-                            (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
-                            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
-                          );
-                          for (var template in activity.subTaskTemplates) {
-                            final parts = template.split('|');
-                            if (parts.length > 1) {
-                              final timeStr = parts.last;
-                              final isCheckedIn = todayTask.subTasks.any((st) => st.title == parts.first && st.checked);
-                              if (!isCheckedIn) {
-                                return timeStr;
-                              }
-                            }
-                          }
-                          // Fallback: first scheduled subtask's time
-                          for (var template in activity.subTaskTemplates) {
-                            final parts = template.split('|');
-                            if (parts.length > 1) {
-                              return parts.last;
-                            }
-                          }
-                        }
-                        return activity.scheduledTime;
-                      }
-
-                      int compareActivities(Activity a, Activity b) {
-                        final aTime = getSortingTime(a);
-                        final bTime = getSortingTime(b);
-                        if (aTime != null && bTime != null) {
-                          return aTime.compareTo(bTime);
-                        }
-                        if (aTime != null && bTime == null) {
-                          return -1;
-                        }
-                        if (aTime == null && bTime != null) {
-                          return 1;
-                        }
-                        return a.timestamp.compareTo(b.timestamp);
-                      }
-
-                      pendingActivities.sort(compareActivities);
-                      completedActivities.sort(compareActivities);
-                      skippedActivities.sort(compareActivities);
-                      
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildCheckedActivitiesList(context, pendingActivities, todayCheckIns, subTasks, isCompletedList: false),
-                          if (skippedActivities.isNotEmpty) ...[
-                            const VGapSm(),
-                            _buildCheckedActivitiesList(context, skippedActivities, todayCheckIns, subTasks, isCompletedList: false, isSkippedList: true),
-                          ],
-                          if (completedActivities.isNotEmpty) ...[
-                            const VGapSm(),
-                            _buildCheckedActivitiesList(context, completedActivities, todayCheckIns, subTasks, isCompletedList: true),
-                          ],
-                          const VGapSm(),
-                          _buildDailySummaryCard(checkedActivities, checkIns, subTasks),
-                          const VGapSm(),
-                          _buildWeeklyCalendarCard(checkedActivities, checkIns, subTasks),
-                        ],
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-          const VGapXxl(),
-          const VGapXxl(),
-          const VGapXxl(),
-        ],
+                // Unified Checked Activities & Summary Section
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildCheckedActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: false),
+                    if (controller.skippedActivities.isNotEmpty) ...[
+                      const VGapSm(),
+                      _buildCheckedActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: false, isSkippedList: true),
+                    ],
+                    if (controller.completedActivities.isNotEmpty) ...[
+                      const VGapSm(),
+                      _buildCheckedActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: true),
+                    ],
+                    const VGapSm(),
+                    _buildDailySummaryCard(controller.checkedActivities, controller.checkIns, controller.subTasks),
+                    const VGapSm(),
+                    _buildWeeklyCalendarCard(controller.checkedActivities, controller.checkIns, controller.subTasks),
+                  ],
+                ),
+                const VGapXxl(),
+                const VGapXxl(),
+                const VGapXxl(),
+              ],
+            );
+          }
+        ),
       ),
     );
   }
@@ -393,11 +312,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
                 );
                 count = todayTask.subTasks.where((st) => st.checked).length;
+              } else if (activity.trackingType == 'milestone') {
+                count = allSubTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp) && s.checked).length;
               } else {
                 count = todayCheckIns.where((c) => c.activityId == activity.id).length;
               }
 
               return ActivityChip(
+                key: ValueKey(activity.id),
                 activity: activity,
                 todayCount: count,
                 isSkipped: isSkippedList,
@@ -421,9 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     builder: (context) => ActivityCheckInSheet(
                       activity: activity,
                     ),
-                  ).then((_) {
-                    setState(() {});
-                  });
+                  );
                 },
                 // Disable long press for completed section (no action available)
                 onLongPress: isCompletedList ? null : () {
@@ -439,6 +359,273 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  // QUICK ACTIONS SECTION
+  Widget? _getActionCard(String action) {
+    if (action == 'Focus 25m') {
+      return _buildActionCard(
+        title: 'Focus 25m',
+        emoji: '🎯',
+        subtitle: 'Start Pomodoro',
+        accentColor: AppTheme.primaryColor,
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => const FocusTimerSheet(),
+          );
+        },
+      );
+    } else if (action == 'Log Food') {
+      return _buildActionCard(
+        title: 'Log Food',
+        emoji: '🍎',
+        subtitle: 'Track calories',
+        accentColor: AppTheme.successColor,
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => const CalorieLogSheet(),
+          );
+        },
+      );
+    } else if (action == 'Water 250ml') {
+      return _buildActionCard(
+        title: 'Water 250ml',
+        emoji: '💧',
+        subtitle: 'Log hydration',
+        accentColor: AppTheme.secondaryColor,
+        onTap: () async {
+          try {
+            await _logService.createEntry(
+              'Logged Water Intake',
+              'Drank 250ml of water.',
+              '💧',
+              ['Health', 'Water'],
+            );
+            if (mounted) {
+              AppToast.show(
+                context: context,
+                message: 'Drank 250ml water logged! 💧',
+                backgroundColor: AppTheme.successColor,
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              AppToast.show(
+                context: context,
+                message: 'Failed to log: $e',
+                backgroundColor: AppTheme.errorColor,
+              );
+            }
+          }
+        },
+      );
+    } else if (action == 'New Journal') {
+      return _buildActionCard(
+        title: 'New Journal',
+        emoji: '📝',
+        subtitle: 'Daily reflection',
+        accentColor: AppTheme.primaryLight,
+        onTap: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const WriteLogScreen(),
+            ),
+          );
+          if (result != null && result is Map<String, dynamic>) {
+            final title = result['title'] as String;
+            final content = result['content'] as String;
+            final mood = result['mood'] as String;
+            final tags = result['tags'] as List<String>;
+            try {
+              await _logService.createEntry(title, content, mood, tags);
+              if (mounted) {
+                AppToast.show(
+                  context: context,
+                  message: 'Journal entry saved! 📝',
+                  backgroundColor: AppTheme.successColor,
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                AppToast.show(
+                  context: context,
+                  message: 'Failed to save: $e',
+                  backgroundColor: AppTheme.errorColor,
+                );
+              }
+            }
+          }
+        },
+      );
+    }
+    return null;
+  }
+
+  Widget _buildQuickActionsSection() {
+    return FutureBuilder<List<String>>(
+      future: _cacheService.getQuickActions(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        final enabledActions = snapshot.data ?? ['Focus 25m', 'Log Food', 'Water 250ml', 'New Journal'];
+        if (enabledActions.isEmpty) return const SizedBox.shrink();
+
+        final List<Widget> cards = [];
+        for (var action in enabledActions) {
+          final card = _getActionCard(action);
+          if (card != null) {
+            cards.add(card);
+          }
+        }
+
+        final List<Widget> rows = [];
+        for (int i = 0; i < cards.length; i += 2) {
+          if (i + 1 < cards.length) {
+            rows.add(
+              Row(
+                children: [
+                  Expanded(child: cards[i]),
+                  const HGapSm(),
+                  Expanded(child: cards[i + 1]),
+                ],
+              ),
+            );
+          } else {
+            rows.add(
+              Row(
+                children: [
+                  Expanded(child: cards[i]),
+                ],
+              ),
+            );
+          }
+          if (i + 2 < cards.length) {
+            rows.add(const VGapSm());
+          }
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Quick Actions'.toUpperCase(),
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.primaryLight,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const VGapSm(),
+              ...rows,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildActionCard({
+    required String title,
+    required String emoji,
+    required String subtitle,
+    required VoidCallback onTap,
+    required Color accentColor,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.04),
+            Colors.white.withValues(alpha: 0.01),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            splashColor: accentColor.withValues(alpha: 0.1),
+            highlightColor: accentColor.withValues(alpha: 0.05),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  width: 1.2,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: accentColor.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.1),
+                          blurRadius: 6,
+                          spreadRadius: 0.5,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      emoji,
+                      style: const TextStyle(fontSize: 22),
+                    ),
+                  ),
+                  const VGapMd(),
+                  Text(
+                    title,
+                    style: AppTheme.bodyLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const VGapXs(),
+                  Text(
+                    subtitle,
+                    style: AppTheme.bodySmall.copyWith(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

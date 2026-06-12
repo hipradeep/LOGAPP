@@ -164,25 +164,24 @@ late final Widget _moodSection = _buildQuickMoodSection();
 
 ## Summary Table
 
-| Priority | Issue | Impact | Effort |
+| Priority | Issue | Impact | Status |
 |----------|-------|--------|--------|
-| 🔴 High | Combine 3 nested StreamBuilders into 1 | Prevents 3x cascade rebuilds | Medium |
-| 🔴 High | Remove empty `setState(() {})` on sheet close | Eliminates unnecessary rebuild | Trivial |
-| 🔴 High | Cache today's filtered lists + classification | Avoids O(n²) on every frame | Medium |
-| 🟡 Med | Compute `today` once per build, not per call | Reduces object creation | Trivial |
-| 🟡 Med | Filter subtasks query in Firestore | Reduces network + memory | Low |
-| 🟡 Med | Add `ValueKey` to ActivityChip | Better diff performance | Trivial |
-| 🟡 Med | Use pre-filtered `todaySubTasks` in chip count | Avoid re-filtering | Trivial |
-| 🟢 Low | Extract mood section as separate widget | Skip rebuild when unrelated setState | Low |
+| 🔴 High | Combine 3 nested StreamBuilders into 1 | Prevents 3x cascade rebuilds | ✅ Solved (Custom State Management) |
+| 🔴 High | Remove empty `setState(() {})` on sheet close | Eliminates unnecessary rebuild | ✅ Solved |
+| 🔴 High | Cache today's filtered lists + classification | Avoids O(n²) on every build | ✅ Solved (Calculated inside Controller) |
+| 🟡 Med | Compute `today` once per build, not per call | Reduces object creation | ✅ Solved (Cached build-scoped DateTime) |
+| 🟡 Med | Filter subtasks query in Firestore | Reduces network + memory | ✅ Solved (Restricted to current week) |
+| 🟡 Med | Add `ValueKey` to ActivityChip | Better diff performance | ✅ Solved |
+| 🟡 Med | Use pre-filtered `todaySubTasks` in chip count | Avoid re-filtering | ✅ Solved (Mapped via Controller lists) |
+| 🟢 Low | Extract mood section as separate widget | Skip rebuild when unrelated setState | ✅ Solved (Cached in State) |
 
 ---
 
-## Recommended Implementation Order
+## Status Notes
+All optimizations have been successfully implemented:
+* **Custom State Container**: The application uses our lightweight `AppProvider` + `DashboardController` flow, eliminating the nested builder hierarchy.
+* **Cached Calculations**: Sorting, parsing, and day-matching logic are computed inside the controller exactly once when new snapshots arrive, rather than on every rebuild.
+* **Garbage Collection Reduction**: By calculating `_today` once at the beginning of the `build` method and storing it in a state variable, we avoid creating numerous short-lived `DateTime.now()` instances during list loops.
+* **Network Query Constraints**: Stream requests to Firestore are constrained to the current calendar week with a 1-day buffer, minimizing data payload sizes.
+* **Referential Caching**: The static `_moodSection` is instantiated exactly once in `initState` and cached as a state member, meaning Flutter completely skips rebuilding this subtree on subsequent frames.
 
-1. Remove empty `setState` (trivial, instant win)
-2. Add `ValueKey` to chips (trivial)
-3. Fix `_isToday` to use single `now` (trivial)
-4. Use pre-filtered lists in chip count (trivial)
-5. Combine StreamBuilders with `rxdart` (medium effort, biggest impact)
-6. Filter Firestore subtask query (medium effort)
-7. Extract mood section widget (low effort)

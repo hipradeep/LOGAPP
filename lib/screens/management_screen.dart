@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../services/cache_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
@@ -66,10 +68,30 @@ class ManagementScreen extends StatefulWidget {
 class _ManagementScreenState extends State<ManagementScreen> {
   final ActivityService _activityService = ActivityService();
   final BudgetService _budgetService = BudgetService();
+  final CacheService _cacheService = CacheService();
 
   // Current active category (0: Milestones, 1: Budget, 2: Diet, 3: Reminders, 4: Study)
   int _activeCategoryIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCachedTab();
+  }
+
+  Future<void> _loadCachedTab() async {
+    final cachedIndex = await _cacheService.getSelectedTab();
+    if (mounted && cachedIndex >= 0 && cachedIndex < _categories.length) {
+      setState(() {
+        _activeCategoryIndex = cachedIndex;
+      });
+    }
+  }
+
   bool _isMenuOpen = false;
+  int? _hoveredCategoryIndex;
+  double _accumulatedDragDelta = 0.0;
+  bool _hasTriggeredDrag = false;
 
   // Selected milestone activity
   Activity? _selectedMilestoneActivity;
@@ -130,17 +152,15 @@ class _ManagementScreenState extends State<ManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
       body: FullScreenPage(
         showScaffold: false,
         isScrollable: false,
-        title: 'Manage Life',
         padding: EdgeInsets.zero,
-        actions: [
-          _buildMenuToggleButton(),
-        ],
         backgroundWidgets: const [
           GlowBlob(
             top: -40,
@@ -169,14 +189,22 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     padding: EdgeInsets.only(
                       left: 24,
                       right: 24,
-                      top: 16,
-                      bottom: bottomPadding + 100,
+                      top: 88,
+                      bottom: bottomPadding + 100 + viewInsetsBottom,
                     ),
                     child: _buildActiveContent(),
                   ),
                 ),
                 
-                // 2. Tap-to-Close Menu Barrier
+                // 2. Custom App Bar / Header (drawn behind dropdown but on top of scrollable content)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildCustomHeader(context),
+                ),
+                
+                // 3. Tap-to-Close Menu Barrier
                 if (_isMenuOpen)
                   Positioned.fill(
                     child: GestureDetector(
@@ -190,11 +218,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     ),
                   ),
                 
-                // 3. Overlaid Collapsible Category Menu
+                // 4. Overlaid Collapsible Category Menu
                 Positioned(
-                  top: -16,
-                  left: 0,
-                  right: 0,
+                  top: 5,
+                  right: 17,
                   child: _buildCollapsibleCategoryMenu(),
                 ),
               ],
@@ -202,30 +229,143 @@ class _ManagementScreenState extends State<ManagementScreen> {
           ),
         ],
       ),
-      floatingActionButton: _activeCategoryIndex == 0 && _selectedMilestoneActivity != null
+      floatingActionButton: _activeCategoryIndex == 0 && _milestoneActivities.isNotEmpty
           ? Padding(
-              padding: EdgeInsets.only(bottom: bottomPadding + 16),
-              child: FloatingActionButton.small(
-                heroTag: null,
+              padding: EdgeInsets.only(bottom: bottomPadding + 36),
+              child: _buildPremiumFAB(
                 onPressed: () => _showAddSubTaskSheet(context),
-                backgroundColor: AppTheme.primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
               ),
             )
           : (_activeCategoryIndex == 1 && _selectedBudget != null)
               ? Padding(
-                  padding: EdgeInsets.only(bottom: bottomPadding + 16),
-                  child: FloatingActionButton.small(
-                    heroTag: null,
+                  padding: EdgeInsets.only(bottom: bottomPadding + 36),
+                  child: _buildPremiumFAB(
                     onPressed: () => _showAddTransactionSheet(context),
-                    backgroundColor: AppTheme.primaryColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
                   ),
                 )
               : null,
     );
+  }
+
+  Widget _buildPremiumFAB({required VoidCallback onPressed}) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.add_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomHeader(BuildContext context) {
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(
+            24,
+            12,
+            24,
+            12,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.white.withValues(alpha: 0.05),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _categories[_activeCategoryIndex]['label'] as String,
+                  style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              _buildMenuToggleButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handlePanUpdate(double globalY) {
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final capsuleTop = statusBarHeight + 5;
+    final localY = globalY - capsuleTop;
+
+    if (localY >= 61 && localY < 61 + _categories.length * 52) {
+      final idx = (localY - 61) ~/ 52;
+      if (idx >= 0 && idx < _categories.length) {
+        if (_hoveredCategoryIndex != idx) {
+          setState(() {
+            _hoveredCategoryIndex = idx;
+          });
+        }
+      }
+    } else {
+      if (_hoveredCategoryIndex != null) {
+        setState(() {
+          _hoveredCategoryIndex = null;
+        });
+      }
+    }
+  }
+
+  void _setActiveCategory(int index) {
+    if (_activeCategoryIndex != index) {
+      HapticFeedback.selectionClick();
+      setState(() {
+        _activeCategoryIndex = index;
+        if (index == 0) {
+          _shouldSelectDefaultMilestone = true;
+        }
+      });
+      _cacheService.saveSelectedTab(index);
+    }
+  }
+
+  void _handlePanEnd() {
+    if (_hoveredCategoryIndex != null) {
+      _setActiveCategory(_hoveredCategoryIndex!);
+      setState(() {
+        _isMenuOpen = false;
+        _hoveredCategoryIndex = null;
+      });
+    } else {
+      setState(() {
+        _hoveredCategoryIndex = null;
+      });
+    }
   }
 
   // ==================== WIDGET BUILDERS ====================
@@ -235,6 +375,48 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
     return GestureDetector(
       onTap: () => setState(() => _isMenuOpen = !_isMenuOpen),
+      onPanStart: (details) {
+        if (!_isMenuOpen) {
+          _accumulatedDragDelta = 0.0;
+          _hasTriggeredDrag = false;
+        } else {
+          setState(() {
+            _hoveredCategoryIndex = null;
+          });
+        }
+      },
+      onPanUpdate: (details) {
+        if (!_isMenuOpen) {
+          if (!_hasTriggeredDrag) {
+            _accumulatedDragDelta += details.delta.dy;
+            const double threshold = 25.0; // slightly lower threshold for quick snapping
+            if (_accumulatedDragDelta >= threshold) {
+              // Swipe down -> next tab
+              final nextIdx = (_activeCategoryIndex + 1) % _categories.length;
+              _setActiveCategory(nextIdx);
+              _hasTriggeredDrag = true;
+              _accumulatedDragDelta = 0.0;
+            } else if (_accumulatedDragDelta <= -threshold) {
+              // Swipe up -> previous tab
+              final prevIdx = (_activeCategoryIndex - 1 + _categories.length) % _categories.length;
+              _setActiveCategory(prevIdx);
+              _hasTriggeredDrag = true;
+              _accumulatedDragDelta = 0.0;
+            }
+          }
+        } else {
+          // Hover-select when menu is open
+          _handlePanUpdate(details.globalPosition.dy);
+        }
+      },
+      onPanEnd: (details) {
+        if (!_isMenuOpen) {
+          _accumulatedDragDelta = 0.0;
+          _hasTriggeredDrag = false;
+        } else {
+          _handlePanEnd();
+        }
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         width: 42,
@@ -289,65 +471,75 @@ class _ManagementScreenState extends State<ManagementScreen> {
   }
 
   Widget _buildCollapsibleCategoryMenu() {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: SizedBox(
-        width: double.infinity,
-        height: _isMenuOpen ? null : 0,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
+    return GestureDetector(
+      onPanStart: (details) {
+        setState(() {
+          _hoveredCategoryIndex = null;
+        });
+      },
+      onPanUpdate: (details) {
+        _handlePanUpdate(details.globalPosition.dy);
+      },
+      onPanEnd: (details) {
+        _handlePanEnd();
+      },
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topRight,
+        child: SizedBox(
+          width: 56,
+          height: _isMenuOpen ? null : 0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: _isMenuOpen
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : [],
             ),
-            boxShadow: _isMenuOpen
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor.withValues(
+                      alpha: _isMenuOpen ? 0.90 : 0.0,
                     ),
-                  ]
-                : [],
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
-            ),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceColor.withValues(
-                    alpha: _isMenuOpen ? 0.85 : 0.0,
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(
-                      alpha: _isMenuOpen ? 0.08 : 0.0,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: Colors.white.withValues(
+                        alpha: _isMenuOpen ? 0.12 : 0.0,
+                      ),
+                      width: 1.0,
                     ),
-                    width: 1.0,
                   ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const VGapMd(),
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 150),
-                      opacity: _isMenuOpen ? 1.0 : 0.0,
-                      child: _buildCategorySelector(),
-                    ),
-                    const VGapMd(),
-                  ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 7),
+                      Opacity(
+                        opacity: _isMenuOpen ? 1.0 : 0.0,
+                        child: _buildMenuToggleButton(),
+                      ),
+                      const SizedBox(height: 12),
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 150),
+                        opacity: _isMenuOpen ? 1.0 : 0.0,
+                        child: _buildCategorySelector(),
+                      ),
+                      const SizedBox(height: 7),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -358,77 +550,47 @@ class _ManagementScreenState extends State<ManagementScreen> {
   }
 
   Widget _buildCategorySelector() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const double spacing = 16;
-          final itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
-
-          return Wrap(
-            spacing: spacing,
-            runSpacing: 14,
-            children: List.generate(_categories.length, (index) {
-              final isSelected = _activeCategoryIndex == index;
-              final cat = _categories[index];
-              return SizedBox(
-                width: itemWidth,
-                child: GestureDetector(
-                  onTap: () => setState(() {
-                    _activeCategoryIndex = index;
-                    if (index == 0) {
-                      _shouldSelectDefaultMilestone = true;
-                    }
-                  }),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppTheme.primaryColor
-                                : Colors.white.withValues(alpha: 0.15),
-                            width: 1.5,
-                          ),
-                          color: isSelected
-                              ? AppTheme.primaryColor.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                        ),
-                        child: Icon(
-                           isSelected ? cat['activeIcon'] : cat['icon'],
-                          color: isSelected
-                              ? AppTheme.primaryColor
-                              : AppTheme.textSecondary,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        cat['label'],
-                        style: TextStyle(
-                          color: isSelected
-                              ? AppTheme.primaryColor
-                              : AppTheme.textSecondary,
-                          fontSize: 10,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(_categories.length, (index) {
+        final isSelected = _activeCategoryIndex == index;
+        final isHovered = _hoveredCategoryIndex == index;
+        final showActive = _hoveredCategoryIndex != null ? isHovered : isSelected;
+        final cat = _categories[index];
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: GestureDetector(
+            onTap: () {
+              _setActiveCategory(index);
+              setState(() {
+                _isMenuOpen = false;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: showActive
+                    ? AppTheme.primaryColor
+                    : Colors.transparent,
+                border: Border.all(
+                  color: showActive
+                      ? AppTheme.primaryLight.withValues(alpha: 0.5)
+                      : Colors.transparent,
+                  width: 1,
                 ),
-              );
-            }),
-          );
-        },
-      ),
+              ),
+              child: Icon(
+                showActive ? cat['activeIcon'] : cat['icon'],
+                color: showActive ? Colors.white : AppTheme.textSecondary,
+                size: 20,
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 
@@ -608,8 +770,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   }
 
   void _showAddSubTaskSheet(BuildContext context) {
-    final activity = _selectedMilestoneActivity;
-    if (activity == null) return;
+    if (_milestoneActivities.isEmpty) return;
 
     showModalBottomSheet(
       context: context,
@@ -617,6 +778,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => AddMilestoneSubTaskSheet(
         milestones: _milestoneActivities,
+        initialActivityId: _selectedMilestoneActivity?.id,
         onAddSubTask: _addMilestoneSubTask,
       ),
     );

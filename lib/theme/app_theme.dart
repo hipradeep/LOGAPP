@@ -82,6 +82,10 @@ class AppTheme {
   static const double iconSizeXl = 48.0;
   static const double iconSizeXxl = 64.0;
 
+  // Checkbox Sizes
+  static const double taskCheckboxSize = 24.0;
+  static const double subtaskCheckboxSize = 18.0;
+
   // Common Gradients
   static const LinearGradient backgroundGradient = LinearGradient(
     begin: Alignment.topLeft,

@@ -12,6 +12,7 @@ class AddMilestoneSubTaskSheet extends StatefulWidget {
   final Future<void> Function(Activity activity, String subTaskName, DateTime timestamp)? onAddSubTask;
   final Task? editTask;
   final Future<void> Function(Task task)? onEditSubTask;
+  final String? initialActivityId;
 
   const AddMilestoneSubTaskSheet({
     super.key,
@@ -19,6 +20,7 @@ class AddMilestoneSubTaskSheet extends StatefulWidget {
     this.onAddSubTask,
     this.editTask,
     this.onEditSubTask,
+    this.initialActivityId,
   });
 
   @override
@@ -42,6 +44,9 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
   void initState() {
     super.initState();
     _selectedMilestoneId = widget.milestones.first.id;
+    if (widget.initialActivityId != null && widget.milestones.any((m) => m.id == widget.initialActivityId)) {
+      _selectedMilestoneId = widget.initialActivityId!;
+    }
     if (widget.editTask != null) {
       final task = widget.editTask!;
       _controller.text = task.taskName;

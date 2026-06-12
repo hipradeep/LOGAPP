@@ -1,0 +1,88 @@
+import 'package:flutter/material.dart';
+import '../models/log_entry.dart';
+import '../theme/app_theme.dart';
+import 'app_spacers.dart';
+
+class JournalOptionsSheet extends StatelessWidget {
+  final LogEntry entry;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const JournalOptionsSheet({
+    super.key,
+    required this.entry,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(AppTheme.defaultBorderRadius),
+          topRight: Radius.circular(AppTheme.defaultBorderRadius),
+        ),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const VGapSm(),
+            // Handle bar
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const VGapMd(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Text(
+                entry.title.isNotEmpty ? entry.title : 'Journal Entry',
+                style: AppTheme.headingSmall.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (entry.content.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
+                child: Text(
+                  entry.content,
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary, fontSize: 13),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            const Divider(color: Colors.white10),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded, color: AppTheme.primaryLight),
+              title: Text('Edit Entry', style: AppTheme.bodyLarge),
+              onTap: () {
+                Navigator.pop(context);
+                onEdit();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_forever_rounded, color: AppTheme.errorColor),
+              title: Text('Delete Entry', style: AppTheme.bodyLarge.copyWith(color: AppTheme.errorColor)),
+              onTap: () {
+                Navigator.pop(context);
+                onDelete();
+              },
+            ),
+            const VGapSm(),
+          ],
+        ),
+      ),
+    );
+  }
+}

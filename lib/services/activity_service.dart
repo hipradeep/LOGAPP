@@ -239,6 +239,19 @@ class ActivityService {
 
   // ==================== SUB-TASKS OPERATIONS ====================
 
+  Stream<List<Task>> getSubTasksStreamForCurrentWeek() {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    final cutoff = monday.subtract(const Duration(days: 1));
+
+    return _subtasksCollection
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
+    });
+  }
+
   Stream<List<Task>> getSubTasksStream() {
     return _subtasksCollection
         .snapshots()
@@ -255,6 +268,20 @@ class ActivityService {
       final list = snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
       list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return list;
+    });
+  }
+
+  Stream<List<Task>> getSubTasksForActivitiesStream(List<String> activityIds) {
+    if (activityIds.isEmpty) {
+      return Stream.value(const <Task>[]);
+    }
+    // Unique list to avoid duplicate query entries
+    final uniqueIds = activityIds.toSet().toList();
+    return _subtasksCollection
+        .where('activityId', whereIn: uniqueIds)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
     });
   }
 

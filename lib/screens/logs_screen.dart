@@ -4,8 +4,8 @@ import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/app_icons.dart';
 import '../widgets/monthly_calendar.dart';
+import '../widgets/journal_options_sheet.dart';
 import '../models/activity.dart';
 import '../models/log_entry.dart';
 import '../models/check_in.dart';
@@ -165,34 +165,41 @@ class _LogsScreenState extends State<LogsScreen> {
         ],
       ),
       floatingActionButton: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding + 86),
-        child: FloatingActionButton(
-          heroTag: null,
+        padding: EdgeInsets.only(bottom: bottomPadding + 36),
+        child: _buildPremiumFAB(
           onPressed: () => _navigateToWriteScreen(),
-          backgroundColor: AppTheme.primaryColor,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumFAB({required VoidCallback onPressed}) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryColor, AppTheme.primaryDark],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.4),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.add_rounded,
+              color: Colors.white,
+              size: 26,
             ),
-            child: const IconMd(Icons.add, color: Colors.white),
           ),
         ),
       ),
@@ -451,75 +458,11 @@ class _LogsScreenState extends State<LogsScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(AppTheme.defaultBorderRadius),
-              topRight: Radius.circular(AppTheme.defaultBorderRadius),
-            ),
-            border: Border(
-              top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1),
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const VGapSm(),
-                // Handle bar
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const VGapMd(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  child: Text(
-                    entry.title.isNotEmpty ? entry.title : 'Journal Entry',
-                    style: AppTheme.headingSmall.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (entry.content.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
-                    child: Text(
-                      entry.content,
-                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary, fontSize: 13),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                const Divider(color: Colors.white10),
-                ListTile(
-                  leading: const Icon(Icons.edit_rounded, color: AppTheme.primaryLight),
-                  title: Text('Edit Entry', style: AppTheme.bodyLarge),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _navigateToWriteScreen(existingEntry: entry);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete_forever_rounded, color: AppTheme.errorColor),
-                  title: Text('Delete Entry', style: AppTheme.bodyLarge.copyWith(color: AppTheme.errorColor)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _handleDelete(entry.id);
-                  },
-                ),
-                const VGapSm(),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (context) => JournalOptionsSheet(
+        entry: entry,
+        onEdit: () => _navigateToWriteScreen(existingEntry: entry),
+        onDelete: () => _handleDelete(entry.id),
+      ),
     );
   }
 
