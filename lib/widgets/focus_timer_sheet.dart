@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../services/log_service.dart';
+import '../services/note_service.dart';
 import 'app_spacers.dart';
 import 'app_toast.dart';
 
@@ -13,7 +13,7 @@ class FocusTimerSheet extends StatefulWidget {
 }
 
 class _FocusTimerSheetState extends State<FocusTimerSheet> {
-  final LogService _logService = LogService();
+  final NoteService _noteService = NoteService();
   final TextEditingController _topicController = TextEditingController(text: 'Focus Session');
   Timer? _sessionTimer;
   final int _totalSeconds = 25 * 60;
@@ -51,9 +51,9 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
           _isCompleted = true;
         });
         
-        // Log focus session in journal
+        // Log focus session in note
         final topic = _topicController.text.trim();
-        _logService.createEntry(
+        _noteService.createEntry(
           'Completed Focus Session',
           'Successfully completed a 25-minute focus session on "$topic".',
           '🎯',

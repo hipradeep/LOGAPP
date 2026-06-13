@@ -94,15 +94,28 @@ class CacheService {
     if (list != null) {
       return list.map((e) => e.toString()).toList();
     }
-    return ['Focus 25m', 'Log Food', 'Water 250ml', 'New Journal'];
+    return ['Focus 25m', 'Log Food', 'Water 250ml', 'New note'];
   }
 
   Future<void> clearAllCache() async {
+    try {
+      final file = await _file;
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  Future<void> saveNotesGridView(bool isGrid) async {
     final cache = await _readCache();
-    cache.remove('user_name');
-    cache.remove('user_avatar');
-    cache.remove('daily_reminder');
-    cache.remove('quick_actions');
+    cache['notes_grid_view'] = isGrid;
     await _writeCache(cache);
+  }
+
+  Future<bool> getNotesGridView() async {
+    final cache = await _readCache();
+    return cache['notes_grid_view'] as bool? ?? true;
   }
 }

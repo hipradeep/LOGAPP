@@ -1,24 +1,27 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/log_entry.dart';
+import '../models/note_entity.dart';
 
-class LogService {
+class NoteService {
   final CollectionReference _logsCollection =
-      FirebaseFirestore.instance.collection('logs');
+      FirebaseFirestore.instance.collection('notes');
 
   // ==================== LOGS OPERATIONS ====================
 
-  Stream<List<LogEntry>> getLogsStream() {
-    return _logsCollection
-        .orderBy('timestamp', descending: true)
+  Stream<List<NoteEntity>> getNotesStream({DateTime? oldestDate}) {
+    var query = _logsCollection.orderBy('timestamp', descending: true);
+    if (oldestDate != null) {
+      query = query.where('timestamp', isGreaterThanOrEqualTo: oldestDate);
+    }
+    return query
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => LogEntry.fromFirestore(doc)).toList();
+      return snapshot.docs.map((doc) => NoteEntity.fromFirestore(doc)).toList();
     });
   }
 
   Future<void> createEntry(String title, String content, String mood, List<String> tags) async {
-    final newEntry = LogEntry(
+    final newEntry = NoteEntity(
       id: '',
       title: title,
       content: content,

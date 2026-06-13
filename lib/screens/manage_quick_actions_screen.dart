@@ -14,7 +14,7 @@ class ManageQuickActionsScreen extends StatefulWidget {
 
 class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
   final CacheService _cacheService = CacheService();
-  final List<String> _allActions = ['Focus 25m', 'Log Food', 'Water 250ml', 'New Journal'];
+  final List<String> _allActions = ['Focus 25m', 'Log Food', 'Water 250ml', 'New note'];
   List<String> _enabledActions = [];
   bool _isLoading = true;
 
@@ -132,7 +132,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                         accentColor = AppTheme.secondaryColor;
                       } else {
                         emoji = '📝';
-                        description = 'Journal entry text log';
+                        description = 'note entry text log';
                         accentColor = AppTheme.primaryLight;
                       }
 

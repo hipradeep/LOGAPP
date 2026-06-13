@@ -20,6 +20,7 @@ class MilestonesController extends ChangeNotifier {
   String _selectedCategory = 'All';
   Activity? _selectedMilestoneActivity;
   bool _shouldSelectDefaultMilestone = true;
+  String? _errorMessage;
 
   // Cached classified lists
   List<Task> _todayTasks = [];
@@ -32,6 +33,7 @@ class MilestonesController extends ChangeNotifier {
   List<Task> get allSubTasks => _allSubTasks;
   String get selectedCategory => _selectedCategory;
   bool get isLoading => _isLoadingActivities || _isLoadingSubTasks;
+  String? get errorMessage => _errorMessage;
 
   List<Task> get todayTasks => _todayTasks;
   List<Task> get futureTasks => _futureTasks;
@@ -41,10 +43,17 @@ class MilestonesController extends ChangeNotifier {
     _initStreams();
   }
 
+  Future<void> refresh() async {
+    _initStreams();
+    await Future.delayed(const Duration(milliseconds: 800));
+  }
+
   void _initStreams() {
+    _activitiesSub?.cancel();
     _activitiesSub = _activityService.getActivitiesStream().listen((activities) {
       _milestoneActivities = activities.where((a) => a.trackingType == 'milestone').toList();
       _isLoadingActivities = false;
+      _errorMessage = null;
 
       final activeIds = _milestoneActivities
           .where((a) => a.checked)
@@ -68,11 +77,19 @@ class MilestonesController extends ChangeNotifier {
             _allSubTasks = tasks;
             _isLoadingSubTasks = false;
             _recomputeAndNotify();
+          }, onError: (error) {
+            _isLoadingSubTasks = false;
+            _errorMessage = error.toString();
+            notifyListeners();
           });
         }
       } else {
         _recomputeAndNotify();
       }
+    }, onError: (error) {
+      _isLoadingActivities = false;
+      _errorMessage = error.toString();
+      notifyListeners();
     });
   }
 
@@ -86,6 +103,12 @@ class MilestonesController extends ChangeNotifier {
     }
     _recomputeAndNotify();
   }
+
+  void resetDefaultSelection() {
+    _shouldSelectDefaultMilestone = true;
+    _recomputeAndNotify();
+  }
+
 
   void _recomputeAndNotify() {
     final activeMilestones = _milestoneActivities.where((a) => a.checked).toList();
@@ -164,6 +187,63 @@ class MilestonesController extends ChangeNotifier {
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  Future<void> createSubTask(Activity activity, String subTaskName, DateTime timestamp) async {
+    await _activityService.createSubTask(activity.id, subTaskName, timestamp, false);
+  }
+
+  Future<void> toggleSubTask(Task task, bool checked) async {
+    List<SubTask> updatedSubTasks = task.subTasks;
+    if (checked != task.checked) {
+      updatedSubTasks = task.subTasks
+          .map((subTask) => subTask.copyWith(checked: checked))
+          .toList();
+    }
+    final updated = task.copyWith(
+      checked: checked,
+      completionTime: checked ? DateTime.now() : null,
+      subTasks: updatedSubTasks,
+    );
+    await _activityService.updateSubTask(updated);
+  }
+
+  Future<void> toggleActivity(Activity activity, bool checked) async {
+    await _activityService.toggleActivity(activity.id, checked);
+  }
+
+  Future<void> updateActivitySymbols(
+    Activity activity, {
+    String? symbolType,
+    String? symbolValue,
+    String? category,
+  }) async {
+    await _activityService.updateActivitySymbols(
+      activity.id,
+      symbolType: symbolType,
+      symbolValue: symbolValue,
+      category: category,
+    );
+  }
+
+  Future<void> deleteSubTask(Task task) async {
+    await _activityService.deleteSubTask(task.id);
+  }
+
+  Future<void> updateSubTask(Task task) async {
+    await _activityService.updateSubTask(task);
+  }
+
+  Future<void> updateSubTaskSymbols(
+    Task task, {
+    String? symbolType,
+    String? symbolValue,
+  }) async {
+    await _activityService.updateSubTaskSymbols(
+      task.id,
+      symbolType: symbolType,
+      symbolValue: symbolValue,
+    );
   }
 
   @override

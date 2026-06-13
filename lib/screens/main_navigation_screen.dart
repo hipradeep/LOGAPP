@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
 import 'management_screen.dart';
-import 'logs_screen.dart';
+import 'notes_screen.dart';
 import 'settings_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -19,7 +19,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = [
     const DashboardScreen(),
     const ManagementScreen(),
-    const LogsScreen(),
+    const NotesScreen(),
     const SettingsScreen(),
   ];
 

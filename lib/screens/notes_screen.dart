@@ -5,30 +5,30 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/monthly_calendar.dart';
-import '../widgets/journal_options_sheet.dart';
+import '../widgets/note_options_sheet.dart';
 import '../models/activity.dart';
-import '../models/log_entry.dart';
+import '../models/note_entity.dart';
 import '../models/check_in.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
-import '../services/log_service.dart';
-import 'write_log_screen.dart';
+import '../services/note_service.dart';
+import 'note_write_screen.dart';
 
-class LogsScreen extends StatefulWidget {
-  const LogsScreen({super.key});
+class NotesScreen extends StatefulWidget {
+  const NotesScreen({super.key});
 
   @override
-  State<LogsScreen> createState() => _LogsScreenState();
+  State<NotesScreen> createState() => _NotesScreenState();
 }
 
-class _LogsScreenState extends State<LogsScreen> {
+class _NotesScreenState extends State<NotesScreen> {
   final ActivityService _activityService = ActivityService();
   final CheckInService _checkInService = CheckInService();
-  final LogService _logService = LogService();
+  final NoteService _noteService = NoteService();
 
   DateTime _selectedDate = DateTime.now();
   late final Stream<List<Activity>> _activitiesStream = _activityService.getActivitiesStream();
-  late final Stream<List<LogEntry>> _logsStream = _logService.getLogsStream();
+  late final Stream<List<NoteEntity>> _notesStream = _noteService.getNotesStream();
   late final Stream<List<CheckIn>> _checkInsStream = _checkInService.getCheckedActivitiesCheckInsStream();
 
   @override
@@ -40,11 +40,11 @@ class _LogsScreenState extends State<LogsScreen> {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 
-  void _navigateToWriteScreen({LogEntry? existingEntry}) async {
+  void _navigateToWriteScreen({NoteEntity? existingEntry}) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => WriteLogScreen(
+        builder: (context) => NoteWriteScreen(
           existingEntry: existingEntry,
         ),
       ),
@@ -58,9 +58,9 @@ class _LogsScreenState extends State<LogsScreen> {
 
       try {
         if (existingEntry != null) {
-          await _logService.updateEntry(existingEntry.id, title, content, mood, tags);
+          await _noteService.updateEntry(existingEntry.id, title, content, mood, tags);
         } else {
-          await _logService.createEntry(title, content, mood, tags);
+          await _noteService.createEntry(title, content, mood, tags);
         }
       } catch (e) {
         if (!mounted) return;
@@ -100,7 +100,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
     if (confirmed == true) {
       try {
-        await _logService.deleteEntry(id);
+        await _noteService.deleteEntry(id);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Log deleted from Firestore.')),
@@ -148,7 +148,7 @@ class _LogsScreenState extends State<LogsScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Journal & Check-ins'.toUpperCase(),
+                    'note & Check-ins'.toUpperCase(),
                     style: AppTheme.bodySmall.copyWith(
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.0,
@@ -220,11 +220,11 @@ class _LogsScreenState extends State<LogsScreen> {
 
         final activities = activitiesSnapshot.data ?? [];
 
-        return StreamBuilder<List<LogEntry>>(
-          stream: _logsStream,
+        return StreamBuilder<List<NoteEntity>>(
+          stream: _notesStream,
           builder: (context, logsSnapshot) {
             if (logsSnapshot.hasError) {
-              return const Center(child: Text('Error loading journal entries'));
+              return const Center(child: Text('Error loading note entries'));
             }
             if (logsSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
@@ -256,7 +256,7 @@ class _LogsScreenState extends State<LogsScreen> {
   // TIMELINE BUILDER
   Widget _buildTimelineList(
     List<Activity> activities,
-    List<LogEntry> logs,
+    List<NoteEntity> logs,
     List<CheckIn> checkIns,
   ) {
     final DateTime today = DateTime.now();
@@ -276,8 +276,8 @@ class _LogsScreenState extends State<LogsScreen> {
 
     final List<dynamic> dayItems = [...dayLogs, ...dayCheckIns];
     dayItems.sort((a, b) {
-      final DateTime timeA = a is LogEntry ? a.timestamp : (a as CheckIn).timestamp;
-      final DateTime timeB = b is LogEntry ? b.timestamp : (b as CheckIn).timestamp;
+      final DateTime timeA = a is NoteEntity ? a.timestamp : (a as CheckIn).timestamp;
+      final DateTime timeB = b is NoteEntity ? b.timestamp : (b as CheckIn).timestamp;
       return timeB.compareTo(timeA);
     });
 
@@ -306,7 +306,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 _buildEmptyDayState('No entries or check-ins completed on this day.')
               else ...[
                 ...dayItems.map((item) {
-                  if (item is LogEntry) {
+                  if (item is NoteEntity) {
                     return _buildJournalCard(item);
                   } else if (item is CheckIn) {
                     return _buildCheckInTile(item, activities);
@@ -366,8 +366,8 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
-  // BUILD JOURNAL ENTRY CARD
-  Widget _buildJournalCard(LogEntry entry) {
+  // BUILD note ENTRY CARD
+  Widget _buildJournalCard(NoteEntity entry) {
     final timeStr = DateFormat('h:mm a').format(entry.timestamp);
     
     return GestureDetector(
@@ -454,11 +454,11 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
-  void _showJournalOptionsBottomSheet(LogEntry entry) {
+  void _showJournalOptionsBottomSheet(NoteEntity entry) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => JournalOptionsSheet(
+      builder: (context) => NoteOptionsSheet(
         entry: entry,
         onEdit: () => _navigateToWriteScreen(existingEntry: entry),
         onDelete: () => _handleDelete(entry.id),

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class LogEntry {
+class NoteEntity {
   final String id;
   final String title;
   final String content;
@@ -8,7 +8,7 @@ class LogEntry {
   final String mood;
   final List<String> tags;
 
-  LogEntry({
+  NoteEntity({
     required this.id,
     required this.title,
     required this.content,
@@ -29,7 +29,7 @@ class LogEntry {
   }
 
   // Create from Firestore Document Snapshot
-  factory LogEntry.fromFirestore(DocumentSnapshot doc) {
+  factory NoteEntity.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
     // Handle Timestamp parsing
@@ -44,7 +44,7 @@ class LogEntry {
         ? List<String>.from(rawTags) 
         : [];
 
-    return LogEntry(
+    return NoteEntity(
       id: doc.id,
       title: data['title'] as String? ?? '',
       content: data['content'] as String? ?? '',
@@ -55,7 +55,7 @@ class LogEntry {
   }
 
   // Copy with helper for modifications
-  LogEntry copyWith({
+  NoteEntity copyWith({
     String? id,
     String? title,
     String? content,
@@ -63,7 +63,7 @@ class LogEntry {
     String? mood,
     List<String>? tags,
   }) {
-    return LogEntry(
+    return NoteEntity(
       id: id ?? this.id,
       title: title ?? this.title,
       content: content ?? this.content,

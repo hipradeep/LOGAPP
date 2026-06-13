@@ -8,10 +8,10 @@ import 'track_activities_screen.dart';
 import 'manage_budget_screen.dart';
 import '../services/cache_service.dart';
 import '../services/activity_service.dart';
-import '../services/log_service.dart';
+import '../services/note_service.dart';
 import '../services/budget_service.dart';
 import '../models/activity.dart';
-import '../models/log_entry.dart';
+import '../models/note_entity.dart';
 import '../models/budget_item.dart';
 import 'manage_quick_actions_screen.dart';
 
@@ -25,7 +25,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final CacheService _cacheService = CacheService();
   final ActivityService _activityService = ActivityService();
-  final LogService _logService = LogService();
+  final NoteService _noteService = NoteService();
   final BudgetService _budgetService = BudgetService();
 
   String _userName = 'Log User';
@@ -259,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSwitchItem(
               icon: Icons.notifications_active_outlined,
               iconBgColor: AppTheme.primaryColor,
-              title: 'Daily Journal Reminder',
+              title: 'Daily note Reminder',
               subtitle: 'Receive a daily nudge to record your thoughts',
               value: _dailyReminder,
               onChanged: _toggleReminder,
@@ -269,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.lock_outline_rounded,
               iconBgColor: Colors.blueAccent,
               title: 'App Lock & PIN',
-              subtitle: 'Secure your journal entries with a passcode',
+              subtitle: 'Secure your note entries with a passcode',
               trailing: _buildComingSoonBadge(),
               onTap: () => _showComingSoonSnackBar('App Lock'),
             ),
@@ -344,7 +344,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   applicationVersion: '1.1.0',
                   applicationIcon: const Text('🚀', style: TextStyle(fontSize: 32)),
                   children: const [
-                    Text('A premium daily journal and activity tracker for Android.'),
+                    Text('A premium daily note and activity tracker for Android.'),
                   ],
                 );
               },
@@ -465,8 +465,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Container(width: 1, height: 32, color: Colors.white10),
                 // Stat 2: Logs
                 Expanded(
-                  child: StreamBuilder<List<LogEntry>>(
-                    stream: _logService.getLogsStream(),
+                  child: StreamBuilder<List<NoteEntity>>(
+                    stream: _noteService.getNotesStream(),
                     builder: (context, snapshot) {
                       final count = snapshot.data?.length ?? 0;
                       return _buildStatColumn('Logs', count.toString(), Icons.history_rounded, Colors.tealAccent);

@@ -78,7 +78,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                   Text('Active Reminders ⏰', style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold)),
                   const VGapMd(),
                   
-                  // Daily Journal Reminder Toggle Card
+                  // Daily note Reminder Toggle Card
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -101,7 +101,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Daily Journal Reminder', style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text('Daily note Reminder', style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold, fontSize: 13)),
                               const VGapXs(),
                               Text('Daily nudge to record your thoughts', style: AppTheme.bodySmall.copyWith(fontSize: 10)),
                             ],

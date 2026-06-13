@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import '../models/log_entry.dart';
+import '../models/note_entity.dart';
 import '../models/check_in.dart';
 
 class MonthlyCalendar extends StatefulWidget {
   final DateTime selectedDate;
-  final List<LogEntry> logs;
+  final List<NoteEntity> logs;
   final List<CheckIn> checkIns;
   final ValueChanged<DateTime> onDateSelected;
 

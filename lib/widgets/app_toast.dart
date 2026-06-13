@@ -10,14 +10,14 @@ class AppToast {
     Color backgroundColor = AppTheme.primaryColor,
   }) {
     ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
+    final controller = ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           message,
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: Colors.white,
+            color: AppTheme.textPrimary,
           ),
         ),
         duration: const Duration(seconds: 3),
@@ -27,7 +27,7 @@ class AppToast {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: AppTheme.textPrimary.withValues(alpha: 0.08),
             width: 1,
           ),
         ),
@@ -35,11 +35,18 @@ class AppToast {
         action: actionLabel != null && onActionPressed != null
             ? SnackBarAction(
                 label: actionLabel,
-                textColor: Colors.white,
+                textColor: AppTheme.textPrimary,
                 onPressed: onActionPressed,
               )
             : null,
       ),
     );
+
+    // Force hide after duration to override Flutter's persistent action snackbar behavior
+    Future.delayed(const Duration(seconds: 3), () {
+      try {
+        controller.close();
+      } catch (_) {}
+    });
   }
 }

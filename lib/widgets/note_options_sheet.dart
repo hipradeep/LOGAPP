@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/log_entry.dart';
+import '../models/note_entity.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
-class JournalOptionsSheet extends StatelessWidget {
-  final LogEntry entry;
+class NoteOptionsSheet extends StatelessWidget {
+  final NoteEntity entry;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const JournalOptionsSheet({
+  const NoteOptionsSheet({
     super.key,
     required this.entry,
     required this.onEdit,
@@ -46,7 +46,7 @@ class JournalOptionsSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Text(
-                entry.title.isNotEmpty ? entry.title : 'Journal Entry',
+                entry.title.isNotEmpty ? entry.title : 'note Entry',
                 style: AppTheme.headingSmall.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

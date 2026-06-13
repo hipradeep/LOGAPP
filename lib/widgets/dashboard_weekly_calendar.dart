@@ -1,0 +1,210 @@
+import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../models/activity.dart';
+import '../models/check_in.dart';
+import '../models/task.dart';
+import 'app_spacers.dart';
+
+class DashboardWeeklyCalendar extends StatelessWidget {
+  final List<Activity> activities;
+  final List<CheckIn> checkIns;
+  final List<Task> subTasks;
+
+  const DashboardWeeklyCalendar({
+    super.key,
+    required this.activities,
+    required this.checkIns,
+    required this.subTasks,
+  });
+
+  bool _isSameDay(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
+  }
+
+  Widget _buildDayCircle({
+    required String label,
+    required String date,
+    required double progress,
+    required bool isToday,
+    required bool isFuture,
+    required bool isCompleted,
+  }) {
+    final Color progressColor = isCompleted
+        ? AppTheme.successColor
+        : (progress > 0 ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.1));
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: AppTheme.bodySmall.copyWith(
+            color: isToday ? AppTheme.primaryLight : AppTheme.textSecondary,
+            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+            fontSize: 11,
+          ),
+        ),
+        const VGapXs(),
+        Container(
+          decoration: isToday
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                )
+              : null,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                  value: isFuture ? 0.0 : (progress > 0 ? progress : 0.0),
+                  strokeWidth: 3,
+                  backgroundColor: isFuture
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : Colors.white.withValues(alpha: 0.08),
+                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                ),
+              ),
+              Text(
+                date,
+                style: AppTheme.bodySmall.copyWith(
+                  color: isToday
+                      ? Colors.white
+                      : (isFuture
+                          ? AppTheme.textSecondary.withValues(alpha: 0.4)
+                          : AppTheme.textSecondary),
+                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const VGapXs(),
+        // Today indicator dot
+        Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            color: isToday ? AppTheme.primaryColor : Colors.transparent,
+            shape: BoxShape.circle,
+            boxShadow: isToday
+                ? [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.5),
+                      blurRadius: 4,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : [],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (activities.isEmpty) return const SizedBox.shrink();
+
+    final now = DateTime.now();
+    // Calculate Monday of current week (DateTime.monday == 1 in Dart)
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+
+    // Generate 7 days starting from Monday
+    final weekDays = List.generate(
+      7,
+      (i) => DateTime(monday.year, monday.month, monday.day + i),
+    );
+    final dayLabels = const ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return RepaintBoundary(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.05),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.calendar_today_rounded,
+                  color: AppTheme.primaryLight,
+                  size: 14,
+                ),
+                const HGapSm(),
+                Text(
+                  'Weekly Progress'.toUpperCase(),
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.primaryLight,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            const VGapMd(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(7, (index) {
+                final day = weekDays[index];
+                final isToday = _isSameDay(day, now);
+                final isFuture = day.isAfter(DateTime(now.year, now.month, now.day));
+
+                // Calculate completion for this day
+                int completed = 0;
+                for (var activity in activities) {
+                  final int todayCount;
+                  if (activity.trackingType == 'multiple') {
+                    final dayTask = subTasks.firstWhere(
+                      (s) => s.activityId == activity.id && _isSameDay(s.timestamp, day),
+                      orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
+                    );
+                    todayCount = dayTask.subTasks.where((st) => st.checked).length;
+                  } else {
+                    todayCount = checkIns
+                        .where((c) =>
+                            c.activityId == activity.id &&
+                            _isSameDay(c.timestamp, day) &&
+                            c.checked)
+                        .length;
+                  }
+                  final bool isDone = todayCount >= activity.targetCount;
+                  if (isDone) completed++;
+                }
+
+                final double completionRate =
+                    activities.isNotEmpty ? completed / activities.length : 0.0;
+
+                return _buildDayCircle(
+                  label: dayLabels[index],
+                  date: day.day.toString(),
+                  progress: isFuture ? 0.0 : completionRate,
+                  isToday: isToday,
+                  isFuture: isFuture,
+                  isCompleted: completionRate >= 1.0 && !isFuture,
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

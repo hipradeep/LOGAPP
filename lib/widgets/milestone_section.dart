@@ -4,6 +4,8 @@ import '../models/activity.dart';
 import 'task_card.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import '../controllers/milestones_controller.dart';
+import 'app_provider.dart';
 
 class MilestoneSection extends StatelessWidget {
   final String title;
@@ -13,10 +15,7 @@ class MilestoneSection extends StatelessWidget {
   final String? expandedSubTaskId;
   final List<Activity> milestoneActivities;
   final Function(String?) onSubTaskExpansionChanged;
-  final Function(Activity?) onActivitySelected;
-  final Function(Task, bool) onToggleSubTask;
   final Function(Task) onEditSubTask;
-  final Function(Task, String?, String?) onUpdateSubTaskSymbols;
 
   const MilestoneSection({
     super.key,
@@ -27,15 +26,14 @@ class MilestoneSection extends StatelessWidget {
     required this.expandedSubTaskId,
     required this.milestoneActivities,
     required this.onSubTaskExpansionChanged,
-    required this.onActivitySelected,
-    required this.onToggleSubTask,
     required this.onEditSubTask,
-    required this.onUpdateSubTaskSymbols,
   });
 
   @override
   Widget build(BuildContext context) {
     if (tasks.isEmpty) return const SizedBox.shrink();
+
+    final controller = AppProvider.read<MilestonesController>(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,7 +60,7 @@ class MilestoneSection extends StatelessWidget {
               );
 
               return TaskCard(
-                key: ValueKey(st.id), // Added ValueKey optimization
+                key: ValueKey(st.id),
                 task: st,
                 milestoneActivities: milestoneActivities,
                 isExpanded: expandedSubTaskId == st.id,
@@ -72,14 +70,20 @@ class MilestoneSection extends StatelessWidget {
                   } else {
                     onSubTaskExpansionChanged(st.id);
                     if (parent.id.isNotEmpty) {
-                      onActivitySelected(parent);
+                      controller.selectActivity(parent);
                     }
                   }
                 },
-                onActivitySelected: onActivitySelected,
-                onToggleSubTask: onToggleSubTask,
+                onActivitySelected: (activity) {
+                  controller.selectActivity(activity);
+                },
+                onToggleSubTask: (task, checked) {
+                  controller.toggleSubTask(task, checked);
+                },
                 onEditSubTask: onEditSubTask,
-                onUpdateSubTaskSymbols: onUpdateSubTaskSymbols,
+                onUpdateSubTaskSymbols: (task, symbolType, symbolValue) {
+                  controller.updateSubTaskSymbols(task, symbolType: symbolType, symbolValue: symbolValue);
+                },
               );
             },
           ),

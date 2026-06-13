@@ -1,62 +1,17 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import '../services/cache_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
-import '../widgets/app_spacers.dart';
-import '../models/activity.dart';
-import '../models/task.dart';
-import '../models/budget_item.dart';
 import '../widgets/budget_tab.dart';
 import '../widgets/milestones_tab.dart';
-import '../widgets/add_milestone_task_sheet.dart';
-import '../widgets/add_transaction_sheet.dart';
-import 'activity_details_screen.dart';
-import '../services/activity_service.dart';
-import '../services/budget_service.dart';
-import '../controllers/milestones_controller.dart';
-import '../widgets/app_provider.dart';
+import '../widgets/notes_tab.dart';
+import '../widgets/diet_tab.dart';
+import '../widgets/reminders_tab.dart';
 
-// ==================== LOCAL DATA MODELS ====================
 
-class DietItem {
-  String foodName;
-  int calories;
-  String mealType;
-
-  DietItem({
-    required this.foodName,
-    required this.calories,
-    required this.mealType,
-  });
-}
-
-class ReminderItem {
-  String title;
-  String time;
-  bool isActive;
-
-  ReminderItem({
-    required this.title,
-    required this.time,
-    this.isActive = true,
-  });
-}
-
-class StudySession {
-  String topic;
-  int durationMinutes;
-  DateTime date;
-
-  StudySession({
-    required this.topic,
-    required this.durationMinutes,
-    required this.date,
-  });
-}
 
 // ==================== MANAGEMENT SCREEN ====================
 
@@ -68,25 +23,15 @@ class ManagementScreen extends StatefulWidget {
 }
 
 class _ManagementScreenState extends State<ManagementScreen> {
-  final ActivityService _activityService = ActivityService();
-  final BudgetService _budgetService = BudgetService();
   final CacheService _cacheService = CacheService();
 
   // Current active category (0: Milestones, 1: Budget, 2: Diet, 3: Reminders, 4: Study)
   int _activeCategoryIndex = 0;
-  late final MilestonesController _milestonesController;
 
   @override
   void initState() {
     super.initState();
-    _milestonesController = MilestonesController();
     _loadCachedTab();
-  }
-
-  @override
-  void dispose() {
-    _milestonesController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadCachedTab() async {
@@ -103,31 +48,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
   double _accumulatedDragDelta = 0.0;
   bool _hasTriggeredDrag = false;
 
-  // Selected milestone activity
-  Activity? _selectedMilestoneActivity;
-  List<Activity> _milestoneActivities = [];
-
-  // Selected budget category
-  BudgetItem? _selectedBudget;
-
-
-  final List<DietItem> _dietItems = [
-    DietItem(foodName: 'Oatmeal with Berries', calories: 350, mealType: 'Breakfast'),
-    DietItem(foodName: 'Grilled Chicken Salad', calories: 450, mealType: 'Lunch'),
-    DietItem(foodName: 'Protein Shake', calories: 200, mealType: 'Snack'),
-  ];
-
-  final List<ReminderItem> _reminders = [
-    ReminderItem(title: 'Drink water', time: '08:00 AM', isActive: true),
-    ReminderItem(title: 'Gym session', time: '06:00 PM', isActive: false),
-    ReminderItem(title: 'Take vitamins', time: '09:00 PM', isActive: true),
-  ];
-
-  final List<StudySession> _studySessions = [
-    StudySession(topic: 'Algorithms (Trees & Graphs)', durationMinutes: 90, date: DateTime.now().subtract(const Duration(days: 1))),
-    StudySession(topic: 'Flutter State Management', durationMinutes: 60, date: DateTime.now()),
-  ];
-
   // Category Configuration
   final List<Map<String, dynamic>> _categories = [
     {
@@ -141,6 +61,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
       'activeIcon': Icons.account_balance_wallet,
     },
     {
+      'label': 'Note/Journal',
+      'icon': Icons.book_outlined,
+      'activeIcon': Icons.book,
+    },
+    {
       'label': 'Diet',
       'icon': Icons.restaurant_outlined,
       'activeIcon': Icons.restaurant,
@@ -150,18 +75,10 @@ class _ManagementScreenState extends State<ManagementScreen> {
       'icon': Icons.notifications_active_outlined,
       'activeIcon': Icons.notifications_active,
     },
-    {
-      'label': 'Study',
-      'icon': Icons.school_outlined,
-      'activeIcon': Icons.school,
-    },
   ];
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
@@ -190,15 +107,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // 1. Scrollable Active Content
+                // 1. Scrollable Active Content (Self-Scrolling inside each tab)
                 Positioned.fill(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: EdgeInsets.only(
+                  child: Padding(
+                    padding: const EdgeInsets.only(
                       left: 24,
                       right: 24,
-                      top: 88,
-                      bottom: bottomPadding + 100 + viewInsetsBottom,
+                      top: 70,
                     ),
                     child: _buildActiveContent(),
                   ),
@@ -236,54 +151,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: _activeCategoryIndex == 0 && _milestoneActivities.isNotEmpty
-          ? Padding(
-              padding: EdgeInsets.only(bottom: bottomPadding + 36),
-              child: _buildPremiumFAB(
-                onPressed: () => _showAddSubTaskSheet(context),
-              ),
-            )
-          : (_activeCategoryIndex == 1 && _selectedBudget != null)
-              ? Padding(
-                  padding: EdgeInsets.only(bottom: bottomPadding + 36),
-                  child: _buildPremiumFAB(
-                    onPressed: () => _showAddTransactionSheet(context),
-                  ),
-                )
-              : null,
-    );
-  }
-
-  Widget _buildPremiumFAB({required VoidCallback onPressed}) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 52,
-            height: 52,
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.add_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -354,9 +221,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
       HapticFeedback.selectionClick();
       setState(() {
         _activeCategoryIndex = index;
-        if (index == 0) {
-          _shouldSelectDefaultMilestone = true;
-        }
       });
       _cacheService.saveSelectedTab(index);
     }
@@ -605,624 +469,21 @@ class _ManagementScreenState extends State<ManagementScreen> {
   Widget _buildActiveContent() {
     switch (_activeCategoryIndex) {
       case 0:
-        return AppProvider<MilestonesController>(
-          notifier: _milestonesController,
-          child: Builder(
-            builder: (context) => _buildMilestonesContent(context),
-          ),
-        );
+        return const MilestonesTab();
       case 1:
-        return BudgetTab(
-          selectedBudgetId: _selectedBudget?.id,
-          onBudgetChanged: (budget) {
-            setState(() {
-              _selectedBudget = budget;
-            });
-          },
-        );
+        return const BudgetTab();
       case 2:
-        return _buildDietContent();
+        return const NotesTab();
       case 3:
-        return _buildRemindersContent();
+        return const DietTab();
       case 4:
-        return _buildStudyContent();
+        return const RemindersTab();
       default:
         return const SizedBox.shrink();
     }
   }
 
-  Widget _buildMilestonesContent(BuildContext context) {
-    final controller = AppProvider.watch<MilestonesController>(context);
-
-    // Keep the local variables in ManagementScreen updated for sheets and floating buttons
-    _milestoneActivities = controller.milestoneActivities;
-    _selectedMilestoneActivity = controller.selectedMilestoneActivity;
-
-    return MilestonesTab(
-      onActivitySelected: (activity) {
-        controller.selectActivity(activity);
-      },
-      onToggleSubTask: _toggleSubTask,
-      onToggleActivity: (activity, checked) async {
-        await _activityService.toggleActivity(activity.id, checked);
-      },
-      onUpdateActivitySymbols: (activity, symbolType, symbolValue, category) async {
-        await _activityService.updateActivitySymbols(
-          activity.id,
-          symbolType: symbolType,
-          symbolValue: symbolValue,
-          category: category,
-        );
-      },
-      onAddSubTask: (activity, name, timestamp) async {
-        await _activityService.createSubTask(activity.id, name, timestamp, false);
-      },
-      onDeleteSubTask: (task) async {
-        await _activityService.deleteSubTask(task.id);
-      },
-      onEditSubTask: (task) {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => AddMilestoneSubTaskSheet(
-            milestones: controller.milestoneActivities,
-            editTask: task,
-            onEditSubTask: (updatedTask) async {
-              await _activityService.updateSubTask(updatedTask);
-            },
-          ),
-        );
-      },
-      onUpdateSubTaskSymbols: (task, symbolType, symbolValue) async {
-        await _activityService.updateSubTaskSymbols(
-          task.id,
-          symbolType: symbolType,
-          symbolValue: symbolValue,
-        );
-      },
-      onOpenActivityDetails: (activity) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ActivityDetailsScreen(
-              activityId: activity.id,
-              showEditIcon: false,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-
-  Future<void> _addMilestoneSubTask(Activity activity, String subTaskName, DateTime timestamp) async {
-    await _activityService.createSubTask(
-      activity.id,
-      subTaskName,
-      timestamp,
-      false,
-    );
-  }
-
-  Future<void> _toggleSubTask(Task task, bool checked) async {
-    List<SubTask> updatedSubTasks = task.subTasks;
-    if (checked != task.checked) {
-      updatedSubTasks = task.subTasks
-          .map((subTask) => subTask.copyWith(checked: checked))
-          .toList();
-    }
-    final updated = task.copyWith(
-      checked: checked,
-      completionTime: checked ? DateTime.now() : null,
-      subTasks: updatedSubTasks,
-    );
-    await _activityService.updateSubTask(updated);
-  }
-
-  void _showAddSubTaskSheet(BuildContext context) {
-    if (_milestoneActivities.isEmpty) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AddMilestoneSubTaskSheet(
-        milestones: _milestoneActivities,
-        initialActivityId: _selectedMilestoneActivity?.id,
-        onAddSubTask: _addMilestoneSubTask,
-      ),
-    );
-  }
-
-  void _showAddTransactionSheet(BuildContext context) {
-    final budget = _selectedBudget;
-    if (budget == null) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AddTransactionSheet(
-        budgetId: budget.id,
-        categoryName: budget.category,
-        onAddTransaction: (tag, desc, amount, date) async {
-          await _budgetService.addExpenseToBudget(budget.id, tag, desc, amount, timestamp: date);
-        },
-      ),
-    );
-  }
-
   // -------------------- 2. BUDGET (MODULARIZED OUT TO BUDGET_TAB) --------------------
 
   // -------------------- 3. DIET --------------------
-
-  Widget _buildDietContent() {
-    int totalCalories = 0;
-    for (var d in _dietItems) {
-      totalCalories += d.calories;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Diet & Nutrition Log', style: AppTheme.headingSmall),
-            ElevatedButton.icon(
-              onPressed: _showAddDietDialog,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        Card(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Daily Calorie Intake', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('$totalCalories kcal', style: AppTheme.headingSmall.copyWith(color: AppTheme.primaryLight)),
-              ],
-            ),
-          ),
-        ),
-        const VGapSm(),
-        if (_dietItems.isEmpty)
-          _buildEmptyState('No diet logs added today.')
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _dietItems.length,
-            itemBuilder: (context, index) {
-              final meal = _dietItems[index];
-              return Card(
-                color: AppTheme.surfaceColor.withValues(alpha: 0.3),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  dense: true,
-                  title: Text(meal.foodName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text(meal.mealType, style: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.7))),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('${meal.calories} kcal', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _dietItems.removeAt(index);
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  void _showAddDietDialog() {
-    final foodController = TextEditingController();
-    final caloriesController = TextEditingController();
-    String selectedMealType = 'Breakfast';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppTheme.surfaceColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Log Food Item'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: foodController,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g., Apple, Chicken Breast',
-                      labelText: 'Food Name',
-                    ),
-                  ),
-                  const VGapSm(),
-                  TextField(
-                    controller: caloriesController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'Calories in kcal',
-                      labelText: 'Calories',
-                    ),
-                  ),
-                  const VGapSm(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Meal Type:', style: TextStyle(fontSize: 14)),
-                      DropdownButton<String>(
-                        dropdownColor: AppTheme.surfaceColor,
-                        value: selectedMealType,
-                        items: ['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Text(type),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setDialogState(() {
-                              selectedMealType = val;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-                ),
-                TextButton(
-                  onPressed: () {
-                    final cal = int.tryParse(caloriesController.text) ?? 0;
-                    if (foodController.text.isNotEmpty && cal > 0) {
-                      setState(() {
-                        _dietItems.add(DietItem(
-                          foodName: foodController.text,
-                          calories: cal,
-                          mealType: selectedMealType,
-                        ));
-                      });
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text('Log', style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // -------------------- 4. REMINDERS --------------------
-
-  Widget _buildRemindersContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Quick Reminders', style: AppTheme.headingSmall),
-            ElevatedButton.icon(
-              onPressed: _showAddReminderDialog,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        if (_reminders.isEmpty)
-          _buildEmptyState('No reminders active.')
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _reminders.length,
-            itemBuilder: (context, index) {
-              final reminder = _reminders[index];
-              return Card(
-                color: AppTheme.surfaceColor.withValues(alpha: 0.3),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(
-                    reminder.isActive ? Icons.alarm_on_rounded : Icons.alarm_off_rounded,
-                    color: reminder.isActive ? AppTheme.primaryLight : AppTheme.textSecondary,
-                  ),
-                  title: Text(
-                    reminder.title,
-                    style: TextStyle(
-                      color: Colors.white,
-                      decoration: !reminder.isActive ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  subtitle: Text(reminder.time, style: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.7))),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Switch(
-                        value: reminder.isActive,
-                        activeThumbColor: AppTheme.primaryColor,
-                        onChanged: (val) {
-                          setState(() {
-                            reminder.isActive = val;
-                          });
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _reminders.removeAt(index);
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  void _showAddReminderDialog() {
-    final titleController = TextEditingController();
-    TimeOfDay selectedTime = TimeOfDay.now();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppTheme.surfaceColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Add Reminder'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g., Walk dog, Meditate',
-                      labelText: 'Task',
-                    ),
-                  ),
-                  const VGapMd(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Time: ${selectedTime.format(context)}',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: selectedTime,
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              selectedTime = time;
-                            });
-                          }
-                        },
-                        child: const Text('Pick Time', style: TextStyle(color: AppTheme.primaryLight)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (titleController.text.isNotEmpty) {
-                      setState(() {
-                        _reminders.add(ReminderItem(
-                          title: titleController.text,
-                          time: selectedTime.format(context),
-                        ));
-                      });
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text('Add', style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // -------------------- 5. STUDY SESSIONS --------------------
-
-  Widget _buildStudyContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Study Sessions', style: AppTheme.headingSmall),
-            ElevatedButton.icon(
-              onPressed: _showAddStudyDialog,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        if (_studySessions.isEmpty)
-          _buildEmptyState('No study sessions recorded.')
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _studySessions.length,
-            itemBuilder: (context, index) {
-              final session = _studySessions[index];
-              return Card(
-                color: AppTheme.surfaceColor.withValues(alpha: 0.3),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.menu_book_rounded, color: AppTheme.primaryLight),
-                  title: Text(session.topic, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                    '${DateFormat('yyyy-MM-dd').format(session.date)} • ${session.durationMinutes} mins',
-                    style: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.7)),
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 18),
-                    onPressed: () {
-                      setState(() {
-                        _studySessions.removeAt(index);
-                      });
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  void _showAddStudyDialog() {
-    final topicController = TextEditingController();
-    final durationController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppTheme.surfaceColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Record Study Session'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: topicController,
-                decoration: const InputDecoration(
-                  hintText: 'e.g., Mathematics, Compiler Design',
-                  labelText: 'Topic',
-                ),
-              ),
-              const VGapSm(),
-              TextField(
-                controller: durationController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  hintText: 'Enter duration in minutes',
-                  labelText: 'Duration (mins)',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-            ),
-            TextButton(
-              onPressed: () {
-                final duration = int.tryParse(durationController.text) ?? 0;
-                if (topicController.text.isNotEmpty && duration > 0) {
-                  setState(() {
-                    _studySessions.add(StudySession(
-                      topic: topicController.text,
-                      durationMinutes: duration,
-                      date: DateTime.now(),
-                    ));
-                  });
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Record', style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // -------------------- HELPER EMPTY WIDGET --------------------
-
-  Widget _buildEmptyState(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: Text(
-          text,
-          style: TextStyle(
-            color: AppTheme.textSecondary.withValues(alpha: 0.6),
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      ),
-    );
-  }
 }

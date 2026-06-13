@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../services/log_service.dart';
+import '../services/note_service.dart';
 import 'app_spacers.dart';
 import 'app_toast.dart';
 
@@ -12,7 +12,7 @@ class CalorieLogSheet extends StatefulWidget {
 }
 
 class _CalorieLogSheetState extends State<CalorieLogSheet> {
-  final LogService _logService = LogService();
+  final NoteService _noteService = NoteService();
   final TextEditingController _foodController = TextEditingController();
   final TextEditingController _caloriesController = TextEditingController();
   String _selectedMeal = 'Snack';
@@ -41,7 +41,7 @@ class _CalorieLogSheetState extends State<CalorieLogSheet> {
 
     setState(() => _isSaving = true);
     try {
-      await _logService.createEntry(
+      await _noteService.createEntry(
         'Logged $_selectedMeal: $food',
         'Logged $calVal kcal of $food for $_selectedMeal.',
         '🍎',

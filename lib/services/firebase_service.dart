@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/log_entry.dart';
+import '../models/note_entity.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
@@ -8,7 +8,7 @@ import '../models/budget_item.dart';
 
 class FirebaseService {
   final CollectionReference _logsCollection =
-      FirebaseFirestore.instance.collection('logs');
+      FirebaseFirestore.instance.collection('notes');
 
   final CollectionReference _activitiesCollection =
       FirebaseFirestore.instance.collection('activities');
@@ -27,17 +27,17 @@ class FirebaseService {
 
   // ==================== LOGS OPERATIONS ====================
 
-  Stream<List<LogEntry>> getLogsStream() {
+  Stream<List<NoteEntity>> getNotesStream() {
     return _logsCollection
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => LogEntry.fromFirestore(doc)).toList();
+      return snapshot.docs.map((doc) => NoteEntity.fromFirestore(doc)).toList();
     });
   }
 
   Future<void> createEntry(String title, String content, String mood, List<String> tags) async {
-    final newEntry = LogEntry(
+    final newEntry = NoteEntity(
       id: '',
       title: title,
       content: content,

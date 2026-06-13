@@ -87,7 +87,7 @@ class CheckInService {
       try {
         final query = await _checkinsCollection
             .where('activityId', isEqualTo: activityId)
-            .get();
+            .get(const GetOptions(source: Source.cache));
         for (var doc in query.docs) {
           final data = doc.data() as Map<String, dynamic>? ?? {};
           final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
@@ -133,7 +133,7 @@ class CheckInService {
     try {
       final query = await _checkinsCollection
           .where('activityId', isEqualTo: activityId)
-          .get();
+          .get(const GetOptions(source: Source.cache));
       for (var doc in query.docs) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
         final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
