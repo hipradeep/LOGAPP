@@ -9,11 +9,11 @@ import 'notification_service.dart';
 
 class ActivityNotificationSync {
   static StreamSubscription<List<Activity>>? _activitiesSub;
-  static StreamSubscription<List<Task>>? _subTasksSub;
+  static StreamSubscription<List<Task>>? _tasksSub;
   static StreamSubscription<List<CheckIn>>? _checkInsSub;
 
   static List<Activity> _latestActivities = [];
-  static List<Task> _latestSubTasks = [];
+  static List<Task> _latestTasks = [];
   static List<CheckIn> _latestCheckIns = [];
 
   static final ActivityService _activityService = ActivityService();
@@ -21,10 +21,9 @@ class ActivityNotificationSync {
   static final CacheService _cacheService = CacheService();
 
 
-  /// Initialize the stream subscriptions to keep notifications synchronized
   static void init() {
     _activitiesSub?.cancel();
-    _subTasksSub?.cancel();
+    _tasksSub?.cancel();
     _checkInsSub?.cancel();
 
     _activitiesSub = _activityService.getActivitiesStream().listen((activities) {
@@ -32,8 +31,8 @@ class ActivityNotificationSync {
       _sync();
     });
 
-    _subTasksSub = _activityService.getSubTasksStream().listen((subTasks) {
-      _latestSubTasks = subTasks;
+    _tasksSub = _activityService.getTasksStream().listen((tasks) {
+      _latestTasks = tasks;
       _sync();
     });
 
@@ -46,10 +45,10 @@ class ActivityNotificationSync {
   /// Cancel all subscriptions
   static void dispose() {
     _activitiesSub?.cancel();
-    _subTasksSub?.cancel();
+    _tasksSub?.cancel();
     _checkInsSub?.cancel();
     _activitiesSub = null;
-    _subTasksSub = null;
+    _tasksSub = null;
     _checkInsSub = null;
   }
 
@@ -146,10 +145,10 @@ class ActivityNotificationSync {
 
       // --- Milestone Tasks One-Shot Reminders ---
       if (activity.trackingType == 'milestone') {
-        final milestoneTasks = _latestSubTasks.where((t) => t.activityId == activity.id);
+        final milestoneTasks = _latestTasks.where((t) => t.activityId == activity.id);
         for (final task in milestoneTasks) {
           if (!task.checked && task.scheduledTime != null && task.scheduledTime!.isNotEmpty) {
-            var scheduledDateTime = _getMilestoneScheduledDateTime(task);
+            var scheduledDateTime = _getTaskScheduledDateTime(task);
             final uniqueId = 'milestone_${task.id}';
 
             if (cleanSnoozes.containsKey(uniqueId)) {
@@ -224,9 +223,9 @@ class ActivityNotificationSync {
     if (isSkipped) return true;
 
     if (activity.trackingType == 'milestone') {
-      return _latestSubTasks.any((s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.checked);
+      return _latestTasks.any((s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.checked);
     } else if (activity.trackingType == 'multiple') {
-      final todayTask = _latestSubTasks.firstWhere(
+      final todayTask = _latestTasks.firstWhere(
         (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
       );
@@ -247,7 +246,7 @@ class ActivityNotificationSync {
     if (isSkipped) return true;
 
     if (activity.trackingType == 'multiple') {
-      final todayTask = _latestSubTasks.firstWhere(
+      final todayTask = _latestTasks.firstWhere(
         (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
       );
@@ -260,8 +259,8 @@ class ActivityNotificationSync {
     return false;
   }
 
-  static DateTime _getMilestoneScheduledDateTime(Task task) {
-    final parsedTime = NotificationService. parseTimeString(task.scheduledTime!);
+  static DateTime _getTaskScheduledDateTime(Task task) {
+    final parsedTime = NotificationService.parseTimeString(task.scheduledTime!);
     return DateTime(
       task.timestamp.year,
       task.timestamp.month,

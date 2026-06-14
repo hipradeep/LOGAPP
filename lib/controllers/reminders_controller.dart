@@ -20,15 +20,63 @@ class RemindersController extends ChangeNotifier {
   String? _errorMessage;
 
   StreamSubscription<List<Activity>>? _activitiesSub;
-  StreamSubscription<List<Task>>? _subTasksSub;
+  StreamSubscription<List<Task>>? _tasksSub;
   StreamSubscription<List<CheckIn>>? _checkInsSub;
 
   List<Activity> _activities = [];
-  List<Task> _allSubTasks = [];
+  List<Task> _allTasks = [];
   List<CheckIn> _checkIns = [];
 
   List<ReminderItem> get reminders => _reminders;
   List<UpcomingReminder> get upcomingReminders => _upcomingReminders;
+  
+  List<UpcomingReminder> get todayReminders {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _upcomingReminders.where((r) =>
+        r.scheduledDateTime.year == today.year &&
+        r.scheduledDateTime.month == today.month &&
+        r.scheduledDateTime.day == today.day &&
+        !r.scheduledDateTime.isBefore(now)
+    ).toList();
+  }
+
+  List<UpcomingReminder> get passedReminders {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _upcomingReminders.where((r) =>
+        r.scheduledDateTime.year == today.year &&
+        r.scheduledDateTime.month == today.month &&
+        r.scheduledDateTime.day == today.day &&
+        r.scheduledDateTime.isBefore(now)
+    ).toList();
+  }
+
+  List<UpcomingReminder> get tomorrowReminders {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    return _upcomingReminders.where((r) =>
+        r.scheduledDateTime.year == tomorrow.year &&
+        r.scheduledDateTime.month == tomorrow.month &&
+        r.scheduledDateTime.day == tomorrow.day
+    ).toList();
+  }
+
+  Map<String, List<UpcomingReminder>> get remindersByActivity {
+    final Map<String, List<UpcomingReminder>> grouped = {};
+    for (final r in _upcomingReminders) {
+      final activity = _activities.firstWhere(
+        (a) => a.id == r.activityId,
+        orElse: () => Activity(id: '', name: 'Unknown', checked: false, timestamp: DateTime.now()),
+      );
+      final activityName = activity.name.isNotEmpty ? activity.name : 'Unknown';
+      if (!grouped.containsKey(activityName)) {
+        grouped[activityName] = [];
+      }
+      grouped[activityName]!.add(r);
+    }
+    return grouped;
+  }
+
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -46,8 +94,8 @@ class RemindersController extends ChangeNotifier {
       _computeUpcomingReminders();
     });
 
-    _subTasksSub = activityService.getSubTasksStream().listen((subTasks) {
-      _allSubTasks = subTasks;
+    _tasksSub = activityService.getTasksStream().listen((tasks) {
+      _allTasks = tasks;
       _computeUpcomingReminders();
     });
 
@@ -60,7 +108,7 @@ class RemindersController extends ChangeNotifier {
   @override
   void dispose() {
     _activitiesSub?.cancel();
-    _subTasksSub?.cancel();
+    _tasksSub?.cancel();
     _checkInsSub?.cancel();
     super.dispose();
   }
@@ -134,9 +182,9 @@ class RemindersController extends ChangeNotifier {
             isCompleted = true;
           } else {
             if (activity.trackingType == 'milestone') {
-              isCompleted = _allSubTasks.any((s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.checked);
+              isCompleted = _allTasks.any((s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.checked);
             } else if (activity.trackingType == 'multiple') {
-              final taskForDate = _allSubTasks.firstWhere(
+              final taskForDate = _allTasks.firstWhere(
                 (s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.subTasks.isNotEmpty,
                 orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: date, checked: false),
               );
@@ -193,7 +241,7 @@ class RemindersController extends ChangeNotifier {
               if (isSkipped) {
                 isSubCompleted = true;
               } else {
-                final taskForDate = _allSubTasks.firstWhere(
+                final taskForDate = _allTasks.firstWhere(
                   (s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.subTasks.isNotEmpty,
                   orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: date, checked: false),
                 );
@@ -219,7 +267,7 @@ class RemindersController extends ChangeNotifier {
                   temp.add(UpcomingReminder(
                     uniqueId: uniqueId,
                     type: 'subtask',
-                    title: '$subTaskTitle (${activity.name})',
+                    title: '${activity.name} - $subTaskTitle',
                     subtitle: 'Subtask Reminder',
                     scheduledDateTime: scheduledTime,
                     activityId: activity.id,
@@ -233,7 +281,7 @@ class RemindersController extends ChangeNotifier {
 
         // --- Milestone Tasks One-Shot Reminders ---
         if (activity.trackingType == 'milestone') {
-          final milestoneTasks = _allSubTasks.where((t) => t.activityId == activity.id && isSameDate(t.timestamp, date));
+          final milestoneTasks = _allTasks.where((t) => t.activityId == activity.id && isSameDate(t.timestamp, date));
           for (final task in milestoneTasks) {
             if (!task.checked && task.scheduledTime != null && task.scheduledTime!.isNotEmpty) {
               final uniqueId = 'milestone_${task.id}';
@@ -251,12 +299,12 @@ class RemindersController extends ChangeNotifier {
               if (!isDateToday || scheduledTime.isAfter(now) || (isDateToday && !task.checked)) {
                 temp.add(UpcomingReminder(
                   uniqueId: uniqueId,
-                  type: 'milestone',
-                  title: '${task.taskName} (${activity.name})',
+                  type: 'task',
+                  title: '${activity.name} - ${task.taskName}',
                   subtitle: 'Milestone Task',
                   scheduledDateTime: scheduledTime,
                   activityId: activity.id,
-                  milestoneTask: task,
+                  task: task,
                 ));
               }
             }
@@ -287,12 +335,12 @@ class RemindersController extends ChangeNotifier {
     final checkInService = CheckInService();
 
     if (reminder.type == 'activity') {
-      await checkInService.createCheckIn(reminder.activityId, DateTime.now(), false, skipped: true);
+      await checkInService.createCheckIn(reminder.activityId, reminder.scheduledDateTime, false, skipped: true);
     } else if (reminder.type == 'subtask') {
-      await checkInService.createCheckIn(reminder.activityId, DateTime.now(), false, skipped: true, subTaskName: reminder.subTaskTitle);
-    } else if (reminder.type == 'milestone' && reminder.milestoneTask != null) {
-      final tomorrowDate = DateTime.now().add(const Duration(days: 1));
-      final task = reminder.milestoneTask!;
+      await checkInService.createCheckIn(reminder.activityId, reminder.scheduledDateTime, false, skipped: true, subTaskName: reminder.subTaskTitle);
+    } else if (reminder.type == 'task' && reminder.task != null) {
+      final tomorrowDate = reminder.scheduledDateTime.add(const Duration(days: 1));
+      final task = reminder.task!;
       final updatedTask = task.copyWith(
         timestamp: DateTime(
           tomorrowDate.year,
@@ -302,7 +350,7 @@ class RemindersController extends ChangeNotifier {
           task.timestamp.minute,
         ),
       );
-      await ActivityService().updateSubTask(updatedTask);
+      await ActivityService().updateTask(updatedTask);
     }
 
     // Update system alarm notifications

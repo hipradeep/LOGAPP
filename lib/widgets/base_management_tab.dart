@@ -13,6 +13,7 @@ class BaseManagementTab<T extends ChangeNotifier> extends StatelessWidget {
   final String emptyMessage;
   final Future<void> Function() onRefresh;
   final VoidCallback onFabPressed;
+  final bool showFab;
   final Widget Function(BuildContext context, T controller) builder;
 
   const BaseManagementTab({
@@ -25,6 +26,7 @@ class BaseManagementTab<T extends ChangeNotifier> extends StatelessWidget {
     required this.emptyMessage,
     required this.onRefresh,
     required this.onFabPressed,
+    this.showFab = true,
     required this.builder,
   });
 
@@ -48,9 +50,10 @@ class BaseManagementTab<T extends ChangeNotifier> extends StatelessWidget {
                   },
                 ),
               ),
-              AppPremiumFab(
-                onPressed: onFabPressed,
-              ),
+              if (showFab)
+                AppPremiumFab(
+                  onPressed: onFabPressed,
+                ),
             ],
           );
         },

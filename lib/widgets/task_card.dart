@@ -11,9 +11,9 @@ class TaskCard extends StatefulWidget {
   final bool isExpanded;
   final VoidCallback onTap;
   final Function(Activity?) onActivitySelected;
-  final Function(Task, bool) onToggleSubTask;
-  final Function(Task) onEditSubTask;
-  final Function(Task, String?, String?) onUpdateSubTaskSymbols;
+  final Function(Task, bool) onToggleTask;
+  final Function(Task) onEditTask;
+  final Function(Task, String?, String?) onUpdateTaskSymbols;
 
   const TaskCard({
     super.key,
@@ -22,9 +22,9 @@ class TaskCard extends StatefulWidget {
     required this.isExpanded,
     required this.onTap,
     required this.onActivitySelected,
-    required this.onToggleSubTask,
-    required this.onEditSubTask,
-    required this.onUpdateSubTaskSymbols,
+    required this.onToggleTask,
+    required this.onEditTask,
+    required this.onUpdateTaskSymbols,
   });
 
   @override
@@ -56,25 +56,25 @@ class _TaskCardState extends State<TaskCard> {
       title: label,
       checked: false,
     ));
-    widget.onToggleSubTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
+    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
   }
 
   void _toggleNestedItem(int index, bool val) {
     final newList = List<SubTask>.from(widget.task.subTasks);
     newList[index] = newList[index].copyWith(checked: val);
-    widget.onToggleSubTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
+    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
   }
 
   void _deleteNestedItem(int index) {
     final newList = List<SubTask>.from(widget.task.subTasks);
     newList.removeAt(index);
-    widget.onToggleSubTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
+    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
   }
 
   void _updateNestedItemDuration(int index, int? duration) {
     final newList = List<SubTask>.from(widget.task.subTasks);
     newList[index] = newList[index].copyWith(durationMinutes: duration);
-    widget.onToggleSubTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
+    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
   }
 
   @override
@@ -124,7 +124,7 @@ class _TaskCardState extends State<TaskCard> {
                     padding: const EdgeInsets.only(top: 2),
                     child: GestureDetector(
                       onTap: () {
-                        widget.onToggleSubTask(widget.task, !widget.task.checked);
+                        widget.onToggleTask(widget.task, !widget.task.checked);
                       },
                       child: Container(
                         width: AppTheme.taskCheckboxSize,
@@ -427,7 +427,7 @@ class _TaskCardState extends State<TaskCard> {
                         ),
                       ),
                       TextButton.icon(
-                        onPressed: () => widget.onEditSubTask(widget.task),
+                        onPressed: () => widget.onEditTask(widget.task),
                         icon: const Icon(Icons.edit_outlined, size: 14, color: AppTheme.primaryLight),
                         label: const Text('Edit', style: TextStyle(color: AppTheme.primaryLight, fontSize: 11)),
                         style: TextButton.styleFrom(
@@ -632,7 +632,7 @@ class _TaskCardState extends State<TaskCard> {
                     ),
                     TextButton(
                       onPressed: () {
-                        widget.onUpdateSubTaskSymbols(st, '', '');
+                        widget.onUpdateTaskSymbols(st, '', '');
                         Navigator.pop(context);
                       },
                       child: const Text('Clear', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
@@ -716,7 +716,7 @@ class _TaskCardState extends State<TaskCard> {
     final isSelected = st.symbolType == 'flag' && st.symbolValue == value;
     return GestureDetector(
       onTap: () {
-        widget.onUpdateSubTaskSymbols(st, 'flag', value);
+        widget.onUpdateTaskSymbols(st, 'flag', value);
         Navigator.pop(context);
       },
       child: Container(
@@ -739,7 +739,7 @@ class _TaskCardState extends State<TaskCard> {
     final isSelected = st.symbolType == 'number' && st.symbolValue == value;
     return GestureDetector(
       onTap: () {
-        widget.onUpdateSubTaskSymbols(st, 'number', value);
+        widget.onUpdateTaskSymbols(st, 'number', value);
         Navigator.pop(context);
       },
       child: Container(
@@ -771,7 +771,7 @@ class _TaskCardState extends State<TaskCard> {
     final isSelected = st.symbolType == 'progress' && st.symbolValue == value;
     return GestureDetector(
       onTap: () {
-        widget.onUpdateSubTaskSymbols(st, 'progress', value);
+        widget.onUpdateTaskSymbols(st, 'progress', value);
         Navigator.pop(context);
       },
       child: Container(
@@ -806,7 +806,7 @@ class _TaskCardState extends State<TaskCard> {
     final isSelected = st.symbolType == 'mood' && st.symbolValue == value;
     return GestureDetector(
       onTap: () {
-        widget.onUpdateSubTaskSymbols(st, 'mood', value);
+        widget.onUpdateTaskSymbols(st, 'mood', value);
         Navigator.pop(context);
       },
       child: Container(

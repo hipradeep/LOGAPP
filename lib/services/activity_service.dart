@@ -8,8 +8,8 @@ class ActivityService {
   final CollectionReference _activitiesCollection =
       FirebaseFirestore.instance.collection('activities');
 
-  final CollectionReference _subtasksCollection =
-      FirebaseFirestore.instance.collection('subtasks');
+  final CollectionReference _tasksCollection =
+      FirebaseFirestore.instance.collection('tasks');
 
   final CollectionReference _checkinsCollection =
       FirebaseFirestore.instance.collection('checkins');
@@ -100,7 +100,7 @@ class ActivityService {
         scheduledTime: null,
         subTasks: initialSubTasks,
       );
-      await _subtasksCollection.add(newTask.toFirestore());
+      await _tasksCollection.add(newTask.toFirestore());
     }
   }
 
@@ -142,7 +142,7 @@ class ActivityService {
     await _activitiesCollection.doc(id).update(updates);
 
     if (trackingType == 'multiple' && subTaskTemplates.isNotEmpty) {
-      final todayQuery = await _subtasksCollection
+      final todayQuery = await _tasksCollection
           .where('activityId', isEqualTo: id)
           .get();
       
@@ -181,7 +181,7 @@ class ActivityService {
           scheduledTime: null,
           subTasks: initialSubTasks,
         );
-        await _subtasksCollection.add(newTask.toFirestore());
+        await _tasksCollection.add(newTask.toFirestore());
       } else {
         final existingTask = Task.fromFirestore(todayDoc);
         final List<SubTask> updatedSubTasks = [];
@@ -214,7 +214,7 @@ class ActivityService {
           subTasks: updatedSubTasks,
           checked: allChecked,
         );
-        await _subtasksCollection.doc(todayDoc.id).set(updatedTask.toFirestore(), SetOptions(merge: true));
+        await _tasksCollection.doc(todayDoc.id).set(updatedTask.toFirestore(), SetOptions(merge: true));
       }
     }
   }
@@ -237,14 +237,14 @@ class ActivityService {
     await _activitiesCollection.doc(id).update(updates);
   }
 
-  // ==================== SUB-TASKS OPERATIONS ====================
+  // ==================== TASKS OPERATIONS ====================
 
-  Stream<List<Task>> getSubTasksStreamForCurrentWeek() {
+  Stream<List<Task>> getTasksStreamForCurrentWeek() {
     final now = DateTime.now();
     final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
     final cutoff = monday.subtract(const Duration(days: 1));
 
-    return _subtasksCollection
+    return _tasksCollection
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
         .snapshots()
         .map((snapshot) {
@@ -252,16 +252,16 @@ class ActivityService {
     });
   }
 
-  Stream<List<Task>> getSubTasksStream() {
-    return _subtasksCollection
+  Stream<List<Task>> getTasksStream() {
+    return _tasksCollection
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
     });
   }
 
-  Stream<List<Task>> getSubTasksForActivityStream(String activityId) {
-    return _subtasksCollection
+  Stream<List<Task>> getTasksForActivityStream(String activityId) {
+    return _tasksCollection
         .where('activityId', isEqualTo: activityId)
         .snapshots()
         .map((snapshot) {
@@ -271,13 +271,13 @@ class ActivityService {
     });
   }
 
-  Stream<List<Task>> getSubTasksForActivitiesStream(List<String> activityIds) {
+  Stream<List<Task>> getTasksForActivitiesStream(List<String> activityIds) {
     if (activityIds.isEmpty) {
       return Stream.value(const <Task>[]);
     }
     // Unique list to avoid duplicate query entries
     final uniqueIds = activityIds.toSet().toList();
-    return _subtasksCollection
+    return _tasksCollection
         .where('activityId', whereIn: uniqueIds)
         .snapshots()
         .map((snapshot) {
@@ -285,7 +285,7 @@ class ActivityService {
     });
   }
 
-  Stream<List<Task>> getCurrentAndRecentMilestoneSubTasksStream(
+  Stream<List<Task>> getCurrentAndRecentMilestoneTasksStream(
     Activity activity,
   ) {
     if (activity.trackingType != 'milestone' || !activity.checked) {
@@ -299,10 +299,10 @@ class ActivityService {
           .where((s) => s.activityId == activity.id)
           .toList()
         ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      final currentSubTaskId = sorted.isNotEmpty ? sorted.first.id : null;
+      final currentTaskId = sorted.isNotEmpty ? sorted.first.id : null;
       final list = sorted
           .where((s) =>
-              s.id == currentSubTaskId ||
+              s.id == currentTaskId ||
               !s.checked ||
               !s.timestamp.isBefore(cutoff))
           .toList();
@@ -310,21 +310,21 @@ class ActivityService {
       return list;
     }
 
-    return getSubTasksForActivityStream(activity.id).map(filterAndSort);
+    return getTasksForActivityStream(activity.id).map(filterAndSort);
   }
 
-  Future<void> createSubTask(
+  Future<void> createTask(
     String activityId, 
-    String subTaskName, 
+    String taskName, 
     DateTime timestamp, 
     bool checked, {
     List<SubTask> subTasks = const [],
   }) async {
-    final hasTime = subTaskName.contains('|');
-    final cleanName = hasTime ? subTaskName.split('|').first : subTaskName;
-    final timeStr = hasTime ? subTaskName.split('|').last : null;
+    final hasTime = taskName.contains('|');
+    final cleanName = hasTime ? taskName.split('|').first : taskName;
+    final timeStr = hasTime ? taskName.split('|').last : null;
 
-    final newSubTask = Task(
+    final newTask = Task(
       id: '',
       activityId: activityId,
       taskName: cleanName,
@@ -333,7 +333,7 @@ class ActivityService {
       scheduledTime: timeStr,
       subTasks: subTasks,
     );
-    await _subtasksCollection.add(newSubTask.toFirestore());
+    await _tasksCollection.add(newTask.toFirestore());
     if (checked) {
       final checkIn = CheckIn(
         id: '',
@@ -346,8 +346,8 @@ class ActivityService {
     }
   }
 
-  Future<void> updateSubTask(Task task) async {
-    await _subtasksCollection.doc(task.id).set(task.toFirestore(), SetOptions(merge: true));
+  Future<void> updateTask(Task task) async {
+    await _tasksCollection.doc(task.id).set(task.toFirestore(), SetOptions(merge: true));
 
     if (task.checked) {
       final existingQuery = await _checkinsCollection
@@ -375,34 +375,34 @@ class ActivityService {
     }
   }
 
-  Future<void> toggleSubTask(String id, bool checked) async {
-    final doc = await _subtasksCollection.doc(id).get();
+  Future<void> toggleTask(String id, bool checked) async {
+    final doc = await _tasksCollection.doc(id).get();
     if (doc.exists) {
-      final subTask = Task.fromFirestore(doc);
-      await _subtasksCollection.doc(id).update({
+      final task = Task.fromFirestore(doc);
+      await _tasksCollection.doc(id).update({
         'checked': checked,
         'completionTime': checked ? Timestamp.fromDate(DateTime.now()) : null,
       });
 
       if (checked) {
         final existingQuery = await _checkinsCollection
-            .where('activityId', isEqualTo: subTask.activityId)
-            .where('subTaskName', isEqualTo: subTask.taskName)
+            .where('activityId', isEqualTo: task.activityId)
+            .where('subTaskName', isEqualTo: task.taskName)
             .get();
         if (existingQuery.docs.isEmpty) {
           final checkIn = CheckIn(
             id: '',
-            activityId: subTask.activityId,
+            activityId: task.activityId,
             timestamp: DateTime.now(),
             checked: true,
-            subTaskName: subTask.taskName,
+            subTaskName: task.taskName,
           );
           await _checkinsCollection.add(checkIn.toFirestore());
         }
       } else {
         final existingQuery = await _checkinsCollection
-            .where('activityId', isEqualTo: subTask.activityId)
-            .where('subTaskName', isEqualTo: subTask.taskName)
+            .where('activityId', isEqualTo: task.activityId)
+            .where('subTaskName', isEqualTo: task.taskName)
             .get();
         for (var doc in existingQuery.docs) {
           await doc.reference.delete();
@@ -411,15 +411,15 @@ class ActivityService {
     }
   }
 
-  Future<void> deleteSubTask(String id) async {
-    final doc = await _subtasksCollection.doc(id).get();
+  Future<void> deleteTask(String id) async {
+    final doc = await _tasksCollection.doc(id).get();
     if (doc.exists) {
-      final subTask = Task.fromFirestore(doc);
-      await _subtasksCollection.doc(id).delete();
+      final task = Task.fromFirestore(doc);
+      await _tasksCollection.doc(id).delete();
 
       final existingQuery = await _checkinsCollection
-          .where('activityId', isEqualTo: subTask.activityId)
-          .where('subTaskName', isEqualTo: subTask.taskName)
+          .where('activityId', isEqualTo: task.activityId)
+          .where('subTaskName', isEqualTo: task.taskName)
           .get();
       for (var doc in existingQuery.docs) {
         await doc.reference.delete();
@@ -427,7 +427,7 @@ class ActivityService {
     }
   }
 
-  Future<void> updateSubTaskSymbols(
+  Future<void> updateTaskSymbols(
     String id, {
     String? symbolType,
     String? symbolValue,
@@ -436,6 +436,6 @@ class ActivityService {
     if (symbolType != null) updates['symbolType'] = symbolType;
     if (symbolValue != null) updates['symbolValue'] = symbolValue;
 
-    await _subtasksCollection.doc(id).update(updates);
+    await _tasksCollection.doc(id).update(updates);
   }
 }

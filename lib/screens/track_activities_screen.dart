@@ -119,10 +119,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           builder: (context, checkinSnapshot) {
             final checkIns = checkinSnapshot.data ?? [];
             return StreamBuilder<List<Task>>(
-              stream: _activityService.getSubTasksStream(),
-              builder: (context, subtaskSnapshot) {
-                final subTasks = subtaskSnapshot.data ?? [];
-                return _buildList(activities, checkIns, subTasks);
+              stream: _activityService.getTasksStream(),
+              builder: (context, tasksSnapshot) {
+                final tasks = tasksSnapshot.data ?? [];
+                return _buildList(activities, checkIns, tasks);
               },
             );
           },
@@ -131,7 +131,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
-  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, List<Task> subTasks) {
+  Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, List<Task> tasks) {
     final active = activities.where((a) => a.checked).toList();
     final completed = activities.where((a) => !a.checked).toList();
 
@@ -152,7 +152,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
 
     String? getSortingTime(Activity activity) {
       if (activity.trackingType == 'multiple') {
-        final todayTask = subTasks.firstWhere(
+        final todayTask = tasks.firstWhere(
           (s) => s.activityId == activity.id && isToday(s.timestamp) && s.subTasks.isNotEmpty,
           orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
         );

@@ -12,10 +12,10 @@ class MilestoneSection extends StatelessWidget {
   final List<Task> tasks;
   final bool isExpanded;
   final VoidCallback onToggle;
-  final String? expandedSubTaskId;
+  final String? expandedTaskId;
   final List<Activity> milestoneActivities;
-  final Function(String?) onSubTaskExpansionChanged;
-  final Function(Task) onEditSubTask;
+  final Function(String?) onTaskExpansionChanged;
+  final Function(Task) onEditTask;
 
   const MilestoneSection({
     super.key,
@@ -23,10 +23,10 @@ class MilestoneSection extends StatelessWidget {
     required this.tasks,
     required this.isExpanded,
     required this.onToggle,
-    required this.expandedSubTaskId,
+    required this.expandedTaskId,
     required this.milestoneActivities,
-    required this.onSubTaskExpansionChanged,
-    required this.onEditSubTask,
+    required this.onTaskExpansionChanged,
+    required this.onEditTask,
   });
 
   @override
@@ -63,12 +63,12 @@ class MilestoneSection extends StatelessWidget {
                 key: ValueKey(st.id),
                 task: st,
                 milestoneActivities: milestoneActivities,
-                isExpanded: expandedSubTaskId == st.id,
+                isExpanded: expandedTaskId == st.id,
                 onTap: () {
-                  if (expandedSubTaskId == st.id) {
-                    onSubTaskExpansionChanged(null);
+                  if (expandedTaskId == st.id) {
+                    onTaskExpansionChanged(null);
                   } else {
-                    onSubTaskExpansionChanged(st.id);
+                    onTaskExpansionChanged(st.id);
                     if (parent.id.isNotEmpty) {
                       controller.selectActivity(parent);
                     }
@@ -77,12 +77,12 @@ class MilestoneSection extends StatelessWidget {
                 onActivitySelected: (activity) {
                   controller.selectActivity(activity);
                 },
-                onToggleSubTask: (task, checked) {
-                  controller.toggleSubTask(task, checked);
+                onToggleTask: (task, checked) {
+                  controller.toggleTask(task, checked);
                 },
-                onEditSubTask: onEditSubTask,
-                onUpdateSubTaskSymbols: (task, symbolType, symbolValue) {
-                  controller.updateSubTaskSymbols(task, symbolType: symbolType, symbolValue: symbolValue);
+                onEditTask: onEditTask,
+                onUpdateTaskSymbols: (task, symbolType, symbolValue) {
+                  controller.updateTaskSymbols(task, symbolType: symbolType, symbolValue: symbolValue);
                 },
               );
             },

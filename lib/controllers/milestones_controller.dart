@@ -8,14 +8,14 @@ class MilestonesController extends ChangeNotifier {
   final ActivityService _activityService = ActivityService();
 
   StreamSubscription<List<Activity>>? _activitiesSub;
-  StreamSubscription<List<Task>>? _subTasksSub;
+  StreamSubscription<List<Task>>? _tasksSub;
 
   List<Activity> _milestoneActivities = [];
-  List<Task> _allSubTasks = [];
+  List<Task> _allTasks = [];
   List<String> _lastActiveIds = [];
 
   bool _isLoadingActivities = true;
-  bool _isLoadingSubTasks = true;
+  bool _isLoadingTasks = true;
 
   String _selectedCategory = 'All';
   Activity? _selectedMilestoneActivity;
@@ -30,9 +30,9 @@ class MilestonesController extends ChangeNotifier {
   // Getters
   List<Activity> get milestoneActivities => _milestoneActivities;
   Activity? get selectedMilestoneActivity => _selectedMilestoneActivity;
-  List<Task> get allSubTasks => _allSubTasks;
+  List<Task> get allTasks => _allTasks;
   String get selectedCategory => _selectedCategory;
-  bool get isLoading => _isLoadingActivities || _isLoadingSubTasks;
+  bool get isLoading => _isLoadingActivities || _isLoadingTasks;
   String? get errorMessage => _errorMessage;
 
   List<Task> get todayTasks => _todayTasks;
@@ -62,23 +62,23 @@ class MilestonesController extends ChangeNotifier {
 
       if (!_listEquals(activeIds, _lastActiveIds)) {
         _lastActiveIds = activeIds;
-        _subTasksSub?.cancel();
+        _tasksSub?.cancel();
 
         if (activeIds.isEmpty) {
-          _allSubTasks = [];
-          _isLoadingSubTasks = false;
+          _allTasks = [];
+          _isLoadingTasks = false;
           _recomputeAndNotify();
         } else {
-          _isLoadingSubTasks = true;
+          _isLoadingTasks = true;
           // Notify listeners so UI updates its loading state for subtasks if active activity list changed
           notifyListeners();
           
-          _subTasksSub = _activityService.getSubTasksForActivitiesStream(activeIds).listen((tasks) {
-            _allSubTasks = tasks;
-            _isLoadingSubTasks = false;
+          _tasksSub = _activityService.getTasksForActivitiesStream(activeIds).listen((tasks) {
+            _allTasks = tasks;
+            _isLoadingTasks = false;
             _recomputeAndNotify();
           }, onError: (error) {
-            _isLoadingSubTasks = false;
+            _isLoadingTasks = false;
             _errorMessage = error.toString();
             notifyListeners();
           });
@@ -126,7 +126,7 @@ class MilestonesController extends ChangeNotifier {
     }
 
     // 2. Filter tasks based on the selected category
-    final List<Task> filteredSubTasks = _allSubTasks.where((st) {
+    final List<Task> filteredTasks = _allTasks.where((st) {
       final parent = _milestoneActivities.firstWhere(
         (a) => a.id == st.activityId,
         orElse: () => Activity(
@@ -149,7 +149,7 @@ class MilestonesController extends ChangeNotifier {
     final List<Task> futureList = [];
     final List<Task> completedList = [];
 
-    for (var st in filteredSubTasks) {
+    for (var st in filteredTasks) {
       if (_isToday(st.timestamp, today)) {
         todayList.add(st);
       } else if (st.checked) {
@@ -189,11 +189,11 @@ class MilestonesController extends ChangeNotifier {
     return true;
   }
 
-  Future<void> createSubTask(Activity activity, String subTaskName, DateTime timestamp) async {
-    await _activityService.createSubTask(activity.id, subTaskName, timestamp, false);
+  Future<void> createTask(Activity activity, String taskName, DateTime timestamp) async {
+    await _activityService.createTask(activity.id, taskName, timestamp, false);
   }
 
-  Future<void> toggleSubTask(Task task, bool checked) async {
+  Future<void> toggleTask(Task task, bool checked) async {
     List<SubTask> updatedSubTasks = task.subTasks;
     if (checked != task.checked) {
       updatedSubTasks = task.subTasks
@@ -205,7 +205,7 @@ class MilestonesController extends ChangeNotifier {
       completionTime: checked ? DateTime.now() : null,
       subTasks: updatedSubTasks,
     );
-    await _activityService.updateSubTask(updated);
+    await _activityService.updateTask(updated);
   }
 
   Future<void> toggleActivity(Activity activity, bool checked) async {
@@ -226,20 +226,20 @@ class MilestonesController extends ChangeNotifier {
     );
   }
 
-  Future<void> deleteSubTask(Task task) async {
-    await _activityService.deleteSubTask(task.id);
+  Future<void> deleteTask(Task task) async {
+    await _activityService.deleteTask(task.id);
   }
 
-  Future<void> updateSubTask(Task task) async {
-    await _activityService.updateSubTask(task);
+  Future<void> updateTask(Task task) async {
+    await _activityService.updateTask(task);
   }
 
-  Future<void> updateSubTaskSymbols(
+  Future<void> updateTaskSymbols(
     Task task, {
     String? symbolType,
     String? symbolValue,
   }) async {
-    await _activityService.updateSubTaskSymbols(
+    await _activityService.updateTaskSymbols(
       task.id,
       symbolType: symbolType,
       symbolValue: symbolValue,
@@ -249,7 +249,7 @@ class MilestonesController extends ChangeNotifier {
   @override
   void dispose() {
     _activitiesSub?.cancel();
-    _subTasksSub?.cancel();
+    _tasksSub?.cancel();
     super.dispose();
   }
 }

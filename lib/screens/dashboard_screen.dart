@@ -126,7 +126,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 DashboardSummaryCard(
                   activities: controller.checkedActivities,
                   checkIns: controller.checkIns,
-                  subTasks: controller.subTasks,
+                  subTasks: controller.tasks,
                 ),
                 const VGapSm(),
 
@@ -143,21 +143,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildCheckedActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: false),
+                    _buildCheckedActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false),
                     if (controller.skippedActivities.isNotEmpty) ...[
                       const VGapSm(),
-                      _buildCheckedActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: false, isSkippedList: true),
+                      _buildCheckedActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false, isSkippedList: true),
                     ],
                     if (controller.completedActivities.isNotEmpty) ...[
                       const VGapSm(),
-                      _buildCheckedActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: true),
+                      _buildCheckedActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: true),
                     ],
                     const VGapSm(),
                        
                     DashboardWeeklyCalendar(
                       activities: controller.checkedActivities,
                       checkIns: controller.checkIns,
-                      subTasks: controller.subTasks,
+                      subTasks: controller.tasks,
                     ),
                     const VGapSm(),
                     // Quick Mood Check-in
@@ -180,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     BuildContext context,
     List<Activity> activities,
     List<CheckIn> todayCheckIns,
-    List<Task> allSubTasks, {
+    List<Task> allTasks, {
     required bool isCompletedList,
     bool isSkippedList = false,
   }) {
@@ -322,13 +322,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: activities.map((activity) {
               final int count;
               if (activity.trackingType == 'multiple') {
-                final todayTask = allSubTasks.firstWhere(
+                final todayTask = allTasks.firstWhere(
                   (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
                   orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
                 );
                 count = todayTask.subTasks.where((st) => st.checked).length;
               } else if (activity.trackingType == 'milestone') {
-                count = allSubTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp) && s.checked).length;
+                count = allTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp) && s.checked).length;
               } else {
                 count = todayCheckIns.where((c) => c.activityId == activity.id).length;
               }

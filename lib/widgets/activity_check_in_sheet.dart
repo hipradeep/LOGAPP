@@ -28,7 +28,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   final CheckInService _checkInService = CheckInService();
   final DateTime _now = DateTime.now();
   late Stream<List<CheckIn>> _checkInsStream;
-  late Stream<List<Task>> _subTasksStream;
+  late Stream<List<Task>> _tasksStream;
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
@@ -39,7 +39,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   void initState() {
     super.initState();
     _checkInsStream = _checkInService.getCheckInsStreamForActivity(widget.activity.id);
-    _subTasksStream = _activityService.getSubTasksForActivityStream(widget.activity.id);
+    _tasksStream = _activityService.getTasksForActivityStream(widget.activity.id);
   }
 
   @override
@@ -90,20 +90,20 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                     final checkIns = snapshot.data ?? [];
 
                     return StreamBuilder<List<Task>>(
-                      stream: _subTasksStream,
-                      builder: (context, subtaskSnapshot) {
-                        if (subtaskSnapshot.hasError) {
+                      stream: _tasksStream,
+                      builder: (context, tasksSnapshot) {
+                        if (tasksSnapshot.hasError) {
                           return const Center(
                             child: Text('Error loading tasks', style: TextStyle(color: AppTheme.errorColor)),
                           );
                         }
-                        if (subtaskSnapshot.connectionState == ConnectionState.waiting) {
+                        if (tasksSnapshot.connectionState == ConnectionState.waiting) {
                           return const Center(
                             child: CircularProgressIndicator(color: AppTheme.primaryColor),
                           );
                         }
-                        final subTasks = subtaskSnapshot.data ?? [];
-                        return _buildSheetContent(scrollController, checkIns, subTasks);
+                        final tasks = tasksSnapshot.data ?? [];
+                        return _buildSheetContent(scrollController, checkIns, tasks);
                       },
                     );
                   },
@@ -116,12 +116,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     );
   }
 
-  Widget _buildSheetContent(ScrollController scrollController, List<CheckIn> checkIns, List<Task> subTasks) {
+  Widget _buildSheetContent(ScrollController scrollController, List<CheckIn> checkIns, List<Task> tasks) {
     // Calculate today's completed check-ins
     final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
     
     final todayTask = widget.activity.trackingType == 'multiple'
-        ? subTasks.firstWhere(
+        ? tasks.firstWhere(
             (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
             orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
           )
@@ -130,7 +130,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     final todayCount = widget.activity.trackingType == 'multiple'
         ? todayTask!.subTasks.where((s) => s.checked).length
         : (widget.activity.trackingType == 'milestone'
-            ? subTasks.where((s) => _isToday(s.timestamp) && s.checked).length
+            ? tasks.where((s) => _isToday(s.timestamp) && s.checked).length
             : todayCheckIns.length);
 
     final targetCount = widget.activity.trackingType == 'multiple'
@@ -233,7 +233,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
             children: [
               // 1. Current Check-In Section
               if (widget.activity.trackingType == 'single') ...[
-                _buildCurrentCheckInCard(isCompleted, todayCount, targetCount, isMultiple, todayCheckIns, subTasks),
+                _buildCurrentCheckInCard(isCompleted, todayCount, targetCount, isMultiple, todayCheckIns, tasks),
                 const VGapLg(),
               ],
               
@@ -243,11 +243,9 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 const VGapLg(),
               ],
               
-
-
               // Tasks checklist section (if activity has tasks enabled)
               if (widget.activity.hasSubTasks) ...[
-                _buildSubTasksSection(subTasks),
+                _buildSubTasksSection(tasks),
                 const VGapLg(),
               ],
 
@@ -261,7 +259,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               BurnChart(
                 activity: widget.activity,
                 checkIns: checkIns,
-                tasks: subTasks,
+                tasks: tasks,
               ),
               const VGapLg(),
               
@@ -283,7 +281,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               const VGapMd(),
 
               // 3. History Checklist List
-              _buildHistorySection(checkIns, subTasks),
+              _buildHistorySection(checkIns, tasks),
             ],
           ),
         ),
@@ -292,7 +290,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   // CURRENT DATE & TIME CHECK-IN WIDGET
-  Widget _buildCurrentCheckInCard(bool isCompleted, int todayCount, int targetCount, bool isMultiple, List<CheckIn> todayCheckIns, List<Task> subTasks) {
+  Widget _buildCurrentCheckInCard(bool isCompleted, int todayCount, int targetCount, bool isMultiple, List<CheckIn> todayCheckIns, List<Task> tasks) {
     final formattedTime = todayCheckIns.isNotEmpty
         ? DateFormat('h:mm a').format(todayCheckIns.first.timestamp)
         : DateFormat('h:mm a').format(_now);
@@ -333,7 +331,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           // Action Checkbox/Button on the right
           if (widget.activity.trackingType != 'milestone')
             GestureDetector(
-              onTap: () => _handleTodayCheckIn(isCompleted, todayCheckIns, subTasks),
+              onTap: () => _handleTodayCheckIn(isCompleted, todayCheckIns, tasks),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 24,
@@ -410,7 +408,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     );
   }
   // HISTORY CHECKLIST LIST VIEW
-  Widget _buildHistorySection(List<CheckIn> checkIns, List<Task> subTasks) {
+  Widget _buildHistorySection(List<CheckIn> checkIns, List<Task> tasks) {
     final List<_HistoryItem> historyItems = [];
     
     // Sort a copy of the checkIns list descending by timestamp
@@ -446,7 +444,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     // Sort descending by timestamp
     historyItems.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    return _buildHistoryList(historyItems, subTasks);
+    return _buildHistoryList(historyItems, tasks);
   }
 
   String _formatHistoryDate(DateTime timestamp) {
@@ -467,7 +465,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  Widget _buildHistoryList(List<_HistoryItem> items, List<Task> subTasks) {
+  Widget _buildHistoryList(List<_HistoryItem> items, List<Task> tasks) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -536,7 +534,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               // Delete Check-in
               if (_isToday(item.timestamp))
                 GestureDetector(
-                  onTap: () => _deleteHistoryItem(item, subTasks),
+                  onTap: () => _deleteHistoryItem(item, tasks),
                   child: const Icon(
                      Icons.delete_outline_rounded,
                     color: AppTheme.errorColor,
@@ -552,7 +550,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     );
   }
 
-  void _deleteHistoryItem(_HistoryItem item, List<Task> subTasks) async {
+  void _deleteHistoryItem(_HistoryItem item, List<Task> tasks) async {
     if (!_isToday(item.timestamp)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -567,8 +565,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         await _checkInService.deleteCheckIn(item.id);
         
         if (widget.activity.trackingType == 'multiple') {
-          // Find the corresponding container Task in loaded subTasks
-          final taskForDay = subTasks.firstWhere(
+          // Find the corresponding container Task in loaded tasks
+          final taskForDay = tasks.firstWhere(
             (s) => _isSameDay(s.timestamp, item.timestamp) && s.subTasks.isNotEmpty,
             orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: item.timestamp, checked: false),
           );
@@ -583,7 +581,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               
               final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
               final updatedTask = taskForDay.copyWith(subTasks: updatedSubTasks, checked: allChecked);
-              await _activityService.updateSubTask(updatedTask);
+              await _activityService.updateTask(updatedTask);
             }
           }
         }
@@ -649,7 +647,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   // ACTIONS
-  void _handleTodayCheckIn(bool isCompleted, List<CheckIn> todayCheckIns, List<Task> subTasks) async {
+  void _handleTodayCheckIn(bool isCompleted, List<CheckIn> todayCheckIns, List<Task> tasks) async {
     // For single check-ins, limit to 1 per day
     if (widget.activity.trackingType == 'single' && isCompleted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -666,7 +664,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
 
     // For multiple activity sync subtasks logic
     if (widget.activity.trackingType == 'multiple') {
-      final todayTask = subTasks.firstWhere(
+      final todayTask = tasks.firstWhere(
         (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
       );
@@ -685,7 +683,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           );
         }).toList();
 
-        await _activityService.createSubTask(
+        await _activityService.createTask(
           widget.activity.id,
           widget.activity.name,
           DateTime.now(),
@@ -721,7 +719,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         }
         if (modified) {
           final updatedTask = todayTask.copyWith(subTasks: updatedSubTasks, checked: true);
-          await _activityService.updateSubTask(updatedTask);
+          await _activityService.updateTask(updatedTask);
         }
       }
     }
@@ -753,12 +751,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   }
 
   // TASKS UI SECTION
-  Widget _buildSubTasksSection(List<Task> subTasks) {
+  Widget _buildSubTasksSection(List<Task> tasks) {
     final List<_SubTaskUiItem> uiItems = [];
 
     if (widget.activity.trackingType == 'multiple') {
       // Find today's container Task document
-      final todayTask = subTasks.firstWhere(
+      final todayTask = tasks.firstWhere(
         (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
       );
@@ -792,8 +790,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       }
     } else {
       // Milestone: show today's tasks
-      final todaySubTasks = subTasks.where((s) => _isToday(s.timestamp)).toList();
-      for (var s in todaySubTasks) {
+      final todayTasks = tasks.where((s) => _isToday(s.timestamp)).toList();
+      for (var s in todayTasks) {
         uiItems.add(_SubTaskUiItem(
           name: s.taskName,
           checked: s.checked,
@@ -925,7 +923,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () {
-                          _toggleSubTask(item, subTasks);
+                          _toggleSubTask(item, tasks);
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -989,13 +987,13 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     }
   }
 
-  void _toggleSubTask(_SubTaskUiItem item, List<Task> subTasks) async {
+  void _toggleSubTask(_SubTaskUiItem item, List<Task> tasks) async {
     final newChecked = !item.checked;
     final checkInNow = DateTime.now();
 
     if (widget.activity.trackingType == 'multiple') {
       // Find today's container Task
-      final todayTask = subTasks.firstWhere(
+      final todayTask = tasks.firstWhere(
         (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty,
         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
       );
@@ -1019,7 +1017,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
 
           final allChecked = initialSubTasks.every((st) => st.checked);
 
-          await _activityService.createSubTask(
+          await _activityService.createTask(
             widget.activity.id,
             widget.activity.name,
             DateTime.now(),
@@ -1051,7 +1049,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
             
             final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
             final updatedTask = todayTask.copyWith(subTasks: updatedSubTasks, checked: allChecked);
-            await _activityService.updateSubTask(updatedTask);
+            await _activityService.updateTask(updatedTask);
 
             // Create or delete check-in log entry
             if (newChecked) {
@@ -1082,7 +1080,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     } else {
       // Milestone standard toggle
       if (item.subTaskId != null) {
-        await _activityService.toggleSubTask(item.subTaskId!, newChecked);
+        await _activityService.toggleTask(item.subTaskId!, newChecked);
       }
     }
   }

@@ -33,14 +33,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
   late Stream<Activity?> _activityStream;
   late Stream<List<CheckIn>> _checkInsStream;
-  late Stream<List<Task>> _subTasksStream;
+  late Stream<List<Task>> _tasksStream;
 
   @override
   void initState() {
     super.initState();
     _activityStream = _activityService.getActivityStream(widget.activityId);
     _checkInsStream = _checkInService.getCheckInsStreamForActivity(widget.activityId);
-    _subTasksStream = _activityService.getSubTasksForActivityStream(widget.activityId);
+    _tasksStream = _activityService.getTasksForActivityStream(widget.activityId);
   }
 
   String _getRepeatDaysLabel(List<int> days) {
@@ -148,10 +148,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           builder: (context, checkInsSnapshot) {
             final checkIns = checkInsSnapshot.data ?? [];
             return StreamBuilder<List<Task>>(
-              stream: _subTasksStream,
-              builder: (context, subTasksSnapshot) {
-                final subTasks = subTasksSnapshot.data ?? [];
-                return _buildDetailsScreen(activity, checkIns, subTasks);
+              stream: _tasksStream,
+              builder: (context, tasksSnapshot) {
+                final tasks = tasksSnapshot.data ?? [];
+                return _buildDetailsScreen(activity, checkIns, tasks);
               },
             );
           },
@@ -160,7 +160,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
-  Widget _buildDetailsScreen(Activity activity, List<CheckIn> checkIns, List<Task> subTasks) {
+  Widget _buildDetailsScreen(Activity activity, List<CheckIn> checkIns, List<Task> tasks) {
     final typeColor = _getTrackingTypeColor(activity.trackingType);
     final typeIcon = _getTrackingTypeIcon(activity.trackingType);
 
@@ -304,7 +304,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
         // 3. Tasks Checklist Section
         if (activity.hasSubTasks) ...[
-          _buildTaskListSection(activity, subTasks),
+          _buildTaskListSection(activity, tasks),
           const VGapLg(),
         ],
 
@@ -312,12 +312,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         ActivityGraphCard(
           activity: activity,
           checkIns: checkIns,
-          tasks: subTasks,
+          tasks: tasks,
         ),
         const VGapLg(),
 
         // 4. Timeline Section
-        _buildHistoryTimeline(activity, checkIns, subTasks),
+        _buildHistoryTimeline(activity, checkIns, tasks),
         const VGapXxl(),
       ],
     );
@@ -394,7 +394,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
-  Widget _buildTaskListSection(Activity activity, List<Task> subTasks) {
+  Widget _buildTaskListSection(Activity activity, List<Task> tasks) {
     List<Widget> taskWidgets = [];
 
     if (activity.trackingType == 'multiple') {
@@ -460,7 +460,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         );
       }
     } else if (activity.trackingType == 'milestone') {
-      final activeTasks = subTasks.where((t) => !t.checked).toList();
+      final activeTasks = tasks.where((t) => !t.checked).toList();
       for (var t in activeTasks) {
         final totalCount = t.subTasks.length;
         final completedCount = t.subTasks.where((st) => st.checked).length;
@@ -612,7 +612,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
 
 
-  Widget _buildHistoryTimeline(Activity activity, List<CheckIn> checkIns, List<Task> subTasks) {
+  Widget _buildHistoryTimeline(Activity activity, List<CheckIn> checkIns, List<Task> tasks) {
     final List<DateTime> last7Days = List.generate(7, (index) {
       final date = DateTime.now().subtract(Duration(days: index));
       return DateTime(date.year, date.month, date.day);

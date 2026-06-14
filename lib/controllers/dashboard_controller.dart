@@ -12,11 +12,11 @@ class DashboardController extends ChangeNotifier {
 
   StreamSubscription<List<Activity>>? _activitiesSub;
   StreamSubscription<List<CheckIn>>? _checkInsSub;
-  StreamSubscription<List<Task>>? _subTasksSub;
+  StreamSubscription<List<Task>>? _tasksSub;
 
   List<Activity> _checkedActivities = [];
   List<CheckIn> _checkIns = [];
-  List<Task> _subTasks = [];
+  List<Task> _tasks = [];
 
   bool _isLoading = true;
 
@@ -29,7 +29,7 @@ class DashboardController extends ChangeNotifier {
   // Getters
   List<Activity> get checkedActivities => _checkedActivities;
   List<CheckIn> get checkIns => _checkIns;
-  List<Task> get subTasks => _subTasks;
+  List<Task> get tasks => _tasks;
   bool get isLoading => _isLoading;
 
   List<Activity> get pendingActivities => _pendingActivities;
@@ -52,8 +52,8 @@ class DashboardController extends ChangeNotifier {
       _recomputeAndNotify();
     });
 
-    _subTasksSub = _activityService.getSubTasksStreamForCurrentWeek().listen((subTasks) {
-      _subTasks = subTasks;
+    _tasksSub = _activityService.getTasksStreamForCurrentWeek().listen((tasks) {
+      _tasks = tasks;
       _recomputeAndNotify();
     });
   }
@@ -74,7 +74,7 @@ class DashboardController extends ChangeNotifier {
 
     for (var activity in _checkedActivities) {
       if (activity.trackingType == 'milestone') {
-        final hasTasksToday = _subTasks.any((t) => t.activityId == activity.id && _isToday(t.timestamp, today));
+        final hasTasksToday = _tasks.any((t) => t.activityId == activity.id && _isToday(t.timestamp, today));
         if (!hasTasksToday) {
           continue;
         }
@@ -92,13 +92,13 @@ class DashboardController extends ChangeNotifier {
 
       final int todayCount;
       if (activity.trackingType == 'multiple') {
-        final todayTask = _subTasks.firstWhere(
+        final todayTask = _tasks.firstWhere(
           (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
           orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
         );
         todayCount = todayTask.subTasks.where((st) => st.checked).length;
       } else if (activity.trackingType == 'milestone') {
-        todayCount = _subTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.checked).length;
+        todayCount = _tasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.checked).length;
       } else {
         todayCount = _todayCheckIns.where((c) => c.activityId == activity.id).length;
       }
@@ -113,7 +113,7 @@ class DashboardController extends ChangeNotifier {
 
     String? getSortingTime(Activity activity) {
       if (activity.trackingType == 'multiple') {
-        final todayTask = _subTasks.firstWhere(
+        final todayTask = _tasks.firstWhere(
           (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
           orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
         );
@@ -168,7 +168,7 @@ class DashboardController extends ChangeNotifier {
   void dispose() {
     _activitiesSub?.cancel();
     _checkInsSub?.cancel();
-    _subTasksSub?.cancel();
+    _tasksSub?.cancel();
     super.dispose();
   }
 }

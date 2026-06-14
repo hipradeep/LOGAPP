@@ -18,7 +18,7 @@ class MilestonesTab extends StatefulWidget {
 
 class _MilestonesTabState extends State<MilestonesTab> {
   late final MilestonesController _controller;
-  String? _expandedSubTaskId;
+  String? _expandedTaskId;
 
   // Accordion open/close state
   bool _todayExpanded = true;
@@ -49,7 +49,7 @@ class _MilestonesTabState extends State<MilestonesTab> {
       onRefresh: () async => await _controller.refresh(),
       onFabPressed: () {
         if (_controller.milestoneActivities.isNotEmpty) {
-          _showAddSubTaskSheet(context, _controller);
+          _showAddTaskSheet(context, _controller);
         }
       },
       builder: (context, controller) {
@@ -67,10 +67,10 @@ class _MilestonesTabState extends State<MilestonesTab> {
               tasks: controller.todayTasks,
               isExpanded: _todayExpanded,
               onToggle: () => setState(() => _todayExpanded = !_todayExpanded),
-              expandedSubTaskId: _expandedSubTaskId,
+              expandedTaskId: _expandedTaskId,
               milestoneActivities: controller.milestoneActivities,
-              onSubTaskExpansionChanged: (id) => setState(() => _expandedSubTaskId = id),
-              onEditSubTask: (task) => _showEditSubTaskSheet(context, task, controller),
+              onTaskExpansionChanged: (id) => setState(() => _expandedTaskId = id),
+              onEditTask: (task) => _showEditTaskSheet(context, task, controller),
             ),
           );
         }
@@ -86,10 +86,10 @@ class _MilestonesTabState extends State<MilestonesTab> {
               tasks: controller.futureTasks,
               isExpanded: _futureExpanded,
               onToggle: () => setState(() => _futureExpanded = !_futureExpanded),
-              expandedSubTaskId: _expandedSubTaskId,
+              expandedTaskId: _expandedTaskId,
               milestoneActivities: controller.milestoneActivities,
-              onSubTaskExpansionChanged: (id) => setState(() => _expandedSubTaskId = id),
-              onEditSubTask: (task) => _showEditSubTaskSheet(context, task, controller),
+              onTaskExpansionChanged: (id) => setState(() => _expandedTaskId = id),
+              onEditTask: (task) => _showEditTaskSheet(context, task, controller),
             ),
           );
         }
@@ -106,10 +106,10 @@ class _MilestonesTabState extends State<MilestonesTab> {
               tasks: controller.completedTasks,
               isExpanded: _completedExpanded,
               onToggle: () => setState(() => _completedExpanded = !_completedExpanded),
-              expandedSubTaskId: _expandedSubTaskId,
+              expandedTaskId: _expandedTaskId,
               milestoneActivities: controller.milestoneActivities,
-              onSubTaskExpansionChanged: (id) => setState(() => _expandedSubTaskId = id),
-              onEditSubTask: (task) => _showEditSubTaskSheet(context, task, controller),
+              onTaskExpansionChanged: (id) => setState(() => _expandedTaskId = id),
+              onEditTask: (task) => _showEditTaskSheet(context, task, controller),
             ),
           );
         }
@@ -166,31 +166,31 @@ class _MilestonesTabState extends State<MilestonesTab> {
   }
 
 
-  void _showAddSubTaskSheet(BuildContext context, MilestonesController controller) {
+  void _showAddTaskSheet(BuildContext context, MilestonesController controller) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddMilestoneSubTaskSheet(
+      builder: (_) => AddMilestoneTaskSheet(
         milestones: controller.milestoneActivities,
         initialActivityId: controller.selectedMilestoneActivity?.id,
-        onAddSubTask: (activity, subTaskName, timestamp) async {
-          await controller.createSubTask(activity, subTaskName, timestamp);
+        onAddTask: (activity, taskName, timestamp) async {
+          await controller.createTask(activity, taskName, timestamp);
         },
       ),
     );
   }
 
-  void _showEditSubTaskSheet(BuildContext context, Task task, MilestonesController controller) {
+  void _showEditTaskSheet(BuildContext context, Task task, MilestonesController controller) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddMilestoneSubTaskSheet(
+      builder: (_) => AddMilestoneTaskSheet(
         milestones: controller.milestoneActivities,
         editTask: task,
-        onEditSubTask: (updatedTask) async {
-          await controller.updateSubTask(updatedTask);
+        onEditTask: (updatedTask) async {
+          await controller.updateTask(updatedTask);
         },
       ),
     );
