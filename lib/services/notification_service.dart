@@ -43,9 +43,9 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin>();
 
       try {
-        final String detectedName = _detectTimeZoneName();
+        final detectedName = _detectTimeZoneName();
         tz.setLocalLocation(tz.getLocation(detectedName));
-      } catch (e) {
+      } catch (_) {
         try {
           tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
         } catch (_) {}
@@ -174,7 +174,7 @@ class NotificationService {
         body,
         scheduledDate,
         _notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
@@ -205,7 +205,7 @@ class NotificationService {
         body,
         scheduledDate,
         _notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );

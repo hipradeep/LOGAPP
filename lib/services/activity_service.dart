@@ -32,9 +32,9 @@ class ActivityService {
     });
   }
 
-  Stream<List<Activity>> getCheckedActivitiesStream() {
+  Stream<List<Activity>> getActiveActivitiesStream() {
     return _activitiesCollection
-        .where('checked', isEqualTo: true)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs.map((doc) => Activity.fromFirestore(doc)).toList();
@@ -57,14 +57,16 @@ class ActivityService {
     String? symbolType,
     String? symbolValue,
     bool skippable = false,
+    bool reminderEnabled = true,
   }) async {
     final newActivity = Activity(
       id: '',
       name: name,
-      checked: true,
+      isActive: true,
       timestamp: DateTime.now(),
       trackingType: trackingType,
       targetCount: targetCount,
+      reminderEnabled: reminderEnabled,
       repeatDays: repeatDays,
       scheduledTime: scheduledTime,
       startDate: startDate,
@@ -104,9 +106,15 @@ class ActivityService {
     }
   }
 
-  Future<void> toggleActivity(String id, bool checked) async {
+  Future<void> toggleActivity(String id, bool isActive) async {
     await _activitiesCollection.doc(id).update({
-      'checked': checked,
+      'isActive': isActive,
+    });
+  }
+
+  Future<void> toggleReminderEnabled(String id, bool enabled) async {
+    await _activitiesCollection.doc(id).update({
+      'reminderEnabled': enabled,
     });
   }
 
@@ -122,6 +130,7 @@ class ActivityService {
     List<String> subTaskTemplates = const [],
     String? description,
     bool? skippable,
+    bool? reminderEnabled,
   }) async {
     final Map<String, dynamic> updates = {
       'name': name,
@@ -135,6 +144,9 @@ class ActivityService {
     };
     if (skippable != null) {
       updates['skippable'] = skippable;
+    }
+    if (reminderEnabled != null) {
+      updates['reminderEnabled'] = reminderEnabled;
     }
     if (description != null) {
       updates['description'] = description;
@@ -288,7 +300,7 @@ class ActivityService {
   Stream<List<Task>> getCurrentAndRecentMilestoneTasksStream(
     Activity activity,
   ) {
-    if (activity.trackingType != 'milestone' || !activity.checked) {
+    if (activity.trackingType != 'milestone' || !activity.isActive) {
       return Stream.value(const <Task>[]);
     }
 

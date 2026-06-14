@@ -54,7 +54,7 @@ class MilestoneSection extends StatelessWidget {
                 orElse: () => Activity(
                   id: '',
                   name: '',
-                  checked: false,
+                  isActive: false,
                   timestamp: DateTime.now(),
                 ),
               );

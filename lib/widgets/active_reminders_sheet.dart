@@ -133,7 +133,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                   
                   // Pending activities count
                   StreamBuilder<List<Activity>>(
-                    stream: _activityService.getCheckedActivitiesStream(),
+                    stream: _activityService.getActiveActivitiesStream(),
                     builder: (context, snapshot) {
                       final count = snapshot.data?.length ?? 0;
                       return Container(

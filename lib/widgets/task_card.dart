@@ -84,7 +84,7 @@ class _TaskCardState extends State<TaskCard> {
       orElse: () => Activity(
         id: '',
         name: '',
-        checked: false,
+        isActive: false,
         timestamp: DateTime.now(),
       ),
     );

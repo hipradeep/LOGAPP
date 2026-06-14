@@ -66,7 +66,7 @@ class CheckInService {
     });
   }
 
-  Stream<List<CheckIn>> getCheckedActivitiesCheckInsStream() {
+  Stream<List<CheckIn>> getActiveActivitiesCheckInsStream() {
     return _checkinsCollection
         .orderBy('timestamp', descending: true)
         .snapshots()

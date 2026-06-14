@@ -5,6 +5,7 @@ import 'app_spacers.dart';
 import 'glass_modal_sheet.dart';
 import '../models/reminder_item.dart';
 import '../models/upcoming_reminder.dart';
+import '../models/activity.dart';
 import '../controllers/reminders_controller.dart';
 import 'base_management_tab.dart';
 
@@ -18,7 +19,6 @@ class RemindersTab extends StatefulWidget {
 class _RemindersTabState extends State<RemindersTab> {
   late RemindersController _controller;
   late PageController _pageController;
-  bool _groupByActivity = false;
   int _activeFragment = 0; // 0 = Alarm (Custom), 1 = Reminders
 
   @override
@@ -35,21 +35,6 @@ class _RemindersTabState extends State<RemindersTab> {
     super.dispose();
   }
 
-  String _formatReminderTime(DateTime dt) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
-    final date = DateTime(dt.year, dt.month, dt.day);
-
-    final timeStr = DateFormat('h:mm a').format(dt);
-    if (date == today) {
-      return 'Today at $timeStr';
-    } else if (date == tomorrow) {
-      return 'Tomorrow at $timeStr';
-    } else {
-      return DateFormat('MMM d, h:mm a').format(dt);
-    }
-  }
 
   void _switchToCustomAlarms() {
     setState(() => _activeFragment = 0);
@@ -73,18 +58,6 @@ class _RemindersTabState extends State<RemindersTab> {
     setState(() => _activeFragment = index);
   }
 
-  void _setTimelineView(bool selected) {
-    if (selected) {
-      setState(() => _groupByActivity = false);
-    }
-  }
-
-  void _setActivityView(bool selected) {
-    if (selected) {
-      setState(() => _groupByActivity = true);
-    }
-  }
-
   Future<void> _handleRefresh() async {
     await _controller.refresh();
   }
@@ -97,155 +70,195 @@ class _RemindersTabState extends State<RemindersTab> {
     _controller.removeReminder(index);
   }
 
-  Widget? _buildTrailingTimeIndicator(UpcomingReminder reminder, bool isPassed) {
-    if (isPassed) return null;
-    
-    final now = DateTime.now();
-    final diff = reminder.scheduledDateTime.difference(now);
-    
-    if (diff.isNegative) return null;
-    
-    final totalMinutes = diff.inMinutes;
-    if (totalMinutes > 0 && totalMinutes <= 180) {
-      final String timeLabel;
-      if (totalMinutes < 60) {
-        timeLabel = '${totalMinutes}m';
-      } else {
-        final hours = totalMinutes ~/ 60;
-        final mins = totalMinutes % 60;
-        if (mins == 0) {
-          timeLabel = '${hours}h';
-        } else {
-          timeLabel = '${hours}h ${mins}m';
-        }
-      }
-      
-      // Determine aesthetic colors & icon based on urgency level
-      final Color badgeBg;
-      final Color badgeBorder;
-      final Color badgeText;
-      final IconData badgeIcon;
 
-      if (totalMinutes <= 15) {
-        // High Urgency (<= 15 mins) - Glowing Rose
-        badgeBg = AppTheme.errorColor.withValues(alpha: 0.15);
-        badgeBorder = AppTheme.errorColor.withValues(alpha: 0.35);
-        badgeText = AppTheme.errorColor;
-        badgeIcon = Icons.bolt_rounded;
-      } else if (totalMinutes <= 60) {
-        // Medium Urgency (16-60 mins) - Warm Amber
-        badgeBg = AppTheme.warningColor.withValues(alpha: 0.15);
-        badgeBorder = AppTheme.warningColor.withValues(alpha: 0.35);
-        badgeText = AppTheme.warningColor;
-        badgeIcon = Icons.hourglass_bottom_rounded;
-      } else {
-        // Normal Urgency (61-180 mins) - Sleek Violet
-        badgeBg = AppTheme.primaryColor.withValues(alpha: 0.15);
-        badgeBorder = AppTheme.primaryColor.withValues(alpha: 0.35);
-        badgeText = AppTheme.primaryLight;
-        badgeIcon = Icons.access_time_filled_rounded;
-      }
+  Widget _buildActivityGroupCard(
+    BuildContext context,
+    Activity activity,
+    List<UpcomingReminder> reminders,
+    RemindersController controller,
+  ) {
+    if (reminders.isEmpty) return const SizedBox.shrink();
 
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: badgeBg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: badgeBorder,
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: badgeText.withValues(alpha: 0.08),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
+    final symbol = activity.symbolValue ?? '🔔';
+    final List<String> weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return Card(
+      color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: Colors.white.withValues(alpha: 0.05),
+          width: 1,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              badgeIcon,
-              size: 12,
-              color: badgeText,
+            // Activity Header: Symbol + Name
+            Row(
+              children: [
+                Text(
+                  symbol,
+                  style: const TextStyle(fontSize: 16),
+                ),
+                const HGapSm(),
+                Expanded(
+                  child: Text(
+                    activity.name.toUpperCase(),
+                    style: AppTheme.bodySmall.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: AppTheme.textPrimary.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            Text(
-              timeLabel,
-              style: TextStyle(
-                color: badgeText,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.2,
-              ),
+            const VGapSm(),
+
+            // Weekdays Repeat Schedule Row (once per activity container card)
+            Row(
+              children: List.generate(7, (i) {
+                final dayNum = i + 1;
+                final isRepeat = activity.repeatDays.contains(dayNum);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text(
+                    weekdays[i],
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isRepeat
+                          ? AppTheme.primaryLight
+                          : AppTheme.textSecondary.withValues(alpha: 0.25),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const VGapMd(),
+
+            // Header Divider
+            const Divider(color: Colors.white10, height: 1),
+            const VGapMd(),
+
+            // Nested Task Reminder Rows
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemCount: reminders.length,
+              itemBuilder: (context, index) {
+                final reminder = reminders[index];
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTaskItemRow(context, activity, reminder, controller),
+                    const VGapMd(),
+                    const Divider(color: Colors.white10, height: 1),
+                    if (index < reminders.length - 1) const VGapMd(),
+                  ],
+                );
+              },
             ),
           ],
         ),
-      );
-    }
-    
-    return null;
+      ),
+    );
   }
 
-  Widget _buildReminderList(
+  Widget _buildTaskItemRow(
     BuildContext context,
-    List<UpcomingReminder> reminders,
-    RemindersController controller, {
-    bool isPassed = false,
-    bool showActivityName = true,
-  }) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      itemCount: reminders.length,
-      itemBuilder: (context, index) {
-        final reminder = reminders[index];
-        final timeStr = _formatReminderTime(reminder.scheduledDateTime);
-        
-        String displayTitle = reminder.title;
-        if (!showActivityName) {
-          if (reminder.type == 'subtask' && reminder.subTaskTitle != null) {
-            displayTitle = reminder.subTaskTitle!;
-          } else if (reminder.type == 'task' && reminder.task != null) {
-            displayTitle = reminder.task!.taskName;
-          }
-        }
+    Activity activity,
+    UpcomingReminder reminder,
+    RemindersController controller,
+  ) {
+    final timeStr = DateFormat('HH:mm').format(reminder.scheduledDateTime);
+    final displayTitle = reminder.subTaskTitle ?? (reminder.type == 'task' && reminder.task != null ? reminder.task!.taskName : reminder.title);
 
-        return Card(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.3),
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            dense: true,
+    final IconData pillIcon;
+    if (reminder.type == 'subtask') {
+      pillIcon = Icons.task_alt_rounded;
+    } else if (reminder.type == 'task') {
+      pillIcon = Icons.star_rounded;
+    } else {
+      pillIcon = Icons.notifications_active_rounded;
+    }
+
+    final Color timeColor = activity.reminderEnabled
+        ? Colors.white
+        : AppTheme.textSecondary.withValues(alpha: 0.4);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Clickable Task Info
+        Expanded(
+          child: InkWell(
             onTap: () => _showReminderActionsSheet(context, reminder, controller),
-            leading: Icon(
-              isPassed ? Icons.notification_important_rounded : Icons.notifications_active_rounded,
-              color: isPassed ? AppTheme.warningColor : AppTheme.primaryLight,
+            borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  timeStr,
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    color: timeColor,
+                    letterSpacing: -1.0,
+                  ),
+                ),
+                const VGapSm(),
+                // Pill Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        pillIcon,
+                        size: 11,
+                        color: AppTheme.primaryLight,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        displayTitle,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            title: Text(
-              displayTitle,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            subtitle: Text(
-              isPassed
-                  ? '$timeStr (Passed) • ${reminder.subtitle}'
-                  : '$timeStr • ${reminder.subtitle}',
-              style: TextStyle(
-                color: isPassed
-                    ? AppTheme.warningColor.withValues(alpha: 0.8)
-                    : AppTheme.textSecondary.withValues(alpha: 0.7),
-              ),
-            ),
-            trailing: _buildTrailingTimeIndicator(reminder, isPassed),
           ),
-        );
-      },
+        ),
+        const HGapMd(),
+        Switch(
+          value: activity.reminderEnabled,
+          activeThumbColor: AppTheme.successColor,
+          activeTrackColor: AppTheme.successColor.withValues(alpha: 0.4),
+          onChanged: (val) {
+            controller.toggleReminderEnabled(activity, val);
+          },
+        ),
+      ],
     );
   }
 
@@ -435,114 +448,22 @@ class _RemindersTabState extends State<RemindersTab> {
               ),
             )
           else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ChoiceChip(
-                  label: const Text('Timeline'),
-                  selected: !_groupByActivity,
-                  onSelected: _setTimelineView,
-                  selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
-                  backgroundColor: Colors.transparent,
-                  labelStyle: TextStyle(
-                    color: !_groupByActivity ? AppTheme.primaryLight : AppTheme.textSecondary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const HGapSm(),
-                ChoiceChip(
-                  label: const Text('By Activity'),
-                  selected: _groupByActivity,
-                  onSelected: _setActivityView,
-                  selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
-                  backgroundColor: Colors.transparent,
-                  labelStyle: TextStyle(
-                    color: _groupByActivity ? AppTheme.primaryLight : AppTheme.textSecondary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-            const VGapSm(),
-            if (_groupByActivity) ...[
-              ...controller.remindersByActivity.entries.map((entry) {
-                final activityName = entry.key;
-                final list = entry.value;
+            ...controller.remindersByActivity.entries.where((entry) {
+              final activity = controller.activities.firstWhere(
+                (a) => a.name == entry.key,
+                orElse: () => Activity(id: '', name: entry.key, isActive: false, timestamp: DateTime.now()),
+              );
+              return activity.isActive;
+            }).map((entry) {
+              final activityName = entry.key;
+              final list = entry.value;
 
-                final now = DateTime.now();
-                final today = DateTime(now.year, now.month, now.day);
-                final tomorrow = today.add(const Duration(days: 1));
+              final activity = controller.activities.firstWhere(
+                (a) => a.name == activityName,
+              );
 
-                final activeToday = list.where((r) =>
-                    r.scheduledDateTime.year == today.year &&
-                    r.scheduledDateTime.month == today.month &&
-                    r.scheduledDateTime.day == today.day &&
-                    !r.scheduledDateTime.isBefore(now)
-                ).toList();
-
-                final activeTomorrow = list.where((r) =>
-                    r.scheduledDateTime.year == tomorrow.year &&
-                    r.scheduledDateTime.month == tomorrow.month &&
-                    r.scheduledDateTime.day == tomorrow.day
-                ).toList();
-
-                if (activeToday.isEmpty && activeTomorrow.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(activityName, style: AppTheme.headingSmall),
-                    const VGapSm(),
-                    if (activeToday.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
-                        child: Text("Today", style: AppTheme.bodyMedium.copyWith(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
-                      ),
-                      _buildReminderList(context, activeToday, controller, showActivityName: false),
-                      const VGapSm(),
-                    ],
-                    if (activeTomorrow.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
-                        child: Text("Tomorrow", style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
-                      ),
-                      _buildReminderList(context, activeTomorrow, controller, showActivityName: false),
-                      const VGapSm(),
-                    ],
-                    const VGapMd(),
-                  ],
-                );
-              }),
-              if (controller.passedReminders.isNotEmpty) ...[
-                Text("Passed Today", style: AppTheme.headingSmall.copyWith(color: AppTheme.warningColor)),
-                const VGapSm(),
-                _buildReminderList(context, controller.passedReminders, controller, isPassed: true, showActivityName: true),
-                const VGapMd(),
-              ],
-            ] else ...[
-              if (controller.todayReminders.isNotEmpty) ...[
-                Text("Today's Reminders", style: AppTheme.headingSmall),
-                const VGapSm(),
-                _buildReminderList(context, controller.todayReminders, controller),
-                const VGapMd(),
-              ],
-              if (controller.passedReminders.isNotEmpty) ...[
-                Text("Passed Today", style: AppTheme.headingSmall.copyWith(color: AppTheme.warningColor)),
-                const VGapSm(),
-                _buildReminderList(context, controller.passedReminders, controller, isPassed: true),
-                const VGapMd(),
-              ],
-              if (controller.tomorrowReminders.isNotEmpty) ...[
-                Text("Tomorrow's Reminders", style: AppTheme.headingSmall),
-                const VGapSm(),
-                _buildReminderList(context, controller.tomorrowReminders, controller),
-                const VGapMd(),
-              ],
-            ],
+              return _buildActivityGroupCard(context, activity, list, controller);
+            }),
           ],
         ],
       ),

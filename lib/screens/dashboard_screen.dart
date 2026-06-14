@@ -124,7 +124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 
                 // Daily Progress
                 DashboardSummaryCard(
-                  activities: controller.checkedActivities,
+                  activities: controller.activeActivities,
                   checkIns: controller.checkIns,
                   subTasks: controller.tasks,
                 ),
@@ -143,19 +143,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildCheckedActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false),
+                    _buildActiveActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false),
                     if (controller.skippedActivities.isNotEmpty) ...[
                       const VGapSm(),
-                      _buildCheckedActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false, isSkippedList: true),
+                      _buildActiveActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false, isSkippedList: true),
                     ],
                     if (controller.completedActivities.isNotEmpty) ...[
                       const VGapSm(),
-                      _buildCheckedActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: true),
+                      _buildActiveActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: true),
                     ],
                     const VGapSm(),
                        
                     DashboardWeeklyCalendar(
-                      activities: controller.checkedActivities,
+                      activities: controller.activeActivities,
                       checkIns: controller.checkIns,
                       subTasks: controller.tasks,
                     ),
@@ -176,7 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildCheckedActivitiesList(
+  Widget _buildActiveActivitiesList(
     BuildContext context,
     List<Activity> activities,
     List<CheckIn> todayCheckIns,

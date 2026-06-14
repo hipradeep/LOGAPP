@@ -17,6 +17,7 @@ class AddActivityScreen extends StatefulWidget {
     List<String> subTaskTemplates,
     String? description,
     bool skippable,
+    bool reminderEnabled,
   }) onAdd;
   final Activity? initialActivity;
   final Function(String name, String trackingType, int targetCount, {
@@ -27,9 +28,10 @@ class AddActivityScreen extends StatefulWidget {
     List<String> subTaskTemplates,
     String? description,
     bool skippable,
+    bool reminderEnabled,
   })? onEdit;
   final VoidCallback? onDelete;
-  final VoidCallback? onToggleComplete;
+  final VoidCallback? onToggleActive;
 
   const AddActivityScreen({
     super.key,
@@ -37,7 +39,7 @@ class AddActivityScreen extends StatefulWidget {
     this.initialActivity,
     this.onEdit,
     this.onDelete,
-    this.onToggleComplete,
+    this.onToggleActive,
   });
 
   @override
@@ -55,6 +57,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
   final Set<int> _draggedIndices = {};
   bool _dragSelectMode = true;
   bool _skippable = false;
+  bool _reminderEnabled = true;
 
   // Schedule fields
   List<int> _repeatDays = [1, 2, 3, 4, 5, 6, 7];
@@ -89,6 +92,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         _subTasks.addAll(a.subTaskTemplates);
       }
       _skippable = a.skippable;
+      _reminderEnabled = a.reminderEnabled;
     }
 
   }
@@ -169,6 +173,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         subTaskTemplates: finalSubTasks,
         description: descriptionStr,
         skippable: _skippable,
+        reminderEnabled: _reminderEnabled,
       );
     } else {
       widget.onAdd(
@@ -182,6 +187,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         subTaskTemplates: finalSubTasks,
         description: descriptionStr,
         skippable: _skippable,
+        reminderEnabled: _reminderEnabled,
       );
     }
     Navigator.pop(context);
@@ -249,7 +255,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         showBackButton: true,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         actions: [
-          if (widget.initialActivity == null || widget.initialActivity!.checked)
+          if (widget.initialActivity == null || widget.initialActivity!.isActive)
             TextButton(
               onPressed: _submit,
               child: const Text(
@@ -261,9 +267,9 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 ),
               ),
             )
-          else if (widget.onToggleComplete != null)
+          else if (widget.onToggleActive != null)
             TextButton(
-              onPressed: widget.onToggleComplete,
+              onPressed: widget.onToggleActive,
               child: const Text(
                 'Activate',
                 style: TextStyle(
@@ -280,27 +286,27 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 if (value == 'delete') {
                   widget.onDelete?.call();
                 } else if (value == 'toggle') {
-                  widget.onToggleComplete?.call();
+                  widget.onToggleActive?.call();
                 }
               },
               itemBuilder: (context) {
-                final isCompleted = !(widget.initialActivity!.checked);
+                final isInactive = !(widget.initialActivity!.isActive);
                 return [
                   PopupMenuItem<String>(
                     value: 'toggle',
                     child: Row(
                       children: [
                         Icon(
-                          isCompleted ? Icons.undo_rounded : Icons.check_circle_outline_rounded,
-                          color: isCompleted ? Colors.white70 : AppTheme.successColor,
+                          isInactive ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                          color: isInactive ? AppTheme.successColor : AppTheme.warningColor,
                           size: 20,
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          isCompleted ? 'Mark Active' : 'Mark Complete',
+                          isInactive ? 'Activate Tracking' : 'Deactivate Tracking',
                           style: TextStyle(
-                            color: isCompleted ? Colors.white : AppTheme.successColor,
-                            fontWeight: isCompleted ? FontWeight.normal : FontWeight.bold,
+                            color: isInactive ? AppTheme.successColor : AppTheme.warningColor,
+                            fontWeight: isInactive ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -392,6 +398,8 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           _buildSectionLabel('OPTIONS'),
           const VGapSm(),
           _buildSkippableToggle(),
+          const VGapMd(),
+          _buildReminderEnabledToggle(),
           const VGapLg(),
 
           // Description
@@ -494,6 +502,62 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             onChanged: (val) {
               setState(() {
                 _skippable = val;
+              });
+            },
+            activeThumbColor: AppTheme.primaryColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderEnabledToggle() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.06),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Icon(
+                  Icons.notifications_active_rounded,
+                  color: _reminderEnabled ? AppTheme.primaryLight : AppTheme.textSecondary,
+                  size: 20,
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reminders Enabled',
+                        style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const VGapXs(),
+                      Text(
+                        'Receive alarm notifications for this activity',
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _reminderEnabled,
+            onChanged: (val) {
+              setState(() {
+                _reminderEnabled = val;
               });
             },
             activeThumbColor: AppTheme.primaryColor,

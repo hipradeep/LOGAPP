@@ -29,7 +29,7 @@ class _NotesScreenState extends State<NotesScreen> {
   DateTime _selectedDate = DateTime.now();
   late final Stream<List<Activity>> _activitiesStream = _activityService.getActivitiesStream();
   late final Stream<List<NoteEntity>> _notesStream = _noteService.getNotesStream();
-  late final Stream<List<CheckIn>> _checkInsStream = _checkInService.getCheckedActivitiesCheckInsStream();
+  late final Stream<List<CheckIn>> _checkInsStream = _checkInService.getActiveActivitiesCheckInsStream();
 
   @override
   void initState() {
@@ -472,7 +472,7 @@ class _NotesScreenState extends State<NotesScreen> {
   Widget _buildCheckInTile(CheckIn checkIn, List<Activity> activities) {
     final activity = activities.firstWhere(
       (a) => a.id == checkIn.activityId,
-      orElse: () => Activity(id: '', name: 'Deleted Activity', checked: false, timestamp: DateTime.now()),
+      orElse: () => Activity(id: '', name: 'Deleted Activity', isActive: false, timestamp: DateTime.now()),
     );
     final timeStr = DateFormat('h:mm a').format(checkIn.timestamp);
 

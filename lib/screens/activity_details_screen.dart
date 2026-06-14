@@ -846,6 +846,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             List<String> subTaskTemplates = const [],
             String? description,
             bool skippable = false,
+            bool reminderEnabled = true,
           }) {},
           initialActivity: activity,
           onEdit: (name, trackingType, targetCount, {
@@ -856,6 +857,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             List<String> subTaskTemplates = const [],
             String? description,
             bool skippable = false,
+            bool reminderEnabled = true,
           }) async {
             final messenger = ScaffoldMessenger.of(context);
             try {
@@ -868,6 +870,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 subTaskTemplates: subTaskTemplates,
                 description: description,
                 skippable: skippable,
+                reminderEnabled: reminderEnabled,
               );
               messenger.showSnackBar(
                 const SnackBar(content: Text('Activity updated in Firestore.')),
@@ -888,11 +891,11 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               navigator.pop();
             }
           },
-          onToggleComplete: () async {
+          onToggleActive: () async {
             final navigator = Navigator.of(context);
             final messenger = ScaffoldMessenger.of(context);
             try {
-              await _activityService.toggleActivity(activity.id, !activity.checked);
+              await _activityService.toggleActivity(activity.id, !activity.isActive);
               navigator.pop(); // close AddActivityScreen
             } catch (e) {
               messenger.showSnackBar(

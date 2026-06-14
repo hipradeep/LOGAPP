@@ -66,9 +66,9 @@ class FirebaseService {
     });
   }
 
-  Stream<List<Activity>> getCheckedActivitiesStream() {
+  Stream<List<Activity>> getActiveActivitiesStream() {
     return _activitiesCollection
-        .where('checked', isEqualTo: true)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs.map((doc) => Activity.fromFirestore(doc)).toList();
@@ -79,7 +79,7 @@ class FirebaseService {
 
   Future<void> createActivity(
     String name,
-    bool checked,
+    bool isActive,
     String trackingType,
     int targetCount, {
     List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
@@ -95,7 +95,7 @@ class FirebaseService {
     final newActivity = Activity(
       id: '',
       name: name,
-      checked: checked,
+      isActive: isActive,
       timestamp: DateTime.now(),
       trackingType: trackingType,
       targetCount: targetCount,
@@ -112,9 +112,9 @@ class FirebaseService {
     await _activitiesCollection.add(newActivity.toFirestore());
   }
 
-  Future<void> toggleActivity(String id, bool checked) async {
+  Future<void> toggleActivity(String id, bool isActive) async {
     await _activitiesCollection.doc(id).update({
-      'checked': checked,
+      'isActive': isActive,
     });
   }
 
@@ -138,7 +138,7 @@ class FirebaseService {
 
   // ==================== CHECK-INS OPERATIONS ====================
 
-  Stream<List<CheckIn>> getCheckedActivitiesCheckInsStream() {
+  Stream<List<CheckIn>> getActiveActivitiesCheckInsStream() {
     return _checkinsCollection
         .orderBy('timestamp', descending: true)
         .snapshots()
@@ -191,7 +191,7 @@ class FirebaseService {
   Stream<List<Task>> getCurrentAndRecentMilestoneSubTasksStream(
     Activity activity,
   ) {
-    if (activity.trackingType != 'milestone' || !activity.checked) {
+    if (activity.trackingType != 'milestone' || !activity.isActive) {
       return Stream.value(const <Task>[]);
     }
 

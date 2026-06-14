@@ -329,7 +329,7 @@ class _ProfileCard extends StatelessWidget {
                 // Stat 1: Habits
                 Expanded(
                   child: StreamBuilder<List<Activity>>(
-                    stream: activityService.getCheckedActivitiesStream(),
+                    stream: activityService.getActiveActivitiesStream(),
                     builder: (context, snapshot) {
                       final count = snapshot.data?.length ?? 0;
                       return _buildStatColumn('Habits', count.toString(), Icons.check_circle_outline_rounded, AppTheme.primaryLight);
@@ -771,6 +771,29 @@ class _PreferencesSecuritySection extends StatelessWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Test notification triggered instantly!'),
+                backgroundColor: AppTheme.successColor,
+              ),
+            );
+          },
+        ),
+        const _Divider(),
+        _MenuItem(
+          icon: Icons.timer_rounded,
+          iconBgColor: AppTheme.primaryColor,
+          title: 'Test Scheduled Notification (10s)',
+          subtitle: 'Schedule a test notification to trigger in 10 seconds',
+          onTap: () async {
+            final triggerTime = DateTime.now().add(const Duration(seconds: 10));
+            await NotificationService.scheduleOneShotNotification(
+              id: 889,
+              title: 'Scheduled Test ⏰',
+              body: 'If you see this, scheduled alarms are working!',
+              dateTime: triggerTime,
+            );
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Test notification scheduled for 10 seconds from now!'),
                 backgroundColor: AppTheme.successColor,
               ),
             );

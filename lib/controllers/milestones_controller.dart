@@ -56,7 +56,7 @@ class MilestonesController extends ChangeNotifier {
       _errorMessage = null;
 
       final activeIds = _milestoneActivities
-          .where((a) => a.checked)
+          .where((a) => a.isActive)
           .map((a) => a.id)
           .toList();
 
@@ -111,7 +111,7 @@ class MilestonesController extends ChangeNotifier {
 
 
   void _recomputeAndNotify() {
-    final activeMilestones = _milestoneActivities.where((a) => a.checked).toList();
+    final activeMilestones = _milestoneActivities.where((a) => a.isActive).toList();
 
     // 1. Update selected activity based on active milestones
     if (_shouldSelectDefaultMilestone && activeMilestones.isNotEmpty) {
@@ -132,7 +132,7 @@ class MilestonesController extends ChangeNotifier {
         orElse: () => Activity(
           id: '',
           name: '',
-          checked: false,
+          isActive: false,
           timestamp: DateTime.now(),
         ),
       );
@@ -208,8 +208,8 @@ class MilestonesController extends ChangeNotifier {
     await _activityService.updateTask(updated);
   }
 
-  Future<void> toggleActivity(Activity activity, bool checked) async {
-    await _activityService.toggleActivity(activity.id, checked);
+  Future<void> toggleActivity(Activity activity, bool isActive) async {
+    await _activityService.toggleActivity(activity.id, isActive);
   }
 
   Future<void> updateActivitySymbols(

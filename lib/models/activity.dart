@@ -3,10 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Activity {
   final String id;
   final String name;
-  final bool checked;
+  final bool isActive;
   final DateTime timestamp;
   final String trackingType; // 'single', 'multiple', or 'milestone'
   final int targetCount;
+  final bool reminderEnabled;
 
   // Schedule fields
   final List<int> repeatDays; // 1=Mon, 2=Tue, ... 7=Sun
@@ -34,10 +35,11 @@ class Activity {
   Activity({
     required this.id,
     required this.name,
-    required this.checked,
+    required this.isActive,
     required this.timestamp,
     this.trackingType = 'single',
     this.targetCount = 1,
+    this.reminderEnabled = true,
     this.repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     this.scheduledTime,
     this.startDate,
@@ -54,10 +56,11 @@ class Activity {
   Map<String, dynamic> toFirestore() {
     return {
       'name': name,
-      'checked': checked,
+      'isActive': isActive,
       'timestamp': Timestamp.fromDate(timestamp),
       'trackingType': trackingType,
       'targetCount': targetCount,
+      'reminderEnabled': reminderEnabled,
       'repeatDays': repeatDays,
       'scheduledTime': scheduledTime,
       'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
@@ -102,10 +105,11 @@ class Activity {
     return Activity(
       id: doc.id,
       name: data['name'] as String? ?? '',
-      checked: data['checked'] as bool? ?? false,
+      isActive: data['isActive'] as bool? ?? false,
       timestamp: dateTime,
       trackingType: rawType,
       targetCount: data['targetCount'] as int? ?? 1,
+      reminderEnabled: data['reminderEnabled'] as bool? ?? true,
       repeatDays: parsedRepeatDays,
       scheduledTime: data['scheduledTime'] as String?,
       startDate: firestoreStartDate?.toDate(),
@@ -123,10 +127,11 @@ class Activity {
   Activity copyWith({
     String? id,
     String? name,
-    bool? checked,
+    bool? isActive,
     DateTime? timestamp,
     String? trackingType,
     int? targetCount,
+    bool? reminderEnabled,
     List<int>? repeatDays,
     String? scheduledTime,
     DateTime? startDate,
@@ -141,10 +146,11 @@ class Activity {
     return Activity(
       id: id ?? this.id,
       name: name ?? this.name,
-      checked: checked ?? this.checked,
+      isActive: isActive ?? this.isActive,
       timestamp: timestamp ?? this.timestamp,
       trackingType: trackingType ?? this.trackingType,
       targetCount: targetCount ?? this.targetCount,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       repeatDays: repeatDays ?? this.repeatDays,
       scheduledTime: scheduledTime ?? this.scheduledTime,
       startDate: startDate ?? this.startDate,

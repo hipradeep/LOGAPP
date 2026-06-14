@@ -14,7 +14,7 @@ class DashboardController extends ChangeNotifier {
   StreamSubscription<List<CheckIn>>? _checkInsSub;
   StreamSubscription<List<Task>>? _tasksSub;
 
-  List<Activity> _checkedActivities = [];
+  List<Activity> _activeActivities = [];
   List<CheckIn> _checkIns = [];
   List<Task> _tasks = [];
 
@@ -27,7 +27,7 @@ class DashboardController extends ChangeNotifier {
   List<CheckIn> _todayCheckIns = [];
 
   // Getters
-  List<Activity> get checkedActivities => _checkedActivities;
+  List<Activity> get activeActivities => _activeActivities;
   List<CheckIn> get checkIns => _checkIns;
   List<Task> get tasks => _tasks;
   bool get isLoading => _isLoading;
@@ -42,8 +42,8 @@ class DashboardController extends ChangeNotifier {
   }
 
   void _initStreams() {
-    _activitiesSub = _activityService.getCheckedActivitiesStream().listen((activities) {
-      _checkedActivities = activities;
+    _activitiesSub = _activityService.getActiveActivitiesStream().listen((activities) {
+      _activeActivities = activities;
       _recomputeAndNotify();
     });
 
@@ -72,7 +72,7 @@ class DashboardController extends ChangeNotifier {
     final List<Activity> completed = [];
     final List<Activity> skipped = [];
 
-    for (var activity in _checkedActivities) {
+    for (var activity in _activeActivities) {
       if (activity.trackingType == 'milestone') {
         final hasTasksToday = _tasks.any((t) => t.activityId == activity.id && _isToday(t.timestamp, today));
         if (!hasTasksToday) {

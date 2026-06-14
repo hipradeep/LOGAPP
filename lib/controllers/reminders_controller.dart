@@ -29,18 +29,8 @@ class RemindersController extends ChangeNotifier {
 
   List<ReminderItem> get reminders => _reminders;
   List<UpcomingReminder> get upcomingReminders => _upcomingReminders;
+  List<Activity> get activities => _activities;
   
-  List<UpcomingReminder> get todayReminders {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return _upcomingReminders.where((r) =>
-        r.scheduledDateTime.year == today.year &&
-        r.scheduledDateTime.month == today.month &&
-        r.scheduledDateTime.day == today.day &&
-        !r.scheduledDateTime.isBefore(now)
-    ).toList();
-  }
-
   List<UpcomingReminder> get passedReminders {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -52,21 +42,12 @@ class RemindersController extends ChangeNotifier {
     ).toList();
   }
 
-  List<UpcomingReminder> get tomorrowReminders {
-    final tomorrow = DateTime.now().add(const Duration(days: 1));
-    return _upcomingReminders.where((r) =>
-        r.scheduledDateTime.year == tomorrow.year &&
-        r.scheduledDateTime.month == tomorrow.month &&
-        r.scheduledDateTime.day == tomorrow.day
-    ).toList();
-  }
-
   Map<String, List<UpcomingReminder>> get remindersByActivity {
     final Map<String, List<UpcomingReminder>> grouped = {};
     for (final r in _upcomingReminders) {
       final activity = _activities.firstWhere(
         (a) => a.id == r.activityId,
-        orElse: () => Activity(id: '', name: 'Unknown', checked: false, timestamp: DateTime.now()),
+        orElse: () => Activity(id: '', name: 'Unknown', isActive: false, timestamp: DateTime.now()),
       );
       final activityName = activity.name.isNotEmpty ? activity.name : 'Unknown';
       if (!grouped.containsKey(activityName)) {
@@ -138,24 +119,23 @@ class RemindersController extends ChangeNotifier {
   Future<void> _computeUpcomingReminders() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
 
     final snoozes = await _cacheService.getSnoozedReminders();
-
     final List<UpcomingReminder> temp = [];
 
     bool isSameDate(DateTime d1, DateTime d2) {
       return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
     }
 
-    final activeActivities = _activities.where((a) => a.checked).toList();
+    final activeActivities = _activities.where((a) => a.isActive).toList();
 
-    for (final date in [today, tomorrow]) {
-      final isDateToday = isSameDate(date, today);
-
+    for (final date in [today]) {
       for (final activity in activeActivities) {
+        
         // RepeatDays
-        if (!activity.repeatDays.contains(date.weekday)) continue;
+        if (!activity.repeatDays.contains(date.weekday)) {
+          continue;
+        }
 
         // Date range boundaries check
         if (activity.startDate != null &&
@@ -171,32 +151,13 @@ class RemindersController extends ChangeNotifier {
         if (activity.scheduledTime != null && activity.scheduledTime!.isNotEmpty) {
           final uniqueId = 'activity_${activity.id}';
 
-          // Check if completed/skipped
-          bool isCompleted = false;
           final isSkipped = _checkIns.any((c) =>
               isSameDate(c.timestamp, date) &&
               c.activityId == activity.id &&
+              c.subTaskName == null &&
               c.skipped == true);
 
-          if (isSkipped) {
-            isCompleted = true;
-          } else {
-            if (activity.trackingType == 'milestone') {
-              isCompleted = _allTasks.any((s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.checked);
-            } else if (activity.trackingType == 'multiple') {
-              final taskForDate = _allTasks.firstWhere(
-                (s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.subTasks.isNotEmpty,
-                orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: date, checked: false),
-              );
-              final completedCount = taskForDate.subTasks.where((st) => st.checked).length;
-              isCompleted = completedCount >= activity.targetCount;
-            } else {
-              final checkInCount = _checkIns.where((c) => c.activityId == activity.id && isSameDate(c.timestamp, date) && c.checked).length;
-              isCompleted = checkInCount >= activity.targetCount;
-            }
-          }
-
-          if (!isCompleted) {
+          if (!isSkipped) {
             final parsedTime = NotificationService.parseTimeString(activity.scheduledTime!);
             var scheduledTime = DateTime(date.year, date.month, date.day, parsedTime.hour, parsedTime.minute);
 
@@ -207,17 +168,14 @@ class RemindersController extends ChangeNotifier {
               }
             }
 
-            // Show if it is in the future, or today but overdue/pending
-            if (!isDateToday || scheduledTime.isAfter(now) || (isDateToday && !isCompleted)) {
-              temp.add(UpcomingReminder(
-                uniqueId: uniqueId,
-                type: 'activity',
-                title: activity.name,
-                subtitle: 'Activity Reminder',
-                scheduledDateTime: scheduledTime,
-                activityId: activity.id,
-              ));
-            }
+            temp.add(UpcomingReminder(
+              uniqueId: uniqueId,
+              type: 'activity',
+              title: activity.name,
+              subtitle: 'Activity Reminder',
+              scheduledDateTime: scheduledTime,
+              activityId: activity.id,
+            ));
           }
         }
 
@@ -231,28 +189,13 @@ class RemindersController extends ChangeNotifier {
             if (timeStr != null && timeStr.isNotEmpty) {
               final uniqueId = 'subtask_${activity.id}_$subTaskTitle';
 
-              bool isSubCompleted = false;
               final isSkipped = _checkIns.any((c) =>
                   isSameDate(c.timestamp, date) &&
                   c.activityId == activity.id &&
                   c.subTaskName == subTaskTitle &&
                   c.skipped == true);
 
-              if (isSkipped) {
-                isSubCompleted = true;
-              } else {
-                final taskForDate = _allTasks.firstWhere(
-                  (s) => s.activityId == activity.id && isSameDate(s.timestamp, date) && s.subTasks.isNotEmpty,
-                  orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: date, checked: false),
-                );
-                final subTask = taskForDate.subTasks.firstWhere(
-                  (st) => st.title == subTaskTitle,
-                  orElse: () => SubTask(id: '', title: '', checked: false),
-                );
-                isSubCompleted = subTask.checked;
-              }
-
-              if (!isSubCompleted) {
+              if (!isSkipped) {
                 final parsedTime = NotificationService.parseTimeString(timeStr);
                 var scheduledTime = DateTime(date.year, date.month, date.day, parsedTime.hour, parsedTime.minute);
 
@@ -263,17 +206,15 @@ class RemindersController extends ChangeNotifier {
                   }
                 }
 
-                if (!isDateToday || scheduledTime.isAfter(now) || (isDateToday && !isSubCompleted)) {
-                  temp.add(UpcomingReminder(
-                    uniqueId: uniqueId,
-                    type: 'subtask',
-                    title: '${activity.name} - $subTaskTitle',
-                    subtitle: 'Subtask Reminder',
-                    scheduledDateTime: scheduledTime,
-                    activityId: activity.id,
-                    subTaskTitle: subTaskTitle,
-                  ));
-                }
+                temp.add(UpcomingReminder(
+                  uniqueId: uniqueId,
+                  type: 'subtask',
+                  title: '${activity.name} - $subTaskTitle',
+                  subtitle: 'Subtask Reminder',
+                  scheduledDateTime: scheduledTime,
+                  activityId: activity.id,
+                  subTaskTitle: subTaskTitle,
+                ));
               }
             }
           }
@@ -283,7 +224,7 @@ class RemindersController extends ChangeNotifier {
         if (activity.trackingType == 'milestone') {
           final milestoneTasks = _allTasks.where((t) => t.activityId == activity.id && isSameDate(t.timestamp, date));
           for (final task in milestoneTasks) {
-            if (!task.checked && task.scheduledTime != null && task.scheduledTime!.isNotEmpty) {
+            if (task.scheduledTime != null && task.scheduledTime!.isNotEmpty) {
               final uniqueId = 'milestone_${task.id}';
 
               final parsedTime = NotificationService.parseTimeString(task.scheduledTime!);
@@ -296,17 +237,15 @@ class RemindersController extends ChangeNotifier {
                 }
               }
 
-              if (!isDateToday || scheduledTime.isAfter(now) || (isDateToday && !task.checked)) {
-                temp.add(UpcomingReminder(
-                  uniqueId: uniqueId,
-                  type: 'task',
-                  title: '${activity.name} - ${task.taskName}',
-                  subtitle: 'Milestone Task',
-                  scheduledDateTime: scheduledTime,
-                  activityId: activity.id,
-                  task: task,
-                ));
-              }
+              temp.add(UpcomingReminder(
+                uniqueId: uniqueId,
+                type: 'task',
+                title: '${activity.name} - ${task.taskName}',
+                subtitle: 'Milestone Task',
+                scheduledDateTime: scheduledTime,
+                activityId: activity.id,
+                task: task,
+              ));
             }
           }
         }
@@ -411,5 +350,93 @@ class RemindersController extends ChangeNotifier {
       await _cacheService.saveReminders(_reminders);
       notifyListeners();
     }
+  }
+
+  Future<void> checkInReminder(UpcomingReminder reminder) async {
+    final checkInNow = DateTime.now();
+    final checkInService = CheckInService();
+    final activityService = ActivityService();
+
+    if (reminder.type == 'activity') {
+      await checkInService.createCheckIn(reminder.activityId, checkInNow, true);
+    } else if (reminder.type == 'subtask' && reminder.subTaskTitle != null) {
+      final todayTask = _allTasks.firstWhere(
+        (s) => _isToday(s.timestamp) && s.subTasks.isNotEmpty && s.activityId == reminder.activityId,
+        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+      );
+
+      if (todayTask.id.isEmpty) {
+        final activity = _activities.firstWhere((a) => a.id == reminder.activityId);
+        final List<SubTask> initialSubTasks = activity.subTaskTemplates.map((template) {
+          final parts = template.split('|');
+          final title = parts.first;
+          final timeStr = parts.length > 1 ? parts.last : null;
+          return SubTask(
+            id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}',
+            title: title,
+            checked: title == reminder.subTaskTitle,
+            scheduledTime: timeStr,
+          );
+        }).toList();
+
+        await activityService.createTask(
+          reminder.activityId,
+          activity.name,
+          DateTime.now(),
+          initialSubTasks.every((st) => st.checked),
+          subTasks: initialSubTasks,
+        );
+
+        await checkInService.createCheckIn(
+          reminder.activityId,
+          checkInNow,
+          true,
+          subTaskName: reminder.subTaskTitle,
+        );
+      } else {
+        final List<SubTask> updatedSubTasks = List<SubTask>.from(todayTask.subTasks);
+        bool modified = false;
+        for (int i = 0; i < updatedSubTasks.length; i++) {
+          final cleanTitle = updatedSubTasks[i].title.contains('|') 
+              ? updatedSubTasks[i].title.split('|').first 
+              : updatedSubTasks[i].title;
+          if (cleanTitle == reminder.subTaskTitle && !updatedSubTasks[i].checked) {
+            updatedSubTasks[i] = updatedSubTasks[i].copyWith(checked: true);
+            modified = true;
+
+            await checkInService.createCheckIn(
+              reminder.activityId,
+              checkInNow,
+              true,
+              subTaskName: reminder.subTaskTitle,
+            );
+          }
+        }
+        if (modified) {
+          final allChecked = updatedSubTasks.every((st) => st.checked);
+          final updatedTask = todayTask.copyWith(subTasks: updatedSubTasks, checked: allChecked);
+          await activityService.updateTask(updatedTask);
+        }
+      }
+    } else if (reminder.type == 'task' && reminder.task != null) {
+      await activityService.toggleTask(reminder.task!.id, true);
+    }
+
+    await _computeUpcomingReminders();
+  }
+
+  Future<void> toggleActivity(Activity activity, bool isActive) async {
+    await ActivityService().toggleActivity(activity.id, isActive);
+    await _computeUpcomingReminders();
+  }
+
+  Future<void> toggleReminderEnabled(Activity activity, bool enabled) async {
+    await ActivityService().toggleReminderEnabled(activity.id, enabled);
+    await _computeUpcomingReminders();
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.day == now.day && date.month == now.month && date.year == now.year;
   }
 }

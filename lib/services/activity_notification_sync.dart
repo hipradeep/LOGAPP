@@ -84,13 +84,22 @@ class ActivityNotificationSync {
       await _cacheService.saveSnoozedReminders(cleanSnoozes);
     }
 
-    // 2. Identify all activities that are active (checked == true)
-    final activeActivities = _latestActivities.where((a) => a.checked).toList();
+    // 2. Identify all activities that are active (isActive == true)
+    final activeActivities = _latestActivities.where((a) => a.isActive).toList();
 
     // 3. Build map of notifications that SHOULD be scheduled
     final Map<String, _TargetNotification> targetNotifications = {};
 
     for (final activity in activeActivities) {
+      if (activity.reminderEnabled == false) {
+        continue;
+      }
+
+      // Check if activity runs today
+      if (!activity.repeatDays.contains(today.weekday)) {
+        continue;
+      }
+
       // --- Activity Main Scheduled Reminder ---
       if (activity.scheduledTime != null && activity.scheduledTime!.isNotEmpty) {
         final isCompleted = _isActivityCompletedToday(activity, today);
@@ -147,7 +156,7 @@ class ActivityNotificationSync {
       if (activity.trackingType == 'milestone') {
         final milestoneTasks = _latestTasks.where((t) => t.activityId == activity.id);
         for (final task in milestoneTasks) {
-          if (!task.checked && task.scheduledTime != null && task.scheduledTime!.isNotEmpty) {
+          if (task.scheduledTime != null && task.scheduledTime!.isNotEmpty) {
             var scheduledDateTime = _getTaskScheduledDateTime(task);
             final uniqueId = 'milestone_${task.id}';
 
@@ -222,19 +231,8 @@ class ActivityNotificationSync {
         c.skipped == true);
     if (isSkipped) return true;
 
-    if (activity.trackingType == 'milestone') {
-      return _latestTasks.any((s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.checked);
-    } else if (activity.trackingType == 'multiple') {
-      final todayTask = _latestTasks.firstWhere(
-        (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
-        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
-      );
-      final todayCount = todayTask.subTasks.where((st) => st.checked).length;
-      return todayCount >= activity.targetCount;
-    } else {
-      final todayCount = _latestCheckIns.where((c) => c.activityId == activity.id && _isToday(c.timestamp, today) && c.checked).length;
-      return todayCount >= activity.targetCount;
-    }
+    // We no longer care if the activity is completed/checked-in/tracked for alarm scheduling.
+    return false;
   }
 
   static bool _isSubTaskCompletedToday(Activity activity, String subTaskTitle, DateTime today) {
@@ -245,17 +243,7 @@ class ActivityNotificationSync {
         c.skipped == true);
     if (isSkipped) return true;
 
-    if (activity.trackingType == 'multiple') {
-      final todayTask = _latestTasks.firstWhere(
-        (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
-        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
-      );
-      final subTask = todayTask.subTasks.firstWhere(
-        (st) => st.title == subTaskTitle,
-        orElse: () => SubTask(id: '', title: '', checked: false),
-      );
-      return subTask.checked;
-    }
+    // We no longer care if the subtask is checked for alarm scheduling.
     return false;
   }
 

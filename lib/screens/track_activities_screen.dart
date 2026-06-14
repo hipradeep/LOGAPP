@@ -115,7 +115,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         }
 
         return StreamBuilder<List<CheckIn>>(
-          stream: _checkInService.getCheckedActivitiesCheckInsStream(),
+          stream: _checkInService.getActiveActivitiesCheckInsStream(),
           builder: (context, checkinSnapshot) {
             final checkIns = checkinSnapshot.data ?? [];
             return StreamBuilder<List<Task>>(
@@ -132,8 +132,8 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   }
 
   Widget _buildList(List<Activity> activities, List<CheckIn> checkIns, List<Task> tasks) {
-    final active = activities.where((a) => a.checked).toList();
-    final completed = activities.where((a) => !a.checked).toList();
+    final active = activities.where((a) => a.isActive).toList();
+    final inactive = activities.where((a) => !a.isActive).toList();
 
     bool isExpired(Activity activity) {
       if (activity.endDate != null) {
@@ -197,7 +197,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
       return a.timestamp.compareTo(b.timestamp);
     }
 
-    int compareCompleted(Activity a, Activity b) {
+    int compareInactive(Activity a, Activity b) {
       final aExpired = isExpired(a);
       final bExpired = isExpired(b);
       if (aExpired != bExpired) {
@@ -218,9 +218,9 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     }
 
     active.sort(compareActive);
-    completed.sort(compareCompleted);
+    inactive.sort(compareInactive);
 
-    if (active.isEmpty && completed.isEmpty) {
+    if (active.isEmpty && inactive.isEmpty) {
       return _buildEmptyState();
     }
 
@@ -236,10 +236,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           )),
           const VGapMd(),
         ],
-        if (completed.isNotEmpty) ...[
-          _buildSectionHeader('Completed Activities (${completed.length})', AppTheme.successColor),
+        if (inactive.isNotEmpty) ...[
+          _buildSectionHeader('Inactive Activities (${inactive.length})', AppTheme.successColor),
           const VGapSm(),
-          ...completed.map((a) => Padding(
+          ...inactive.map((a) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _buildActivityCard(a),
           )),
@@ -310,7 +310,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   }
 
   Widget _buildActivityCard(Activity activity) {
-    final isActive = activity.checked;
+    final isActive = activity.isActive;
     final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
     final typeBadge = _getTypeBadge(activity.trackingType);
 
@@ -484,7 +484,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   }
 
   Widget _buildActivityProgressIcon(Activity activity) {
-    final isActive = activity.checked;
+    final isActive = activity.isActive;
     final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
     
     IconData typeIcon;
@@ -553,6 +553,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             List<String> subTaskTemplates = const [],
             String? description,
             bool skippable = false,
+            bool reminderEnabled = true,
           }) {
             _addActivity(
               name, trackingType, targetCount,
@@ -563,6 +564,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               subTaskTemplates: subTaskTemplates,
               description: description,
               skippable: skippable,
+              reminderEnabled: reminderEnabled,
             );
           },
         ),
@@ -590,6 +592,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     List<String> subTaskTemplates = const [],
     String? description,
     bool skippable = false,
+    bool reminderEnabled = true,
   }) async {
     try {
       await _activityService.createActivity(
@@ -603,6 +606,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         subTaskTemplates: subTaskTemplates,
         description: description ?? '',
         skippable: skippable,
+        reminderEnabled: reminderEnabled,
       );
     } catch (e) {
       if (mounted) {
