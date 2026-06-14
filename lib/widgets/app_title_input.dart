@@ -9,6 +9,11 @@ class AppTitleInput extends StatelessWidget {
   final String label;
   final String hintText;
   final IconData icon;
+  final int minLines;
+  final int maxLines;
+  final String? Function(String?)? validator;
+  final Widget? trailing;
+  final TextInputType? keyboardType;
 
   const AppTitleInput({
     super.key,
@@ -17,6 +22,11 @@ class AppTitleInput extends StatelessWidget {
     required this.label,
     required this.hintText,
     required this.icon,
+    this.minLines = 1,
+    this.maxLines = 1,
+    this.validator,
+    this.trailing,
+    this.keyboardType,
   });
 
   @override
@@ -24,16 +34,19 @@ class AppTitleInput extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            label.toUpperCase(),
-            style: AppTheme.bodySmall.copyWith(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: AppTheme.bodySmall.copyWith(
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+              ),
             ),
-          ),
+            ?trailing,
+          ],
         ),
         const VGapSm(),
         TextFormField(
@@ -45,10 +58,11 @@ class AppTitleInput extends StatelessWidget {
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
-          keyboardType: TextInputType.text,
-          maxLines: 1,
-          textInputAction: TextInputAction.next,
-          validator: (val) {
+          keyboardType: keyboardType ?? (maxLines > 1 ? TextInputType.multiline : TextInputType.text),
+          minLines: minLines,
+          maxLines: maxLines,
+          textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+          validator: validator ?? (val) {
             if (val == null || val.trim().isEmpty) {
               return 'Please enter a title';
             }
@@ -63,6 +77,7 @@ class AppTitleInput extends StatelessWidget {
             ),
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             filled: false,
+            fillColor: Colors.transparent,
             border: const UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.white10, width: 1.5),
             ),

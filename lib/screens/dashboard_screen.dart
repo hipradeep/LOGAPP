@@ -122,8 +122,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const VGapMd(),
                 
-                // Quick Mood Check-in
-                _moodSection,
+                // Daily Progress
+                DashboardSummaryCard(
+                  activities: controller.checkedActivities,
+                  checkIns: controller.checkIns,
+                  subTasks: controller.subTasks,
+                ),
                 const VGapSm(),
 
                 // Quick Actions
@@ -149,17 +153,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _buildCheckedActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.subTasks, isCompletedList: true),
                     ],
                     const VGapSm(),
-                    DashboardSummaryCard(
-                      activities: controller.checkedActivities,
-                      checkIns: controller.checkIns,
-                      subTasks: controller.subTasks,
-                    ),
-                    const VGapSm(),
+                       
                     DashboardWeeklyCalendar(
                       activities: controller.checkedActivities,
                       checkIns: controller.checkIns,
                       subTasks: controller.subTasks,
                     ),
+                    const VGapSm(),
+                    // Quick Mood Check-in
+                    _moodSection,
+                    const VGapSm(),
                   ],
                 ),
                 const VGapXxl(),

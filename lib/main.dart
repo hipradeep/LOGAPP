@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 
+import 'services/notification_service.dart';
+import 'services/activity_notification_sync.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -21,6 +24,12 @@ void main() async {
   } catch (e) {
     debugPrint("Firebase initialization failed/bypassed: $e");
   }
+
+  // Initialize Notification Service for banner reminders
+  await NotificationService.init();
+
+  // Start syncing activities/subtasks with native local notifications
+  ActivityNotificationSync.init();
 
   runApp(const MyApp());
 }

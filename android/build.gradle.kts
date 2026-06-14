@@ -3,6 +3,11 @@ allprojects {
         google()
         mavenCentral()
     }
+    // Define the 'flutter' property mapping to resolve build failures in plugins like ':jni'
+    // that attempt to read 'flutter.ndkVersion' from project properties
+    extra.set("flutter", mapOf(
+        "ndkVersion" to "27.0.12077973"
+    ))
 }
 
 val newBuildDir: Directory =

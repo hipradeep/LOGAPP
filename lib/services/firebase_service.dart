@@ -4,7 +4,7 @@ import '../models/note_entity.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
-import '../models/budget_item.dart';
+import '../models/budget.dart';
 
 class FirebaseService {
   final CollectionReference _logsCollection =
@@ -21,6 +21,9 @@ class FirebaseService {
 
   final CollectionReference _budgetsCollection =
       FirebaseFirestore.instance.collection('budgets');
+
+  final CollectionReference _transactionsCollection =
+      FirebaseFirestore.instance.collection('transactions');
 
   final DocumentReference _budgetSettingsDoc =
       FirebaseFirestore.instance.collection('metadata').doc('budget_settings');
@@ -354,9 +357,9 @@ class FirebaseService {
     await _budgetSettingsDoc.set({'monthlySalary': salary}, SetOptions(merge: true));
   }
 
-  Stream<List<BudgetItem>> getBudgetsStream() {
+  Stream<List<Budget>> getBudgetsStream() {
     return _budgetsCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => BudgetItem.fromFirestore(doc)).toList();
+      return snapshot.docs.map((doc) => Budget.fromFirestore(doc)).toList();
     });
   }
 
@@ -381,12 +384,11 @@ class FirebaseService {
     bool repeat = true,
     bool checked = true,
   }) async {
-    final newItem = BudgetItem(
+    final newItem = Budget(
       id: '',
       category: category,
       limit: limit,
       period: period,
-      expenses: const [],
       description: description,
       startDate: startDate,
       endDate: endDate,
@@ -440,34 +442,21 @@ class FirebaseService {
     await _budgetsCollection.doc(budgetId).delete();
   }
 
-  Future<void> addExpenseToBudget(String budgetId, String tag, String description, double amount, {DateTime? timestamp}) async {
+  Future<void> addTransaction(String budgetId, String tag, String description, double amount, {DateTime? timestamp}) async {
     final expenseTime = timestamp ?? DateTime.now();
-    final doc = await _budgetsCollection.doc(budgetId).get();
-    if (doc.exists) {
-      final budget = BudgetItem.fromFirestore(doc);
-      final list = List<BudgetExpense>.from(budget.expenses);
-      list.add(BudgetExpense(
-        id: 'e-${DateTime.now().millisecondsSinceEpoch}',
-        tag: tag,
-        description: description,
-        amount: amount,
-        timestamp: expenseTime,
-      ));
-      await _budgetsCollection.doc(budgetId).update({
-        'expenses': list.map((e) => e.toMap()).toList(),
-      });
-    }
+    await _transactionsCollection.add({
+      'budgetId': budgetId,
+      'tag': tag,
+      'description': description,
+      'amount': amount,
+      'entryDate': Timestamp.fromDate(DateTime.now()),
+      'expenseDate': Timestamp.fromDate(expenseTime),
+      'isValidated': true,
+      'rawBody': null,
+    });
   }
 
-  Future<void> deleteExpenseFromBudget(String budgetId, String expenseId) async {
-    final doc = await _budgetsCollection.doc(budgetId).get();
-    if (doc.exists) {
-      final budget = BudgetItem.fromFirestore(doc);
-      final list = List<BudgetExpense>.from(budget.expenses);
-      list.removeWhere((e) => e.id == expenseId);
-      await _budgetsCollection.doc(budgetId).update({
-        'expenses': list.map((e) => e.toMap()).toList(),
-      });
-    }
+  Future<void> deleteTransaction(String transactionId) async {
+    await _transactionsCollection.doc(transactionId).delete();
   }
 }

@@ -2,7 +2,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
+import '../models/budget.dart';
+import '../services/budget_service.dart';
+import '../services/cache_service.dart';
 import 'app_spacers.dart';
+import 'app_title_input.dart';
+import 'app_title_dropdown.dart';
+import 'app_binary_toggle.dart';
+import 'app_action_buttons.dart';
 
 /// Tag definition for expense categories
 class _ExpenseTag {
@@ -13,29 +20,41 @@ class _ExpenseTag {
   const _ExpenseTag(this.label, this.icon, this.color);
 }
 
-const List<_ExpenseTag> _expenseTags = [
-  _ExpenseTag('Bill', Icons.receipt_long_rounded, Colors.redAccent),
-  _ExpenseTag('Dinner', Icons.dinner_dining_rounded, Colors.amber),
-  _ExpenseTag('Drink', Icons.local_cafe_rounded, Colors.brown),
-  _ExpenseTag('Fuel', Icons.local_gas_station_rounded, Colors.blue),
-  _ExpenseTag('Grocery', Icons.local_grocery_store_rounded, Colors.green),
-  _ExpenseTag('Health', Icons.medical_services_rounded, Colors.teal),
-  _ExpenseTag('Other', Icons.more_horiz_rounded, Colors.grey),
-  _ExpenseTag('Shopping', Icons.shopping_bag_rounded, Colors.pinkAccent),
-  _ExpenseTag('Snack', Icons.fastfood_rounded, Colors.orange),
-  _ExpenseTag('Travel', Icons.flight_rounded, Colors.indigo),
-];
+IconData getIconDataByName(String name) {
+  switch (name) {
+    case 'flight_rounded': return Icons.flight_rounded;
+    case 'fastfood_rounded': return Icons.fastfood_rounded;
+    case 'local_cafe_rounded': return Icons.local_cafe_rounded;
+    case 'local_grocery_store_rounded': return Icons.local_grocery_store_rounded;
+    case 'storefront_rounded': return Icons.storefront_rounded;
+    case 'shopping_bag_rounded': return Icons.shopping_bag_rounded;
+    case 'receipt_long_rounded': return Icons.receipt_long_rounded;
+    case 'dinner_dining_rounded': return Icons.dinner_dining_rounded;
+    case 'local_gas_station_rounded': return Icons.local_gas_station_rounded;
+    case 'medical_services_rounded': return Icons.medical_services_rounded;
+    case 'school_rounded': return Icons.school_rounded;
+    case 'sports_esports_rounded': return Icons.sports_esports_rounded;
+    case 'pets_rounded': return Icons.pets_rounded;
+    case 'home_rounded': return Icons.home_rounded;
+    case 'directions_car_rounded': return Icons.directions_car_rounded;
+    default: return Icons.more_horiz_rounded;
+  }
+}
 
 class AddTransactionSheet extends StatefulWidget {
   final String budgetId;
   final String categoryName;
   final Future<void> Function(String tag, String description, double amount, DateTime date) onAddTransaction;
+  final Transaction? existingTransaction;
+  final List<Budget>? budgets;
 
   const AddTransactionSheet({
     super.key,
     required this.budgetId,
     required this.categoryName,
     required this.onAddTransaction,
+    this.existingTransaction,
+    this.budgets,
   });
 
   @override
@@ -43,16 +62,85 @@ class AddTransactionSheet extends StatefulWidget {
 }
 
 class _AddTransactionSheetState extends State<AddTransactionSheet> {
+  final BudgetService _budgetService = BudgetService();
+  final CacheService _cacheService = CacheService();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
   final FocusNode _descFocus = FocusNode();
   final FocusNode _amountFocus = FocusNode();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   
-  DateTime _selectedDate = DateTime.now();
+  late String _selectedBudgetId;
+  late DateTime _selectedDate;
   bool _isSaving = false;
+  bool _isDeleting = false;
   bool _isExpense = true;
   int? _selectedTagIndex;
+
+  List<_ExpenseTag> _expenseTags = [];
+  bool _isLoadingTags = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedBudgetId = widget.budgetId;
+    
+    final tx = widget.existingTransaction;
+    if (tx != null) {
+      _descController.text = tx.description;
+      if (tx.amount.abs() % 1 == 0) {
+        _amountController.text = tx.amount.abs().toStringAsFixed(0);
+      } else {
+        _amountController.text = tx.amount.abs().toStringAsFixed(2);
+      }
+      _selectedDate = tx.expenseDate;
+      _isExpense = tx.amount >= 0;
+    } else {
+      _selectedDate = DateTime.now();
+      _isExpense = true;
+    }
+
+    _loadExpenseTags();
+  }
+
+  Future<void> _loadExpenseTags() async {
+    final list = await _cacheService.getExpenseCategories();
+    // Sort by count descending
+    list.sort((a, b) => (b['count'] as int? ?? 0).compareTo(a['count'] as int? ?? 0));
+    
+    final tags = list.map((item) {
+      return _ExpenseTag(
+        item['label'] as String,
+        getIconDataByName(item['icon'] as String),
+        Color(item['color'] as int),
+      );
+    }).toList();
+
+    if (mounted) {
+      setState(() {
+        _expenseTags = tags;
+        _isLoadingTags = false;
+        _initializeSelectedTag();
+      });
+    }
+  }
+
+  void _initializeSelectedTag() {
+    final tx = widget.existingTransaction;
+    if (tx != null && _expenseTags.isNotEmpty) {
+      final tagLower = tx.tag.toLowerCase().trim();
+      for (int i = 0; i < _expenseTags.length; i++) {
+        if (_expenseTags[i].label.toLowerCase() == tagLower) {
+          _selectedTagIndex = i;
+          break;
+        }
+      }
+      _selectedTagIndex ??= _expenseTags.indexWhere((t) => t.label.toLowerCase() == 'other');
+      if (_selectedTagIndex == -1) _selectedTagIndex = 0;
+    } else {
+      _selectedTagIndex = 0;
+    }
+  }
 
   @override
   void dispose() {
@@ -64,40 +152,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     super.dispose();
   }
 
-  Future<void> _pickCustomDate() async {
-    final today = DateTime.now();
-    final firstDate = today.subtract(const Duration(days: 30));
-    final lastDate = today.add(const Duration(days: 7));
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
-  }
-
   Future<void> _submit() async {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     final customDesc = _descController.text.trim();
 
-    if (_selectedTagIndex == null) {
+    if (_selectedTagIndex == null || _expenseTags.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select an expense tag'),
@@ -117,21 +176,57 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
 
     final tag = _expenseTags[_selectedTagIndex!];
-    final desc = customDesc;
-    // If no custom description, the tag label alone will be shown on display
     final finalAmount = _isExpense ? amount : -amount;
 
     setState(() => _isSaving = true);
     try {
-      await widget.onAddTransaction(tag.label, desc, finalAmount, _selectedDate);
-      if (mounted) {
-        Navigator.pop(context);
+      if (widget.existingTransaction != null) {
+        final updatedExpense = Transaction(
+          id: widget.existingTransaction!.id,
+          budgetId: _selectedBudgetId,
+          tag: tag.label,
+          description: customDesc,
+          amount: finalAmount,
+          entryDate: widget.existingTransaction!.entryDate,
+          expenseDate: _selectedDate,
+          isValidated: true,
+          rawBody: widget.existingTransaction!.rawBody,
+        );
+
+        if (_selectedBudgetId != widget.budgetId) {
+          await _budgetService.moveTransaction(
+            destBudgetId: _selectedBudgetId,
+            transaction: updatedExpense,
+          );
+        } else {
+          await _budgetService.updateTransaction(updatedExpense);
+        }
+
+        await _cacheService.incrementCategoryCount(tag.label);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Transaction validated successfully'),
+              backgroundColor: AppTheme.successColor,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        await widget.onAddTransaction(tag.label, customDesc, finalAmount, _selectedDate);
+        
+        await _cacheService.incrementCategoryCount(tag.label);
+
+        if (mounted) {
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error adding transaction: $e'),
+            content: Text('Error saving transaction: $e'),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -140,6 +235,169 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  Future<void> _delete() async {
+    if (widget.existingTransaction == null) return;
+    setState(() => _isDeleting = true);
+    try {
+      await _budgetService.deleteTransaction(widget.existingTransaction!.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction deleted/ignored'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+      }
+    }
+  }
+
+  void _onDateChanged(DateTime date) {
+    _selectedDate = date;
+  }
+
+  void _onTagSelected(int index) {
+    _selectedTagIndex = index;
+  }
+
+  void _onExpenseTypeChanged(bool isExpense) {
+    _isExpense = isExpense;
+  }
+
+  void _handleBudgetChanged(String? val) {
+    if (val != null) {
+      setState(() {
+        _selectedBudgetId = val;
+      });
+    }
+  }
+
+  void _handleClose() => Navigator.pop(context);
+
+  String? _validateDescription(String? val) => null;
+
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.existingTransaction != null
+                    ? (widget.existingTransaction!.isValidated
+                        ? 'Edit Transaction'
+                        : 'Validate Auto-Transaction')
+                    : 'Log Expense',
+                style: AppTheme.headingMedium.copyWith(fontSize: 24),
+              ),
+              const SizedBox(height: 4),
+              if (widget.existingTransaction != null && widget.budgets != null)
+                AppTitleDropdown<String>(
+                  value: _selectedBudgetId,
+                  items: widget.budgets!.map((b) {
+                    return DropdownMenuItem<String>(
+                      value: b.id,
+                      child: Text(
+                        b.category,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _handleBudgetChanged,
+                )
+              else
+                Text(
+                  'Category: ${widget.categoryName}',
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          ),
+          child: IconButton(
+            onPressed: _handleClose,
+            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAmountInput() {
+    return AppTitleInput(
+      controller: _amountController,
+      focusNode: _amountFocus,
+      label: 'Amount (₹)',
+      hintText: 'e.g. 250.00',
+      icon: Icons.attach_money_rounded,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      trailing: widget.existingTransaction != null
+          ? AppBinaryToggle(
+              value: _isExpense,
+              onChanged: _onExpenseTypeChanged,
+              trueLabel: 'Debit',
+              falseLabel: 'Credit',
+            )
+          : null,
+    );
+  }
+
+  Widget _buildDescriptionInput() {
+    return AppTitleInput(
+      controller: _descController,
+      focusNode: _descFocus,
+      label: 'Description',
+      hintText: 'Add a note (optional)',
+      icon: Icons.description_outlined,
+      validator: _validateDescription,
+    );
+  }
+
+  Widget _buildActionButtons() {
+    if (widget.existingTransaction != null) {
+      return AppActionButtons(
+        primaryLabel: widget.existingTransaction!.isValidated
+            ? 'Save Changes'
+            : 'Validate Transaction',
+        onPrimaryPressed: _submit,
+        isPrimaryLoading: _isSaving,
+        primaryColor: AppTheme.successColor,
+        secondaryLabel: 'Ignore',
+        onSecondaryPressed: _delete,
+        isSecondaryLoading: _isDeleting,
+        height: 50,
+      );
+    } else {
+      return AppActionButtons(
+        primaryLabel: 'Log Expense',
+        onPrimaryPressed: _submit,
+        isPrimaryLoading: _isSaving,
+        primaryColor: AppTheme.primaryColor,
+        height: 50,
+      );
     }
   }
 
@@ -189,164 +447,46 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 28),
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Log Expense',
-                                      style: AppTheme.headingMedium.copyWith(fontSize: 24),
-                                    ),
-                                    Text(
-                                      'Category: ${widget.categoryName}',
-                                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.05),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                                ),
-                                child: IconButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
-                                ),
-                              ),
-                            ],
-                          ),
+                          _buildHeader(),
+                          if (widget.existingTransaction?.rawBody != null) ...[
+                            const VGapMd(),
+                            _RawBodyCard(rawText: widget.existingTransaction!.rawBody!),
+                          ],
                           const VGapLg(),
-                          Text(
+                          const Text(
                             'Select Date',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                           const VGapMd(),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: _buildDateSelectorRow(),
+                          _DateSelector(
+                            initialDate: _selectedDate,
+                            onDateChanged: _onDateChanged,
                           ),
                           const VGapLg(),
-
-                          // ── Expense Tag Icons ──
-                          Text(
+                          const Text(
                             'What was it for?',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                           const VGapMd(),
-                          _buildTagGrid(),
+                          if (_isLoadingTags)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: CircularProgressIndicator(color: AppTheme.primaryColor),
+                              ),
+                            )
+                          else
+                            _TagSelector(
+                              tags: _expenseTags,
+                              initialSelectedIndex: _selectedTagIndex,
+                              onTagSelected: _onTagSelected,
+                            ),
                           const VGapLg(),
-
-                          // ── Amount ──
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Amount (₹)',
-                                style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
-                              ),
-                              GestureDetector(
-                                onTap: () => setState(() => _isExpense = !_isExpense),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: _isExpense
-                                        ? AppTheme.errorColor.withValues(alpha: 0.15)
-                                        : AppTheme.successColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: _isExpense
-                                          ? AppTheme.errorColor.withValues(alpha: 0.4)
-                                          : AppTheme.successColor.withValues(alpha: 0.4),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _isExpense ? 'Expense(-)' : 'Gain(+)',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: _isExpense ? AppTheme.errorColor : AppTheme.successColor,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const VGapMd(),
-                          TextField(
-                            controller: _amountController,
-                            focusNode: _amountFocus,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                            decoration: const InputDecoration(
-                              hintText: 'e.g. 250.00',
-                              hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                              enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(color: Colors.white24, width: 1),
-                              ),
-                              focusedBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-                              ),
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(vertical: 8),
-                            ),
-                          ),
-                          const VGapMd(),
-
-                          // ── Description (optional, below amount) ──
-                          Text(
-                            'Description',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 15, color: AppTheme.textSecondary),
-                          ),
-                          const VGapMd(),
-                          TextField(
-                            controller: _descController,
-                            focusNode: _descFocus,
-                            textInputAction: TextInputAction.newline,
-                            minLines: 1,
-                            maxLines: 3,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                            decoration: const InputDecoration(
-                              hintText: 'Add a note (optional)',
-                              hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                              enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(color: Colors.white24, width: 1),
-                              ),
-                              focusedBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
-                              ),
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(vertical: 8),
-                            ),
-                          ),
+                          _buildAmountInput(),
                           const VGapLg(),
-
-                          ElevatedButton(
-                            onPressed: _isSaving ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              minimumSize: const Size(double.infinity, 50),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            child: _isSaving
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Log Expense',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                          ),
+                          _buildDescriptionInput(),
+                          const VGapLg(),
+                          _buildActionButtons(),
                           const VGapXl(),
                         ],
                       ),
@@ -360,21 +500,102 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ),
     );
   }
+}
 
-  /// Builds the horizontally scrollable circular tag selector
-  Widget _buildTagGrid() {
+class _RawBodyCard extends StatelessWidget {
+  final String rawText;
+
+  const _RawBodyCard({required this.rawText});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.auto_awesome, color: AppTheme.warningColor, size: 14),
+              SizedBox(width: 6),
+              Text(
+                'Auto-Intercepted Notification Body',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.warningColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            rawText,
+            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagSelector extends StatefulWidget {
+  final List<_ExpenseTag> tags;
+  final int? initialSelectedIndex;
+  final ValueChanged<int> onTagSelected;
+
+  const _TagSelector({
+    required this.tags,
+    required this.initialSelectedIndex,
+    required this.onTagSelected,
+  });
+
+  @override
+  State<_TagSelector> createState() => _TagSelectorState();
+}
+
+class _TagSelectorState extends State<_TagSelector> {
+  int? _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialSelectedIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TagSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSelectedIndex != oldWidget.initialSelectedIndex) {
+      setState(() {
+        _selectedIndex = widget.initialSelectedIndex;
+      });
+    }
+  }
+
+  void _handleTagTap(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    widget.onTagSelected(index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
       child: Row(
-        children: List.generate(_expenseTags.length, (index) {
-          final tag = _expenseTags[index];
-          final isSelected = _selectedTagIndex == index;
+        children: List.generate(widget.tags.length, (index) {
+          final tag = widget.tags[index];
+          final isSelected = _selectedIndex == index;
 
           return Padding(
-            padding: EdgeInsets.only(right: index < _expenseTags.length - 1 ? 12 : 0),
+            padding: EdgeInsets.only(right: index < widget.tags.length - 1 ? 12 : 0),
             child: GestureDetector(
-              onTap: () => setState(() => _selectedTagIndex = index),
+              onTap: () => _handleTagTap(index),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -417,8 +638,73 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ),
     );
   }
+}
 
-  Widget _buildDateSelectorRow() {
+class _DateSelector extends StatefulWidget {
+  final DateTime initialDate;
+  final ValueChanged<DateTime> onDateChanged;
+
+  const _DateSelector({
+    required this.initialDate,
+    required this.onDateChanged,
+  });
+
+  @override
+  State<_DateSelector> createState() => _DateSelectorState();
+}
+
+class _DateSelectorState extends State<_DateSelector> {
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.initialDate;
+  }
+
+  void _handleDateSelection(DateTime date) {
+    setState(() {
+      _selectedDate = date;
+    });
+    widget.onDateChanged(date);
+  }
+
+  Future<void> _pickCustomDate() async {
+    final today = DateTime.now();
+    final firstDate = today.subtract(const Duration(days: 30));
+    final lastDate = today.add(const Duration(days: 7));
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primaryColor,
+              surface: AppTheme.surfaceColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      _handleDateSelection(picked);
+    }
+  }
+
+  bool _isSameDay(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
+  }
+
+  void _onTodayTap(DateTime today) => _handleDateSelection(today);
+  void _onYesterdayTap(DateTime yesterday) => _handleDateSelection(yesterday);
+
+  @override
+  Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -429,18 +715,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
     return Row(
       children: [
-        _buildDateChip('Today', today, isToday),
+        _buildDateChip('Today', today, isToday, () => _onTodayTap(today)),
         const HGapSm(),
-        _buildDateChip('Yesterday', yesterday, isYesterday),
+        _buildDateChip('Yesterday', yesterday, isYesterday, () => _onYesterdayTap(yesterday)),
         const HGapSm(),
         _buildCustomDateChip(isCustom),
       ],
     );
   }
 
-  Widget _buildDateChip(String label, DateTime date, bool isSelected) {
+  Widget _buildDateChip(String label, DateTime date, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
-      onTap: () => setState(() => _selectedDate = date),
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -509,8 +795,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ),
     );
   }
-
-  bool _isSameDay(DateTime d1, DateTime d2) {
-    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
-  }
 }
+
+

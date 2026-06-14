@@ -1,25 +1,30 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../models/budget_item.dart';
+import '../models/budget.dart';
 import '../services/budget_service.dart';
 
 class BudgetController extends ChangeNotifier {
   final BudgetService _budgetService = BudgetService();
-  StreamSubscription<List<BudgetItem>>? _budgetSub;
+  StreamSubscription<List<Budget>>? _budgetSub;
+  StreamSubscription<List<Transaction>>? _transactionSub;
 
-  List<BudgetItem> _budgets = [];
+  List<Budget> _budgets = [];
+  List<Transaction> _transactions = [];
   bool _isLoading = true;
+  bool _budgetsLoaded = false;
+  bool _transactionsLoaded = false;
   String? _errorMessage;
   String? _selectedBudgetId;
   
-  ValueChanged<BudgetItem?>? onBudgetChanged;
+  ValueChanged<Budget?>? onBudgetChanged;
 
-  List<BudgetItem> get budgets => _budgets;
+  List<Budget> get budgets => _budgets;
+  List<Transaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get selectedBudgetId => _selectedBudgetId;
 
-  BudgetItem? get selectedBudget {
+  Budget? get selectedBudget {
     if (_selectedBudgetId != null) {
       final matches = _budgets.where((b) => b.id == _selectedBudgetId);
       if (matches.isNotEmpty) return matches.first;
@@ -30,6 +35,12 @@ class BudgetController extends ChangeNotifier {
       return activeBudgets.isNotEmpty ? activeBudgets.first : _budgets.first;
     }
     return null;
+  }
+
+  List<Transaction> get selectedBudgetTransactions {
+    final budget = selectedBudget;
+    if (budget == null) return [];
+    return _transactions.where((t) => t.budgetId == budget.id).toList();
   }
 
   BudgetController({this.onBudgetChanged, String? initialSelectedBudgetId}) {
@@ -49,52 +60,80 @@ class BudgetController extends ChangeNotifier {
 
   void _initStream() {
     _isLoading = true;
+    _budgetsLoaded = false;
+    _transactionsLoaded = false;
     notifyListeners();
-    _subscribeToStream();
+    _subscribeToStreams();
   }
 
   Future<void> refresh() async {
-    _subscribeToStream();
+    _subscribeToStreams();
     await Future.delayed(const Duration(milliseconds: 800));
   }
 
-  void _subscribeToStream() {
+  void _subscribeToStreams() {
     _budgetSub?.cancel();
     _budgetSub = _budgetService.getBudgetsStream().listen(
       (budgetsData) {
         _budgets = budgetsData;
-        _isLoading = false;
+        _budgetsLoaded = true;
         _errorMessage = null;
 
-        if (_selectedBudgetId != null) {
-          final matches = _budgets.where((b) => b.id == _selectedBudgetId);
-          if (matches.isEmpty && _budgets.isNotEmpty) {
-            _selectedBudgetId = _budgets.first.id;
-            onBudgetChanged?.call(selectedBudget);
-          }
-        } else if (_budgets.isNotEmpty) {
-          final activeBudgets = _budgets.where((b) => b.checked).toList();
-          _selectedBudgetId = activeBudgets.isNotEmpty ? activeBudgets.first.id : _budgets.first.id;
-          onBudgetChanged?.call(selectedBudget);
-        }
+        _checkAndUpdateSelectedBudget();
+        _checkLoadingState();
+        notifyListeners();
+      },
+      onError: _handleError,
+    );
 
+    _transactionSub?.cancel();
+    _transactionSub = _budgetService.getTransactionsStream().listen(
+      (transactionsData) {
+        _transactions = transactionsData;
+        _transactionsLoaded = true;
+        _errorMessage = null;
+
+        _checkLoadingState();
         notifyListeners();
       },
-      onError: (error) {
-        _isLoading = false;
-        _errorMessage = error.toString();
-        notifyListeners();
-      },
+      onError: _handleError,
     );
   }
 
-  Future<void> deleteExpense(BudgetItem budget, String expenseId) async {
-    await _budgetService.deleteExpenseFromBudget(budget.id, expenseId);
+  void _checkAndUpdateSelectedBudget() {
+    if (_selectedBudgetId != null) {
+      final matches = _budgets.where((b) => b.id == _selectedBudgetId);
+      if (matches.isEmpty && _budgets.isNotEmpty) {
+        _selectedBudgetId = _budgets.first.id;
+        onBudgetChanged?.call(selectedBudget);
+      }
+    } else if (_budgets.isNotEmpty) {
+      final activeBudgets = _budgets.where((b) => b.checked).toList();
+      _selectedBudgetId = activeBudgets.isNotEmpty ? activeBudgets.first.id : _budgets.first.id;
+      onBudgetChanged?.call(selectedBudget);
+    }
+  }
+
+  void _checkLoadingState() {
+    if (_budgetsLoaded && _transactionsLoaded) {
+      _isLoading = false;
+    }
+  }
+
+  void _handleError(Object error) {
+    _isLoading = false;
+    _errorMessage = error.toString();
+    notifyListeners();
+  }
+
+  Future<void> deleteTransaction(Budget budget, String transactionId) async {
+    await _budgetService.deleteTransaction(transactionId);
   }
 
   @override
   void dispose() {
     _budgetSub?.cancel();
+    _transactionSub?.cancel();
     super.dispose();
   }
 }

@@ -40,7 +40,6 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
   final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _contentFocusNode = FocusNode();
 
-  bool _isTitleFocused = false;
   bool _isContentFocused = false;
 
   int _wordCount = 0;
@@ -80,12 +79,7 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
 
     _updateCounts(_contentController.text);
 
-    // Add listeners to rebuild on focus changes
-    _titleFocusNode.addListener(() {
-      setState(() {
-        _isTitleFocused = _titleFocusNode.hasFocus;
-      });
-    });
+    // Add listener to rebuild on focus changes
     _contentFocusNode.addListener(() {
       setState(() {
         _isContentFocused = _contentFocusNode.hasFocus;

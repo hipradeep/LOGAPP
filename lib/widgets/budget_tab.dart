@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/budget_item.dart';
+import '../models/budget.dart';
 import '../services/budget_service.dart';
-import '../services/sms_transaction_service.dart';
+import '../services/notification_transaction_service.dart';
 import '../theme/app_theme.dart';
 import 'base_management_tab.dart';
 import '../controllers/budget_controller.dart';
 import 'app_spacers.dart';
-import '../screens/sms_import_sheet.dart';
+import 'transaction_filter_sheet.dart';
 import 'add_transaction_sheet.dart';
-import 'app_premium_fab.dart';
+import 'app_provider.dart';
 
 class BudgetTab extends StatefulWidget {
   final String? selectedBudgetId;
-  final ValueChanged<BudgetItem?>? onBudgetChanged;
+  final ValueChanged<Budget?>? onBudgetChanged;
 
   const BudgetTab({
     super.key,
@@ -27,15 +27,30 @@ class BudgetTab extends StatefulWidget {
 
 class _BudgetTabState extends State<BudgetTab> {
   late BudgetController _controller;
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
+  String _filterType = 'all'; // 'all', 'debit', 'credit'
+  String _filterValidation = 'all'; // 'all', 'validated', 'pending'
   String? _deletingExpenseId;
 
   @override
   void initState() {
     super.initState();
     _controller = BudgetController(
-      initialSelectedBudgetId: widget.selectedBudgetId,
       onBudgetChanged: widget.onBudgetChanged,
+      initialSelectedBudgetId: widget.selectedBudgetId,
     );
+    _filterStartDate = DateTime.now().subtract(const Duration(days: 30));
+    _filterEndDate = DateTime.now();
+
+    _initNotificationScannerService();
+  }
+
+  void _initNotificationScannerService() async {
+    final granted = await NotificationTransactionService.isPermissionGranted();
+    if (granted) {
+      await NotificationTransactionService.startService();
+    }
   }
 
   @override
@@ -52,8 +67,8 @@ class _BudgetTabState extends State<BudgetTab> {
     super.dispose();
   }
 
-  void _deleteExpense(BudgetItem budget, String expenseId) async {
-    await _controller.deleteExpense(budget, expenseId);
+  void _deleteTransaction(Budget budget, String expenseId) async {
+    await _controller.deleteTransaction(budget, expenseId);
   }
 
   @override
@@ -82,41 +97,40 @@ class _BudgetTabState extends State<BudgetTab> {
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Dropdown Selector Row
-            Row(
-              children: [
-                SizedBox(
-                  width: 180,
-                  child: _buildBudgetDropdown(budgets, controller),
-                ),
-                const HGapSm(),
-                _buildCalendarButton(context, selectedBudget),
-                const HGapSm(),
-                _buildProgressButton(context, selectedBudget),
-                const HGapSm(),
-                _buildSmsImportButton(context, selectedBudget),
-                const Spacer(),
-              ],
-            ),
-            const VGapMd(),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Dropdown Selector Row
+              Row(
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: _buildBudgetDropdown(budgets, controller),
+                  ),
+                  const HGapSm(),
+                  _buildCalendarButton(context, selectedBudget),
+                  const HGapSm(),
+                  _buildProgressButton(context, selectedBudget),
+                  const HGapSm(),
+                  _buildScannerStatusButton(context, selectedBudget),
+                  const Spacer(),
+                ],
+              ),
+              const VGapMd(),
 
-            // Render selected budget details
-            if (selectedBudget == null)
-              _buildEmptyState('Select a budget category above.')
-            else ...[
-              _buildSelectedBudgetDetails(selectedBudget),
+              // Render selected budget details
+              if (selectedBudget == null)
+                _buildEmptyState('Select a budget category above.')
+              else ...[
+                _buildSelectedBudgetDetails(selectedBudget, controller),
+              ],
             ],
-          ],
-        ),
+          ),
         );
       },
     );
   }
 
-
-  void _showAddTransactionSheet(BuildContext context, BudgetItem budget) {
+  void _showAddTransactionSheet(BuildContext context, Budget budget) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -125,15 +139,13 @@ class _BudgetTabState extends State<BudgetTab> {
         budgetId: budget.id,
         categoryName: budget.category,
         onAddTransaction: (tag, desc, amount, date) async {
-          // Keep BudgetService direct usage here for adding transaction to avoid passing too much to controller
-          await BudgetService().addExpenseToBudget(budget.id, tag, desc, amount, timestamp: date);
+          await BudgetService().addTransaction(budget.id, tag, desc, amount, timestamp: date);
         },
       ),
     );
   }
 
-
-  Widget _buildBudgetDropdown(List<BudgetItem> budgets, BudgetController controller) {
+  Widget _buildBudgetDropdown(List<Budget> budgets, BudgetController controller) {
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -184,9 +196,10 @@ class _BudgetTabState extends State<BudgetTab> {
     );
   }
 
-  Widget _buildSelectedBudgetDetails(BudgetItem budget) {
-    final percent = budget.limit > 0 ? (budget.spentForCurrentPeriod / budget.limit).clamp(0.0, 1.0) : 0.0;
-    final isOver = budget.isOverBudget;
+  Widget _buildSelectedBudgetDetails(Budget budget, BudgetController controller) {
+    final spent = budget.spentForCurrentPeriod(controller.transactions);
+    final percent = budget.limit > 0 ? (spent / budget.limit).clamp(0.0, 1.0) : 0.0;
+    final isOver = budget.isOverBudget(controller.transactions);
     final isActive = budget.checked;
 
     final Color statusColor = !isActive
@@ -286,7 +299,7 @@ class _BudgetTabState extends State<BudgetTab> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Spent: ₹${budget.spentForCurrentPeriod.toStringAsFixed(1)}',
+                    'Spent: ₹${spent.toStringAsFixed(1)}',
                     style: TextStyle(color: isOver && isActive ? AppTheme.errorColor : AppTheme.textSecondary, fontSize: 12),
                   ),
                   Text(
@@ -311,30 +324,65 @@ class _BudgetTabState extends State<BudgetTab> {
         const VGapMd(),
 
         // Expenses list
-        const Text('Expense History', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Expense History', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+            IconButton(
+              icon: Icon(
+                Icons.filter_list_rounded,
+                color: (_filterStartDate != null || _filterType != 'all' || _filterValidation != 'all')
+                    ? AppTheme.primaryLight
+                    : AppTheme.textSecondary,
+                size: 20,
+              ),
+              onPressed: _showFilterSheet,
+            ),
+          ],
+        ),
         const VGapSm(),
-        if (budget.expenses.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-              child: Text(
-                'No expenses recorded yet.',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontStyle: FontStyle.italic,
-                  fontSize: 12,
+        () {
+          final filteredExpenses = controller.selectedBudgetTransactions.where((expense) {
+            if (_filterStartDate != null && expense.expenseDate.isBefore(_filterStartDate!)) {
+              return false;
+            }
+            if (_filterEndDate != null && expense.expenseDate.isAfter(_filterEndDate!.add(const Duration(days: 1)))) {
+              return false;
+            }
+            final isGain = expense.amount < 0;
+            if (_filterType == 'debit' && isGain) return false;
+            if (_filterType == 'credit' && !isGain) return false;
+            if (_filterValidation == 'validated' && !expense.isValidated) return false;
+            if (_filterValidation == 'pending' && expense.isValidated) return false;
+            return true;
+          }).toList();
+
+          filteredExpenses.sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
+          final displayExpenses = filteredExpenses;
+
+          if (displayExpenses.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No matching expenses found.',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
+                  ),
                 ),
               ),
-            ),
-          )
-        else
-          ListView.builder(
+            );
+          }
+
+          return ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: budget.expenses.length,
+            itemCount: displayExpenses.length,
             itemBuilder: (context, index) {
-              final expense = budget.expenses[budget.expenses.length - 1 - index];
-              final formattedDate = DateFormat('d MMM yyyy - h:mm a').format(expense.timestamp);
+              final expense = displayExpenses[index];
+              final formattedDate = DateFormat('d MMM yyyy - h:mm a').format(expense.expenseDate);
               final lookup = expense.tag.isNotEmpty ? expense.tag : expense.description;
               final iconColor = _getTagColor(lookup);
               final iconData = _getTagIcon(lookup);
@@ -348,116 +396,109 @@ class _BudgetTabState extends State<BudgetTab> {
                     _deletingExpenseId = isDeletingThis ? null : expense.id;
                   });
                 },
-                onTap: () {
-                  if (_deletingExpenseId != null) {
-                    setState(() => _deletingExpenseId = null);
-                  }
-                },
+                onTap: () => _handleExpenseTap(budget, expense),
                 child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isDeletingThis
-                        ? AppTheme.errorColor.withValues(alpha: 0.08)
-                        : AppTheme.surfaceColor.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(16),
+                    color: isDeletingThis 
+                        ? AppTheme.errorColor.withValues(alpha: 0.1) 
+                        : (expense.isValidated ? Colors.white.withValues(alpha: 0.02) : Colors.transparent),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isDeletingThis
-                          ? AppTheme.errorColor.withValues(alpha: 0.2)
-                          : AppTheme.textPrimary.withValues(alpha: 0.04),
-                      width: 1,
+                      color: isDeletingThis 
+                          ? AppTheme.errorColor 
+                          : (expense.isValidated 
+                              ? Colors.white.withValues(alpha: 0.03) 
+                              : AppTheme.warningColor.withValues(alpha: 0.35)),
+                      width: expense.isValidated ? 1.0 : 1.2,
                     ),
                   ),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Icon Container
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: iconColor.withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: iconColor.withValues(alpha: 0.2), width: 1),
-                        ),
-                        child: Icon(
-                          iconData,
-                          color: iconColor,
-                          size: 18,
-                        ),
-                      ),
-                      const HGapMd(),
-                      // Title and Date
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text.rich(
-                              TextSpan(
+                      Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: iconColor.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(iconData, color: iconColor, size: 16),
+                          ),
+                          const HGapMd(),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  TextSpan(
-                                    text: tagName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryLight, fontSize: 13),
+                                  Text(
+                                    tagName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary, fontSize: 13),
                                   ),
-                                  if (expense.description.isNotEmpty) ...[
-                                    TextSpan(
-                                      text: ' | ',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textMuted, fontSize: 13),
-                                    ),
-                                    TextSpan(
-                                      text: expense.description,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary, fontSize: 13),
+                                  if (!expense.isValidated) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.warningColor.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.3)),
+                                      ),
+                                      child: const Text(
+                                        'Pending',
+                                        style: TextStyle(color: AppTheme.warningColor, fontSize: 8, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ],
                                 ],
                               ),
+                              const SizedBox(height: 3),
+                              Text(
+                                formattedDate,
+                                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            '${isGain ? '+' : '-'}₹${expense.amount.abs().toStringAsFixed(1)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isGain ? AppTheme.successColor : AppTheme.errorColor,
+                              fontSize: 14,
                             ),
-                            const VGapXs(),
-                            Text(
-                              formattedDate,
-                              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+                          ),
+                          if (isDeletingThis) ...[
+                            const HGapMd(),
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.errorColor, size: 20),
+                              onPressed: () => _deleteTransaction(budget, expense.id),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-                      // Amount
-                      Text(
-                        isGain
-                            ? '+₹${expense.amount.abs().toStringAsFixed(1)}'
-                            : '-₹${expense.amount.toStringAsFixed(1)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isGain ? AppTheme.successColor : AppTheme.errorColor,
-                          fontSize: 13,
-                        ),
-                      ),
-                      // Delete Button (only on long press)
-                      if (isDeletingThis) ...[
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () {
-                            _deleteExpense(budget, expense.id);
-                            setState(() => _deletingExpenseId = null);
-                          },
-                          child: Icon(
-                            Icons.close_rounded,
-                            color: AppTheme.errorColor.withValues(alpha: 0.8),
-                            size: 18,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               );
             },
-          ),
+          );
+        }(),
       ],
     );
   }
 
   Widget _buildCardTag(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: AppTheme.textPrimary.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(4),
@@ -476,9 +517,7 @@ class _BudgetTabState extends State<BudgetTab> {
     );
   }
 
-
-
-  Widget _buildCalendarButton(BuildContext context, BudgetItem? budget) {
+  Widget _buildCalendarButton(BuildContext context, Budget? budget) {
     final hasDates = budget != null && (budget.startDate != null || budget.endDate != null);
 
     return Tooltip(
@@ -592,12 +631,13 @@ class _BudgetTabState extends State<BudgetTab> {
     );
   }
 
-  Widget _buildProgressButton(BuildContext context, BudgetItem? budget) {
+  Widget _buildProgressButton(BuildContext context, Budget? budget) {
     if (budget == null) return const SizedBox.shrink();
+    final controller = AppProvider.watch<BudgetController>(context);
     final total = budget.limit;
-    final spent = budget.spentForCurrentPeriod;
+    final spent = budget.spentForCurrentPeriod(controller.transactions);
     final percent = total > 0 ? (spent / total).clamp(0.0, 1.0) : 0.0;
-    final isOver = budget.isOverBudget;
+    final isOver = budget.isOverBudget(controller.transactions);
     final isActive = budget.checked;
 
     final Color statusColor = !isActive
@@ -652,33 +692,11 @@ class _BudgetTabState extends State<BudgetTab> {
     );
   }
 
-  Widget _buildSmsImportButton(BuildContext context, BudgetItem? budget) {
+  Widget _buildScannerStatusButton(BuildContext context, Budget? budget) {
     return Tooltip(
-      message: 'Import from SMS',
+      message: 'Notification Scanner Settings',
       child: GestureDetector(
-        onTap: () async {
-          if (budget == null) return;
-          final granted = await SmsTransactionService().requestPermission();
-          if (!mounted) return;
-          if (!granted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('SMS permission is required to read transactions'),
-                backgroundColor: AppTheme.errorColor,
-              ),
-            );
-            return;
-          }
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => SmsImportSheet(
-              budgetId: budget.id,
-              existingExpenses: budget.expenses,
-            ),
-          );
-        },
+        onTap: _handleNotificationScannerSetup,
         child: Container(
           width: 34,
           height: 34,
@@ -691,7 +709,7 @@ class _BudgetTabState extends State<BudgetTab> {
             ),
           ),
           child: const Icon(
-            Icons.sms_rounded,
+            Icons.notifications_active_rounded,
             color: AppTheme.primaryLight,
             size: 16,
           ),
@@ -700,74 +718,98 @@ class _BudgetTabState extends State<BudgetTab> {
     );
   }
 
-  IconData _getCategoryIcon(String category) {
-    final cat = category.toLowerCase();
-    if (cat.contains('food') || cat.contains('eat') || cat.contains('restaurant') || cat.contains('cafe')) {
-      return Icons.restaurant_rounded;
+  void _handleNotificationScannerSetup() async {
+    final hasPermission = await NotificationTransactionService.isPermissionGranted();
+    if (!mounted) return;
+
+    if (!hasPermission) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppTheme.surfaceColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Notification Scanner Access',
+            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            'LOG requires Notification Access to automatically scan and import transaction alerts from banking, UPI, and SMS apps in real time. Your messages are parsed locally on your device.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: _handleDismissSetupDialog,
+              child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+            ),
+            TextButton(
+              onPressed: _handleEnableScannerAccess,
+              child: const Text('Enable Access', style: TextStyle(color: AppTheme.primaryLight, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      await NotificationTransactionService.startService();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Notification transaction scanner is running in the background.'),
+          backgroundColor: AppTheme.successColor,
+        ),
+      );
     }
-    if (cat.contains('travel') || cat.contains('transport') || cat.contains('cab') || cat.contains('fuel') || cat.contains('car') || cat.contains('bike')) {
-      return Icons.directions_car_rounded;
-    }
-    if (cat.contains('shopping') || cat.contains('cloth') || cat.contains('grocer')) {
-      return Icons.shopping_bag_rounded;
-    }
-    if (cat.contains('bill') || cat.contains('rent') || cat.contains('utility') || cat.contains('phone') || cat.contains('recharge')) {
-      return Icons.receipt_rounded;
-    }
-    if (cat.contains('entertainment') || cat.contains('movie') || cat.contains('game') || cat.contains('show')) {
-      return Icons.movie_rounded;
-    }
-    if (cat.contains('health') || cat.contains('medical') || cat.contains('gym') || cat.contains('doctor')) {
-      return Icons.medical_services_rounded;
-    }
-    if (cat.contains('education') || cat.contains('book') || cat.contains('class') || cat.contains('study')) {
-      return Icons.menu_book_rounded;
-    }
-    if (cat.contains('gift') || cat.contains('present')) {
-      return Icons.card_giftcard_rounded;
-    }
-    if (cat.contains('invest') || cat.contains('save') || cat.contains('stock') || cat.contains('mutual')) {
-      return Icons.account_balance_wallet_rounded;
-    }
-    if (cat.contains('pet') || cat.contains('dog') || cat.contains('cat')) {
-      return Icons.pets_rounded;
-    }
-    return Icons.payment_rounded;
   }
 
-  Color _getCategoryColor(String category) {
-    final cat = category.toLowerCase();
-    if (cat.contains('food') || cat.contains('eat') || cat.contains('restaurant') || cat.contains('cafe')) {
-      return Colors.amber;
+  void _handleDismissSetupDialog() {
+    Navigator.pop(context);
+  }
+
+  void _handleEnableScannerAccess() async {
+    Navigator.pop(context);
+    await NotificationTransactionService.requestPermission();
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => TransactionFilterSheet(
+        initialStartDate: _filterStartDate,
+        initialEndDate: _filterEndDate,
+        initialType: _filterType,
+        initialValidation: _filterValidation,
+        onApply: _handleApplyFilters,
+      ),
+    );
+  }
+
+  void _handleApplyFilters(DateTime? start, DateTime? end, String type, String validation) {
+    setState(() {
+      _filterStartDate = start;
+      _filterEndDate = end;
+      _filterType = type;
+      _filterValidation = validation;
+    });
+  }
+
+  void _handleExpenseTap(Budget budget, Transaction expense) {
+    if (_deletingExpenseId != null) {
+      setState(() => _deletingExpenseId = null);
+    } else {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => AddTransactionSheet(
+          budgetId: budget.id,
+          categoryName: budget.category,
+          existingTransaction: expense,
+          budgets: _controller.budgets,
+          onAddTransaction: (tag, desc, amount, date) async {},
+        ),
+      );
     }
-    if (cat.contains('travel') || cat.contains('transport') || cat.contains('cab') || cat.contains('fuel') || cat.contains('car') || cat.contains('bike')) {
-      return Colors.blue;
-    }
-    if (cat.contains('shopping') || cat.contains('cloth') || cat.contains('grocer')) {
-      return Colors.orange;
-    }
-    if (cat.contains('bill') || cat.contains('rent') || cat.contains('utility') || cat.contains('phone') || cat.contains('recharge')) {
-      return Colors.redAccent;
-    }
-    if (cat.contains('entertainment') || cat.contains('movie') || cat.contains('game') || cat.contains('show')) {
-      return Colors.purpleAccent;
-    }
-    if (cat.contains('health') || cat.contains('medical') || cat.contains('gym') || cat.contains('doctor')) {
-      return Colors.green;
-    }
-    if (cat.contains('education') || cat.contains('book') || cat.contains('class') || cat.contains('study')) {
-      return Colors.cyan;
-    }
-    if (cat.contains('gift') || cat.contains('present')) {
-      return Colors.pinkAccent;
-    }
-    if (cat.contains('invest') || cat.contains('save') || cat.contains('stock') || cat.contains('mutual')) {
-      return Colors.yellow;
-    }
-    if (cat.contains('pet') || cat.contains('dog') || cat.contains('cat')) {
-      return Colors.teal;
-    }
-    return AppTheme.primaryColor;
   }
 
   Widget _buildEmptyState(String text) {
@@ -795,6 +837,7 @@ class _BudgetTabState extends State<BudgetTab> {
     'fuel': Icons.local_gas_station_rounded,
     'grocery': Icons.local_grocery_store_rounded,
     'health': Icons.medical_services_rounded,
+    'quickmart': Icons.storefront_rounded,
     'shopping': Icons.shopping_bag_rounded,
     'snack': Icons.fastfood_rounded,
     'travel': Icons.flight_rounded,
@@ -809,6 +852,7 @@ class _BudgetTabState extends State<BudgetTab> {
     'fuel': Colors.blue,
     'grocery': Colors.green,
     'health': Colors.teal,
+    'quickmart': Colors.deepPurpleAccent,
     'shopping': Colors.pinkAccent,
     'snack': Colors.orange,
     'travel': Colors.indigo,
@@ -817,6 +861,7 @@ class _BudgetTabState extends State<BudgetTab> {
 
   String _getTagName(String description) {
     final key = description.toLowerCase();
+    if (key.contains('quickmart')) return 'QuickMart';
     for (final entry in _tagIcons.entries) {
       if (key.contains(entry.key)) {
         return entry.key

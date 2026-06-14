@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 FLUTTER REBUILD AUDIT RULE - "ANTI-GRAVITY CHECK"
 ===================================================
 
@@ -93,9 +97,148 @@ Test:  Open Flutter DevTools > Performance > Enable "Track Widget Rebuilds"
 Fail:  Shipping without checking which widgets have rebuild count > 1 per interaction.
 Fix:   Any widget with high rebuild count needs one of the fixes above.
 
+---
+
+RULE 11: REACTIVE CONFIG/SETTINGS GRAVITY
+------------------------------------------
+Check: Are components displaying cached configurations, local preferences, or toggles (e.g., enabled quick actions, profile avatar, theme preference) static or using one-off FutureBuilders?
+Test:  Toggle the setting elsewhere in the app. Does the component update instantly without requiring a full screen rebuild?
+Fail:  Using a one-off FutureBuilder/get method that evaluates only on mount, or triggering a full-screen setState() from a parent to update minor cached settings.
+Fix:   Expose a broadcast stream (e.g., StreamController.broadcast()) or ValueNotifier from the service/controller, make the component a StatefulWidget that subscribes to this stream/notifier to trigger surgical setState() locally, and dispose the subscription in dispose().
+
+RULE 12: KEYS GRAVITY
+----------------------
+Check: Are dynamic list items using proper keys?
+Test:  Insert, delete, or reorder list items. Verify state remains attached to the correct item.
+Fail:  Dynamic widgets in lists without ValueKey/ObjectKey/UniqueKey where identity matters.
+Fix:   Assign stable keys based on item identity:
+       key: ValueKey(item.id)
+
+---
+
+RULE 13: FUTUREBUILDER GRAVITY
+-------------------------------
+Check: Is Future created inside build()?
+Test:  Search for FutureBuilder(future: someApiCall()) inside build().
+Fail:  New Future created on every rebuild causing repeated API calls.
+Fix:   Create and cache Future in initState():
+       late Future<Data> _future;
+
+---
+
+RULE 14: OBJECT CREATION GRAVITY
+---------------------------------
+Check: Are expensive objects created inside build()?
+Test:  Search for DateFormat, RegExp, controllers, mappers, parsers, etc. created in build().
+Fail:  New object allocation on every rebuild.
+Fix:   Move to:
+       - static final
+       - initState()
+       - dependency injection/service layer
+
+---
+
+RULE 15: INHERITED WIDGET GRAVITY
+----------------------------------
+Check: Are MediaQuery, Theme, Localizations, or inherited values being read higher than necessary?
+Test:  Search for MediaQuery.of(context), Theme.of(context) near screen root.
+Fail:  Entire large widget tree depends on inherited updates.
+Fix:   Move inherited widget access closer to where value is actually needed.
+
+---
+
+RULE 16: WATCH VS READ GRAVITY
+-------------------------------
+Check: Are reactive listeners used only where rebuilding is required?
+Test:  Search for watch(), Consumer(), ref.watch().
+Fail:  Using watch/listener for one-time actions.
+Fix:   Use:
+       context.read()
+       Provider.of(context, listen: false)
+       ref.read()
+
+---
+
+RULE 17: IMAGE GRAVITY
+-----------------------
+Check: Are large images rebuilding unnecessarily?
+Test:  Enable Track Widget Rebuilds and inspect image widgets.
+Fail:  Network or large image widgets rebuilt repeatedly by parent updates.
+Fix:   Extract image widget into separate StatelessWidget.
+       Use image caching solutions where appropriate.
+
+---
+
+RULE 18: LAYOUT BUILDER GRAVITY
+--------------------------------
+Check: Is LayoutBuilder used only when layout constraints are actually required?
+Test:  Search for LayoutBuilder usage.
+Fail:  LayoutBuilder wrapping simple widgets with no constraint-dependent logic.
+Fix:   Replace with:
+       - MediaQuery
+       - Fixed constraints
+       - Responsive helper methods
+
+---
+
+RULE 19: STREAM GRAVITY
+------------------------
+Check: Is StreamBuilder scope minimized?
+Test:  Search for StreamBuilder wrapping Scaffold, Screen, Column, or large sections.
+Fail:  Entire screen rebuilt for every stream event.
+Fix:   Wrap only the widget that displays stream-dependent data.
+
+---
+
+RULE 20: BUILD PURITY GRAVITY
+------------------------------
+Check: Does build() contain side effects?
+Test:  Search build() for:
+       API calls
+       analytics
+       database writes
+       navigation
+       logging-heavy operations
+Fail:  Business logic executed inside build().
+Fix:   Move side effects to:
+       - initState()
+       - lifecycle methods
+       - event handlers
+       - controllers/services
+
+---
+
+RULE 21: PROFILE MODE GRAVITY
+------------------------------
+Check: Has performance been verified in Profile mode?
+Test:  Run:
+       flutter run --profile
+Fail:  Performance conclusions based only on Debug mode.
+Fix:   Validate frame timings, rebuilds, and memory usage in Profile mode before shipping.
+
+---
+
+RULE 22: PAINT VS BUILD GRAVITY
+--------------------------------
+Check: Have you confirmed the issue is actually rebuild-related?
+Test:  Enable:
+       debugRepaintRainbowEnabled
+       debugProfilePaintsEnabled
+Fail:  Optimizing rebuilds when bottleneck is actually paint/layout work.
+Fix:   Identify whether issue originates from:
+       - Build phase
+       - Layout phase
+       - Paint phase
+       Then optimize the correct layer.
+
+===================================================
+UPDATED SCORE
 ===================================================
 SCORE: Count how many rules your screen passes.
-10/10 = Optimized
-7-9   = Acceptable, fix remaining rules soon
-Below 7 = Screen likely has visible jank or wasted cycles
-===================================================
+22/22 = Production Grade
+18-21 = Very Good
+14-17 = Acceptable, fix remaining rules soon
+10-13 = Needs Optimization
+Below 10 = High Risk of Jank
+
+

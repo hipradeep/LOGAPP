@@ -46,12 +46,16 @@ class _CheckInSheetState extends State<CheckInSheet> {
       if (!startPart.contains('AM') && !startPart.contains('PM')) {
         if (fullStr.contains('AM')) {
           startPart += ' AM';
-        } else if (fullStr.contains('PM')) startPart += ' PM';
+        } else if (fullStr.contains('PM')) {
+          startPart += ' PM';
+        }
       }
       if (endPart != null && !endPart.contains('AM') && !endPart.contains('PM')) {
         if (fullStr.contains('AM')) {
           endPart += ' AM';
-        } else if (fullStr.contains('PM')) endPart += ' PM';
+        } else if (fullStr.contains('PM')) {
+          endPart += ' PM';
+        }
       }
 
       final formats = [
@@ -104,7 +108,6 @@ class _CheckInSheetState extends State<CheckInSheet> {
   Widget build(BuildContext context) {
     final isOutside = _isOutsideWindow();
     final checkInColor = isOutside ? AppTheme.errorColor : AppTheme.successColor;
-    final statusText = isOutside ? 'Outside Window' : 'On Time';
 
     return DraggableScrollableSheet(
       controller: _sheetController,
@@ -252,7 +255,7 @@ class _CheckInSheetState extends State<CheckInSheet> {
                             onPressed: _isLoading ? null : () async {
                               setState(() => _isLoading = true);
                               final success = await widget.onConfirm(_note);
-                              if (mounted) {
+                              if (context.mounted) {
                                 Navigator.pop(context, success);
                               }
                             },

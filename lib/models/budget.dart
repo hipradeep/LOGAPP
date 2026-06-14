@@ -1,57 +1,86 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class BudgetExpense {
+class Transaction {
   final String id;
+  final String budgetId;
   final String tag;
   final String description;
   final double amount;
-  final DateTime timestamp;
+  final DateTime entryDate;
+  final DateTime expenseDate;
+  final bool isValidated;
+  final String? rawBody;
 
-  BudgetExpense({
+  Transaction({
     required this.id,
+    required this.budgetId,
     required this.tag,
     required this.description,
     required this.amount,
-    required this.timestamp,
+    required this.entryDate,
+    required this.expenseDate,
+    this.isValidated = true,
+    this.rawBody,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
+      'budgetId': budgetId,
       'tag': tag,
       'description': description,
       'amount': amount,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'entryDate': Timestamp.fromDate(entryDate),
+      'expenseDate': Timestamp.fromDate(expenseDate),
+      'isValidated': isValidated,
+      'rawBody': rawBody,
     };
   }
 
-  factory BudgetExpense.fromMap(Map<String, dynamic> map) {
-    final rawTimestamp = map['timestamp'];
-    final DateTime dateTime;
-    if (rawTimestamp is Timestamp) {
-      dateTime = rawTimestamp.toDate();
-    } else if (rawTimestamp is String) {
-      dateTime = DateTime.tryParse(rawTimestamp) ?? DateTime.now();
+  factory Transaction.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return Transaction.fromMap(doc.id, data);
+  }
+
+  factory Transaction.fromMap(String id, Map<String, dynamic> map) {
+    final rawEntryDate = map['entryDate'];
+    final DateTime parsedEntryDate;
+    if (rawEntryDate is Timestamp) {
+      parsedEntryDate = rawEntryDate.toDate();
+    } else if (rawEntryDate is String) {
+      parsedEntryDate = DateTime.tryParse(rawEntryDate) ?? DateTime.now();
     } else {
-      dateTime = DateTime.now();
+      parsedEntryDate = DateTime.now();
     }
 
-    return BudgetExpense(
-      id: map['id'] as String? ?? '',
+    final rawExpenseDate = map['expenseDate'];
+    final DateTime parsedExpenseDate;
+    if (rawExpenseDate is Timestamp) {
+      parsedExpenseDate = rawExpenseDate.toDate();
+    } else if (rawExpenseDate is String) {
+      parsedExpenseDate = DateTime.tryParse(rawExpenseDate) ?? parsedEntryDate;
+    } else {
+      parsedExpenseDate = parsedEntryDate;
+    }
+
+    return Transaction(
+      id: id,
+      budgetId: map['budgetId'] as String? ?? '',
       tag: map['tag'] as String? ?? '',
       description: map['description'] as String? ?? '',
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      timestamp: dateTime,
+      entryDate: parsedEntryDate,
+      expenseDate: parsedExpenseDate,
+      isValidated: map['isValidated'] as bool? ?? true,
+      rawBody: map['rawBody'] as String?,
     );
   }
 }
 
-class BudgetItem {
+class Budget {
   final String id;
   final String category;
   final double limit;
   final String period; // 'daily', 'weekly', 'monthly', 'custom'
-  final List<BudgetExpense> expenses;
   final String description;
   final List<int> repeatDays;
   final String? scheduledTime; // e.g. "09:00"
@@ -60,12 +89,11 @@ class BudgetItem {
   final bool repeat;
   final bool checked;
 
-  BudgetItem({
+  Budget({
     required this.id,
     required this.category,
     required this.limit,
     required this.period,
-    required this.expenses,
     this.description = '',
     this.repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     this.scheduledTime,
@@ -75,36 +103,40 @@ class BudgetItem {
     this.checked = true,
   });
 
-  double get spentForCurrentPeriod {
+  double spentForCurrentPeriod(List<Transaction> allTransactions) {
     final now = DateTime.now();
     double sum = 0.0;
-    for (final exp in expenses) {
+    
+    // Filter transactions belonging to this budget
+    final budgetTransactions = allTransactions.where((t) => t.budgetId == id);
+
+    for (final exp in budgetTransactions) {
       // Filter by repeatDays if set
-      if (repeatDays.isNotEmpty && !repeatDays.contains(exp.timestamp.weekday)) {
+      if (repeatDays.isNotEmpty && !repeatDays.contains(exp.expenseDate.weekday)) {
         continue;
       }
 
       if (period == 'daily') {
-        if (exp.timestamp.year == now.year &&
-            exp.timestamp.month == now.month &&
-            exp.timestamp.day == now.day) {
+        if (exp.expenseDate.year == now.year &&
+            exp.expenseDate.month == now.month &&
+            exp.expenseDate.day == now.day) {
           sum += exp.amount;
         }
       } else if (period == 'weekly') {
         // Start of week (Monday)
         final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
-        final expDate = DateTime(exp.timestamp.year, exp.timestamp.month, exp.timestamp.day);
+        final expDate = DateTime(exp.expenseDate.year, exp.expenseDate.month, exp.expenseDate.day);
         if (expDate.isAfter(startOfWeek.subtract(const Duration(days: 1))) &&
             expDate.isBefore(now.add(const Duration(days: 1)))) {
           sum += exp.amount;
         }
       } else if (period == 'monthly') {
-        if (exp.timestamp.year == now.year &&
-            exp.timestamp.month == now.month) {
+        if (exp.expenseDate.year == now.year &&
+            exp.expenseDate.month == now.month) {
           sum += exp.amount;
         }
       } else if (period == 'custom' || (startDate != null && endDate != null)) {
-        final expDate = DateTime(exp.timestamp.year, exp.timestamp.month, exp.timestamp.day);
+        final expDate = DateTime(exp.expenseDate.year, exp.expenseDate.month, exp.expenseDate.day);
         final start = startDate != null ? DateTime(startDate!.year, startDate!.month, startDate!.day) : null;
         final end = endDate != null ? DateTime(endDate!.year, endDate!.month, endDate!.day) : null;
         bool inRange = true;
@@ -120,7 +152,8 @@ class BudgetItem {
     return sum;
   }
 
-  bool get isOverBudget => spentForCurrentPeriod > limit;
+  bool isOverBudget(List<Transaction> allTransactions) =>
+      spentForCurrentPeriod(allTransactions) > limit;
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -128,7 +161,6 @@ class BudgetItem {
       'limit': limit,
       'period': period,
       'description': description,
-      'expenses': expenses.map((e) => e.toMap()).toList(),
       'repeatDays': repeatDays,
       'scheduledTime': scheduledTime,
       'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
@@ -138,12 +170,8 @@ class BudgetItem {
     };
   }
 
-  factory BudgetItem.fromFirestore(DocumentSnapshot doc) {
+  factory Budget.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-    final rawExpenses = data['expenses'] as List? ?? [];
-    final parsedExpenses = rawExpenses
-        .map((e) => BudgetExpense.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
 
     final Timestamp? firestoreStartDate = data['startDate'] as Timestamp?;
     final Timestamp? firestoreEndDate = data['endDate'] as Timestamp?;
@@ -153,12 +181,11 @@ class BudgetItem {
         ? rawRepeatDays.map<int>((e) => (e as num).toInt()).toList()
         : const [1, 2, 3, 4, 5, 6, 7];
 
-    return BudgetItem(
+    return Budget(
       id: doc.id,
       category: data['category'] as String? ?? '',
       limit: (data['limit'] as num?)?.toDouble() ?? 0.0,
       period: data['period'] as String? ?? 'monthly',
-      expenses: parsedExpenses,
       description: data['description'] as String? ?? '',
       repeatDays: parsedRepeatDays,
       scheduledTime: data['scheduledTime'] as String?,
@@ -169,12 +196,7 @@ class BudgetItem {
     );
   }
 
-  factory BudgetItem.fromMap(String id, Map<String, dynamic> data) {
-    final rawExpenses = data['expenses'] as List? ?? [];
-    final parsedExpenses = rawExpenses
-        .map((e) => BudgetExpense.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
-
+  factory Budget.fromMap(String id, Map<String, dynamic> data) {
     DateTime? parsedStartDate;
     final rawStartDate = data['startDate'];
     if (rawStartDate is Timestamp) {
@@ -196,12 +218,11 @@ class BudgetItem {
         ? rawRepeatDays.map<int>((e) => (e as num).toInt()).toList()
         : const [1, 2, 3, 4, 5, 6, 7];
 
-    return BudgetItem(
+    return Budget(
       id: id,
       category: data['category'] as String? ?? '',
       limit: (data['limit'] as num?)?.toDouble() ?? 0.0,
       period: data['period'] as String? ?? 'monthly',
-      expenses: parsedExpenses,
       description: data['description'] as String? ?? '',
       repeatDays: parsedRepeatDays,
       scheduledTime: data['scheduledTime'] as String?,
@@ -212,12 +233,11 @@ class BudgetItem {
     );
   }
 
-  BudgetItem copyWith({
+  Budget copyWith({
     String? id,
     String? category,
     double? limit,
     String? period,
-    List<BudgetExpense>? expenses,
     String? description,
     List<int>? repeatDays,
     String? scheduledTime,
@@ -226,12 +246,11 @@ class BudgetItem {
     bool? repeat,
     bool? checked,
   }) {
-    return BudgetItem(
+    return Budget(
       id: id ?? this.id,
       category: category ?? this.category,
       limit: limit ?? this.limit,
       period: period ?? this.period,
-      expenses: expenses ?? this.expenses,
       description: description ?? this.description,
       repeatDays: repeatDays ?? this.repeatDays,
       scheduledTime: scheduledTime ?? this.scheduledTime,

@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import '../models/reminder_item.dart';
 
 class CacheService {
   static final CacheService _instance = CacheService._internal();
   factory CacheService() => _instance;
   CacheService._internal();
+
+  final StreamController<List<String>> _quickActionsController = StreamController<List<String>>.broadcast();
+  Stream<List<String>> get quickActionsStream => _quickActionsController.stream;
 
   File? _cacheFile;
 
@@ -86,6 +91,7 @@ class CacheService {
     final cache = await _readCache();
     cache['quick_actions'] = actions;
     await _writeCache(cache);
+    _quickActionsController.add(actions);
   }
 
   Future<List<String>> getQuickActions() async {
@@ -117,5 +123,116 @@ class CacheService {
   Future<bool> getNotesGridView() async {
     final cache = await _readCache();
     return cache['notes_grid_view'] as bool? ?? true;
+  }
+
+  Future<void> saveExpenseCategories(List<Map<String, dynamic>> categories) async {
+    final cache = await _readCache();
+    cache['expense_categories'] = categories;
+    await _writeCache(cache);
+  }
+
+  Future<List<Map<String, dynamic>>> getExpenseCategories() async {
+    final cache = await _readCache();
+    final list = cache['expense_categories'] as List<dynamic>?;
+    if (list != null) {
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    final defaults = [
+      {'label': 'Travel', 'icon': 'flight_rounded', 'color': 0xFF3F51B5, 'count': 0},
+      {'label': 'Snack', 'icon': 'fastfood_rounded', 'color': 0xFFFF9800, 'count': 0},
+      {'label': 'Drink', 'icon': 'local_cafe_rounded', 'color': 0xFF795548, 'count': 0},
+      {'label': 'Grocery', 'icon': 'local_grocery_store_rounded', 'color': 0xFF4CAF50, 'count': 0},
+      {'label': 'QuickMart', 'icon': 'storefront_rounded', 'color': 0xFF7C4DFF, 'count': 0},
+      {'label': 'Shopping', 'icon': 'shopping_bag_rounded', 'color': 0xFFFF4081, 'count': 0},
+      {'label': 'Bill', 'icon': 'receipt_long_rounded', 'color': 0xFFFF5252, 'count': 0},
+      {'label': 'Dinner', 'icon': 'dinner_dining_rounded', 'color': 0xFFFFC107, 'count': 0},
+      {'label': 'Fuel', 'icon': 'local_gas_station_rounded', 'color': 0xFF2196F3, 'count': 0},
+      {'label': 'Health', 'icon': 'medical_services_rounded', 'color': 0xFF009688, 'count': 0},
+      {'label': 'Other', 'icon': 'more_horiz_rounded', 'color': 0xFF9E9E9E, 'count': 0},
+    ];
+    await saveExpenseCategories(defaults);
+    return defaults;
+  }
+
+  Future<void> incrementCategoryCount(String label) async {
+    final categories = await getExpenseCategories();
+    bool found = false;
+    for (var cat in categories) {
+      if (cat['label'].toString().toLowerCase() == label.toLowerCase()) {
+        cat['count'] = (cat['count'] as int? ?? 0) + 1;
+        found = true;
+        break;
+      }
+    }
+    // If it's a custom category not in default cache but passed anyway
+    if (!found) {
+      categories.add({
+        'label': label,
+        'icon': 'more_horiz_rounded',
+        'color': 0xFF9E9E9E,
+        'count': 1,
+      });
+    }
+    await saveExpenseCategories(categories);
+  }
+
+  Future<void> saveReminders(List<ReminderItem> reminders) async {
+    final cache = await _readCache();
+    cache['reminders'] = reminders.map((r) => {
+      'title': r.title,
+      'time': r.time,
+      'isActive': r.isActive,
+    }).toList();
+    await _writeCache(cache);
+  }
+
+  Future<List<ReminderItem>> getReminders() async {
+    final cache = await _readCache();
+    final list = cache['reminders'] as List<dynamic>?;
+    if (list != null) {
+      return list.map((e) {
+        final map = e as Map<String, dynamic>;
+        return ReminderItem(
+          title: map['title'] as String? ?? '',
+          time: map['time'] as String? ?? '',
+          isActive: map['isActive'] as bool? ?? true,
+        );
+      }).toList();
+    }
+    return [
+      ReminderItem(title: 'Drink water', time: '08:00 AM', isActive: true),
+      ReminderItem(title: 'Gym session', time: '06:00 PM', isActive: false),
+      ReminderItem(title: 'Take vitamins', time: '09:00 PM', isActive: true),
+    ];
+  }
+
+  Future<void> saveScheduledActivityIds(List<String> ids) async {
+    final cache = await _readCache();
+    cache['scheduled_activity_ids'] = ids;
+    await _writeCache(cache);
+  }
+
+  Future<List<String>> getScheduledActivityIds() async {
+    final cache = await _readCache();
+    final list = cache['scheduled_activity_ids'] as List<dynamic>?;
+    if (list != null) {
+      return list.map((e) => e.toString()).toList();
+    }
+    return [];
+  }
+
+  Future<void> saveSnoozedReminders(Map<String, String> snoozes) async {
+    final cache = await _readCache();
+    cache['snoozed_reminders'] = snoozes;
+    await _writeCache(cache);
+  }
+
+  Future<Map<String, String>> getSnoozedReminders() async {
+    final cache = await _readCache();
+    final map = cache['snoozed_reminders'] as Map<dynamic, dynamic>?;
+    if (map != null) {
+      return map.map((key, value) => MapEntry(key.toString(), value.toString()));
+    }
+    return {};
   }
 }

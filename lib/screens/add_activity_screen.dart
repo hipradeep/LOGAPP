@@ -6,6 +6,7 @@ import '../widgets/app_spacers.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../models/activity.dart';
+import '../widgets/app_popup_menu_button.dart';
 
 class AddActivityScreen extends StatefulWidget {
   final Function(String name, String trackingType, int targetCount, {
@@ -274,69 +275,52 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             ),
           if (widget.initialActivity != null) ...[
             const SizedBox(width: 8),
-            Transform.translate(
-              offset: const Offset(10, 0),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  shape: BoxShape.circle,
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
-                  padding: EdgeInsets.zero,
-                  color: AppTheme.surfaceColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
+            AppPopupMenuButton(
+              onSelected: (value) {
+                if (value == 'delete') {
+                  widget.onDelete?.call();
+                } else if (value == 'toggle') {
+                  widget.onToggleComplete?.call();
+                }
+              },
+              itemBuilder: (context) {
+                final isCompleted = !(widget.initialActivity!.checked);
+                return [
+                  PopupMenuItem<String>(
+                    value: 'toggle',
+                    child: Row(
+                      children: [
+                        Icon(
+                          isCompleted ? Icons.undo_rounded : Icons.check_circle_outline_rounded,
+                          color: isCompleted ? Colors.white70 : AppTheme.successColor,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          isCompleted ? 'Mark Active' : 'Mark Complete',
+                          style: TextStyle(
+                            color: isCompleted ? Colors.white : AppTheme.successColor,
+                            fontWeight: isCompleted ? FontWeight.normal : FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  onSelected: (value) {
-                    if (value == 'delete') {
-                      widget.onDelete?.call();
-                    } else if (value == 'toggle') {
-                      widget.onToggleComplete?.call();
-                    }
-                  },
-                  itemBuilder: (context) {
-                    final isCompleted = !(widget.initialActivity!.checked);
-                    return [
-                      PopupMenuItem<String>(
-                        value: 'toggle',
-                        child: Row(
-                          children: [
-                            Icon(
-                              isCompleted ? Icons.undo_rounded : Icons.check_circle_outline_rounded,
-                              color: isCompleted ? Colors.white70 : AppTheme.successColor,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              isCompleted ? 'Mark Active' : 'Mark Complete',
-                              style: TextStyle(
-                                color: isCompleted ? Colors.white : AppTheme.successColor,
-                                fontWeight: isCompleted ? FontWeight.normal : FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                        SizedBox(width: 12),
+                        Text(
+                          'Delete Activity',
+                          style: TextStyle(color: AppTheme.errorColor),
                         ),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
-                            SizedBox(width: 12),
-                            Text(
-                              'Delete Activity',
-                              style: TextStyle(color: AppTheme.errorColor),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ];
-                  },
-                ),
-              ),
+                      ],
+                    ),
+                  ),
+                ];
+              },
             ),
           ],
         ],

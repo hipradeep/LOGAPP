@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/diet_item.dart';
 
 class DietController extends ChangeNotifier {
-  List<DietItem> _dietItems = [
+  final List<DietItem> _dietItems = [
     DietItem(foodName: 'Oatmeal with Berries', calories: 350, mealType: 'Breakfast'),
     DietItem(foodName: 'Grilled Chicken Salad', calories: 450, mealType: 'Lunch'),
     DietItem(foodName: 'Protein Shake', calories: 200, mealType: 'Snack'),

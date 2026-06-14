@@ -6,6 +6,7 @@ import '../models/task.dart';
 import '../services/activity_service.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import 'app_title_dropdown.dart';
 
 class AddMilestoneSubTaskSheet extends StatefulWidget {
   final List<Activity> milestones;
@@ -317,11 +318,8 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                                       style: AppTheme.headingMedium.copyWith(fontSize: 24),
                                     ),
                                     const SizedBox(height: 4),
-                                    DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
+                                    AppTitleDropdown<String>(
                                       value: _selectedMilestoneId,
-                                      dropdownColor: AppTheme.surfaceColor,
-                                      isDense: true,
                                       items: widget.milestones.map((m) {
                                         return DropdownMenuItem<String>(
                                           value: m.id,
@@ -332,17 +330,6 @@ class _AddMilestoneSubTaskSheetState extends State<AddMilestoneSubTaskSheet> {
                                         );
                                       }).toList(),
                                       onChanged: widget.editTask != null ? null : _onMilestoneChanged,
-                                      style: const TextStyle(
-                                        color: AppTheme.primaryLight,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      icon: const Icon(
-                                        Icons.arrow_drop_down_rounded,
-                                        color: AppTheme.primaryLight,
-                                        size: 18,
-                                      ),
-                                    ),
                                     ),
                                   ],
                                 ),

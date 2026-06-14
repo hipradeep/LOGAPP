@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/cache_service.dart';
 import '../services/activity_service.dart';
+import '../services/notification_service.dart';
 import '../models/activity.dart';
 import 'app_spacers.dart';
 
@@ -37,6 +38,16 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
 
   Future<void> _toggleReminder(bool val) async {
     await _cacheService.saveDailyReminder(val);
+    if (val) {
+      await NotificationService.scheduleDailyNotification(
+        id: 999,
+        title: 'Daily Journal Reminder 📝',
+        body: 'Time to record your daily thoughts and update your log!',
+        timeString: '09:00 PM',
+      );
+    } else {
+      await NotificationService.cancelNotification(999);
+    }
     setState(() {
       _dailyReminder = val;
     });

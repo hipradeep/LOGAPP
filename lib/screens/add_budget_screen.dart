@@ -4,11 +4,12 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
-import '../models/budget_item.dart';
+import '../models/budget.dart';
 import '../services/budget_service.dart';
+import '../widgets/app_title_input.dart';
 
 class AddBudgetScreen extends StatefulWidget {
-  final BudgetItem? existingBudget;
+  final Budget? existingBudget;
 
   const AddBudgetScreen({
     super.key,
@@ -363,48 +364,6 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     );
   }
 
-  Widget _buildDescriptionInputField() {
-    return TextFormField(
-      controller: _descriptionController,
-      maxLines: null,
-      minLines: 4,
-      keyboardType: TextInputType.multiline,
-      textInputAction: TextInputAction.newline,
-      textCapitalization: TextCapitalization.sentences,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        hintText: 'Enter budget description (optional)...',
-        hintStyle: TextStyle(
-          color: AppTheme.textSecondary.withValues(alpha: 0.5),
-          fontSize: 14,
-        ),
-        filled: true,
-        fillColor: AppTheme.surfaceColor.withValues(alpha: 0.3),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
-            width: 1.5,
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
-            width: 1.5,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: AppTheme.primaryColor.withValues(alpha: 0.4),
-            width: 1.5,
-          ),
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -754,9 +713,13 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
 
                 const VGapLg(),
 
-                _buildSectionLabel('DESCRIPTION'),
-                const VGapSm(),
-                _buildDescriptionInputField(),
+                AppTitleInput(
+                  controller: _descriptionController,
+                  label: 'description',
+                  hintText: 'Enter budget description (optional)...',
+                  icon: Icons.description_outlined,
+                  validator: (val) => null,
+                ),
 
                 const VGapLg(),
 

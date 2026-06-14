@@ -35,6 +35,7 @@ class FullScreenPage extends StatelessWidget {
   final bool showBackground;
   final bool showScaffold;
   final List<Widget>? actions;
+  final Widget? floatingActionButton;
 
   const FullScreenPage({
     super.key,
@@ -51,6 +52,7 @@ class FullScreenPage extends StatelessWidget {
     this.showBackground = true,
     this.showScaffold = true,
     this.actions,
+    this.floatingActionButton,
   });
 
   MainAxisAlignment _getMainAxisAlignment() {
@@ -264,6 +266,7 @@ class FullScreenPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: mainBody,
+      floatingActionButton: floatingActionButton,
     );
   }
 }
