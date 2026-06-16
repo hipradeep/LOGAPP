@@ -28,7 +28,7 @@ class MilestonesController extends ChangeNotifier {
   List<Task> _completedTasks = [];
 
   // Getters
-  List<Activity> get milestoneActivities => _milestoneActivities;
+  List<Activity> get milestoneActivities => _milestoneActivities.where((a) => a.isActive).toList();
   Activity? get selectedMilestoneActivity => _selectedMilestoneActivity;
   List<Task> get allTasks => _allTasks;
   String get selectedCategory => _selectedCategory;
@@ -50,6 +50,11 @@ class MilestonesController extends ChangeNotifier {
 
   void _initStreams() {
     _activitiesSub?.cancel();
+    _tasksSub?.cancel();
+    _tasksSub = null;
+    _isLoadingActivities = true;
+    _isLoadingTasks = true;
+
     _activitiesSub = _activityService.getActivitiesStream().listen((activities) {
       _milestoneActivities = activities.where((a) => a.trackingType == 'milestone').toList();
       _isLoadingActivities = false;
@@ -60,7 +65,7 @@ class MilestonesController extends ChangeNotifier {
           .map((a) => a.id)
           .toList();
 
-      if (!_listEquals(activeIds, _lastActiveIds)) {
+      if (_tasksSub == null || !_listEquals(activeIds, _lastActiveIds)) {
         _lastActiveIds = activeIds;
         _tasksSub?.cancel();
 
@@ -84,10 +89,12 @@ class MilestonesController extends ChangeNotifier {
           });
         }
       } else {
+        _isLoadingTasks = false;
         _recomputeAndNotify();
       }
     }, onError: (error) {
       _isLoadingActivities = false;
+      _isLoadingTasks = false;
       _errorMessage = error.toString();
       notifyListeners();
     });
@@ -116,6 +123,7 @@ class MilestonesController extends ChangeNotifier {
     // 1. Update selected activity based on active milestones
     if (_shouldSelectDefaultMilestone && activeMilestones.isNotEmpty) {
       _selectedMilestoneActivity = activeMilestones.first;
+      // Keep category as 'All' — this is the initial default state
     } else if (_selectedMilestoneActivity != null) {
       final stillActive = activeMilestones.any((a) => a.id == _selectedMilestoneActivity!.id);
       if (!stillActive) {

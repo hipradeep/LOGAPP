@@ -63,14 +63,15 @@ class _CheckInHistorySheetState extends State<CheckInHistorySheet> {
           }
         });
 
+        Theme.of(context);
         return Container(
           decoration: BoxDecoration(
-            color: AppTheme.backgroundColor.withValues(alpha: 0.95),
+            color: AppTheme.background(context).withValues(alpha: 0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+            border: Border.all(color: AppTheme.borderColor(context), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 40,
                 offset: const Offset(0, -10),
               ),
@@ -87,7 +88,7 @@ class _CheckInHistorySheetState extends State<CheckInHistorySheet> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppTheme.borderColor(context),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -105,19 +106,19 @@ class _CheckInHistorySheetState extends State<CheckInHistorySheet> {
                             Text('Activity History', style: AppTheme.headingMedium.copyWith(fontSize: 28)),
                             Text(
                               'Your gym consistency over time',
-                              style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
+                              style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
                             ),
                           ],
                         ),
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: AppTheme.subtleFillColor(context),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                            border: Border.all(color: AppTheme.borderColor(context)),
                           ),
                           child: IconButton(
                             onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                            icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
                           ),
                         ),
                       ],
@@ -137,7 +138,7 @@ class _CheckInHistorySheetState extends State<CheckInHistorySheet> {
                             child: Text(
                               day,
                               style: AppTheme.bodySmall.copyWith(
-                                color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                                color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
                               ),
@@ -148,7 +149,7 @@ class _CheckInHistorySheetState extends State<CheckInHistorySheet> {
                     ),
                   ),
                   const VGapSm(),
-                  const Divider(color: Colors.white10, indent: 24, endIndent: 24),
+                  Divider(color: AppTheme.borderColor(context), indent: 24, endIndent: 24),
                   
                   Expanded(
                     child: ListView(

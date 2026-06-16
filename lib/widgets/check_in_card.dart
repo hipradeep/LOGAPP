@@ -36,7 +36,7 @@ class CheckInCard extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: AppTheme.shadowColor(context),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),

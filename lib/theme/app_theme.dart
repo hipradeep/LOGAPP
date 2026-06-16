@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
+  // Dynamic theme state updated from MyApp root
+  static bool isDark = true;
+
   // === App Colors ===
   
   // Brand Primary (Violet 500)
@@ -52,6 +55,136 @@ class AppTheme {
   // Use for: Extremely low-emphasis text, borders, subtle dividers.
   static const textMuted = Colors.white54;
 
+  // === Light Theme Surface Tokens (Mockup Palette) ===
+
+  // Light Background (Ambient light blue tint)
+  static const lightBackgroundColor = Color(0xFFEFF6FF);
+
+  // Light Surface (Pure white for cards/modals with soft shadows)
+  static const lightSurfaceColor = Color(0xFFFFFFFF);
+
+  // Light Surface Variant (Light tinted fill for inputs/containers)
+  static const lightSurfaceVariant = Color(0xFFF3F8FF);
+
+  // Light Border (Subtle soft periwinkle-blue border)
+  static const lightBorderColor = Color(0xFFE0ECFC);
+
+  // Light Text Primary (Slate 900 for dark premium high-contrast titles)
+  static const lightTextPrimary = Color(0xFF0F172A);
+
+  // Light Text Secondary (Slate 700 for subtitles/labels)
+  static const lightTextSecondary = Color(0xFF334155);
+
+  // Light Text Muted (Slate 500 for captions/placeholders)
+  static const lightTextMuted = Color(0xFF64748B);
+
+  // === Context-Aware Helpers ===
+  // Use these in non-const widget trees that need to respond to the active theme.
+
+  /// Returns whether the current context is in dark mode.
+  static bool isDarkMode(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  /// Returns the surface color for the current theme (card/dialog backgrounds).
+  static Color surface(BuildContext context) =>
+      isDarkMode(context) ? surfaceColor : lightSurfaceColor;
+
+  /// Returns the background color for the current theme (screen backgrounds).
+  static Color background(BuildContext context) =>
+      isDarkMode(context) ? backgroundColor : lightBackgroundColor;
+
+  /// Returns the border/divider color for the current theme.
+  static Color borderColor(BuildContext context) =>
+      isDarkMode(context)
+          ? Colors.white.withValues(alpha: 0.07)
+          : lightBorderColor;
+
+  /// Returns the primary text color for the current theme.
+  static Color textPrimaryColor(BuildContext context) =>
+      isDarkMode(context) ? textPrimary : lightTextPrimary;
+
+  /// Returns the secondary text color for the current theme.
+  static Color textSecondaryColor(BuildContext context) =>
+      isDarkMode(context) ? textSecondary : lightTextSecondary;
+
+  /// Returns the muted text color for the current theme.
+  static Color textMutedColor(BuildContext context) =>
+      isDarkMode(context) ? textMuted : lightTextMuted;
+
+  /// Returns the primary accent color appropriate for the current theme.
+  static Color primaryAccentColor(BuildContext context) =>
+      isDarkMode(context) ? primaryLight : primaryColor;
+
+  /// Returns the hint/placeholder text color.
+  static Color hintColor(BuildContext context) =>
+      isDarkMode(context)
+          ? textSecondary.withValues(alpha: 0.5)
+          : lightTextMuted.withValues(alpha: 0.6);
+
+  /// Returns the border/divider color for inputs/containers.
+  static Color inputBorderColor(BuildContext context) =>
+      isDarkMode(context) ? Colors.white10 : lightBorderColor;
+
+  /// Returns the background color for quick action cards.
+  static Color quickActionCardColor(BuildContext context) =>
+      isDarkMode(context) ? Colors.white.withValues(alpha: 0.04) : lightSurfaceColor;
+
+  /// Returns the shadow color for quick action cards.
+  static Color quickActionShadowColor(BuildContext context, Color accentColor) =>
+      isDarkMode(context) ? accentColor.withValues(alpha: 0.02) : const Color(0xFFC4D0FB).withValues(alpha: 0.15);
+
+  /// Returns the border color for quick action cards.
+  static Color quickActionBorderColor(BuildContext context) =>
+      isDarkMode(context) ? Colors.white.withValues(alpha: 0.05) : borderColor(context);
+
+  /// Returns the subtle background fill color for interactive items.
+  static Color subtleFillColor(BuildContext context) =>
+      isDarkMode(context)
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.05);
+
+  /// Returns the text color for selected choice chips.
+  static Color selectedChipTextColor(BuildContext context) =>
+      isDarkMode(context) ? textPrimary : Colors.white;
+
+  /// Returns the drop shadow color for elevated surfaces.
+  static Color shadowColor(BuildContext context) =>
+      isDarkMode(context)
+          ? Colors.black.withValues(alpha: 0.3)
+          : const Color(0xFFC4D0FB).withValues(alpha: 0.2);
+
+  /// Returns the inactive thumb color for switches.
+  static Color switchInactiveThumbColor(BuildContext context) =>
+      isDarkMode(context) ? textSecondary : lightTextMuted;
+
+  /// Returns the inactive track color for switches.
+  static Color switchInactiveTrackColor(BuildContext context) =>
+      isDarkMode(context) ? Colors.white10 : Colors.black12;
+
+  /// Returns the segmented button selected background color.
+  static Color segmentedSelectedBgColor(BuildContext context) =>
+      primaryColor.withValues(alpha: isDarkMode(context) ? 0.2 : 0.15);
+
+  /// Returns the background surface color with opacity for settings container.
+  static Color settingsContainerColor(BuildContext context) =>
+      surface(context).withValues(alpha: isDarkMode(context) ? 0.45 : 0.8);
+
+  /// Returns the border color for active category toggle buttons.
+  static Color activeToggleBorderColor(BuildContext context) =>
+      isDarkMode(context)
+          ? primaryLight.withValues(alpha: 0.5)
+          : primaryDark.withValues(alpha: 0.5);
+
+  /// Returns the text color for pill badges.
+  static Color pillBadgeTextColor(BuildContext context) =>
+      isDarkMode(context) ? Colors.white : primaryColor;
+
+  /// Returns the category input text color.
+  static Color categoryTextColor(BuildContext context, {required bool isEditing}) =>
+      isDarkMode(context)
+          ? (isEditing ? Colors.white54 : Colors.white)
+          : (isEditing ? lightTextMuted : lightTextPrimary);
+
   // === Layout Constants ===
   // Standard horizontal padding for most screens
   static const EdgeInsets defaultScreenPadding = EdgeInsets.symmetric(horizontal: 24.0);
@@ -93,9 +226,19 @@ class AppTheme {
     colors: [backgroundColor, surfaceColor],
   );
 
+  static const LinearGradient lightBackgroundGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [lightBackgroundColor, lightSurfaceVariant],
+  );
+
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primaryColor, secondaryColor],
   );
+
+  /// Returns the background gradient for the current theme.
+  static LinearGradient resolvedBackgroundGradient(BuildContext context) =>
+      isDarkMode(context) ? backgroundGradient : lightBackgroundGradient;
 
   // === Typography (Text Styles) ===
   
@@ -104,7 +247,7 @@ class AppTheme {
   static TextStyle get headingLarge => GoogleFonts.outfit(
     fontSize: 32,
     fontWeight: FontWeight.bold,
-    color: textPrimary,
+    color: isDark ? textPrimary : lightTextPrimary,
   );
 
   // Section Headings (24px, Bold, Outfit font)
@@ -112,7 +255,7 @@ class AppTheme {
   static TextStyle get headingMedium => GoogleFonts.outfit(
     fontSize: 24,
     fontWeight: FontWeight.bold,
-    color: textPrimary,
+    color: isDark ? textPrimary : lightTextPrimary,
   );
 
   // Sub-headings (18px, SemiBold, Outfit font)
@@ -120,35 +263,35 @@ class AppTheme {
   static TextStyle get headingSmall => GoogleFonts.outfit(
     fontSize: 18,
     fontWeight: FontWeight.w600,
-    color: textPrimary,
+    color: isDark ? textPrimary : lightTextPrimary,
   );
 
   // Primary Body Text (16px, Normal, Inter font)
   // Use for: Main descriptive text, primary subtitles, standard input text.
   static TextStyle get bodyLarge => GoogleFonts.inter(
     fontSize: 16,
-    color: textPrimary,
+    color: isDark ? textPrimary : lightTextPrimary,
   );
 
   // Secondary Body Text (14px, Normal, Inter font)
   // Use for: Secondary descriptions, helper texts, inactive tab labels.
   static TextStyle get bodyMedium => GoogleFonts.inter(
     fontSize: 14,
-    color: textSecondary,
+    color: isDark ? textSecondary : lightTextSecondary,
   );
 
   // Small Text (12px, Normal, Inter font)
   // Use for: Captions, dates, timestamps, small tags.
   static TextStyle get bodySmall => GoogleFonts.inter(
     fontSize: 12,
-    color: textSecondary,
+    color: isDark ? textSecondary : lightTextSecondary,
   );
 
   // Micro Text (10px, Normal, Inter font)
   // Use for: Bottom navigation labels, extreme fine print.
   static TextStyle get bodyMicro => GoogleFonts.inter(
     fontSize: 10,
-    color: textMuted,
+    color: isDark ? textMuted : lightTextMuted,
   );
 
   static ThemeData get darkTheme {
@@ -157,6 +300,10 @@ class AppTheme {
       primaryColor: primaryColor,
       scaffoldBackgroundColor: backgroundColor,
       cardColor: surfaceColor,
+      checkboxTheme: CheckboxThemeData(
+        side: const BorderSide(color: textMuted, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
         displayLarge: headingLarge,
         displayMedium: headingMedium,
@@ -182,6 +329,59 @@ class AppTheme {
         ),
         labelStyle: TextStyle(color: textSecondary),
         hintStyle: TextStyle(color: Colors.white24),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, buttonHeight),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(defaultBorderRadius)),
+          textStyle: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static ThemeData get lightTheme {
+    return ThemeData(
+      brightness: Brightness.light,
+      primaryColor: primaryColor,
+      scaffoldBackgroundColor: lightBackgroundColor,
+      cardColor: lightSurfaceColor,
+      dividerColor: lightBorderColor,
+      iconTheme: const IconThemeData(color: lightTextPrimary),
+      checkboxTheme: CheckboxThemeData(
+        side: const BorderSide(color: lightTextMuted, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme).copyWith(
+        displayLarge: headingLarge.copyWith(color: lightTextPrimary),
+        displayMedium: headingMedium.copyWith(color: lightTextPrimary),
+        titleLarge: headingSmall.copyWith(color: lightTextPrimary),
+        bodyLarge: bodyLarge.copyWith(color: lightTextPrimary),
+        bodyMedium: bodyMedium.copyWith(color: lightTextSecondary),
+        bodySmall: bodySmall.copyWith(color: lightTextSecondary),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: lightSurfaceVariant,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(defaultBorderRadius),
+          borderSide: const BorderSide(color: lightBorderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(defaultBorderRadius),
+          borderSide: const BorderSide(color: lightBorderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(defaultBorderRadius),
+          borderSide: const BorderSide(color: primaryColor),
+        ),
+        labelStyle: const TextStyle(color: lightTextSecondary),
+        hintStyle: TextStyle(color: lightTextSecondary.withValues(alpha: 0.5)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

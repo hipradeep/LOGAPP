@@ -6,14 +6,12 @@ import 'app_spacers.dart';
 
 class DashboardQuickActions extends StatefulWidget {
   final VoidCallback onFocus;
-  final VoidCallback onLogFood;
   final VoidCallback onWater;
   final VoidCallback onNewJournal;
 
   const DashboardQuickActions({
     super.key,
     required this.onFocus,
-    required this.onLogFood,
     required this.onWater,
     required this.onNewJournal,
   });
@@ -55,131 +53,93 @@ class _DashboardQuickActionsState extends State<DashboardQuickActions> {
     super.dispose();
   }
 
-  Widget _buildActionCard({
+  Widget _buildActionButton({
+    required BuildContext context,
     required String title,
     required String emoji,
-    required String subtitle,
-    required VoidCallback onTap,
+    required String label,
     required Color accentColor,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.04),
-            Colors.white.withValues(alpha: 0.01),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            splashColor: accentColor.withValues(alpha: 0.1),
-            highlightColor: accentColor.withValues(alpha: 0.05),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  width: 1.2,
-                ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: accentColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: accentColor.withValues(alpha: 0.22),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: accentColor.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: accentColor.withValues(alpha: 0.1),
-                          blurRadius: 6,
-                          spreadRadius: 0.5,
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      emoji,
-                      style: const TextStyle(fontSize: 22),
-                    ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                splashColor: accentColor.withValues(alpha: 0.18),
+                highlightColor: accentColor.withValues(alpha: 0.08),
+                child: Center(
+                  child: Text(
+                    emoji,
+                    style: const TextStyle(fontSize: 24),
                   ),
-                  const VGapMd(),
-                  Text(
-                    title,
-                    style: AppTheme.bodyLarge.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const VGapXs(),
-                  Text(
-                    subtitle,
-                    style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
+        const VGapSm(),
+        Text(
+          label,
+          style: AppTheme.bodySmall.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget? _getActionCard(String action) {
+  Widget? _getActionBtn(BuildContext context, String action) {
     if (action == 'Focus 25m') {
-      return _buildActionCard(
+      return _buildActionButton(
+        context: context,
         title: 'Focus 25m',
         emoji: '🎯',
-        subtitle: 'Start Pomodoro',
+        label: 'Focus',
         accentColor: AppTheme.primaryColor,
         onTap: widget.onFocus,
       );
-    } else if (action == 'Log Food') {
-      return _buildActionCard(
-        title: 'Log Food',
-        emoji: '🍎',
-        subtitle: 'Track calories',
-        accentColor: AppTheme.successColor,
-        onTap: widget.onLogFood,
-      );
+
     } else if (action == 'Water 250ml') {
-      return _buildActionCard(
+      return _buildActionButton(
+        context: context,
         title: 'Water 250ml',
         emoji: '💧',
-        subtitle: 'Log hydration',
+        label: 'Water',
         accentColor: AppTheme.secondaryColor,
         onTap: widget.onWater,
       );
     } else if (action == 'New Journal' || action == 'New note') {
-      return _buildActionCard(
+      return _buildActionButton(
+        context: context,
         title: 'New Journal',
         emoji: '📝',
-        subtitle: 'Daily reflection',
-        accentColor: AppTheme.primaryLight,
+        label: 'Journal',
+        accentColor: AppTheme.primaryAccentColor(context),
         onTap: widget.onNewJournal,
       );
     }
@@ -193,54 +153,47 @@ class _DashboardQuickActionsState extends State<DashboardQuickActions> {
       return const SizedBox.shrink();
     }
 
-    final List<Widget> cards = [];
+    final List<Widget> actionButtons = [];
     for (var action in enabledActions) {
-      final card = _getActionCard(action);
-      if (card != null) {
-        cards.add(card);
+      final btn = _getActionBtn(context, action);
+      if (btn != null) {
+        actionButtons.add(btn);
       }
     }
 
     final List<Widget> rows = [];
-    for (int i = 0; i < cards.length; i += 2) {
-      if (i + 1 < cards.length) {
-        rows.add(
-          Row(
-            children: [
-              Expanded(child: cards[i]),
-              const HGapSm(),
-              Expanded(child: cards[i + 1]),
-            ],
-          ),
-        );
-      } else {
-        rows.add(
-          Row(
-            children: [
-              Expanded(child: cards[i]),
-            ],
-          ),
-        );
+    for (int i = 0; i < actionButtons.length; i += 4) {
+      final List<Widget> rowItems = [];
+      for (int j = 0; j < 4; j++) {
+        if (i + j < actionButtons.length) {
+          rowItems.add(Expanded(child: actionButtons[i + j]));
+        } else {
+          rowItems.add(const Expanded(child: SizedBox.shrink()));
+        }
       }
-      if (i + 2 < cards.length) {
-        rows.add(const VGapSm());
+      rows.add(Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: rowItems,
+      ));
+      if (i + 4 < actionButtons.length) {
+        rows.add(const VGapMd());
       }
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Quick Actions'.toUpperCase(),
             style: AppTheme.bodySmall.copyWith(
-              color: AppTheme.primaryLight,
+              color: AppTheme.primaryAccentColor(context),
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
             ),
           ),
-          const VGapSm(),
+          const VGapMd(),
           ...rows,
         ],
       ),

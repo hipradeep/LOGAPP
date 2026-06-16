@@ -36,6 +36,7 @@ class DashboardController extends ChangeNotifier {
   List<Activity> get completedActivities => _completedActivities;
   List<Activity> get skippedActivities => _skippedActivities;
   List<CheckIn> get todayCheckIns => _todayCheckIns;
+  List<Activity> get todayActivities => [..._pendingActivities, ..._completedActivities, ..._skippedActivities];
 
   DashboardController() {
     _initStreams();
@@ -73,6 +74,10 @@ class DashboardController extends ChangeNotifier {
     final List<Activity> skipped = [];
 
     for (var activity in _activeActivities) {
+      if (!activity.repeatDays.contains(today.weekday)) {
+        continue;
+      }
+
       if (activity.trackingType == 'milestone') {
         final hasTasksToday = _tasks.any((t) => t.activityId == activity.id && _isToday(t.timestamp, today));
         if (!hasTasksToday) {

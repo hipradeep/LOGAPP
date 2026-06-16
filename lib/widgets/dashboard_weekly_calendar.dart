@@ -21,98 +21,11 @@ class DashboardWeeklyCalendar extends StatelessWidget {
     return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
   }
 
-  Widget _buildDayCircle({
-    required String label,
-    required String date,
-    required double progress,
-    required bool isToday,
-    required bool isFuture,
-    required bool isCompleted,
-  }) {
-    final Color progressColor = isCompleted
-        ? AppTheme.successColor
-        : (progress > 0 ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.1));
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: AppTheme.bodySmall.copyWith(
-            color: isToday ? AppTheme.primaryLight : AppTheme.textSecondary,
-            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-            fontSize: 11,
-          ),
-        ),
-        const VGapXs(),
-        Container(
-          decoration: isToday
-              ? BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.35),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                )
-              : null,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: CircularProgressIndicator(
-                  value: isFuture ? 0.0 : (progress > 0 ? progress : 0.0),
-                  strokeWidth: 3,
-                  backgroundColor: isFuture
-                      ? Colors.white.withValues(alpha: 0.03)
-                      : Colors.white.withValues(alpha: 0.08),
-                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-                ),
-              ),
-              Text(
-                date,
-                style: AppTheme.bodySmall.copyWith(
-                  color: isToday
-                      ? Colors.white
-                      : (isFuture
-                          ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                          : AppTheme.textSecondary),
-                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const VGapXs(),
-        // Today indicator dot
-        Container(
-          width: 5,
-          height: 5,
-          decoration: BoxDecoration(
-            color: isToday ? AppTheme.primaryColor : Colors.transparent,
-            shape: BoxShape.circle,
-            boxShadow: isToday
-                ? [
-                    BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.5),
-                      blurRadius: 4,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : [],
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    // CRITICAL: Registers this component to rebuild on theme switch
+    Theme.of(context);
+    
     if (activities.isEmpty) return const SizedBox.shrink();
 
     final now = DateTime.now();
@@ -131,10 +44,10 @@ class DashboardWeeklyCalendar extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 24),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.4),
+          color: AppTheme.surface(context).withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: AppTheme.borderColor(context),
             width: 1,
           ),
         ),
@@ -143,16 +56,16 @@ class DashboardWeeklyCalendar extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.calendar_today_rounded,
-                  color: AppTheme.primaryLight,
+                  color: AppTheme.primaryAccentColor(context),
                   size: 14,
                 ),
                 const HGapSm(),
                 Text(
                   'Weekly Progress'.toUpperCase(),
                   style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.primaryLight,
+                    color: AppTheme.primaryAccentColor(context),
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
                   ),
@@ -192,7 +105,7 @@ class DashboardWeeklyCalendar extends StatelessWidget {
                 final double completionRate =
                     activities.isNotEmpty ? completed / activities.length : 0.0;
 
-                return _buildDayCircle(
+                return _DashboardDayCircle(
                   label: dayLabels[index],
                   date: day.day.toString(),
                   progress: isFuture ? 0.0 : completionRate,
@@ -205,6 +118,111 @@ class DashboardWeeklyCalendar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DashboardDayCircle extends StatelessWidget {
+  final String label;
+  final String date;
+  final double progress;
+  final bool isToday;
+  final bool isFuture;
+  final bool isCompleted;
+
+  const _DashboardDayCircle({
+    required this.label,
+    required this.date,
+    required this.progress,
+    required this.isToday,
+    required this.isFuture,
+    required this.isCompleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // CRITICAL: Registers this component to rebuild on theme switch
+    Theme.of(context);
+
+    final Color progressColor = isCompleted
+        ? AppTheme.successColor
+        : (progress > 0 ? AppTheme.primaryAccentColor(context) : AppTheme.subtleFillColor(context));
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: AppTheme.bodySmall.copyWith(
+            color: isToday ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+            fontSize: 11,
+          ),
+        ),
+        const VGapXs(),
+        Container(
+          decoration: isToday
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                )
+              : null,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                  value: isFuture ? 0.0 : (progress > 0 ? progress : 0.0),
+                  strokeWidth: 3,
+                  backgroundColor: isFuture
+                      ? AppTheme.subtleFillColor(context).withValues(alpha: 0.3)
+                      : AppTheme.subtleFillColor(context),
+                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                ),
+              ),
+              Text(
+                date,
+                style: AppTheme.bodySmall.copyWith(
+                  color: isToday
+                      ? AppTheme.selectedChipTextColor(context)
+                      : (isFuture
+                          ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
+                          : AppTheme.textSecondaryColor(context)),
+                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const VGapXs(),
+        // Today indicator dot
+        Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            color: isToday ? AppTheme.primaryColor : Colors.transparent,
+            shape: BoxShape.circle,
+            boxShadow: isToday
+                ? [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.5),
+                      blurRadius: 4,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : [],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -39,7 +39,7 @@ class MilestoneSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildSectionHeader(),
+        _buildSectionHeader(context),
         if (isExpanded) ...[
           ListView.builder(
             key: ValueKey('${title}_list'),
@@ -92,7 +92,7 @@ class MilestoneSection extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader() {
+  Widget _buildSectionHeader(BuildContext context) {
     return InkWell(
       onTap: onToggle,
       borderRadius: BorderRadius.circular(8),
@@ -106,7 +106,7 @@ class MilestoneSection extends StatelessWidget {
               style: AppTheme.headingSmall.copyWith(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Colors.white.withValues(alpha: 0.85),
+                color: AppTheme.textPrimaryColor(context).withValues(alpha: 0.85),
               ),
             ),
             const HGapSm(),
@@ -122,8 +122,8 @@ class MilestoneSection extends StatelessWidget {
               ),
               child: Text(
                 '${tasks.length}',
-                style: const TextStyle(
-                  color: AppTheme.primaryLight,
+                style: TextStyle(
+                  color: AppTheme.primaryAccentColor(context),
                   fontSize: 9,
                   fontWeight: FontWeight.bold,
                 ),
@@ -132,7 +132,7 @@ class MilestoneSection extends StatelessWidget {
             const HGapXs(),
             Icon(
               isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-              color: Colors.white54,
+              color: AppTheme.textMutedColor(context),
               size: 16,
             ),
           ],

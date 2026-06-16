@@ -7,6 +7,8 @@ class WeeklyCalendar extends StatelessWidget {
   final DateTime selectedDate;
   final Function(DateTime) onDateSelected;
 
+  static final DateFormat _dayFormat = DateFormat('E');
+
   const WeeklyCalendar({
     super.key,
     required this.selectedDate,
@@ -15,9 +17,11 @@ class WeeklyCalendar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // CRITICAL: Registers this component to rebuild on theme switch
+    Theme.of(context);
+
     // Find the Monday of the week containing selectedDate
     DateTime weekStart = selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
-    final surfaceColor = const Color(0xFF1E293B);
 
     return SizedBox(
       height: 100,
@@ -32,6 +36,22 @@ class WeeklyCalendar extends StatelessWidget {
           DateTime now = DateTime.now();
           bool isToday = date.day == now.day && date.month == now.month && date.year == now.year;
 
+          final Color dayTextColor = isSelected
+              ? AppTheme.selectedChipTextColor(context)
+              : (isToday ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context));
+
+          final Color weekdayColor = isSelected || isToday
+              ? AppTheme.primaryAccentColor(context)
+              : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6);
+
+          final Color boxBgColor = isSelected
+              ? AppTheme.primaryColor
+              : (isToday ? AppTheme.primaryColor.withValues(alpha: 0.1) : AppTheme.surface(context));
+
+          final Color boxBorderColor = isSelected
+              ? Colors.transparent
+              : (isToday ? AppTheme.primaryColor.withValues(alpha: 0.5) : AppTheme.borderColor(context));
+
           return Expanded(
             child: GestureDetector(
               onTap: () => onDateSelected(date),
@@ -39,9 +59,9 @@ class WeeklyCalendar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    DateFormat('E').format(date).substring(0, 1),
+                    _dayFormat.format(date).substring(0, 1),
                     style: GoogleFonts.outfit(
-                      color: isSelected || isToday ? Colors.white : AppTheme.textSecondary.withValues(alpha: 0.5),
+                      color: weekdayColor,
                       fontSize: 12,
                       fontWeight: isSelected || isToday ? FontWeight.w600 : FontWeight.w400,
                     ),
@@ -51,21 +71,25 @@ class WeeklyCalendar extends StatelessWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: isSelected ? AppTheme.primaryColor : (isToday ? AppTheme.primaryColor.withValues(alpha: 0.1) : surfaceColor),
+                      color: boxBgColor,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSelected ? Colors.transparent : (isToday ? AppTheme.primaryColor.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05)),
+                        color: boxBorderColor,
                         width: isToday ? 2 : 1,
                       ),
                       boxShadow: isSelected ? [
-                        BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))
+                        BoxShadow(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        )
                       ] : [],
                     ),
                     child: Center(
                       child: Text(
                         date.day.toString(),
                         style: GoogleFonts.outfit(
-                          color: isSelected || isToday ? Colors.white : AppTheme.textSecondary,
+                          color: dayTextColor,
                           fontSize: 14,
                           fontWeight: isSelected || isToday ? FontWeight.w600 : FontWeight.w400,
                         ),

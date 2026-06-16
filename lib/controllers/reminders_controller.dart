@@ -45,15 +45,11 @@ class RemindersController extends ChangeNotifier {
   Map<String, List<UpcomingReminder>> get remindersByActivity {
     final Map<String, List<UpcomingReminder>> grouped = {};
     for (final r in _upcomingReminders) {
-      final activity = _activities.firstWhere(
-        (a) => a.id == r.activityId,
-        orElse: () => Activity(id: '', name: 'Unknown', isActive: false, timestamp: DateTime.now()),
-      );
-      final activityName = activity.name.isNotEmpty ? activity.name : 'Unknown';
-      if (!grouped.containsKey(activityName)) {
-        grouped[activityName] = [];
+      final activityId = r.activityId;
+      if (!grouped.containsKey(activityId)) {
+        grouped[activityId] = [];
       }
-      grouped[activityName]!.add(r);
+      grouped[activityId]!.add(r);
     }
     return grouped;
   }

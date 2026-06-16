@@ -43,10 +43,14 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: AppTheme.borderColor(context),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.add, color: Colors.white, size: 20),
+            child: Icon(
+              Icons.add,
+              color: AppTheme.textPrimaryColor(context),
+              size: 20,
+            ),
           ),
         ),
       ],
@@ -391,7 +395,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                                   child: Text(
                                     activity.name,
                                     style: AppTheme.bodyLarge.copyWith(
-                                      color: isActive ? Colors.white : AppTheme.textSecondary,
+                                      color: isActive ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                                       fontWeight: FontWeight.w600,
                                     ),
                                     maxLines: 1,

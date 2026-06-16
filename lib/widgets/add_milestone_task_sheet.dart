@@ -204,9 +204,9 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
+              surface: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -233,9 +233,9 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
+              surface: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -270,14 +270,15 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
         maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) {
+          Theme.of(context);
           return Container(
             decoration: BoxDecoration(
-              color: AppTheme.backgroundColor.withValues(alpha: 0.95),
+              color: AppTheme.background(context).withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+              border: Border.all(color: AppTheme.borderColor(context), width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
+                  color: AppTheme.shadowColor(context),
                   blurRadius: 40,
                   offset: const Offset(0, -10),
                 ),
@@ -294,7 +295,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white24,
+                        color: AppTheme.borderColor(context),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -325,7 +326,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                                           value: m.id,
                                           child: Text(
                                             m.name,
-                                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                                            style: TextStyle(color: AppTheme.textPrimaryColor(context), fontSize: 13),
                                           ),
                                         );
                                       }).toList(),
@@ -336,13 +337,13 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                               ),
                               Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.05),
+                                  color: AppTheme.subtleFillColor(context),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                                  border: Border.all(color: AppTheme.borderColor(context)),
                                 ),
                                 child: IconButton(
                                   onPressed: () => Navigator.pop(context),
-                                  icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                                  icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
                                 ),
                               ),
                             ],
@@ -350,7 +351,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                           const VGapLg(),
                           Text(
                             'Select Date',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondary),
+                            style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondaryColor(context)),
                           ),
                           const VGapMd(),
                           SingleChildScrollView(
@@ -360,7 +361,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                           const VGapLg(),
                           Text(
                             'Task Name',
-                            style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondary),
+                            style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondaryColor(context)),
                           ),
                           const VGapMd(),
                           TextField(
@@ -375,21 +376,21 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                                 curve: Curves.easeOut,
                               );
                             },
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            style: TextStyle(color: AppTheme.textPrimaryColor(context), fontSize: 13),
                             decoration: InputDecoration(
                               hintText: 'Add milestone task...',
-                              hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                              hintStyle: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 13),
                               filled: true,
-                              fillColor: Colors.white.withValues(alpha: 0.02),
+                              fillColor: AppTheme.subtleFillColor(context),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                                borderSide: BorderSide(color: AppTheme.borderColor(context)),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                                borderSide: BorderSide(color: AppTheme.borderColor(context)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -430,18 +431,18 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: _isSaving
-                                      ? const SizedBox(
+                                      ? SizedBox(
                                           height: 18,
                                           width: 18,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            color: AppTheme.primaryLight,
+                                            color: AppTheme.primaryAccentColor(context),
                                           ),
                                         )
-                                      : const Text(
+                                      : Text(
                                           'SAVE',
                                           style: TextStyle(
-                                            color: AppTheme.primaryLight,
+                                            color: AppTheme.primaryAccentColor(context),
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -483,8 +484,8 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                                   Text(
                                     'Tasks',
                                     style: AppTheme.headingSmall.copyWith(
-                                      fontSize: 15,
-                                      color: AppTheme.textSecondary,
+                                      fontSize: 13,
+                                      color: AppTheme.textSecondaryColor(context),
                                     ),
                                   ),
                                   const VGapMd(),
@@ -495,8 +496,8 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                                         child: Text(
                                           'No tasks for this date. Add one above!',
                                           style: AppTheme.bodySmall.copyWith(
-                                            fontStyle: FontStyle.italic,
-                                            color: AppTheme.textSecondary,
+                                            fontSize: 10,
+                                            color: AppTheme.textSecondaryColor(context),
                                           ),
                                         ),
                                       ),
@@ -557,18 +558,18 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
         decoration: BoxDecoration(
           color: isSelected 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-              : Colors.white.withValues(alpha: 0.03),
+              : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected 
                 ? AppTheme.primaryColor.withValues(alpha: 0.3) 
-                : Colors.white.withValues(alpha: 0.05),
+                : AppTheme.borderColor(context),
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            color: isSelected ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -589,12 +590,12 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
         decoration: BoxDecoration(
           color: isCustom 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-              : Colors.white.withValues(alpha: 0.03),
+              : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isCustom 
                 ? AppTheme.primaryColor.withValues(alpha: 0.3) 
-                : Colors.white.withValues(alpha: 0.05),
+                : AppTheme.borderColor(context),
           ),
         ),
         child: Row(
@@ -603,13 +604,13 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
             Icon(
               Icons.calendar_month_rounded, 
               size: 13, 
-              color: isCustom ? AppTheme.primaryLight : AppTheme.textSecondary,
+              color: isCustom ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                color: isCustom ? Colors.white : AppTheme.textSecondary,
+                color: isCustom ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
                 fontSize: 11,
                 fontWeight: isCustom ? FontWeight.bold : FontWeight.normal,
               ),
@@ -632,12 +633,12 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
         decoration: BoxDecoration(
           color: hasTime 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-              : Colors.white.withValues(alpha: 0.03),
+              : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: hasTime 
                 ? AppTheme.primaryColor.withValues(alpha: 0.3) 
-                : Colors.white.withValues(alpha: 0.05),
+                : AppTheme.borderColor(context),
           ),
         ),
         child: Row(
@@ -646,14 +647,14 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
             Icon(
               Icons.access_time_rounded, 
               size: 13, 
-              color: hasTime ? AppTheme.primaryLight : AppTheme.textSecondary,
+              color: hasTime ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
             ),
             if (hasTime) ...[
               const SizedBox(width: 4),
               Text(
                 label!,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppTheme.selectedChipTextColor(context),
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -668,7 +669,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                 child: Icon(
                   Icons.close_rounded,
                   size: 12,
-                  color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                  color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
                 ),
               ),
             ],
@@ -688,12 +689,12 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.15),
+        color: AppTheme.surface(context).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: task.checked 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-              : Colors.white.withValues(alpha: 0.02),
+              : AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -716,7 +717,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                     child: Text(
                       displayName,
                       style: TextStyle(
-                        color: task.checked ? AppTheme.textSecondary : Colors.white,
+                        color: task.checked ? AppTheme.textSecondaryColor(context) : AppTheme.textPrimaryColor(context),
                         decoration: task.checked ? TextDecoration.lineThrough : null,
                         fontSize: 13,
                       ),
@@ -728,7 +729,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: task.checked
-                            ? Colors.white.withValues(alpha: 0.02)
+                            ? AppTheme.subtleFillColor(context)
                             : AppTheme.primaryColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -739,16 +740,16 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                             Icons.access_time_rounded,
                             size: 10,
                             color: task.checked
-                                ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                                : AppTheme.primaryLight,
+                                ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
+                                : AppTheme.primaryAccentColor(context),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             _formatTimeString(timeString),
                             style: TextStyle(
                               color: task.checked
-                                  ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                                  : AppTheme.primaryLight,
+                                  ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
+                                  : AppTheme.primaryAccentColor(context),
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),

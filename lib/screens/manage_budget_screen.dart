@@ -73,10 +73,14 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: AppTheme.subtleFillColor(context),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.add, color: Colors.white, size: 20),
+            child: Icon(
+              Icons.add,
+              color: AppTheme.textPrimaryColor(context),
+              size: 20,
+            ),
           ),
         ),
         const HGapSm(),
@@ -102,13 +106,20 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
 
   List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context) {
     return [
-      const PopupMenuItem(
+      PopupMenuItem(
         value: 'expense_category',
         child: Row(
           children: [
-            Icon(Icons.category_rounded, color: AppTheme.primaryLight, size: 18),
-            HGapSm(),
-            Text('Expense Category', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+            Icon(Icons.category_rounded, color: AppTheme.primaryAccentColor(context), size: 18),
+            const HGapSm(),
+            Text(
+              'Expense Category',
+              style: TextStyle(
+                color: AppTheme.textPrimaryColor(context),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -292,7 +303,7 @@ class _BudgetCard extends StatelessWidget {
           child: Stack(
             children: [
               if (percent > 0 && isActive) _buildProgressFill(percent, accentColor),
-              _buildCardContent(isActive, isOver, accentColor, spent, percent),
+              _buildCardContent(context, isActive, isOver, accentColor, spent, percent),
             ],
           ),
         ),
@@ -334,7 +345,7 @@ class _BudgetCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCardContent(bool isActive, bool isOver, Color accentColor, double spent, double percent) {
+  Widget _buildCardContent(BuildContext context, bool isActive, bool isOver, Color accentColor, double spent, double percent) {
     final String periodLabel = budget.period.toUpperCase();
     final Color periodColor = budget.period == 'weekly' ? AppTheme.secondaryColor : AppTheme.primaryColor;
 
@@ -358,7 +369,7 @@ class _BudgetCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeaderRow(isActive, isOver, accentColor, periodLabel, periodColor),
+                  _buildHeaderRow(context, isActive, isOver, accentColor, periodLabel, periodColor),
                   const VGapSm(),
                   _buildMetaChips(isActive, isOver, spent, accentColor),
                 ],
@@ -370,7 +381,7 @@ class _BudgetCard extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderRow(bool isActive, bool isOver, Color accentColor, String periodLabel, Color periodColor) {
+  Widget _buildHeaderRow(BuildContext context, bool isActive, bool isOver, Color accentColor, String periodLabel, Color periodColor) {
     return Row(
       children: [
         Container(
@@ -393,7 +404,9 @@ class _BudgetCard extends StatelessWidget {
           child: Text(
             budget.category,
             style: AppTheme.bodyLarge.copyWith(
-              color: isActive ? Colors.white : AppTheme.textSecondary,
+              color: isActive
+                  ? AppTheme.textPrimaryColor(context)
+                  : AppTheme.textSecondaryColor(context),
               fontWeight: FontWeight.w600,
               decoration: !isActive ? TextDecoration.lineThrough : null,
             ),

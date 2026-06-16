@@ -17,15 +17,16 @@ class NoteOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
+        color: AppTheme.surface(context),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(AppTheme.defaultBorderRadius),
           topRight: Radius.circular(AppTheme.defaultBorderRadius),
         ),
         border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1),
+          top: BorderSide(color: AppTheme.borderColor(context), width: 1),
         ),
       ),
       child: SafeArea(
@@ -38,7 +39,7 @@ class NoteOptionsSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: AppTheme.borderColor(context),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -57,14 +58,14 @@ class NoteOptionsSheet extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
                 child: Text(
                   entry.content,
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary, fontSize: 13),
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context), fontSize: 13),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-            const Divider(color: Colors.white10),
+            Divider(color: AppTheme.borderColor(context)),
             ListTile(
-              leading: const Icon(Icons.edit_rounded, color: AppTheme.primaryLight),
+              leading: Icon(Icons.edit_rounded, color: AppTheme.primaryAccentColor(context)),
               title: Text('Edit Entry', style: AppTheme.bodyLarge),
               onTap: () {
                 Navigator.pop(context);

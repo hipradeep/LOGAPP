@@ -55,14 +55,15 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
+          color: AppTheme.surface(context),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+          border: Border.all(color: AppTheme.borderColor(context), width: 1),
         ),
         child: _isLoading
             ? const Center(
@@ -80,7 +81,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                       width: 36,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: AppTheme.borderColor(context),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -93,9 +94,9 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.02),
+                      color: AppTheme.subtleFillColor(context),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      border: Border.all(color: AppTheme.borderColor(context)),
                     ),
                     child: Row(
                       children: [
@@ -105,7 +106,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                             color: AppTheme.primaryColor.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.notifications_active_outlined, color: AppTheme.primaryLight, size: 20),
+                          child: Icon(Icons.notifications_active_outlined, color: AppTheme.primaryAccentColor(context), size: 20),
                         ),
                         const HGapMd(),
                         Expanded(
@@ -122,8 +123,8 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                           value: _dailyReminder,
                           activeThumbColor: AppTheme.primaryColor,
                           activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.4),
-                          inactiveThumbColor: AppTheme.textSecondary,
-                          inactiveTrackColor: Colors.white12,
+                          inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+                          inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
                           onChanged: _toggleReminder,
                         ),
                       ],
@@ -140,9 +141,9 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.02),
+                          color: AppTheme.subtleFillColor(context),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          border: Border.all(color: AppTheme.borderColor(context)),
                         ),
                         child: Row(
                           children: [

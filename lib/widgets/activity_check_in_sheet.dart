@@ -57,14 +57,15 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) {
+          Theme.of(context);
           return Container(
             decoration: BoxDecoration(
-              color: AppTheme.backgroundColor.withValues(alpha: 0.95),
+              color: AppTheme.background(context).withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+              border: Border.all(color: AppTheme.borderColor(context), width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
+                  color: AppTheme.shadowColor(context),
                   blurRadius: 40,
                   offset: const Offset(0, -10),
                 ),
@@ -148,7 +149,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           width: 40,
           height: 4,
           decoration: BoxDecoration(
-            color: Colors.white24,
+            color: AppTheme.borderColor(context),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -176,7 +177,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                           isMultiple || widget.activity.trackingType == 'milestone'
                               ? 'Target: $targetCount times per day (Today: $todayCount)'
                               : 'Daily check-in',
-                          style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary, fontSize: 13),
+                          style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context), fontSize: 13),
                         ),
                         if ((widget.activity.trackingType == 'single' ||
                                 widget.activity.trackingType == 'milestone') &&
@@ -185,18 +186,18 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                           Text(
                             '  •  ',
                             style: AppTheme.bodyMedium.copyWith(
-                                color: AppTheme.textSecondary.withValues(alpha: 0.5), fontSize: 13),
+                                color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.5), fontSize: 13),
                           ),
-                          const Icon(
+                          Icon(
                             Icons.access_time_rounded,
                             size: 13,
-                            color: AppTheme.primaryLight,
+                            color: AppTheme.primaryAccentColor(context),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             _formatTimeString(widget.activity.scheduledTime!),
                             style: AppTheme.bodyMedium.copyWith(
-                              color: AppTheme.primaryLight,
+                              color: AppTheme.primaryAccentColor(context),
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
                             ),
@@ -209,19 +210,19 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               ),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: AppTheme.subtleFillColor(context),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                  icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
                 ),
               ),
             ],
           ),
         ),
         const VGapLg(),
-        const Divider(color: Colors.white10, height: 1, indent: 24, endIndent: 24),
+        Divider(color: AppTheme.borderColor(context), height: 1, indent: 24, endIndent: 24),
         const VGapMd(),
 
         Expanded(
@@ -308,8 +309,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               children: [
                 Text(
                   isMultiple || widget.activity.trackingType == 'milestone' ? 'Daily Progress' : 'Daily Habit Check-in',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppTheme.textPrimaryColor(context),
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
@@ -320,7 +321,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       ? '$todayCount of $targetCount logged today'
                       : (isCompleted ? 'Checked in today at $formattedTime' : 'Not checked in yet today'),
                   style: AppTheme.bodySmall.copyWith(
-                    color: isCompleted ? AppTheme.successColor.withValues(alpha: 0.8) : AppTheme.textSecondary,
+                    color: isCompleted ? AppTheme.successColor.withValues(alpha: 0.8) : AppTheme.textSecondaryColor(context),
                   ),
                 ),
               ],
@@ -341,18 +342,18 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                   borderRadius: widget.activity.trackingType == 'single' ? BorderRadius.circular(6) : null,
                   color: isCompleted ? AppTheme.primaryColor : Colors.transparent,
                   border: Border.all(
-                    color: isCompleted ? AppTheme.primaryColor : AppTheme.textSecondary.withValues(alpha: 0.5),
+                    color: isCompleted ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
                     width: 2,
                   ),
                 ),
                 child: widget.activity.trackingType == 'single'
                     ? (isCompleted
-                        ? const Icon(Icons.check, size: 14, color: Colors.white)
+                        ? Icon(Icons.check, size: 14, color: AppTheme.selectedChipTextColor(context))
                         : null)
                     : Icon(
                         Icons.add,
                         size: 14,
-                        color: isCompleted ? Colors.white : AppTheme.primaryLight,
+                        color: isCompleted ? AppTheme.selectedChipTextColor(context) : AppTheme.primaryAccentColor(context),
                       ),
               ),
             ),
@@ -388,7 +389,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           child: Container(
             height: 8,
             width: double.infinity,
-            color: Colors.white.withValues(alpha: 0.05),
+            color: AppTheme.subtleFillColor(context),
             child: FractionallySizedBox(
               alignment: Alignment.centerLeft,
               widthFactor: percent,
@@ -397,7 +398,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                   gradient: LinearGradient(
                     colors: percent >= 1.0
                         ? [AppTheme.successColor, AppTheme.successColor.withValues(alpha: 0.7)]
-                        : [AppTheme.primaryColor, AppTheme.primaryLight],
+                        : [AppTheme.primaryColor, AppTheme.primaryAccentColor(context)],
                   ),
                 ),
               ),
@@ -478,10 +479,10 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor.withValues(alpha: 0.2),
+            color: AppTheme.surface(context).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: item.checked ? AppTheme.primaryColor.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.02),
+              color: item.checked ? AppTheme.primaryColor.withValues(alpha: 0.2) : AppTheme.borderColor(context),
               width: 1,
             ),
           ),
@@ -494,7 +495,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                     Icon(
                       Icons.circle,
                       size: 8,
-                      color: item.checked ? AppTheme.primaryColor : AppTheme.textSecondary.withValues(alpha: 0.5),
+                      color: item.checked ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
                     ),
                     const HGapMd(),
                     Expanded(
@@ -504,7 +505,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                           Text(
                             formattedDate,
                             style: AppTheme.bodyMedium.copyWith(
-                              color: item.checked ? Colors.white : AppTheme.textSecondary,
+                              color: item.checked ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                               fontWeight: item.checked ? FontWeight.bold : FontWeight.normal,
                               fontSize: 13,
                             ),
@@ -618,7 +619,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
             Text(
               'Description'.toUpperCase(),
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.0,
               ),
@@ -630,16 +631,16 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor.withValues(alpha: 0.2),
+            color: AppTheme.surface(context).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: AppTheme.borderColor(context),
               width: 1,
             ),
           ),
           child: Text(
             description,
-            style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
+            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimaryColor(context).withValues(alpha: 0.7)),
           ),
         ),
       ],
@@ -653,7 +654,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Already checked in today!'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppTheme.warningColor,
           duration: Duration(seconds: 2),
         ),
       );
@@ -855,12 +856,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                   decoration: BoxDecoration(
                     color: item.checked 
                         ? AppTheme.primaryColor.withValues(alpha: 0.08) 
-                        : AppTheme.surfaceColor.withValues(alpha: 0.45),
+                        : AppTheme.surface(context).withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: item.checked 
                           ? AppTheme.primaryColor.withValues(alpha: 0.25) 
-                          : Colors.white.withValues(alpha: 0.05),
+                          : AppTheme.borderColor(context),
                       width: 1,
                     ),
                   ),
@@ -874,7 +875,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                               child: Text(
                                 item.name,
                                 style: TextStyle(
-                                  color: item.checked ? AppTheme.textSecondary : Colors.white,
+                                  color: item.checked ? AppTheme.textSecondaryColor(context) : AppTheme.textPrimaryColor(context),
                                   decoration: item.checked ? TextDecoration.lineThrough : null,
                                   fontSize: 13,
                                 ),
@@ -887,7 +888,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: item.checked
-                                      ? Colors.white.withValues(alpha: 0.02)
+                                      ? AppTheme.subtleFillColor(context)
                                       : AppTheme.primaryColor.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
@@ -898,16 +899,16 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                                       Icons.access_time_rounded,
                                       size: 10,
                                       color: item.checked
-                                          ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                                          : AppTheme.primaryLight,
+                                          ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
+                                          : AppTheme.primaryAccentColor(context),
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
                                       _formatTimeString(item.scheduledTime!),
                                       style: TextStyle(
                                         color: item.checked
-                                            ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                                            : AppTheme.primaryLight,
+                                            ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
+                                            : AppTheme.primaryAccentColor(context),
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -937,12 +938,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                               border: Border.all(
                                 color: item.checked 
                                     ? AppTheme.primaryColor 
-                                    : AppTheme.textSecondary.withValues(alpha: 0.5),
+                                    : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
                                 width: 2,
                               ),
                             ),
                             child: item.checked
-                                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                                ? Icon(Icons.check, size: 12, color: AppTheme.selectedChipTextColor(context))
                                 : null,
                           ),
                         ),

@@ -16,6 +16,9 @@ class ActivityNotificationSync {
   static List<Task> _latestTasks = [];
   static List<CheckIn> _latestCheckIns = [];
 
+  static Timer? _debounceTimer;
+  static Completer<void>? _syncCompleter;
+
   static final ActivityService _activityService = ActivityService();
   static final CheckInService _checkInService = CheckInService();
   static final CacheService _cacheService = CacheService();
@@ -50,6 +53,8 @@ class ActivityNotificationSync {
     _activitiesSub = null;
     _tasksSub = null;
     _checkInsSub = null;
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
   }
 
   /// Public entry point to force synchronizing notifications
@@ -57,8 +62,31 @@ class ActivityNotificationSync {
     await _sync();
   }
 
-  /// Run the notification scheduling/cancellation logic
-  static Future<void> _sync() async {
+  /// Run the notification scheduling/cancellation logic with debouncing
+  static Future<void> _sync() {
+    _debounceTimer?.cancel();
+    
+    if (_syncCompleter == null || _syncCompleter!.isCompleted) {
+      _syncCompleter = Completer<void>();
+    }
+    
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        await _syncInternal();
+        if (_syncCompleter != null && !_syncCompleter!.isCompleted) {
+          _syncCompleter!.complete();
+        }
+      } catch (e, stackTrace) {
+        if (_syncCompleter != null && !_syncCompleter!.isCompleted) {
+          _syncCompleter!.completeError(e, stackTrace);
+        }
+      }
+    });
+    
+    return _syncCompleter!.future;
+  }
+
+  static Future<void> _syncInternal() async {
     if (_latestActivities.isEmpty) return;
 
     final now = DateTime.now();
@@ -102,24 +130,50 @@ class ActivityNotificationSync {
 
       // --- Activity Main Scheduled Reminder ---
       if (activity.scheduledTime != null && activity.scheduledTime!.isNotEmpty) {
-        final isCompleted = _isActivityCompletedToday(activity, today);
-        final uniqueId = 'activity_${activity.id}';
+        // Parse main activity schedule time to compare hours/minutes
+        DateTime? mainParsedTime;
+        try {
+          mainParsedTime = NotificationService.parseTimeString(activity.scheduledTime!);
+        } catch (_) {}
 
-        DateTime? finalDateTime;
-        String? finalTimeString = activity.scheduledTime!;
-        if (cleanSnoozes.containsKey(uniqueId)) {
-          finalDateTime = DateTime.parse(cleanSnoozes[uniqueId]!);
-          finalTimeString = null;
+        // Check if there is any subtask reminder scheduled at the exact same hour and minute
+        bool hasMatchingSubtaskTime = false;
+        if (activity.trackingType == 'multiple' && activity.subTaskTemplates.isNotEmpty && mainParsedTime != null) {
+          for (final template in activity.subTaskTemplates) {
+            final parts = template.split('|');
+            final timeStr = parts.length > 1 ? parts.last : null;
+            if (timeStr != null && timeStr.isNotEmpty) {
+              try {
+                final subParsedTime = NotificationService.parseTimeString(timeStr);
+                if (subParsedTime.hour == mainParsedTime.hour && subParsedTime.minute == mainParsedTime.minute) {
+                  hasMatchingSubtaskTime = true;
+                  break;
+                }
+              } catch (_) {}
+            }
+          }
         }
 
-        targetNotifications[uniqueId] = _TargetNotification(
-          uniqueId: uniqueId,
-          title: activity.name,
-          body: 'Time for your activity: ${activity.name}',
-          timeString: finalTimeString,
-          dateTime: finalDateTime,
-          forceTomorrow: isCompleted,
-        );
+        if (!hasMatchingSubtaskTime) {
+          final isCompleted = _isActivityCompletedToday(activity, today);
+          final uniqueId = 'activity_${activity.id}';
+
+          DateTime? finalDateTime;
+          String? finalTimeString = activity.scheduledTime!;
+          if (cleanSnoozes.containsKey(uniqueId)) {
+            finalDateTime = DateTime.parse(cleanSnoozes[uniqueId]!);
+            finalTimeString = null;
+          }
+
+          targetNotifications[uniqueId] = _TargetNotification(
+            uniqueId: uniqueId,
+            title: activity.name,
+            body: 'Time for your activity: ${activity.name}',
+            timeString: finalTimeString,
+            dateTime: finalDateTime,
+            forceTomorrow: isCompleted,
+          );
+        }
       }
 
       // --- Routine Subtasks Scheduled Reminders ---

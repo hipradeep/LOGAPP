@@ -1,8 +1,18 @@
+import 'dart:ui';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'cache_service.dart';
+
+@pragma('vm:entry-point')
+void onNotificationActionCallback(NotificationResponse details) {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  NotificationService.handleNotificationAction(details);
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -28,10 +38,41 @@ class NotificationService {
     priority: Priority.max,
     playSound: true,
     enableVibration: true,
+    actions: <AndroidNotificationAction>[
+      AndroidNotificationAction(
+        'dismiss',
+        'Dismiss',
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        'reschedule_10',
+        '10 Min',
+        cancelNotification: true,
+      ),
+      AndroidNotificationAction(
+        'reschedule_30',
+        '30 Min',
+        cancelNotification: true,
+      ),
+    ],
   );
 
   static const NotificationDetails _notificationDetails = NotificationDetails(
     android: _androidDetails,
+  );
+
+  static const AndroidNotificationDetails _simpleAndroidDetails = AndroidNotificationDetails(
+    'reminder_channel_v3_simple',
+    'Alerts',
+    channelDescription: 'Simple status alerts and confirmations',
+    importance: Importance.defaultImportance,
+    priority: Priority.defaultPriority,
+    playSound: true,
+    enableVibration: true,
+  );
+
+  static const NotificationDetails _simpleNotificationDetails = NotificationDetails(
+    android: _simpleAndroidDetails,
   );
 
   /// Initialize the notification service
@@ -60,9 +101,75 @@ class NotificationService {
 
       await _notificationsPlugin.initialize(
         initializationSettings,
-        onDidReceiveNotificationResponse: (NotificationResponse details) {},
+        onDidReceiveNotificationResponse: _handleNotificationResponse,
+        onDidReceiveBackgroundNotificationResponse: onNotificationActionCallback,
       );
     } catch (_) {}
+  }
+
+  static void _handleNotificationResponse(NotificationResponse details) {
+    handleNotificationAction(details);
+  }
+
+  static void handleNotificationAction(NotificationResponse details) async {
+    final actionId = details.actionId;
+    final payload = details.payload;
+    
+    // Log the incoming action details for easier debugging
+    debugPrint('Notification Action Triggered: actionId=$actionId, payload=$payload, id=${details.id}');
+
+    if (actionId == null || payload == null || payload.isEmpty) {
+      debugPrint('Action aborted: actionId or payload is null/empty.');
+      return;
+    }
+
+    // Check and prevent duplicate action execution within 3 seconds (cross-isolate)
+    if (await CacheService().isDuplicateAction(details.id, actionId)) {
+      debugPrint('Action aborted: duplicate event detected for notification ${details.id} with action $actionId.');
+      return;
+    }
+
+    final parts = payload.split('|');
+    if (parts.length < 2) {
+      debugPrint('Action aborted: payload could not be parsed: $payload');
+      return;
+    }
+    final title = parts[0];
+    final body = parts[1];
+
+    if (actionId.startsWith('reschedule_')) {
+      final minsStr = actionId.split('_').last; // "10" or "30"
+      final minutes = int.tryParse(minsStr);
+      if (minutes != null && details.id != null) {
+        debugPrint('Rescheduling notification "$title" (ID: ${details.id}) by $minutes minutes...');
+        // Ensure timezones are initialized in this background isolate
+        try {
+          tz.initializeTimeZones();
+          tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+        } catch (e) {
+          debugPrint('Failed to initialize timezone in background isolate: $e');
+        }
+
+        final newTime = DateTime.now().add(Duration(minutes: minutes));
+        await cancelNotification(details.id!);
+        await scheduleOneShotNotification(
+          id: details.id!,
+          title: title,
+          body: '$body (Rescheduled)',
+          dateTime: newTime,
+          skipPermissionCheck: true,
+        );
+
+        // Show instant confirmation notification using simple details (no action buttons)
+        final confirmationId = (details.id! + 12345) & 0x7FFFFFFF;
+        await showSimpleInstantNotification(
+          id: confirmationId,
+          title: 'Reminder Rescheduled',
+          body: '"$title" has been rescheduled for $minutes min.',
+        );
+        debugPrint('Confirmation notification triggered for rescheduling.');
+      }
+    }
   }
 
   static String _detectTimeZoneName() {
@@ -142,9 +249,18 @@ class NotificationService {
     required String body,
     required String timeString,
     bool forceTomorrow = false,
+    bool skipPermissionCheck = false,
   }) async {
     try {
-      await requestPermissions();
+      if (!skipPermissionCheck) {
+        await requestPermissions();
+      }
+
+      // Ensure timezones are initialized
+      try {
+        tz.initializeTimeZones();
+        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      } catch (_) {}
 
       final parsedTime = parseTimeString(timeString);
       
@@ -178,6 +294,7 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
+        payload: '$title|$body',
       );
     } catch (_) {}
   }
@@ -188,9 +305,18 @@ class NotificationService {
     required String title,
     required String body,
     required DateTime dateTime,
+    bool skipPermissionCheck = false,
   }) async {
     try {
-      await requestPermissions();
+      if (!skipPermissionCheck) {
+        await requestPermissions();
+      }
+
+      // Ensure timezones are initialized
+      try {
+        tz.initializeTimeZones();
+        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      } catch (_) {}
 
       final now = tz.TZDateTime.now(tz.local);
       final scheduledDate = tz.TZDateTime.from(dateTime, tz.local);
@@ -208,6 +334,7 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.alarmClock,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
+        payload: '$title|$body',
       );
     } catch (_) {}
   }
@@ -229,6 +356,23 @@ class NotificationService {
         title,
         body,
         _notificationDetails,
+        payload: '$title|$body',
+      );
+    } catch (_) {}
+  }
+
+  /// Display a simple notification immediately without action buttons
+  static Future<void> showSimpleInstantNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      await _notificationsPlugin.show(
+        id,
+        title,
+        body,
+        _simpleNotificationDetails,
       );
     } catch (_) {}
   }

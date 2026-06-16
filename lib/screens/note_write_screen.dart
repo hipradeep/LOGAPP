@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../models/note_entity.dart';
-import '../widgets/app_title_input.dart';
+import '../widgets/glow_blob.dart';
 
 class MoodItem {
   final String emoji;
@@ -15,6 +17,106 @@ class MoodItem {
     required this.label,
     required this.glowColor,
   });
+}
+
+class NoteWriteController extends ChangeNotifier {
+  final NoteEntity? existingEntry;
+  late final TextEditingController titleController;
+  late final TextEditingController contentController;
+  late final FocusNode titleFocusNode;
+  late final FocusNode contentFocusNode;
+  
+  late DateTime timestamp;
+  late String selectedMood;
+  
+  // History for content undo/redo
+  final List<String> _history = [];
+  int _historyIndex = -1;
+  bool _isPerformingUndoRedo = false;
+
+  NoteWriteController({this.existingEntry}) {
+    selectedMood = existingEntry?.mood ?? '';
+    
+    final titleText = existingEntry?.title ?? '';
+    
+    titleController = TextEditingController(text: titleText);
+    contentController = TextEditingController(text: existingEntry?.content ?? '');
+    titleFocusNode = FocusNode();
+    contentFocusNode = FocusNode();
+    timestamp = existingEntry?.timestamp ?? DateTime.now();
+
+    // Initialize history
+    _history.add(contentController.text);
+    _historyIndex = 0;
+
+    contentController.addListener(_onContentChanged);
+  }
+
+  void _onContentChanged() {
+    if (_isPerformingUndoRedo) return;
+    
+    final currentText = contentController.text;
+    if (_historyIndex >= 0 && currentText == _history[_historyIndex]) return;
+
+    // Clear redo history
+    if (_historyIndex < _history.length - 1) {
+      _history.removeRange(_historyIndex + 1, _history.length);
+    }
+
+    _history.add(currentText);
+    if (_history.length > 50) {
+      _history.removeAt(0);
+    }
+    _historyIndex = _history.length - 1;
+    notifyListeners();
+  }
+
+  bool get canUndo => _historyIndex > 0;
+  bool get canRedo => _historyIndex < _history.length - 1;
+
+  void undo() {
+    if (!canUndo) return;
+    _isPerformingUndoRedo = true;
+    _historyIndex--;
+    contentController.text = _history[_historyIndex];
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: contentController.text.length),
+    );
+    _isPerformingUndoRedo = false;
+    notifyListeners();
+  }
+
+  void redo() {
+    if (!canRedo) return;
+    _isPerformingUndoRedo = true;
+    _historyIndex++;
+    contentController.text = _history[_historyIndex];
+    contentController.selection = TextSelection.fromPosition(
+      TextPosition(offset: contentController.text.length),
+    );
+    _isPerformingUndoRedo = false;
+    notifyListeners();
+  }
+
+  void updateMood(String mood) {
+    selectedMood = mood;
+    notifyListeners();
+  }
+
+  void updateTimestamp(DateTime newDate) {
+    timestamp = newDate;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    contentController.removeListener(_onContentChanged);
+    titleController.dispose();
+    contentController.dispose();
+    titleFocusNode.dispose();
+    contentFocusNode.dispose();
+    super.dispose();
+  }
 }
 
 class NoteWriteScreen extends StatefulWidget {
@@ -31,22 +133,10 @@ class NoteWriteScreen extends StatefulWidget {
 
 class _NoteWriteScreenState extends State<NoteWriteScreen> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _titleController;
-  late TextEditingController _contentController;
-  
-  String _selectedMood = '😊';
-
-  // Focus nodes to manage glassmorphic border highlights
-  final FocusNode _titleFocusNode = FocusNode();
-  final FocusNode _contentFocusNode = FocusNode();
-
-  bool _isContentFocused = false;
-
-  int _wordCount = 0;
-  int _charCount = 0;
+  late final NoteWriteController _writeController;
 
   final List<MoodItem> _moods = const [
-    MoodItem(emoji: '', label: 'None', glowColor: Colors.grey),
+    MoodItem(emoji: '📝', label: 'Note', glowColor: Colors.grey),
     MoodItem(emoji: '😊', label: 'Happy', glowColor: Colors.amber),
     MoodItem(emoji: '🚀', label: 'Productive', glowColor: Colors.blue),
     MoodItem(emoji: '🌌', label: 'Peaceful', glowColor: Colors.purple),
@@ -62,289 +152,159 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedMood = widget.existingEntry?.mood ?? '';
-
-    String titleText = widget.existingEntry?.title ?? '';
-    // Strip the mood emoji if it exists at the start of the title to avoid duplicating it
-    if (_selectedMood.isNotEmpty) {
-      if (titleText.startsWith('$_selectedMood ')) {
-        titleText = titleText.substring(_selectedMood.length + 1).trim();
-      } else if (titleText.startsWith(_selectedMood)) {
-        titleText = titleText.substring(_selectedMood.length).trim();
-      }
-    }
-
-    _titleController = TextEditingController(text: titleText);
-    _contentController = TextEditingController(text: widget.existingEntry?.content ?? '');
-
-    _updateCounts(_contentController.text);
-
-    // Add listener to rebuild on focus changes
-    _contentFocusNode.addListener(() {
-      setState(() {
-        _isContentFocused = _contentFocusNode.hasFocus;
-      });
-    });
-
-    // Add listener for word/char counts
-    _contentController.addListener(() {
-      _updateCounts(_contentController.text);
-    });
+    _writeController = NoteWriteController(existingEntry: widget.existingEntry);
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _contentController.dispose();
-    _titleFocusNode.dispose();
-    _contentFocusNode.dispose();
+    _writeController.dispose();
     super.dispose();
-  }
-
-  void _updateCounts(String text) {
-    setState(() {
-      _charCount = text.length;
-      _wordCount = text.trim().isEmpty 
-          ? 0 
-          : text.trim().split(RegExp(r'\s+')).length;
-    });
   }
 
   void _saveLog() {
     if (_formKey.currentState!.validate()) {
+      final selectedMood = _writeController.selectedMood;
+      final rawTitle = _writeController.titleController.text.trim();
+
       Navigator.pop(context, {
-        'title': _selectedMood.isNotEmpty ? '$_selectedMood ${_titleController.text.trim()}' : _titleController.text.trim(),
-        'content': _contentController.text.trim(),
-        'mood': _selectedMood,
-        'tags': <String>[], // Return empty tags list since we removed tags
+        'title': rawTitle,
+        'content': _writeController.contentController.text.trim(),
+        'mood': selectedMood,
+        'tags': <String>[],
       });
     }
   }
 
+  void _handleDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        ),
+        title: Text(
+          'Delete Note?',
+          style: AppTheme.headingSmall,
+        ),
+        content: Text(
+          'Are you sure you want to delete this note? This action cannot be undone.',
+          style: AppTheme.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: _popDialog,
+            child: Text(
+              'CANCEL',
+              style: TextStyle(color: AppTheme.textSecondaryColor(context)),
+            ),
+          ),
+          TextButton(
+            onPressed: _confirmDelete,
+            child: const Text(
+              'DELETE',
+              style: TextStyle(color: AppTheme.errorColor, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _popDialog() {
+    Navigator.pop(context);
+  }
+
+  void _confirmDelete() {
+    Navigator.pop(context); // Pop dialog
+    Navigator.pop(context, {'delete': true}); // Return delete action to caller
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.existingEntry != null;
-
+    Theme.of(context);
+    
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: FullScreenPage(
         showScaffold: false,
         isScrollable: true,
-        title: isEditing ? 'Edit note' : 'New note',
+        title: widget.existingEntry != null ? 'Edit note' : 'New note',
         showBackButton: true,
+        backgroundWidgets: [
+          ListenableBuilder(
+            listenable: _writeController,
+            builder: (context, _) {
+              final activeMood = _moods.firstWhere(
+                (m) => m.emoji == _writeController.selectedMood,
+                orElse: () => _moods.first,
+              );
+              return GlowBlob(
+                bottom: -40,
+                right: -40,
+                size: 260,
+                color: activeMood.glowColor,
+                opacity: 0.12,
+              );
+            },
+          ),
+        ],
         actions: [
           TextButton(
             onPressed: _saveLog,
             child: Text(
-              isEditing ? 'UPDATE' : 'SAVE',
-              style: const TextStyle(
-                color: AppTheme.primaryLight,
+              widget.existingEntry != null ? 'UPDATE' : 'SAVE',
+              style: TextStyle(
+                color: AppTheme.primaryAccentColor(context),
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
               ),
             ),
           ),
+          if (widget.existingEntry != null)
+            PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _handleDelete();
+                }
+              },
+              icon: Icon(
+                Icons.more_vert_rounded,
+                color: Theme.of(context).iconTheme.color,
+              ),
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                      HGapSm(),
+                      Text('Delete Note', style: TextStyle(color: AppTheme.errorColor)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
         children: [
-          const VGapMd(),
+          const VGapSm(),
           Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title Field
-                AppTitleInput(
-                  controller: _titleController,
-                  focusNode: _titleFocusNode,
-                  label: 'Note Title',
-                  hintText: 'Give your entry a title...',
-                  icon: Icons.edit_note_rounded,
-                ),
-                const VGapLg(),
-                
-                // Content Field
-                Text(
-                  'What\'s on your mind?'.toUpperCase(),
-                  style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.primaryLight,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                NoteTitleField(controller: _writeController),
+                Divider(color: AppTheme.borderColor(context), height: 1),
+                const VGapXs(),
+                NoteDateField(controller: _writeController),
                 const VGapSm(),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  constraints: const BoxConstraints(minHeight: 280),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _isContentFocused
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.white.withValues(alpha: 0.03),
-                    borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                    border: Border.all(
-                      color: _isContentFocused
-                          ? AppTheme.primaryColor
-                          : Colors.white.withValues(alpha: 0.08),
-                      width: _isContentFocused ? 2 : 1,
-                    ),
-                    boxShadow: _isContentFocused
-                        ? [
-                            BoxShadow(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                              blurRadius: 12,
-                              spreadRadius: 1,
-                            )
-                          ]
-                        : [],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextFormField(
-                        controller: _contentController,
-                        focusNode: _contentFocusNode,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          height: 1.6,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Start writing your story...',
-                          hintStyle: TextStyle(color: AppTheme.textSecondary),
-                          border: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          filled: false,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        validator: (val) {
-                          if (val == null || val.trim().isEmpty) {
-                            return 'Please write something before saving';
-                          }
-                          return null;
-                        },
-                      ),
-                      const VGapMd(),
-                      const Divider(color: Colors.white12, height: 1),
-                      const VGapSm(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            '$_wordCount words',
-                            style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
-                          ),
-                          const HGapMd(),
-                          Text(
-                            '$_charCount characters',
-                            style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const VGapLg(),
-                
-                // Mood Selection Heading
-                Text(
-                  'How are you feeling?'.toUpperCase(),
-                  style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.primaryLight,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                NoteMoodSelector(controller: _writeController, moods: _moods),
                 const VGapSm(),
-                
-                // Moods Selector List
-                SizedBox(
-                  height: 84,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    clipBehavior: Clip.none,
-                    itemCount: _moods.length,
-                    itemBuilder: (context, index) {
-                      final moodItem = _moods[index];
-                      final isSelected = _selectedMood == moodItem.emoji;
-
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          left: index == 0 ? 12 : 0,
-                          right: 12, 
-                          top: 8, 
-                          bottom: 8
-                        ),
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedMood = moodItem.emoji;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                          child: AnimatedScale(
-                            scale: isSelected ? 1.06 : 1.0,
-                            duration: const Duration(milliseconds: 200),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 64,
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? moodItem.glowColor.withValues(alpha: 0.15)
-                                    : AppTheme.surfaceColor.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? moodItem.glowColor
-                                      : Colors.white.withValues(alpha: 0.05),
-                                  width: isSelected ? 2 : 1,
-                                ),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: moodItem.glowColor.withValues(alpha: 0.3),
-                                          blurRadius: 10,
-                                          spreadRadius: 1,
-                                        )
-                                      ]
-                                    : null,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (moodItem.emoji.isEmpty)
-                                    const Icon(Icons.edit_note, color: Colors.white70, size: 24)
-                                  else
-                                    Text(
-                                      moodItem.emoji,
-                                      style: const TextStyle(fontSize: 20),
-                                    ),
-                                  const VGapXs(),
-                                  Text(
-                                    moodItem.label,
-                                    style: AppTheme.bodyMicro.copyWith(
-                                      color: isSelected ? Colors.white : AppTheme.textSecondary,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                
+                Divider(color: AppTheme.borderColor(context), height: 1),
+                const VGapMd(),
+                NoteContentField(controller: _writeController),
                 const VGapXl(),
-                const VGapXxl(),
               ],
             ),
           ),
@@ -353,3 +313,279 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
     );
   }
 }
+
+class NoteTitleField extends StatelessWidget {
+  final NoteWriteController controller;
+
+  const NoteTitleField({
+    super.key,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller.titleController,
+      focusNode: controller.titleFocusNode,
+      style: GoogleFonts.outfit(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: AppTheme.textPrimaryColor(context),
+      ),
+      maxLines: null,
+      keyboardType: TextInputType.multiline,
+      textInputAction: TextInputAction.newline,
+      decoration: InputDecoration(
+        hintText: 'Title',
+        hintStyle: GoogleFonts.outfit(
+          fontSize: 28,
+          fontWeight: FontWeight.bold,
+          color: AppTheme.hintColor(context),
+        ),
+        border: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        errorBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+        filled: false,
+      ),
+      validator: (val) {
+        if (val == null || val.trim().isEmpty) {
+          return 'Please enter a title';
+        }
+        return null;
+      },
+    );
+  }
+}
+
+class NoteDateField extends StatelessWidget {
+  final NoteWriteController controller;
+
+  const NoteDateField({
+    super.key,
+    required this.controller,
+  });
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: controller.timestamp,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: AppTheme.isDarkMode(context)
+              ? AppTheme.darkTheme.copyWith(
+                  colorScheme: const ColorScheme.dark(
+                    primary: AppTheme.primaryColor,
+                    onPrimary: Colors.white,
+                    surface: AppTheme.surfaceColor,
+                    onSurface: Colors.white,
+                  ),
+                )
+              : AppTheme.lightTheme.copyWith(
+                  colorScheme: const ColorScheme.light(
+                    primary: AppTheme.primaryColor,
+                    onPrimary: Colors.white,
+                    surface: AppTheme.lightSurfaceColor,
+                    onSurface: AppTheme.lightTextPrimary,
+                  ),
+                ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      final originalTime = controller.timestamp;
+      final newDateTime = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        originalTime.hour,
+        originalTime.minute,
+        originalTime.second,
+      );
+      controller.updateTimestamp(newDateTime);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final formattedDate = DateFormat('d MMMM yyyy').format(controller.timestamp);
+        return InkWell(
+          onTap: () => _selectDate(context),
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 14,
+                  color: AppTheme.textSecondaryColor(context),
+                ),
+                const HGapSm(),
+                Text(
+                  formattedDate,
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.textSecondaryColor(context),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class NoteContentField extends StatelessWidget {
+  final NoteWriteController controller;
+
+  const NoteContentField({
+    super.key,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller.contentController,
+      focusNode: controller.contentFocusNode,
+      maxLines: null,
+      keyboardType: TextInputType.multiline,
+      style: TextStyle(
+        color: AppTheme.textPrimaryColor(context),
+        fontSize: 16,
+        height: 1.6,
+      ),
+      decoration: InputDecoration(
+        hintText: 'Description',
+        hintStyle: TextStyle(
+          color: AppTheme.hintColor(context),
+          fontSize: 16,
+        ),
+        border: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        errorBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+        filled: false,
+      ),
+      validator: (val) {
+        if (val == null || val.trim().isEmpty) {
+          return 'Please write something before saving';
+        }
+        return null;
+      },
+    );
+  }
+}
+
+class NoteMoodSelector extends StatelessWidget {
+  final NoteWriteController controller;
+  final List<MoodItem> moods;
+
+  const NoteMoodSelector({
+    super.key,
+    required this.controller,
+    required this.moods,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final activeMood = moods.firstWhere(
+          (m) => m.emoji == controller.selectedMood,
+          orElse: () => moods.first,
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 36,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: moods.length,
+                itemBuilder: (context, index) {
+                  final moodItem = moods[index];
+                  final isSelected = controller.selectedMood == moodItem.emoji;
+                  final accentColor = isSelected ? moodItem.glowColor : AppTheme.borderColor(context);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 2, bottom: 2),
+                    child: InkWell(
+                      onTap: () => controller.updateMood(moodItem.emoji),
+                      borderRadius: BorderRadius.circular(16),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isSelected
+                              ? moodItem.glowColor.withValues(alpha: 0.15)
+                              : AppTheme.surface(context).withValues(alpha: 0.4),
+                          border: Border.all(
+                            color: accentColor,
+                            width: isSelected ? 2 : 1,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: moodItem.glowColor.withValues(alpha: 0.3),
+                                    blurRadius: 6,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 1),
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: Center(
+                          child: moodItem.emoji.isEmpty
+                              ? Icon(
+                                  Icons.edit_note_rounded,
+                                  color: isSelected ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
+                                  size: 18,
+                                )
+                              : Text(
+                                  moodItem.emoji,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const VGapSm(),
+            Text(
+              activeMood.label,
+              style: AppTheme.bodySmall.copyWith(
+                color: activeMood.emoji.isEmpty ? AppTheme.textSecondaryColor(context) : activeMood.glowColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+

@@ -116,14 +116,15 @@ class _CheckInSheetState extends State<CheckInSheet> {
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
+        Theme.of(context);
         return Container(
           decoration: BoxDecoration(
-            color: AppTheme.backgroundColor.withValues(alpha: 0.95),
+            color: AppTheme.background(context).withValues(alpha: 0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+            border: Border.all(color: AppTheme.borderColor(context), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 40,
                 offset: const Offset(0, -10),
               ),
@@ -140,7 +141,7 @@ class _CheckInSheetState extends State<CheckInSheet> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppTheme.borderColor(context),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -161,7 +162,7 @@ class _CheckInSheetState extends State<CheckInSheet> {
                                 Text('Confirmation', style: AppTheme.headingMedium.copyWith(fontSize: 28)),
                                 Text(
                                   'Complete your session entry',
-                                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
+                                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
                                 ),
                                 const VGapXs(),
                                 RichText(
@@ -173,7 +174,7 @@ class _CheckInSheetState extends State<CheckInSheet> {
                                     children: [
                                       TextSpan(
                                         text: 'CHECK-IN TIME ',
-                                        style: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.6)),
+                                        style: TextStyle(color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6)),
                                       ),
                                       TextSpan(
                                         text: DateFormat('hh:mm a').format(DateTime.now()),
@@ -186,13 +187,13 @@ class _CheckInSheetState extends State<CheckInSheet> {
                             ),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.05),
+                                color: AppTheme.subtleFillColor(context),
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                                border: Border.all(color: AppTheme.borderColor(context)),
                               ),
                               child: IconButton(
                                 onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                                icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
                               ),
                             ),
                           ],
@@ -200,7 +201,7 @@ class _CheckInSheetState extends State<CheckInSheet> {
                         const VGapMd(),
                         Text(
                           'Add Notes',
-                          style: AppTheme.headingSmall.copyWith(fontSize: 16, color: AppTheme.textSecondary),
+                          style: AppTheme.headingSmall.copyWith(fontSize: 16, color: AppTheme.textSecondaryColor(context)),
                         ),
                         const VGapMd(),
                         TextField(
@@ -212,21 +213,21 @@ class _CheckInSheetState extends State<CheckInSheet> {
                               curve: Curves.easeOut,
                             );
                           },
-                          style: const TextStyle(color: Colors.white, fontSize: 15),
+                          style: TextStyle(color: AppTheme.textPrimaryColor(context), fontSize: 15),
                           minLines: 2,
                           maxLines: 6,
                           decoration: InputDecoration(
                             hintText: 'How are you feeling today?',
-                            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.15)),
+                            hintStyle: TextStyle(color: AppTheme.textMutedColor(context)),
                             filled: true,
-                            fillColor: Colors.white.withValues(alpha: 0.02),
+                            fillColor: AppTheme.subtleFillColor(context),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                              borderSide: BorderSide(color: AppTheme.borderColor(context)),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                              borderSide: BorderSide(color: AppTheme.borderColor(context)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(20),
@@ -273,22 +274,22 @@ class _CheckInSheetState extends State<CheckInSheet> {
                               child: Container(
                                 alignment: Alignment.center,
                                 child: _isLoading 
-                                  ? const SizedBox(
+                                  ? SizedBox(
                                       height: 20, 
                                       width: 20, 
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.selectedChipTextColor(context)),
                                     )
                                   : Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                        Icon(Icons.check_circle_rounded, color: AppTheme.selectedChipTextColor(context), size: 20),
                                         const HGapMd(),
                                         Text(
                                           'Confirm Check-in',
                                           style: GoogleFonts.outfit(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: Colors.white,
+                                            color: AppTheme.selectedChipTextColor(context),
                                           ),
                                         ),
                                       ],

@@ -121,7 +121,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
                 },
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                  child: Icon(Icons.chevron_left_rounded, size: 20),
                 ),
               ),
               const SizedBox(width: 2),
@@ -129,7 +129,6 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
                 DateFormat('MMM yyyy').format(_currentMonth),
                 style: AppTheme.bodySmall.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
                   fontSize: 11,
                 ),
               ),
@@ -143,7 +142,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
                 },
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                  child: Icon(Icons.chevron_right_rounded, size: 20),
                 ),
               ),
             ],
@@ -161,7 +160,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: weekdays.map((day) {
           return SizedBox(
-            width: 32,
+            width: 36,
             child: Text(
               day,
               textAlign: TextAlign.center,
@@ -199,8 +198,8 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
       child: Opacity(
         opacity: isFuture ? 0.3 : 1.0,
         child: Container(
-          width: 32,
-          height: 32,
+          width: 36,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSelected ? Colors.white : Colors.transparent,
@@ -216,11 +215,11 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
               Text(
                 dayNumber,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: isSelected || isTodayDate ? FontWeight.bold : FontWeight.w500,
                   color: isSelected
-                      ? AppTheme.backgroundColor
-                      : Colors.white.withValues(alpha: 0.9),
+                      ? AppTheme.lightTextPrimary  // always dark on white circle
+                      : Theme.of(context).textTheme.bodySmall!.color,
                 ),
               ),
               const SizedBox(height: 0.5),
@@ -270,7 +269,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: weekDates.map((date) {
             if (date == null) {
-              return const SizedBox(width: 32, height: 32);
+              return const SizedBox(width: 36, height: 36);
             }
             return _buildDayCell(date, today);
           }).toList(),
@@ -292,9 +291,9 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        color: AppTheme.surface(context).withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+        border: Border.all(color: AppTheme.borderColor(context)),
       ),
       child: Column(
         children: [

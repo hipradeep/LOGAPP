@@ -70,6 +70,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     return FullScreenPage(
       isScrollable: false,
       alignment: PageAlignment.center,
@@ -109,14 +110,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     fontSize: 48,
                     letterSpacing: 8,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 Text(
                   'TRACK YOUR LIFE',
                   style: AppTheme.bodySmall.copyWith(
                     letterSpacing: 4,
-                    color: AppTheme.primaryLight.withValues(alpha: 0.7),
+                    color: AppTheme.primaryAccentColor(context).withValues(alpha: 0.7),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -129,12 +130,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         // Loading Indicator at bottom
         FadeTransition(
           opacity: _fadeAnimation,
-          child: const SizedBox(
+          child: SizedBox(
             width: 40,
             height: 2,
             child: LinearProgressIndicator(
-              backgroundColor: Colors.white10,
-              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+              backgroundColor: AppTheme.borderColor(context),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
             ),
           ),
         ),

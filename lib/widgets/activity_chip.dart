@@ -112,7 +112,6 @@ class _ActivityChipState extends State<ActivityChip>
             checkColor: Colors.white,
             visualDensity: VisualDensity.compact,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            side: const BorderSide(color: Colors.white54, width: 1.5),
           ),
         ),
       );
@@ -126,7 +125,7 @@ class _ActivityChipState extends State<ActivityChip>
             CircularProgressIndicator(
               value: progress,
               strokeWidth: 2.5,
-              backgroundColor: Colors.white.withValues(alpha: 0.08),
+              backgroundColor: AppTheme.borderColor(context),
               valueColor: AlwaysStoppedAnimation<Color>(accentColor),
             ),
             if (isSkipped)
@@ -195,7 +194,7 @@ class _ActivityChipState extends State<ActivityChip>
                     ? AppTheme.warningColor.withValues(alpha: 0.9)
                     : (isSelected || isCompleted
                         ? AppTheme.successColor.withValues(alpha: 0.9)
-                        : AppTheme.textPrimary),
+                        : Theme.of(context).textTheme.bodyLarge?.color),
                 fontWeight: FontWeight.w600,
                 fontSize: 11,
                 decoration: isSkipped ? TextDecoration.lineThrough : null,

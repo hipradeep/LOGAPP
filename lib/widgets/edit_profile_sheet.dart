@@ -41,6 +41,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Container(
       padding: EdgeInsets.only(
         left: 24,
@@ -49,13 +50,13 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 32,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
+        color: AppTheme.surface(context),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
         ),
         border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1),
+          top: BorderSide(color: AppTheme.borderColor(context), width: 1),
         ),
       ),
       child: Column(
@@ -67,7 +68,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: AppTheme.borderColor(context),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -116,7 +117,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                     decoration: BoxDecoration(
                       color: isSelected 
                           ? AppTheme.primaryColor.withValues(alpha: 0.2) 
-                          : Colors.white.withValues(alpha: 0.04),
+                          : AppTheme.subtleFillColor(context),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: isSelected ? AppTheme.primaryColor : Colors.transparent,

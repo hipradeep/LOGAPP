@@ -130,6 +130,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     return FullScreenPage(
       showScaffold: true,
       isScrollable: true,
@@ -161,7 +162,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     return Text(
       'Manage transaction tags & usage frequency'.toUpperCase(),
       style: AppTheme.bodySmall.copyWith(
-        color: AppTheme.textSecondary,
+        color: AppTheme.textSecondaryColor(context),
         fontWeight: FontWeight.bold,
         letterSpacing: 1.0,
       ),
@@ -183,7 +184,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           padding: const EdgeInsets.symmetric(vertical: 40),
           child: Text(
             'No categories defined.',
-            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
+            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
           ),
         ),
       );
@@ -220,10 +221,10 @@ class _CategoryItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.25),
+        color: AppTheme.surface(context).withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.03),
+          color: AppTheme.borderColor(context),
           width: 1.0,
         ),
       ),
@@ -234,14 +235,14 @@ class _CategoryItem extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: AppTheme.textPrimaryColor(context),
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          _buildUsageBadge(count),
+          _buildUsageBadge(context, count),
         ],
       ),
     );
@@ -263,17 +264,17 @@ class _CategoryItem extends StatelessWidget {
     );
   }
 
-  Widget _buildUsageBadge(int count) {
+  Widget _buildUsageBadge(BuildContext context, int count) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
+        color: AppTheme.subtleFillColor(context),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         '$count usages',
         style: TextStyle(
-          color: AppTheme.textSecondary.withValues(alpha: 0.6),
+          color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
           fontSize: 10,
           fontWeight: FontWeight.w500,
         ),
@@ -345,9 +346,9 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.backgroundColor,
+          color: AppTheme.surface(context),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1),
+          border: Border.all(color: AppTheme.borderColor(context), width: 1),
         ),
         padding: EdgeInsets.only(
           left: 24,
@@ -386,7 +387,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         ),
         IconButton(
           onPressed: _handleClose,
-          icon: const Icon(Icons.close, color: AppTheme.textSecondary),
+          icon: Icon(Icons.close, color: AppTheme.textSecondaryColor(context)),
         ),
       ],
     );
@@ -399,7 +400,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         Text(
           'Category Name'.toUpperCase(),
           style: AppTheme.bodySmall.copyWith(
-            color: AppTheme.textSecondary,
+            color: AppTheme.textSecondaryColor(context),
             fontWeight: FontWeight.bold,
             letterSpacing: 1.0,
           ),
@@ -409,13 +410,13 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
           controller: _nameController,
           focusNode: _nameFocus,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: AppTheme.textPrimaryColor(context)),
           decoration: InputDecoration(
             hintText: 'e.g. Subscriptions',
-            hintStyle: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+            hintStyle: TextStyle(color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             filled: true,
-            fillColor: AppTheme.surfaceColor.withValues(alpha: 0.2),
+            fillColor: AppTheme.surface(context).withValues(alpha: 0.2),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -437,7 +438,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         Text(
           'Select Icon'.toUpperCase(),
           style: AppTheme.bodySmall.copyWith(
-            color: AppTheme.textSecondary,
+            color: AppTheme.textSecondaryColor(context),
             fontWeight: FontWeight.bold,
             letterSpacing: 1.0,
           ),
@@ -460,16 +461,16 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppTheme.primaryColor.withValues(alpha: 0.15)
-                      : Colors.white.withValues(alpha: 0.03),
+                      : AppTheme.subtleFillColor(context),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isSelected ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.05),
+                    color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
                     width: isSelected ? 1.8 : 1,
                   ),
                 ),
                 child: Icon(
                   icon,
-                  color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary.withValues(alpha: 0.7),
+                  color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.7),
                   size: 20,
                 ),
               ),
@@ -487,7 +488,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         Text(
           'Select Color'.toUpperCase(),
           style: AppTheme.bodySmall.copyWith(
-            color: AppTheme.textSecondary,
+            color: AppTheme.textSecondaryColor(context),
             fontWeight: FontWeight.bold,
             letterSpacing: 1.0,
           ),

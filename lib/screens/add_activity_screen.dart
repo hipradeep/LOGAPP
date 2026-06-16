@@ -7,6 +7,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../models/activity.dart';
 import '../widgets/app_popup_menu_button.dart';
+import '../widgets/app_text_action_button.dart';
 
 class AddActivityScreen extends StatefulWidget {
   final Function(String name, String trackingType, int targetCount, {
@@ -198,11 +199,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       context: context,
       initialTime: _scheduledTime ?? const TimeOfDay(hour: 8, minute: 0),
       builder: (context, child) {
+        final currentTheme = Theme.of(context);
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+          data: currentTheme.copyWith(
+            colorScheme: currentTheme.colorScheme.copyWith(
               primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
+              surface: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -222,11 +224,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365 * 3)),
       builder: (context, child) {
+        final currentTheme = Theme.of(context);
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+          data: currentTheme.copyWith(
+            colorScheme: currentTheme.colorScheme.copyWith(
               primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
+              surface: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -246,6 +249,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: FullScreenPage(
@@ -255,30 +259,11 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         showBackButton: true,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         actions: [
-          if (widget.initialActivity == null || widget.initialActivity!.isActive)
-            TextButton(
-              onPressed: _submit,
-              child: const Text(
-                'Save',
-                style: TextStyle(
-                  color: AppTheme.primaryLight,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            )
-          else if (widget.onToggleActive != null)
-            TextButton(
-              onPressed: widget.onToggleActive,
-              child: const Text(
-                'Activate',
-                style: TextStyle(
-                  color: AppTheme.successColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
+          AppTextActionButton(
+            label: 'Save',
+            offset: const Offset(16, 0),
+            onPressed: _submit,
+          ),
           if (widget.initialActivity != null) ...[
             const SizedBox(width: 8),
             AppPopupMenuButton(
@@ -420,27 +405,30 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       keyboardType: TextInputType.multiline,
       textInputAction: TextInputAction.newline,
       textCapitalization: TextCapitalization.sentences,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      style: TextStyle(
+        color: AppTheme.textPrimaryColor(context),
+        fontSize: 14,
+      ),
       decoration: InputDecoration(
         hintText: 'Enter activity description (optional)...',
         hintStyle: TextStyle(
-          color: AppTheme.textSecondary.withValues(alpha: 0.5),
+          color: AppTheme.hintColor(context),
           fontSize: 14,
         ),
         filled: true,
-        fillColor: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        fillColor: AppTheme.surface(context).withValues(alpha: 0.3),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: AppTheme.borderColor(context),
             width: 1.5,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: AppTheme.borderColor(context),
             width: 1.5,
           ),
         ),
@@ -459,10 +447,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        color: AppTheme.surface(context).withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: AppTheme.borderColor(context),
           width: 1.5,
         ),
       ),
@@ -474,7 +462,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
               children: [
                 Icon(
                   Icons.double_arrow_rounded,
-                  color: _skippable ? AppTheme.warningColor : AppTheme.textSecondary,
+                  color: _skippable ? AppTheme.warningColor : AppTheme.textSecondaryColor(context),
                   size: 20,
                 ),
                 const HGapMd(),
@@ -489,7 +477,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                       const VGapXs(),
                       Text(
                         'Allow skipping this activity for the day',
-                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary, fontSize: 11),
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondaryColor(context), fontSize: 11),
                       ),
                     ],
                   ),
@@ -504,7 +492,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 _skippable = val;
               });
             },
+            activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.5),
             activeThumbColor: AppTheme.primaryColor,
+            inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+            inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
           ),
         ],
       ),
@@ -515,10 +506,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        color: AppTheme.surface(context).withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: AppTheme.borderColor(context),
           width: 1.5,
         ),
       ),
@@ -530,7 +521,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
               children: [
                 Icon(
                   Icons.notifications_active_rounded,
-                  color: _reminderEnabled ? AppTheme.primaryLight : AppTheme.textSecondary,
+                  color: _reminderEnabled ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
                   size: 20,
                 ),
                 const HGapMd(),
@@ -545,7 +536,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                       const VGapXs(),
                       Text(
                         'Receive alarm notifications for this activity',
-                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary, fontSize: 11),
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondaryColor(context), fontSize: 11),
                       ),
                     ],
                   ),
@@ -560,7 +551,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 _reminderEnabled = val;
               });
             },
+            activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.5),
             activeThumbColor: AppTheme.primaryColor,
+            inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+            inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
           ),
         ],
       ),
@@ -573,7 +567,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       child: Text(
         label,
         style: AppTheme.bodySmall.copyWith(
-          color: AppTheme.textSecondary,
+          color: AppTheme.textSecondaryColor(context),
           fontWeight: FontWeight.bold,
           letterSpacing: 1.0,
         ),
@@ -592,7 +586,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           focusNode: _focusNode,
           autofocus: false,
           style: GoogleFonts.outfit(
-            color: Colors.white,
+            color: AppTheme.textPrimaryColor(context),
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -603,26 +597,32 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           decoration: InputDecoration(
             hintText: 'Enter activity name...',
             hintStyle: GoogleFonts.outfit(
-              color: AppTheme.textSecondary.withValues(alpha: 0.5),
+              color: AppTheme.hintColor(context),
               fontSize: 20,
               fontWeight: FontWeight.w500,
             ),
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             filled: false,
-            border: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white10, width: 1.5),
+            border: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: AppTheme.inputBorderColor(context),
+                width: 1.5,
+              ),
             ),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white10, width: 1.5),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: AppTheme.inputBorderColor(context),
+                width: 1.5,
+              ),
             ),
             focusedBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
             ),
-            prefixIcon: const Padding(
-              padding: EdgeInsets.only(right: 12),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(right: 12),
               child: Icon(
                 Icons.edit_note_rounded,
-                color: AppTheme.primaryLight,
+                color: AppTheme.primaryAccentColor(context),
                 size: 28,
               ),
             ),
@@ -659,12 +659,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           decoration: BoxDecoration(
             color: isSelected
                 ? AppTheme.primaryColor.withValues(alpha: 0.12)
-                : AppTheme.surfaceColor.withValues(alpha: 0.2),
+                : AppTheme.surface(context).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
                   ? AppTheme.primaryColor.withValues(alpha: 0.6)
-                  : Colors.white.withValues(alpha: 0.04),
+                  : AppTheme.borderColor(context),
               width: 1.5,
             ),
           ),
@@ -673,13 +673,13 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
               Icon(
                 icon,
                 size: 20,
-                color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary,
+                color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  color: isSelected ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 13,
                 ),
@@ -756,11 +756,11 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                   shape: BoxShape.circle,
                   color: isSelected
                       ? AppTheme.primaryColor.withValues(alpha: 0.2)
-                      : AppTheme.surfaceColor.withValues(alpha: 0.3),
+                      : AppTheme.surface(context).withValues(alpha: 0.3),
                   border: Border.all(
                     color: isSelected
                         ? AppTheme.primaryColor.withValues(alpha: 0.7)
-                        : Colors.white.withValues(alpha: 0.08),
+                        : AppTheme.borderColor(context),
                     width: 1.5,
                   ),
                 ),
@@ -768,7 +768,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                   child: Text(
                     _dayLabels[index],
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppTheme.textSecondary,
+                      color: isSelected ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 13,
                     ),
@@ -789,12 +789,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+          color: AppTheme.surface(context).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: _scheduledTime != null
                 ? AppTheme.primaryColor.withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.06),
+                : AppTheme.borderColor(context),
             width: 1,
           ),
         ),
@@ -802,7 +802,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           children: [
             Icon(
               Icons.access_time_rounded,
-              color: _scheduledTime != null ? AppTheme.primaryLight : AppTheme.textSecondary,
+              color: _scheduledTime != null ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
               size: 20,
             ),
             const HGapMd(),
@@ -812,7 +812,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                     ? _formatTimeForDisplay(_scheduledTime!)
                     : 'No specific time set',
                 style: TextStyle(
-                  color: _scheduledTime != null ? Colors.white : AppTheme.textSecondary,
+                  color: _scheduledTime != null ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                   fontSize: 14,
                 ),
               ),
@@ -822,7 +822,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 onTap: () => setState(() => _scheduledTime = null),
                 child: Icon(
                   Icons.close_rounded,
-                  color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                  color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                   size: 18,
                 ),
               ),
@@ -848,12 +848,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+          color: AppTheme.surface(context).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: date != null
                 ? AppTheme.primaryColor.withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.06),
+                : AppTheme.borderColor(context),
             width: 1,
           ),
         ),
@@ -861,7 +861,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           children: [
             Icon(
               Icons.calendar_today_rounded,
-              color: date != null ? AppTheme.primaryLight : AppTheme.textSecondary,
+              color: date != null ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
               size: 16,
             ),
             const SizedBox(width: 6),
@@ -872,7 +872,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                   Text(
                     label,
                     style: TextStyle(
-                      color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                      color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
@@ -882,7 +882,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                   Text(
                     date != null ? DateFormat('MMM d, yyyy').format(date) : 'Not set',
                     style: TextStyle(
-                      color: date != null ? Colors.white : AppTheme.textSecondary,
+                      color: date != null ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                       fontSize: 12,
                     ),
                     maxLines: 1,
@@ -904,7 +904,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 },
                 child: Icon(
                   Icons.close_rounded,
-                  color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                  color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                   size: 16,
                 ),
               ),
@@ -946,7 +946,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           height: 6,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: AppTheme.borderColor(context),
             borderRadius: BorderRadius.circular(3),
           ),
           child: FractionallySizedBox(
@@ -969,14 +969,14 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             Text(
               'Day $elapsedDays of $totalDays elapsed',
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 fontWeight: FontWeight.w500,
               ),
             ),
             Text(
               '$percent%',
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.primaryLight,
+                color: AppTheme.primaryAccentColor(context),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -1010,11 +1010,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       context: context,
       initialTime: _subTaskTime ?? const TimeOfDay(hour: 8, minute: 0),
       builder: (context, child) {
+        final currentTheme = Theme.of(context);
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+          data: currentTheme.copyWith(
+            colorScheme: currentTheme.colorScheme.copyWith(
               primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
+              surface: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -1044,10 +1045,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.2),
+        color: AppTheme.surface(context).withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: AppTheme.borderColor(context),
           width: 1.5,
         ),
       ),
@@ -1055,15 +1056,15 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         children: [
           Icon(
             Icons.info_outline_rounded,
-            color: AppTheme.primaryLight.withValues(alpha: 0.7),
+            color: AppTheme.primaryAccentColor(context).withValues(alpha: 0.7),
             size: 18,
           ),
           const HGapMd(),
-          const Expanded(
+          Expanded(
             child: Text(
               'Tasks for milestone activities are added and managed on the Milestones Tab.',
               style: TextStyle(
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 fontSize: 13,
                 height: 1.3,
               ),
@@ -1077,10 +1078,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
   Widget _buildSubTaskTemplatesField() {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        color: AppTheme.surface(context).withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: AppTheme.borderColor(context),
           width: 1.5,
         ),
       ),
@@ -1096,19 +1097,19 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 Expanded(
                   child: TextField(
                     controller: _subTaskInputController,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: AppTheme.textPrimaryColor(context), fontSize: 14),
                     onSubmitted: (_) => _addSubTask(),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Add task...',
-                      hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                      hintStyle: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 13),
                       enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white24, width: 1),
+                        borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1),
                       ),
-                      focusedBorder: UnderlineInputBorder(
+                      focusedBorder: const UnderlineInputBorder(
                         borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
                       ),
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                   ),
                 ),
@@ -1119,7 +1120,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                     padding: const EdgeInsets.all(8),
                     child: Icon(
                       Icons.access_time_rounded,
-                      color: _subTaskTime != null ? AppTheme.primaryLight : AppTheme.textSecondary,
+                      color: _subTaskTime != null ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
                       size: 20,
                     ),
                   ),
@@ -1133,9 +1134,9 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                       color: AppTheme.primaryColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.add_rounded,
-                      color: AppTheme.primaryLight,
+                      color: AppTheme.primaryAccentColor(context),
                       size: 18,
                     ),
                   ),
@@ -1158,16 +1159,16 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.access_time_rounded,
                     size: 12,
-                    color: AppTheme.primaryLight,
+                    color: AppTheme.primaryAccentColor(context),
                   ),
                   const SizedBox(width: 4),
                   Text(
                     _formatTimeForDisplay(_subTaskTime!),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppTheme.textPrimaryColor(context),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1175,10 +1176,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                   const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () => setState(() => _subTaskTime = null),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
                       size: 12,
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryColor(context),
                     ),
                   ),
                 ],
@@ -1187,7 +1188,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           ],
           if (_subTasks.isNotEmpty) ...[
             const VGapMd(),
-            const Divider(color: Colors.white10, height: 1, indent: 0, endIndent: 0),
+            Divider(color: AppTheme.borderColor(context), height: 1, indent: 0, endIndent: 0),
             const VGapSm(),
             ListView.builder(
               shrinkWrap: true,
@@ -1211,7 +1212,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppTheme.primaryLight.withValues(alpha: 0.6),
+                            color: AppTheme.primaryAccentColor(context).withValues(alpha: 0.6),
                             width: 1.5,
                           ),
                         ),
@@ -1223,8 +1224,8 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                             Expanded(
                               child: Text(
                                 subTaskName,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: AppTheme.textPrimaryColor(context),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -1246,16 +1247,16 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.access_time_rounded,
                                       size: 10,
-                                      color: AppTheme.primaryLight,
+                                      color: AppTheme.primaryAccentColor(context),
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
                                       _formatTimeString(subTaskTimeStr),
-                                      style: const TextStyle(
-                                        color: AppTheme.primaryLight,
+                                      style: TextStyle(
+                                        color: AppTheme.primaryAccentColor(context),
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1273,13 +1274,13 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: AppTheme.subtleFillColor(context),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.close_rounded,
                             size: 14,
-                            color: AppTheme.textSecondary,
+                            color: AppTheme.textSecondaryColor(context),
                           ),
                         ),
                       ),

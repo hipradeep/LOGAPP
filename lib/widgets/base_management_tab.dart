@@ -83,9 +83,11 @@ class BaseManagementTab<T extends ChangeNotifier> extends StatelessWidget {
       return RefreshIndicator(
         onRefresh: onRefresh,
         color: AppTheme.primaryColor,
-        backgroundColor: AppTheme.surfaceColor,
+        backgroundColor: AppTheme.surface(context),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final secondaryColor = AppTheme.textSecondaryColor(context);
+
             return SingleChildScrollView(
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               child: ConstrainedBox(
@@ -94,16 +96,16 @@ class BaseManagementTab<T extends ChangeNotifier> extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(emptyIcon, size: 64, color: AppTheme.textSecondary.withValues(alpha: 0.5)),
+                      Icon(emptyIcon, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
                       const VGapMd(),
                       Text(
                         emptyMessage,
-                        style: AppTheme.headingSmall.copyWith(color: AppTheme.textSecondary),
+                        style: AppTheme.headingSmall.copyWith(color: secondaryColor),
                       ),
                       const VGapSm(),
-                      const Text(
+                      Text(
                         'Tap the + button to create your first entry.',
-                        style: TextStyle(color: AppTheme.textSecondary),
+                        style: TextStyle(color: secondaryColor),
                       ),
                     ],
                   ),
@@ -118,7 +120,7 @@ class BaseManagementTab<T extends ChangeNotifier> extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: AppTheme.primaryColor,
-      backgroundColor: AppTheme.surfaceColor,
+      backgroundColor: AppTheme.surface(context),
       child: builder(context, ctrl),
     );
   }

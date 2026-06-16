@@ -1,16 +1,23 @@
 import 'dart:developer' as developer;
+import 'dart:ui';
+import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_notification_listener/flutter_notification_listener.dart';
+import 'cache_service.dart';
 
 @pragma('vm:entry-point')
 void onNotificationCallback(NotificationEvent event) {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
   NotificationTransactionService.handleNotificationEvent(event);
 }
 
 class NotificationTransactionService {
   static const String _logName = 'NotificationTxService';
-
+  static const _channel = MethodChannel('com.pradeepapp.log/sms_scanner');
+  
   // Package name whitelists to focus on (SMS apps and major UPI/payment apps in India)
   static const List<String> _whitelistedPackages = [
     'com.google.android.apps.messaging', // Google Messages
@@ -19,6 +26,14 @@ class NotificationTransactionService {
     'com.google.android.apps.nbu.paisa.user', // Google Pay
     'com.phonepe.app',                     // PhonePe
     'net.one97.paytm',                     // Paytm
+    'com.hdfc.customers',                  // HDFC Bank
+    'com.csam.icici.bank.imobile',         // ICICI iMobile
+    'com.sbi.lotusintouch',                // SBI YONO
+    'com.axis.mobile',                     // Axis Bank
+    'com.kotak.mahindra.kotak',            // Kotak Bank
+    'com.rbl.rblbank',                     // RBL Bank
+    'in.finacle.canara',                   // Canara Bank
+    'com.pradeepapp.log',                  // LOG App (for test/dummy transactions)
   ];
 
   static const _tagKeywords = {
@@ -47,18 +62,35 @@ class NotificationTransactionService {
   /// Request Notification Access by redirecting user to system settings
   static Future<void> requestPermission() async {
     try {
-      await NotificationsListener.openPermissionSettings();
+      await _channel.invokeMethod('openNotificationListenerSettings');
     } catch (e) {
-      developer.log('Error opening permission settings: $e', name: _logName);
+      developer.log('Error opening settings via MethodChannel: $e. Falling back to listener openPermissionSettings...', name: _logName);
+      try {
+        await NotificationsListener.openPermissionSettings();
+      } catch (ex) {
+        developer.log('Error opening permission settings: $ex', name: _logName);
+      }
     }
   }
 
   /// Initialize the listener and start background service
   static Future<void> startService() async {
     try {
+      final isEnabled = await CacheService().getNotificationScannerEnabled();
+      if (!isEnabled) {
+        developer.log('Notification scanner is disabled in settings. Skipping start.', name: _logName);
+        return;
+      }
+
       final hasPermission = await isPermissionGranted();
       if (!hasPermission) {
         developer.log('Cannot start service: Permission not granted.', name: _logName);
+        return;
+      }
+
+      final isRunning = await NotificationsListener.isRunning ?? false;
+      if (isRunning) {
+        developer.log('Service is already running. Skipping start.', name: _logName);
         return;
       }
 
@@ -94,6 +126,7 @@ class NotificationTransactionService {
     // 1. Filter packages: check if it is a whitelisted app or has message/bank components
     final isMatchingPackage = _whitelistedPackages.contains(packageName) || 
         packageName.contains('message') || 
+        packageName.contains('messaging') || 
         packageName.contains('mms') ||
         packageName.contains('telephony') ||
         packageName.contains('wallet') ||
@@ -129,18 +162,44 @@ class NotificationTransactionService {
     try {
       // 3. Initialize Firebase inside background isolate if not loaded
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
+        try {
+          await Firebase.initializeApp(
+            options: const FirebaseOptions(
+              apiKey: 'AIzaSyCRscOIxEaSnmztsF0DHGrm8sZNa6dEjec',
+              appId: '1:1093748425101:android:b5d45281b53d038ff3fdc4',
+              messagingSenderId: '1093748425101',
+              projectId: 'logapp-c7867',
+              storageBucket: 'logapp-c7867.firebasestorage.app',
+            ),
+          );
+        } catch (e) {
+          developer.log('Firebase initialization failed in background isolate: $e', name: _logName);
+          return;
+        }
+      }
+
+      if (Firebase.apps.isEmpty) {
+        developer.log('Firebase has no active apps after init. Aborting notification insert.', name: _logName);
+        return;
       }
 
       // 4. Fetch the active budget document
-      final budgetsQuery = await FirebaseFirestore.instance
+      var budgetsQuery = await FirebaseFirestore.instance
           .collection('budgets')
           .where('checked', isEqualTo: true)
           .limit(1)
           .get();
 
       if (budgetsQuery.docs.isEmpty) {
-        developer.log('No active budget found to append transaction.', name: _logName);
+        developer.log('No checked budget found. Falling back to the first available budget...', name: _logName);
+        budgetsQuery = await FirebaseFirestore.instance
+            .collection('budgets')
+            .limit(1)
+            .get();
+      }
+
+      if (budgetsQuery.docs.isEmpty) {
+        developer.log('No budget category found at all. Aborting notification insert.', name: _logName);
         return;
       }
 
@@ -197,6 +256,7 @@ class NotificationTransactionService {
   static bool _isTransactionText(String body) {
     return body.contains('rs.') ||
         body.contains('inr') ||
+        body.contains('₹') ||
         body.contains('debited') ||
         body.contains('credited') ||
         body.contains('spent') ||

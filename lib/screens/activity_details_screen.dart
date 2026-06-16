@@ -5,6 +5,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_text_action_button.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
@@ -104,6 +105,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     return StreamBuilder<Activity?>(
       stream: _activityStream,
       builder: (context, activitySnapshot) {
@@ -131,7 +133,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Activity not found', style: TextStyle(color: Colors.white)),
+                  Text(
+                    'Activity not found',
+                    style: TextStyle(color: AppTheme.textPrimaryColor(context)),
+                  ),
                   const VGapMd(),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(context),
@@ -171,16 +176,9 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       showBackButton: true,
       actions: widget.showEditIcon
           ? [
-              GestureDetector(
-                onTap: () => _navigateToEditActivity(activity),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
-                ),
+              AppTextActionButton(
+                label: 'Edit',
+                onPressed: () => _navigateToEditActivity(activity),
               ),
             ]
           : null,
@@ -206,10 +204,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor.withValues(alpha: 0.2),
+            color: AppTheme.surface(context).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: AppTheme.borderColor(context),
               width: 1,
             ),
           ),
@@ -278,19 +276,19 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               ),
               if (activity.description != null && activity.description!.isNotEmpty) ...[
                 const VGapMd(),
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: AppTheme.borderColor(context), height: 1),
                 const VGapMd(),
                 Text(
                   'Description',
                   style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryColor(context),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const VGapXs(),
                 Text(
                   activity.description!,
-                  style: AppTheme.bodyMedium.copyWith(color: Colors.white70),
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
                 ),
               ],
             ],
@@ -331,10 +329,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.15),
+        color: AppTheme.surface(context).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.03),
+          color: AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -418,8 +416,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppTheme.textPrimaryColor(context),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -479,8 +477,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 Expanded(
                   child: Text(
                     t.taskName,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppTheme.textPrimaryColor(context),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -534,10 +532,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.15),
+        color: AppTheme.surface(context).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.03),
+          color: AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -577,7 +575,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: AppTheme.textSecondary.withValues(alpha: 0.6)),
+        Icon(icon, size: 16, color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6)),
         const HGapSm(),
         Expanded(
           child: Row(
@@ -587,7 +585,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               Text(
                 label,
                 style: AppTheme.bodyMedium.copyWith(
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                   fontSize: 13,
                 ),
               ),
@@ -597,7 +595,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   value,
                   textAlign: TextAlign.right,
                   style: AppTheme.bodyMedium.copyWith(
-                    color: Colors.white,
+                    color: AppTheme.textPrimaryColor(context),
                     fontWeight: FontWeight.w500,
                     fontSize: 13,
                   ),
@@ -623,12 +621,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       children: [
         Row(
           children: [
-            const IconSm(Icons.history_rounded, color: AppTheme.textSecondary),
+            IconSm(Icons.history_rounded, color: AppTheme.textSecondaryColor(context)),
             const HGapSm(),
             Text(
               '1-Week History Timeline'.toUpperCase(),
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5,
               ),
@@ -680,11 +678,11 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                           shape: BoxShape.circle,
                           color: hasActivity
                               ? AppTheme.successColor.withValues(alpha: 0.15)
-                              : Colors.white.withValues(alpha: 0.05),
+                              : AppTheme.subtleFillColor(context),
                           border: Border.all(
                             color: hasActivity
                                 ? AppTheme.successColor
-                                : Colors.white.withValues(alpha: 0.15),
+                                : AppTheme.borderColor(context),
                             width: 2,
                           ),
                         ),
@@ -696,7 +694,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                         Expanded(
                           child: Container(
                             width: 2,
-                            color: Colors.white.withValues(alpha: 0.08),
+                            color: AppTheme.borderColor(context),
                             margin: const EdgeInsets.symmetric(vertical: 4),
                           ),
                         ),
@@ -711,12 +709,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                         decoration: BoxDecoration(
                           color: hasActivity
                               ? AppTheme.successColor.withValues(alpha: 0.03)
-                              : AppTheme.surfaceColor.withValues(alpha: 0.15),
+                              : AppTheme.surface(context).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: hasActivity
                                 ? AppTheme.successColor.withValues(alpha: 0.15)
-                                : Colors.white.withValues(alpha: 0.03),
+                                : AppTheme.borderColor(context),
                             width: 1,
                           ),
                         ),
@@ -729,7 +727,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                 Text(
                                   dayLabel,
                                   style: TextStyle(
-                                    color: hasActivity ? Colors.white : AppTheme.textSecondary,
+                                    color: hasActivity ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                                     fontWeight: hasActivity ? FontWeight.bold : FontWeight.w500,
                                     fontSize: 14,
                                   ),
@@ -740,7 +738,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                         ? '${dayCheckIns.length} task(s) logged'
                                         : 'Completed',
                                     style: TextStyle(
-                                      color: hasActivity ? AppTheme.successColor : AppTheme.textSecondary,
+                                      color: hasActivity ? AppTheme.successColor : AppTheme.textSecondaryColor(context),
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -809,7 +807,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                               Text(
                                 'No activity logged',
                                 style: AppTheme.bodySmall.copyWith(
-                                  color: AppTheme.textSecondary.withValues(alpha: 0.4),
+                                  color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.4),
                                   fontSize: 12,
                                 ),
                               ),
@@ -913,7 +911,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
+        backgroundColor: AppTheme.surface(context),
         title: Text('Delete "${activity.name}"?', style: AppTheme.headingSmall),
         content: const Text('Are you sure you want to delete this activity? All associated daily progress will be removed.'),
         actions: [

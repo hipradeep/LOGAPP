@@ -18,8 +18,8 @@ import 'note_write_screen.dart';
 import '../controllers/dashboard_controller.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/focus_timer_sheet.dart';
-import '../widgets/calorie_log_sheet.dart';
 import '../widgets/dashboard_quick_actions.dart';
+
 import '../widgets/dashboard_summary_card.dart';
 import '../widgets/dashboard_weekly_calendar.dart';
 
@@ -36,6 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   
   final ValueNotifier<Set<String>> _selectedActivityIds = ValueNotifier({});
   late final DashboardController _controller;
+  static final DateFormat _dateFormat = DateFormat('EEEE, MMM d');
 
   final List<Map<String, String>> _moods = [
     {'emoji': '😊', 'label': 'Happy'},
@@ -46,13 +47,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     {'emoji': '💤', 'label': 'Tired'},
   ];
 
-  late final Widget _moodSection;
+
 
   @override
   void initState() {
     super.initState();
     _controller = DashboardController();
-    _moodSection = _buildQuickMoodSection();
   }
 
   @override
@@ -68,111 +68,133 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppProvider<DashboardController>(
-        notifier: _controller,
-        child: Builder(
-          builder: (context) {
-            final controller = AppProvider.watch<DashboardController>(context);
-            if (controller.isLoading) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppTheme.primaryColor),
-              );
-            }
-            return FullScreenPage(
-              showScaffold: false,
-              isScrollable: true,
-              title: 'Your Daily LOG',
-              padding: EdgeInsets.zero,
-              backgroundWidgets: [
-                const GlowBlob(
-                  top: -50,
-                  left: -50,
-                  size: 250,
-                  color: AppTheme.primaryColor,
-                  opacity: 0.12,
-                ),
-                GlowBlob(
-                  bottom: Responsive.heightPercent(context, 20),
-                  right: -60,
-                  size: 300,
-                  color: AppTheme.primaryLight,
-                  opacity: 0.06,
-                ),
-              ],
-              children: [
-                // Subheader indicating date
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        DateFormat('EEEE, MMM d').format(DateTime.now()).toUpperCase(),
-                        style: AppTheme.bodySmall.copyWith(
-                          color: AppTheme.primaryLight,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const VGapMd(),
-                
-                // Daily Progress
-                DashboardSummaryCard(
-                  activities: controller.activeActivities,
-                  checkIns: controller.checkIns,
-                  subTasks: controller.tasks,
-                ),
-                const VGapSm(),
-
-                // Quick Actions
-                DashboardQuickActions(
-                  onFocus: _handleFocusAction,
-                  onLogFood: _handleLogFoodAction,
-                  onWater: _handleWaterAction,
-                  onNewJournal: _handleNewJournalAction,
-                ),
-                const VGapSm(),
-
-                // Unified Checked Activities & Summary Section
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildActiveActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false),
-                    if (controller.skippedActivities.isNotEmpty) ...[
-                      const VGapSm(),
-                      _buildActiveActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false, isSkippedList: true),
-                    ],
-                    if (controller.completedActivities.isNotEmpty) ...[
-                      const VGapSm(),
-                      _buildActiveActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: true),
-                    ],
-                    const VGapSm(),
-                       
-                    DashboardWeeklyCalendar(
-                      activities: controller.activeActivities,
-                      checkIns: controller.checkIns,
-                      subTasks: controller.tasks,
-                    ),
-                    const VGapSm(),
-                    // Quick Mood Check-in
-                    _moodSection,
-                    const VGapSm(),
-                  ],
-                ),
-                const VGapXxl(),
-                const VGapXxl(),
-                const VGapXxl(),
-              ],
+    return AppProvider<DashboardController>(
+      notifier: _controller,
+      child: Builder(
+        builder: (context) {
+          final controller = AppProvider.watch<DashboardController>(context);
+          if (controller.isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor),
             );
           }
+          return FullScreenPage(
+            showScaffold: false,
+            isScrollable: true,
+            title: 'LOG',
+            padding: EdgeInsets.zero,
+            leading: _buildDrawerButton(context),
+            backgroundWidgets: _buildBackgroundWidgets(context),
+            children: [
+              _buildHeaderDate(context),
+              const VGapMd(),
+              DashboardSummaryCard(
+                activities: controller.todayActivities,
+                checkIns: controller.checkIns,
+                subTasks: controller.tasks,
+              ),
+              const VGapSm(),
+              DashboardQuickActions(
+                onFocus: _handleFocusAction,
+                onWater: _handleWaterAction,
+                onNewJournal: _handleNewJournalAction,
+              ),
+              const VGapSm(),
+              _buildActivitiesAndCalendarSection(context, controller),
+              const VGapXxl(),
+              const VGapXxl(),
+              const VGapXxl(),
+            ],
+          );
+        }
+      ),
+    );
+  }
+
+  Widget _buildDrawerButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _openDrawer(context),
+      child: Transform.translate(
+        offset: const Offset(-8, 0),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          color: Colors.transparent,
+          child: Icon(
+            Icons.menu_rounded,
+            color: Theme.of(context).iconTheme.color,
+            size: 24,
+          ),
         ),
       ),
+    );
+  }
+
+  void _openDrawer(BuildContext context) {
+    Scaffold.of(context).openDrawer();
+  }
+
+  List<Widget> _buildBackgroundWidgets(BuildContext context) {
+    return [
+      const GlowBlob(
+        top: -50,
+        left: -50,
+        size: 250,
+        color: AppTheme.primaryColor,
+        opacity: 0.12,
+      ),
+      GlowBlob(
+        bottom: Responsive.heightPercent(context, 20),
+        right: -60,
+        size: 300,
+        color: AppTheme.primaryLight,
+        opacity: 0.06,
+      ),
+    ];
+  }
+
+  Widget _buildHeaderDate(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            _dateFormat.format(DateTime.now()).toUpperCase(),
+            style: AppTheme.bodySmall.copyWith(
+              color: AppTheme.primaryAccentColor(context),
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivitiesAndCalendarSection(BuildContext context, DashboardController controller) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildActiveActivitiesList(context, controller.pendingActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false),
+        if (controller.skippedActivities.isNotEmpty) ...[
+          const VGapSm(),
+          _buildActiveActivitiesList(context, controller.skippedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: false, isSkippedList: true),
+        ],
+        if (controller.completedActivities.isNotEmpty) ...[
+          const VGapSm(),
+          _buildActiveActivitiesList(context, controller.completedActivities, controller.todayCheckIns, controller.tasks, isCompletedList: true),
+        ],
+        const VGapSm(),
+           
+        DashboardWeeklyCalendar(
+          activities: controller.activeActivities,
+          checkIns: controller.checkIns,
+          subTasks: controller.tasks,
+        ),
+        const VGapSm(),
+        _buildQuickMoodSection(),
+        const VGapSm(),
+      ],
     );
   }
 
@@ -199,14 +221,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? AppTheme.warningColor.withValues(alpha: 0.04)
             : (isCompletedList 
                 ? AppTheme.successColor.withValues(alpha: 0.04)
-                : AppTheme.surfaceColor.withValues(alpha: 0.2)),
+                : AppTheme.surface(context).withValues(alpha: 0.2)),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
           color: isSkippedList
               ? AppTheme.warningColor.withValues(alpha: 0.15)
               : (isCompletedList
                   ? AppTheme.successColor.withValues(alpha: 0.15)
-                  : Colors.white.withValues(alpha: 0.02)),
+                  : AppTheme.borderColor(context)),
           width: 1,
         ),
       ),
@@ -237,7 +259,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       style: AppTheme.bodySmall.copyWith(
                         color: isSkippedList
                             ? AppTheme.warningColor
-                            : (isCompletedList ? AppTheme.successColor : AppTheme.textPrimary),
+                            : (isCompletedList
+                                ? AppTheme.successColor
+                                : AppTheme.textPrimaryColor(context)),
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.0,
                       ),
@@ -387,10 +411,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: AppTheme.defaultCardPadding,
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.4),
+        color: AppTheme.surface(context).withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -418,10 +442,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       width: 54,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor.withValues(alpha: 0.7),
+                        color: AppTheme.surface(context).withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: AppTheme.borderColor(context),
                           width: 1,
                         ),
                       ),
@@ -567,14 +591,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _handleLogFoodAction() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const CalorieLogSheet(),
-    );
-  }
 
   void _handleWaterAction() async {
     try {

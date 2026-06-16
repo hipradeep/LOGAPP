@@ -121,14 +121,14 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   Widget _buildDatePickerTheme(BuildContext context, Widget? child) {
     return Theme(
       data: ThemeData.dark().copyWith(
-        colorScheme: const ColorScheme.dark(
+        colorScheme: ColorScheme.dark(
           primary: AppTheme.primaryColor,
-          onPrimary: Colors.white,
-          surface: AppTheme.surfaceColor,
-          onSurface: AppTheme.textPrimary,
+          onPrimary: AppTheme.selectedChipTextColor(context),
+          surface: AppTheme.surface(context),
+          onSurface: AppTheme.textPrimaryColor(context),
         ),
-        dialogTheme: const DialogThemeData(
-          backgroundColor: AppTheme.backgroundColor,
+        dialogTheme: DialogThemeData(
+          backgroundColor: AppTheme.background(context),
         ),
       ),
       child: child!,
@@ -187,7 +187,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.white24,
+          color: AppTheme.borderColor(context),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -277,11 +277,12 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
+        color: AppTheme.background(context),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.03), width: 1.5),
+        border: Border.all(color: AppTheme.borderColor(context), width: 1.5),
       ),
       padding: const EdgeInsets.only(left: 24, right: 24, top: 12, bottom: 24),
       child: SafeArea(
@@ -292,7 +293,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             _buildDragHandle(),
             _FilterHeader(onClose: () => Navigator.pop(context)),
             const VGapSm(),
-            const Divider(color: Colors.white10),
+            Divider(color: AppTheme.borderColor(context)),
             const VGapMd(),
             _buildDateShortcutsSection(),
             const VGapMd(),
@@ -328,13 +329,13 @@ class _FilterHeader extends StatelessWidget {
           ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: AppTheme.subtleFillColor(context),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              border: Border.all(color: AppTheme.borderColor(context)),
             ),
             child: IconButton(
               onPressed: onClose,
-              icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+              icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
@@ -354,7 +355,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary, letterSpacing: 0.8),
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondaryColor(context), letterSpacing: 0.8),
     );
   }
 }
@@ -372,30 +373,30 @@ class _QuickDateSelector extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          _buildChip('1 Month', '1m'),
+          _buildChip(context, '1 Month', '1m'),
           const SizedBox(width: 8),
-          _buildChip('3 Months', '3m'),
+          _buildChip(context, '3 Months', '3m'),
           const SizedBox(width: 8),
-          _buildChip('6 Months', '6m'),
+          _buildChip(context, '6 Months', '6m'),
         ],
       ),
     );
   }
 
-  Widget _buildChip(String label, String value) {
+  Widget _buildChip(BuildContext context, String label, String value) {
     final isSelected = selectedValue == value;
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (_) => onSelect(value),
-      selectedColor: AppTheme.primaryColor.withValues(alpha: 0.18),
-      backgroundColor: AppTheme.surfaceColor.withValues(alpha: 0.35),
+      selectedColor: AppTheme.segmentedSelectedBgColor(context),
+      backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
       side: BorderSide(
-        color: isSelected ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.05),
+        color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
         width: 1.2,
       ),
       labelStyle: TextStyle(
-        color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary,
+        color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
         fontSize: 11,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
       ),
@@ -427,10 +428,10 @@ class _DateInputField extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.35),
+          color: AppTheme.surface(context).withValues(alpha: 0.35),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSet ? AppTheme.primaryColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+            color: isSet ? AppTheme.primaryColor.withValues(alpha: 0.3) : AppTheme.borderColor(context),
             width: 1.2,
           ),
         ),
@@ -439,7 +440,7 @@ class _DateInputField extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10, fontWeight: FontWeight.w500),
+              style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 10, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 4),
             Row(
@@ -449,7 +450,7 @@ class _DateInputField extends StatelessWidget {
                   child: Text(
                     text,
                     style: TextStyle(
-                      color: isSet ? AppTheme.primaryLight : Colors.white,
+                      color: isSet ? AppTheme.primaryAccentColor(context) : AppTheme.textPrimaryColor(context),
                       fontSize: 13,
                       fontWeight: isSet ? FontWeight.bold : FontWeight.normal,
                     ),
@@ -458,7 +459,7 @@ class _DateInputField extends StatelessWidget {
                 ),
                 Icon(
                   Icons.calendar_today_rounded,
-                  color: isSet ? AppTheme.primaryLight : AppTheme.textSecondary.withValues(alpha: 0.5),
+                  color: isSet ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
                   size: 14,
                 ),
               ],
@@ -480,30 +481,30 @@ class _TypeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _buildChip('All', 'all'),
+        _buildChip(context, 'All', 'all'),
         const HGapSm(),
-        _buildChip('Debit', 'debit'),
+        _buildChip(context, 'Debit', 'debit'),
         const HGapSm(),
-        _buildChip('Credit', 'credit'),
+        _buildChip(context, 'Credit', 'credit'),
       ],
     );
   }
 
-  Widget _buildChip(String label, String value) {
+  Widget _buildChip(BuildContext context, String label, String value) {
     final isSelected = selectedType == value;
     return Expanded(
       child: ChoiceChip(
         label: Center(child: Text(label)),
         selected: isSelected,
         onSelected: (_) => onSelect(value),
-        selectedColor: AppTheme.primaryColor.withValues(alpha: 0.18),
-        backgroundColor: AppTheme.surfaceColor.withValues(alpha: 0.35),
+        selectedColor: AppTheme.segmentedSelectedBgColor(context),
+        backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
         side: BorderSide(
-          color: isSelected ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.05),
+          color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
           width: 1.2,
         ),
         labelStyle: TextStyle(
-          color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary,
+          color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
           fontSize: 12,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
         ),
@@ -524,30 +525,30 @@ class _ValidationSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _buildChip('All', 'all'),
+        _buildChip(context, 'All', 'all'),
         const HGapSm(),
-        _buildChip('Validated', 'validated'),
+        _buildChip(context, 'Validated', 'validated'),
         const HGapSm(),
-        _buildChip('Pending', 'pending'),
+        _buildChip(context, 'Pending', 'pending'),
       ],
     );
   }
 
-  Widget _buildChip(String label, String value) {
+  Widget _buildChip(BuildContext context, String label, String value) {
     final isSelected = selectedVal == value;
     return Expanded(
       child: ChoiceChip(
         label: Center(child: Text(label)),
         selected: isSelected,
         onSelected: (_) => onSelect(value),
-        selectedColor: AppTheme.primaryColor.withValues(alpha: 0.18),
-        backgroundColor: AppTheme.surfaceColor.withValues(alpha: 0.35),
+        selectedColor: AppTheme.segmentedSelectedBgColor(context),
+        backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
         side: BorderSide(
-          color: isSelected ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.05),
+          color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
           width: 1.2,
         ),
         labelStyle: TextStyle(
-          color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary,
+          color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
           fontSize: 12,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
         ),

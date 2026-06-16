@@ -19,6 +19,7 @@ class MilestonesTab extends StatefulWidget {
 class _MilestonesTabState extends State<MilestonesTab> {
   late final MilestonesController _controller;
   String? _expandedTaskId;
+  final Map<String, GlobalKey> _chipKeys = {};
 
   // Accordion open/close state
   bool _todayExpanded = true;
@@ -43,9 +44,9 @@ class _MilestonesTabState extends State<MilestonesTab> {
       controller: _controller,
       isLoading: (ctrl) => ctrl.isLoading,
       errorMessage: (ctrl) => ctrl.errorMessage,
-      isEmpty: (ctrl) => ctrl.todayTasks.isEmpty && ctrl.futureTasks.isEmpty && ctrl.completedTasks.isEmpty,
+      isEmpty: (ctrl) => ctrl.milestoneActivities.isEmpty,
       emptyIcon: Icons.flag_outlined,
-      emptyMessage: 'No tasks found. Tap the FAB (+) to add a task!',
+      emptyMessage: 'No milestone activities active.',
       onRefresh: () async => await _controller.refresh(),
       onFabPressed: () {
         if (_controller.milestoneActivities.isNotEmpty) {
@@ -58,6 +59,44 @@ class _MilestonesTabState extends State<MilestonesTab> {
         final List<String> categories = ['All', ...uniqueActivityNames];
 
         final List<Widget> sectionWidgets = [];
+
+        // If tasks lists are all empty, show placeholder
+        if (controller.todayTasks.isEmpty &&
+            controller.futureTasks.isEmpty &&
+            controller.completedTasks.isEmpty) {
+          sectionWidgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.flag_outlined,
+                      size: 64,
+                      color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.4),
+                    ),
+                    const VGapMd(),
+                    Text(
+                      'No tasks found',
+                      style: AppTheme.headingSmall.copyWith(
+                        color: AppTheme.textSecondaryColor(context),
+                      ),
+                    ),
+                    const VGapSm(),
+                    Text(
+                      'Tap the FAB (+) to add a task for this milestone!',
+                      style: TextStyle(
+                        color: AppTheme.textSecondaryColor(context),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
 
         // Today Section
         if (controller.todayTasks.isNotEmpty) {
@@ -114,66 +153,110 @@ class _MilestonesTabState extends State<MilestonesTab> {
           );
         }
 
-        // Check all completed tasks link
-        sectionWidgets.add(const VGapMd());
-        sectionWidgets.add(
-          Center(
-            child: TextButton(
-              onPressed: () {
-                controller.selectActivity(null);
-                setState(() {
-                  _completedExpanded = true;
-                });
-              },
-              child: Text(
-                'Check all completed tasks',
-                style: TextStyle(
-                  color: AppTheme.secondaryColor.withValues(alpha: 0.8),
-                  fontSize: 12,
-                  decoration: TextDecoration.underline,
-                  decorationColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
-                ),
-              ),
-            ),
-          ),
-        );
+
 
         final bottomPadding = MediaQuery.of(context).padding.bottom;
         final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
 
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
-          child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Category Capsule list
-            _buildCategoryBar(categories, controller),
-            const VGapMd(),
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: (details) {
+            if (details.primaryVelocity == null) return;
+            final currentIndex = categories.indexOf(controller.selectedCategory);
+            if (currentIndex == -1) return;
 
-            if (controller.selectedMilestoneActivity != null &&
-                controller.selectedMilestoneActivity!.id.isNotEmpty) ...[
-              _buildMilestoneHeaderCard(context, controller.selectedMilestoneActivity!),
-              const VGapMd(),
-            ],
+            if (details.primaryVelocity! < 0) {
+              // Swipe left -> Next category
+              if (currentIndex < categories.length - 1) {
+                _selectCategory(categories[currentIndex + 1], controller);
+              }
+            } else if (details.primaryVelocity! > 0) {
+              // Swipe right -> Previous category
+              if (currentIndex > 0) {
+                _selectCategory(categories[currentIndex - 1], controller);
+              }
+            }
+          },
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Category Capsule list
+                        _buildCategoryBar(categories, controller),
+                        const VGapMd(),
 
-            ...sectionWidgets,
-          ],
-        ),
+                        if (controller.selectedCategory != 'All' &&
+                            controller.selectedMilestoneActivity != null &&
+                            controller.selectedMilestoneActivity!.id.isNotEmpty) ...[
+                          _buildMilestoneHeaderCard(context, controller.selectedMilestoneActivity!),
+                          const VGapMd(),
+                        ],
+                        ...sectionWidgets,
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );
   }
 
+  void _selectCategory(String cat, MilestonesController controller) {
+    if (cat != 'All') {
+      final act = controller.milestoneActivities.firstWhere((a) => a.name == cat);
+      controller.selectActivity(act);
+    } else {
+      controller.selectActivity(null);
+    }
+
+    // Scroll the selected capsule chip into view if it is scrolled off screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = _chipKeys[cat];
+      if (key != null && key.currentContext != null) {
+        Scrollable.ensureVisible(
+          key.currentContext!,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          alignment: 0.5,
+        );
+      }
+    });
+  }
+
 
   void _showAddTaskSheet(BuildContext context, MilestonesController controller) {
+    // Derive initialId directly from selectedCategory:
+    // - 'All' → null → sheet defaults to first milestone
+    // - specific name → look up that activity's id from the list
+    final String? initialId;
+    if (controller.selectedCategory == 'All') {
+      initialId = null;
+    } else {
+      initialId = controller.milestoneActivities
+          .where((a) => a.name == controller.selectedCategory)
+          .map((a) => a.id)
+          .firstOrNull;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AddMilestoneTaskSheet(
         milestones: controller.milestoneActivities,
-        initialActivityId: controller.selectedMilestoneActivity?.id,
+        initialActivityId: initialId,
         onAddTask: (activity, taskName, timestamp) async {
           await controller.createTask(activity, taskName, timestamp);
         },
@@ -202,7 +285,7 @@ class _MilestonesTabState extends State<MilestonesTab> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.35),
+        color: AppTheme.surface(context).withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: AppTheme.warningColor.withValues(alpha: 0.2),
@@ -249,7 +332,7 @@ class _MilestonesTabState extends State<MilestonesTab> {
                 Text(
                   'View trends, consistency, & history',
                   style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                    color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
                     fontSize: 11,
                   ),
                 ),
@@ -314,13 +397,17 @@ class _MilestonesTabState extends State<MilestonesTab> {
       child: Row(
         children: categories.map((cat) {
           final isSelected = controller.selectedCategory == cat;
+          final key = _chipKeys.putIfAbsent(cat, () => GlobalKey());
           return Padding(
+            key: key,
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
               label: Text(
                 cat,
                 style: TextStyle(
-                  color: isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
+                  color: isSelected
+                      ? AppTheme.selectedChipTextColor(context)
+                      : AppTheme.textSecondaryColor(context),
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
@@ -328,16 +415,11 @@ class _MilestonesTabState extends State<MilestonesTab> {
               selected: isSelected,
               onSelected: (val) {
                 if (val) {
-                  if (cat != 'All') {
-                    final act = controller.milestoneActivities.firstWhere((a) => a.name == cat);
-                    controller.selectActivity(act);
-                  } else {
-                    controller.selectActivity(null);
-                  }
+                  _selectCategory(cat, controller);
                 }
               },
               selectedColor: AppTheme.secondaryColor,
-              backgroundColor: AppTheme.surfaceColor.withValues(alpha: 0.4),
+              backgroundColor: AppTheme.surface(context).withValues(alpha: 0.4),
               showCheckmark: false,
               elevation: 0,
               labelPadding: EdgeInsets.zero,
@@ -347,7 +429,7 @@ class _MilestonesTabState extends State<MilestonesTab> {
                 side: BorderSide(
                   color: isSelected 
                       ? AppTheme.secondaryColor.withValues(alpha: 0.5) 
-                      : AppTheme.textPrimary.withValues(alpha: 0.05),
+                      : AppTheme.borderColor(context),
                   width: 1,
                 ),
               ),

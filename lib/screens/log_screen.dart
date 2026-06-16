@@ -14,14 +14,14 @@ import '../services/check_in_service.dart';
 import '../services/note_service.dart';
 import 'note_write_screen.dart';
 
-class NotesScreen extends StatefulWidget {
-  const NotesScreen({super.key});
+class LogScreen extends StatefulWidget {
+  const LogScreen({super.key});
 
   @override
-  State<NotesScreen> createState() => _NotesScreenState();
+  State<LogScreen> createState() => _LogScreenState();
 }
 
-class _NotesScreenState extends State<NotesScreen> {
+class _LogScreenState extends State<LogScreen> {
   final ActivityService _activityService = ActivityService();
   final CheckInService _checkInService = CheckInService();
   final NoteService _noteService = NoteService();
@@ -78,7 +78,7 @@ class _NotesScreenState extends State<NotesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
+        backgroundColor: AppTheme.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius)),
         title: Text('Delete Log', style: AppTheme.headingSmall),
         content: Text(
@@ -116,13 +116,13 @@ class _NotesScreenState extends State<NotesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: FullScreenPage(
         showScaffold: false,
         isScrollable: true,
         title: 'Activity Logs',
+        showBackButton: true,
         padding: EdgeInsets.zero,
         backgroundWidgets: const [
           GlowBlob(
@@ -148,7 +148,7 @@ class _NotesScreenState extends State<NotesScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'note & Check-ins'.toUpperCase(),
+                    'Log & Checkins'.toUpperCase(),
                     style: AppTheme.bodySmall.copyWith(
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.0,
@@ -163,45 +163,6 @@ class _NotesScreenState extends State<NotesScreen> {
           // Dynamic Logs Content
           _buildFirestoreTimeline(),
         ],
-      ),
-      floatingActionButton: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding + 36),
-        child: _buildPremiumFAB(
-          onPressed: () => _navigateToWriteScreen(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPremiumFAB({required VoidCallback onPressed}) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 52,
-            height: 52,
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.add_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -376,10 +337,10 @@ class _NotesScreenState extends State<NotesScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+          color: AppTheme.surface(context).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.04),
+            color: AppTheme.borderColor(context),
             width: 1,
           ),
         ),
@@ -418,7 +379,7 @@ class _NotesScreenState extends State<NotesScreen> {
                           entry.title.isNotEmpty ? entry.title : 'Untitled Log',
                           style: AppTheme.bodyMedium.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: AppTheme.textPrimaryColor(context),
                             fontSize: 14,
                           ),
                           maxLines: 1,
@@ -438,7 +399,7 @@ class _NotesScreenState extends State<NotesScreen> {
                     Text(
                       entry.content,
                       style: AppTheme.bodyMedium.copyWith(
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: AppTheme.textSecondaryColor(context),
                         fontSize: 12,
                       ),
                       maxLines: 2,
@@ -516,7 +477,7 @@ class _NotesScreenState extends State<NotesScreen> {
                               activity.name,
                               style: AppTheme.bodyMedium.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: AppTheme.textPrimaryColor(context),
                                 fontSize: 13,
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -565,7 +526,7 @@ class _NotesScreenState extends State<NotesScreen> {
                             ? 'Completed: ${checkIn.subTaskName!.split('|').first}'
                             : 'Logged a quick check-in.',
                         style: AppTheme.bodyMedium.copyWith(
-                          color: Colors.white.withValues(alpha: 0.7),
+                          color: AppTheme.textSecondaryColor(context),
                           fontSize: 12,
                         ),
                       ),

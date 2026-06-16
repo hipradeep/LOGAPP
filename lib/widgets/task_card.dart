@@ -99,13 +99,13 @@ class _TaskCardState extends State<TaskCard> {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: widget.task.checked
-            ? AppTheme.surfaceColor.withValues(alpha: 0.15)
-            : AppTheme.surfaceColor.withValues(alpha: 0.35),
+            ? AppTheme.surface(context).withValues(alpha: 0.15)
+            : AppTheme.surface(context).withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: widget.isExpanded
               ? AppTheme.primaryColor.withValues(alpha: 0.3)
-              : Colors.white.withValues(alpha: 0.04),
+              : AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -137,7 +137,7 @@ class _TaskCardState extends State<TaskCard> {
                           border: Border.all(
                             color: widget.task.checked 
                                 ? const Color(0xFF64748B)
-                                : Colors.white30,
+                                : AppTheme.borderColor(context),
                             width: 2,
                           ),
                         ),
@@ -157,7 +157,7 @@ class _TaskCardState extends State<TaskCard> {
                         Text(
                           widget.task.taskName,
                           style: TextStyle(
-                            color: widget.task.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Colors.white,
+                            color: widget.task.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Theme.of(context).textTheme.bodyLarge!.color,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                             decoration: widget.task.checked ? TextDecoration.lineThrough : null,
@@ -229,10 +229,10 @@ class _TaskCardState extends State<TaskCard> {
                                 ),
                               // Repeat arrows badge
                               if (parent.repeatDays.length < 7)
-                                const Icon(
+                                Icon(
                                   Icons.repeat_rounded,
                                   size: 12,
-                                  color: Colors.white38,
+                                  color: AppTheme.textSecondary.withValues(alpha: 0.5),
                                 ),
                             ],
                           ),
@@ -257,7 +257,7 @@ class _TaskCardState extends State<TaskCard> {
           
           // Expanded panel showing nested items and actions
           if (widget.isExpanded) ...[
-            const Divider(color: Colors.white10, height: 1, indent: 16, endIndent: 16),
+            Divider(color: AppTheme.borderColor(context), height: 1, indent: 16, endIndent: 16),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
@@ -347,12 +347,12 @@ class _TaskCardState extends State<TaskCard> {
                                   border: Border.all(
                                     color: item.checked
                                         ? AppTheme.primaryColor
-                                        : Colors.white.withValues(alpha: 0.3),
+                                        : AppTheme.borderColor(context),
                                     width: 1.5,
                                   ),
                                 ),
                                 child: item.checked
-                                    ? const Icon(Icons.check, size: 11, color: Colors.white)
+                                    ? Icon(Icons.check, size: 11, color: Theme.of(context).colorScheme.onPrimary)
                                     : null,
                               ),
                               const SizedBox(width: 10),
@@ -360,7 +360,7 @@ class _TaskCardState extends State<TaskCard> {
                                 child: Text(
                                   item.title,
                                   style: TextStyle(
-                                    color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Colors.white70,
+                                    color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Theme.of(context).textTheme.bodyMedium!.color,
                                     fontSize: 13,
                                     decoration: item.checked ? TextDecoration.lineThrough : null,
                                     decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
@@ -405,10 +405,10 @@ class _TaskCardState extends State<TaskCard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.03),
+                          color: AppTheme.surface(context).withValues(alpha: 0.35),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: AppTheme.borderColor(context),
                             width: 1,
                           ),
                         ),
@@ -421,7 +421,7 @@ class _TaskCardState extends State<TaskCard> {
                               widget.task.scheduledTime != null
                                   ? '${DateFormat('MMM d, yyyy').format(widget.task.timestamp)} • ${_formatTimeString(widget.task.scheduledTime!)}'
                                   : DateFormat('MMM d, yyyy').format(widget.task.timestamp),
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              style: TextStyle(color: Theme.of(context).textTheme.bodySmall!.color, fontSize: 11),
                             ),
                           ],
                         ),
@@ -455,21 +455,21 @@ class _TaskCardState extends State<TaskCard> {
           child: TextField(
             controller: _nestedController,
             focusNode: _nestedFocusNode,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 12),
             decoration: InputDecoration(
               hintText: 'Add checklist sub-item...',
               hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.02),
+              fillColor: AppTheme.surface(context).withValues(alpha: 0.5),
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                borderSide: BorderSide(color: AppTheme.borderColor(context)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                borderSide: BorderSide(color: AppTheme.borderColor(context)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -533,21 +533,21 @@ class _TaskCardState extends State<TaskCard> {
         }
       },
       itemBuilder: (context) => [
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'none',
-          child: Text('No limit', style: TextStyle(color: Colors.white, fontSize: 13)),
+          child: Text('No limit', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: '10',
-          child: Text('10 minutes', style: TextStyle(color: Colors.white, fontSize: 13)),
+          child: Text('10 minutes', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: '30',
-          child: Text('30 minutes', style: TextStyle(color: Colors.white, fontSize: 13)),
+          child: Text('30 minutes', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: '60',
-          child: Text('1 hour', style: TextStyle(color: Colors.white, fontSize: 13)),
+          child: Text('1 hour', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
         ),
         const PopupMenuDivider(height: 1),
         const PopupMenuItem<String>(
@@ -562,7 +562,7 @@ class _TaskCardState extends State<TaskCard> {
         ),
       ],
       offset: const Offset(0, 30),
-      color: AppTheme.surfaceColor,
+      color: AppTheme.surface(context),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -571,7 +571,7 @@ class _TaskCardState extends State<TaskCard> {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: item.checked
-                      ? Colors.white.withValues(alpha: 0.02)
+                      ? AppTheme.surface(context).withValues(alpha: 0.2)
                       : AppTheme.primaryColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(6),
                 ),
@@ -604,7 +604,7 @@ class _TaskCardState extends State<TaskCard> {
                 size: 16,
                 color: item.checked
                     ? AppTheme.textSecondary.withValues(alpha: 0.2)
-                    : Colors.white24,
+                    : AppTheme.borderColor(context),
               ),
       ),
     );
@@ -615,7 +615,7 @@ class _TaskCardState extends State<TaskCard> {
       context: context,
       builder: (context) {
         return Dialog(
-          backgroundColor: AppTheme.surfaceColor,
+          backgroundColor: AppTheme.surface(context),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Padding(
             padding: const EdgeInsets.all(20.0),
@@ -626,9 +626,9 @@ class _TaskCardState extends State<TaskCard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Mark with symbol',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color, fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     TextButton(
                       onPressed: () {
@@ -723,10 +723,10 @@ class _TaskCardState extends State<TaskCard> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.02),
+          color: isSelected ? color.withValues(alpha: 0.15) : AppTheme.surface(context).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? color : Colors.white.withValues(alpha: 0.05),
+            color: isSelected ? color : AppTheme.borderColor(context),
             width: 1.5,
           ),
         ),
@@ -746,10 +746,10 @@ class _TaskCardState extends State<TaskCard> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.02),
+          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.2) : AppTheme.surface(context).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppTheme.primaryColor : Colors.white.withValues(alpha: 0.05),
+            color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
             width: 1.5,
           ),
         ),
@@ -757,7 +757,7 @@ class _TaskCardState extends State<TaskCard> {
           child: Text(
             value,
             style: TextStyle(
-              color: isSelected ? AppTheme.primaryLight : Colors.white70,
+              color: isSelected ? AppTheme.primaryLight : Theme.of(context).textTheme.bodySmall!.color,
               fontSize: 13,
               fontWeight: FontWeight.bold,
             ),
@@ -778,10 +778,10 @@ class _TaskCardState extends State<TaskCard> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.secondaryColor.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.02),
+          color: isSelected ? AppTheme.secondaryColor.withValues(alpha: 0.15) : AppTheme.surface(context).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppTheme.secondaryColor : Colors.white.withValues(alpha: 0.05),
+            color: isSelected ? AppTheme.secondaryColor : AppTheme.borderColor(context),
             width: 1.5,
           ),
         ),
@@ -793,7 +793,7 @@ class _TaskCardState extends State<TaskCard> {
               painter: PieChartPainter(
                 progress: progress,
                 color: AppTheme.secondaryColor,
-                backgroundColor: Colors.white12,
+                backgroundColor: AppTheme.borderColor(context),
               ),
             ),
           ),
@@ -813,10 +813,10 @@ class _TaskCardState extends State<TaskCard> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.02),
+          color: isSelected ? AppTheme.borderColor(context).withValues(alpha: 0.2) : AppTheme.surface(context).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? Colors.white54 : Colors.white.withValues(alpha: 0.05),
+            color: isSelected ? AppTheme.borderColor(context) : AppTheme.borderColor(context),
             width: 1.5,
           ),
         ),

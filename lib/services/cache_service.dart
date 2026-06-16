@@ -114,6 +114,17 @@ class CacheService {
     }
   }
 
+  Future<void> saveThemeMode(String mode) async {
+    final cache = await _readCache();
+    cache['theme_mode'] = mode;
+    await _writeCache(cache);
+  }
+
+  Future<String?> getThemeMode() async {
+    final cache = await _readCache();
+    return cache['theme_mode'] as String?;
+  }
+
   Future<void> saveNotesGridView(bool isGrid) async {
     final cache = await _readCache();
     cache['notes_grid_view'] = isGrid;
@@ -234,5 +245,56 @@ class CacheService {
       return map.map((key, value) => MapEntry(key.toString(), value.toString()));
     }
     return {};
+  }
+
+  /// Check if a notification action was already triggered within the last 3 seconds
+  Future<bool> isDuplicateAction(int? notificationId, String actionId) async {
+    if (notificationId == null) return false;
+    final cache = await _readCache();
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // Purge action records older than 10 seconds to avoid cache bloat
+    final Map<String, dynamic> cleanCache = {};
+    cache.forEach((key, value) {
+      if (key.startsWith('last_action_')) {
+        if (value is int && now - value < 10000) {
+          cleanCache[key] = value;
+        }
+      } else {
+        cleanCache[key] = value;
+      }
+    });
+
+    final uniqueKey = 'last_action_${notificationId}_$actionId';
+    final lastProcessed = cleanCache[uniqueKey] as int? ?? 0;
+    if (now - lastProcessed < 3000) {
+      return true;
+    }
+
+    cleanCache[uniqueKey] = now;
+    await _writeCache(cleanCache);
+    return false;
+  }
+
+  Future<void> saveNotificationScannerEnabled(bool enabled) async {
+    final cache = await _readCache();
+    cache['notification_scanner_enabled'] = enabled;
+    await _writeCache(cache);
+  }
+
+  Future<bool> getNotificationScannerEnabled() async {
+    final cache = await _readCache();
+    return cache['notification_scanner_enabled'] as bool? ?? true;
+  }
+
+  Future<void> saveSmsScannerEnabled(bool enabled) async {
+    final cache = await _readCache();
+    cache['sms_scanner_enabled'] = enabled;
+    await _writeCache(cache);
+  }
+
+  Future<bool> getSmsScannerEnabled() async {
+    final cache = await _readCache();
+    return cache['sms_scanner_enabled'] as bool? ?? false;
   }
 }

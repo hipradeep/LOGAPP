@@ -90,6 +90,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
@@ -100,9 +101,9 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+            border: Border.all(color: AppTheme.borderColor(context), width: 1),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -112,7 +113,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: AppTheme.borderColor(context),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -134,7 +135,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
               ] else ...[
                 Text(
                   _topicController.text.isNotEmpty ? _topicController.text : 'Focus Session',
-                  style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: AppTheme.primaryLight),
+                  style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: AppTheme.primaryAccentColor(context)),
                 ),
                 const VGapSm(),
               ],
@@ -149,7 +150,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
                     child: CircularProgressIndicator(
                       value: _isCompleted ? 1.0 : (_totalSeconds - _secondsRemaining) / _totalSeconds,
                       strokeWidth: 10,
-                      backgroundColor: Colors.white.withValues(alpha: 0.05),
+                      backgroundColor: AppTheme.subtleFillColor(context),
                       valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
                     ),
                   ),
@@ -183,8 +184,8 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
                       ElevatedButton(
                         onPressed: _resetTimer,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.08),
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.subtleFillColor(context),
+                          foregroundColor: AppTheme.textPrimaryColor(context),
                           minimumSize: const Size(100, 48),
                         ),
                         child: const Text('Reset'),
@@ -205,7 +206,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
                     _sessionTimer?.cancel();
                     Navigator.pop(context);
                   },
-                  child: Text('Cancel Session', style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+                  child: Text('Cancel Session', style: TextStyle(color: AppTheme.textSecondaryColor(context))),
                 ),
               ],
             ],

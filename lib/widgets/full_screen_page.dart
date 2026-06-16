@@ -16,11 +16,6 @@ enum PageAlignment {
   bottomRight,
 }
 
-/// A reusable widget that provides a full-width, full-height container
-/// with the app's standard deep gradient background.
-/// By default, it wraps the child in a SafeArea and SingleChildScrollView
-/// to handle standard screen behaviors (like avoiding device notches and the keyboard).
-/// Features a fixed glassmorphism header.
 class FullScreenPage extends StatelessWidget {
   final List<Widget> children;
   final List<Widget>? slivers;
@@ -36,6 +31,7 @@ class FullScreenPage extends StatelessWidget {
   final bool showScaffold;
   final List<Widget>? actions;
   final Widget? floatingActionButton;
+  final Widget? leading;
 
   const FullScreenPage({
     super.key,
@@ -53,6 +49,7 @@ class FullScreenPage extends StatelessWidget {
     this.showScaffold = true,
     this.actions,
     this.floatingActionButton,
+    this.leading,
   });
 
   MainAxisAlignment _getMainAxisAlignment() {
@@ -113,7 +110,7 @@ class FullScreenPage extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    if (title == null && !showBackButton && (actions == null || actions!.isEmpty)) return const SizedBox.shrink();
+    if (title == null && !showBackButton && leading == null && (actions == null || actions!.isEmpty)) return const SizedBox.shrink();
 
     return ClipRRect(
       child: BackdropFilter(
@@ -130,7 +127,7 @@ class FullScreenPage extends StatelessWidget {
             color: Colors.transparent,
             border: Border(
               bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: AppTheme.borderColor(context),
                 width: 1,
               ),
             ),
@@ -139,28 +136,47 @@ class FullScreenPage extends StatelessWidget {
             bottom: false,
             child: Row(
               children: [
-                if (showBackButton)
-                  GestureDetector(
-                    onTap: onBackPress ?? () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
+                if (leading != null)
+                  leading!
+                else if (showBackButton)
+                  Transform.translate(
+                    offset: const Offset(-8, 0),
+                    child: GestureDetector(
+                      onTap: onBackPress ?? () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.borderColor(context),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Theme.of(context).iconTheme.color,
+                          size: 16,
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),
                     ),
                   ),
-                if (showBackButton && title != null) const HGapMd(),
+                if ((leading != null || showBackButton) && title != null) const HGapMd(),
                 if (title != null)
                   Expanded(
-                    child: Text(
-                      title!,
-                      style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
+                    child: Transform.translate(
+                      offset: const Offset(-8, 0),
+                      child: Text(
+                        title!,
+                        style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                if (actions != null) ...actions!,
+                if (actions != null)
+                  Transform.translate(
+                    offset: const Offset(16, 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actions!,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -175,7 +191,7 @@ class FullScreenPage extends StatelessWidget {
     final crossAxis = _getCrossAxisAlignment();
     
     final double statusBarHeight = MediaQuery.of(context).padding.top;
-    final double headerPadding = (title != null || showBackButton) ? (statusBarHeight + 72.0) : 0.0;
+    final double headerPadding = (title != null || showBackButton || leading != null) ? (statusBarHeight + 72.0) : 0.0;
 
     Widget content;
     if (isScrollable) {
@@ -234,8 +250,8 @@ class FullScreenPage extends StatelessWidget {
       width: Responsive.width(context),
       height: Responsive.height(context),
       decoration: showBackground
-          ? const BoxDecoration(
-              gradient: AppTheme.backgroundGradient,
+          ? BoxDecoration(
+              gradient: AppTheme.resolvedBackgroundGradient(context),
             )
           : null,
       child: Stack(

@@ -317,7 +317,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       value: b.id,
                       child: Text(
                         b.category,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        style: TextStyle(color: AppTheme.textPrimaryColor(context), fontSize: 13),
                       ),
                     );
                   }).toList(),
@@ -326,20 +326,20 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               else
                 Text(
                   'Category: ${widget.categoryName}',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondary),
+                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
                 ),
             ],
           ),
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: AppTheme.subtleFillColor(context),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           child: IconButton(
             onPressed: _handleClose,
-            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+            icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
           ),
         ),
       ],
@@ -412,14 +412,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         maxChildSize: 0.9,
         expand: false,
         builder: (context, scrollController) {
+          Theme.of(context);
           return Container(
             decoration: BoxDecoration(
-              color: AppTheme.backgroundColor.withValues(alpha: 0.95),
+              color: AppTheme.background(context).withValues(alpha: 0.95),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+              border: Border.all(color: AppTheme.borderColor(context), width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
+                  color: AppTheme.shadowColor(context),
                   blurRadius: 40,
                   offset: const Offset(0, -10),
                 ),
@@ -436,7 +437,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white24,
+                        color: AppTheme.borderColor(context),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -453,9 +454,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             _RawBodyCard(rawText: widget.existingTransaction!.rawBody!),
                           ],
                           const VGapLg(),
-                          const Text(
+                          Text(
                             'Select Date',
-                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                           const VGapMd(),
                           _DateSelector(
@@ -463,9 +464,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             onDateChanged: _onDateChanged,
                           ),
                           const VGapLg(),
-                          const Text(
+                          Text(
                             'What was it for?',
-                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                           const VGapMd(),
                           if (_isLoadingTags)
@@ -513,7 +514,7 @@ class _RawBodyCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.3),
+        color: AppTheme.surface(context).withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.15)),
       ),
@@ -533,7 +534,7 @@ class _RawBodyCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             rawText,
-            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary, height: 1.3),
+            style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryColor(context), height: 1.3),
           ),
         ],
       ),
@@ -606,19 +607,19 @@ class _TagSelectorState extends State<_TagSelector> {
                     decoration: BoxDecoration(
                       color: isSelected
                           ? tag.color.withValues(alpha: 0.18)
-                          : Colors.white.withValues(alpha: 0.04),
+                          : AppTheme.subtleFillColor(context),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: isSelected
                             ? tag.color.withValues(alpha: 0.5)
-                            : Colors.white.withValues(alpha: 0.08),
+                            : AppTheme.borderColor(context),
                         width: isSelected ? 1.8 : 1,
                       ),
                     ),
                     child: Icon(
                       tag.icon,
                       size: 18,
-                      color: isSelected ? tag.color : AppTheme.textSecondary.withValues(alpha: 0.6),
+                      color: isSelected ? tag.color : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -627,7 +628,7 @@ class _TagSelectorState extends State<_TagSelector> {
                     style: TextStyle(
                       fontSize: 8,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? Colors.white : AppTheme.textSecondary.withValues(alpha: 0.6),
+                      color: isSelected ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                     ),
                   ),
                 ],
@@ -682,9 +683,9 @@ class _DateSelectorState extends State<_DateSelector> {
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: AppTheme.primaryColor,
-              surface: AppTheme.surfaceColor,
+              surface: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -733,18 +734,18 @@ class _DateSelectorState extends State<_DateSelector> {
         decoration: BoxDecoration(
           color: isSelected 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-              : Colors.white.withValues(alpha: 0.03),
+              : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected 
                 ? AppTheme.primaryColor.withValues(alpha: 0.3) 
-                : Colors.white.withValues(alpha: 0.05),
+                : AppTheme.borderColor(context),
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            color: isSelected ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -765,12 +766,12 @@ class _DateSelectorState extends State<_DateSelector> {
         decoration: BoxDecoration(
           color: isCustom 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
-              : Colors.white.withValues(alpha: 0.03),
+              : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isCustom 
                 ? AppTheme.primaryColor.withValues(alpha: 0.3) 
-                : Colors.white.withValues(alpha: 0.05),
+                : AppTheme.borderColor(context),
           ),
         ),
         child: Row(
@@ -779,13 +780,13 @@ class _DateSelectorState extends State<_DateSelector> {
             Icon(
               Icons.calendar_month_rounded, 
               size: 14, 
-              color: isCustom ? AppTheme.primaryLight : AppTheme.textSecondary,
+              color: isCustom ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                color: isCustom ? Colors.white : AppTheme.textSecondary,
+                color: isCustom ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
                 fontSize: 12,
                 fontWeight: isCustom ? FontWeight.bold : FontWeight.normal,
               ),

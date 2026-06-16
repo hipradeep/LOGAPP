@@ -93,13 +93,13 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
+        backgroundColor: AppTheme.surface(context),
         title: const Text('Delete Budget Category'),
         content: Text('Are you sure you want to delete "${widget.budget.category}"? This will delete all logged expenses under it.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondaryColor(context))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -119,6 +119,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     
     return StreamBuilder<List<Budget>>(
@@ -145,10 +146,10 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
 
             return Container(
               decoration: BoxDecoration(
-                color: AppTheme.surfaceColor,
+                color: AppTheme.surface(context),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: AppTheme.borderColor(context),
                   width: 1.0,
                 ),
               ),
@@ -170,7 +171,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: AppTheme.borderColor(context),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -191,7 +192,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                               ),
                               Text(
                                 'Period: ${budget.period.toUpperCase()}',
-                                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                                style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 12),
                               ),
                             ],
                           ),
@@ -208,9 +209,9 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppTheme.backgroundColor.withValues(alpha: 0.4),
+                        color: AppTheme.background(context).withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(color: AppTheme.borderColor(context)),
                       ),
                       child: Column(
                         children: [
@@ -220,7 +221,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Spent this ${budget.period.replaceAll('ly', '')}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                                  Text('Spent this ${budget.period.replaceAll('ly', '')}', style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 12)),
                                   const SizedBox(height: 4),
                                   Text('₹${spent.toStringAsFixed(1)}', style: AppTheme.headingMedium.copyWith(color: statusColor)),
                                 ],
@@ -228,7 +229,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text('Limit', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                                  Text('Limit', style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 12)),
                                   const SizedBox(height: 4),
                                   Text('₹${budget.limit.toStringAsFixed(0)}', style: AppTheme.headingSmall),
                                 ],
@@ -240,7 +241,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
                               value: percent,
-                              backgroundColor: Colors.white.withValues(alpha: 0.05),
+                              backgroundColor: AppTheme.subtleFillColor(context),
                               valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                               minHeight: 8,
                             ),
@@ -254,12 +255,12 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                     ? 'Exceeded by ₹${(spent - budget.limit).toStringAsFixed(1)}'
                                     : '₹${(budget.limit - spent).toStringAsFixed(1)} remaining',
                                 style: TextStyle(
-                                  color: isOver ? AppTheme.errorColor : AppTheme.textSecondary, 
+                                  color: isOver ? AppTheme.errorColor : AppTheme.textSecondaryColor(context), 
                                   fontSize: 11,
                                   fontWeight: isOver ? FontWeight.bold : FontWeight.normal,
                                 ),
                               ),
-                              Text('${(percent * 100).toInt()}% used', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                              Text('${(percent * 100).toInt()}% used', style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 11)),
                             ],
                           ),
                         ],
@@ -290,14 +291,14 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: AppTheme.surfaceColor,
+                              color: AppTheme.surface(context),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                              border: Border.all(color: AppTheme.borderColor(context)),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 value: _selectedPeriod,
-                                dropdownColor: AppTheme.surfaceColor,
+                                dropdownColor: AppTheme.surface(context),
                                 items: ['daily', 'weekly', 'monthly'].map((p) {
                                   return DropdownMenuItem(
                                     value: p,
@@ -317,7 +318,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                         ),
                         const HGapSm(),
                         IconButton(
-                          icon: const Icon(Icons.check_circle_rounded, color: AppTheme.primaryLight, size: 32),
+                          icon: Icon(Icons.check_circle_rounded, color: AppTheme.primaryAccentColor(context), size: 32),
                           onPressed: _saveBudgetSettings,
                         ),
                       ],
@@ -330,9 +331,9 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppTheme.backgroundColor.withValues(alpha: 0.2),
+                        color: AppTheme.background(context).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(color: AppTheme.borderColor(context)),
                       ),
                       child: Column(
                         children: [
@@ -379,19 +380,19 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.surfaceColor,
+                                    color: AppTheme.surface(context),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                    border: Border.all(color: AppTheme.borderColor(context)),
                                   ),
                                   child: DropdownButtonHideUnderline(
                                     child: DropdownButton<String>(
                                       value: _selectedTag,
                                       isExpanded: true,
-                                      dropdownColor: AppTheme.surfaceColor,
+                                      dropdownColor: AppTheme.surface(context),
                                       items: ['Bill', 'Dinner', 'Drink', 'Fuel', 'Grocery', 'Health', 'Other', 'Shopping', 'Snack', 'Travel'].map((t) {
                                         return DropdownMenuItem(
                                           value: t,
-                                          child: Text(t, style: const TextStyle(fontSize: 13, color: Colors.white)),
+                                          child: Text(t, style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryColor(context))),
                                         );
                                       }).toList(),
                                       onChanged: (val) {
@@ -426,13 +427,13 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                     Text('Expense History', style: AppTheme.headingSmall),
                     const VGapSm(),
                     if (sortedExpenses.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Center(
                           child: Text(
                             'No expenses recorded yet.',
                             style: TextStyle(
-                              color: AppTheme.textSecondary,
+                              color: AppTheme.textSecondaryColor(context),
                               fontStyle: FontStyle.italic,
                             ),
                           ),
@@ -451,9 +452,9 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                             margin: const EdgeInsets.symmetric(vertical: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.02),
+                              color: AppTheme.subtleFillColor(context),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
+                              border: Border.all(color: AppTheme.borderColor(context)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -467,16 +468,16 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                           children: [
                                             TextSpan(
                                               text: expense.tag,
-                                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryLight),
+                                              style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryAccentColor(context)),
                                             ),
                                             if (expense.description.isNotEmpty) ...[
                                               TextSpan(
                                                 text: ' | ',
-                                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white38),
+                                                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textMutedColor(context)),
                                               ),
                                               TextSpan(
                                                 text: expense.description,
-                                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimaryColor(context)),
                                               ),
                                             ],
                                           ],
@@ -484,7 +485,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                       ),
                                       Text(
                                         formattedDate,
-                                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+                                        style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 10),
                                       ),
                                     ],
                                   ),
@@ -497,7 +498,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                 IconButton(
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
-                                  icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: 18),
+                                  icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 18),
                                   onPressed: () {
                                     _budgetService.deleteTransaction(expense.id);
                                   },

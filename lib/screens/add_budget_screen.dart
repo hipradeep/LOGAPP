@@ -206,10 +206,10 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.4),
+        color: AppTheme.surface(context).withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -219,7 +219,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
           Text(
             title.toUpperCase(),
             style: AppTheme.bodySmall.copyWith(
-              color: AppTheme.primaryLight,
+              color: AppTheme.primaryAccentColor(context),
               fontWeight: FontWeight.bold,
               letterSpacing: 1.0,
             ),
@@ -266,12 +266,12 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
           decoration: BoxDecoration(
             color: isSelected
                 ? AppTheme.primaryColor.withValues(alpha: 0.12)
-                : AppTheme.surfaceColor.withValues(alpha: 0.2),
+                : AppTheme.surface(context).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
                   ? AppTheme.primaryColor.withValues(alpha: 0.6)
-                  : Colors.white.withValues(alpha: 0.04),
+                  : AppTheme.borderColor(context),
               width: 1.5,
             ),
           ),
@@ -280,13 +280,17 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
               Icon(
                 icon,
                 size: 20,
-                color: isSelected ? AppTheme.primaryLight : AppTheme.textSecondary,
+                color: isSelected
+                    ? AppTheme.primaryAccentColor(context)
+                    : AppTheme.textSecondaryColor(context),
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  color: isSelected
+                      ? AppTheme.textPrimaryColor(context)
+                      : AppTheme.textSecondaryColor(context),
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 13,
                 ),
@@ -331,16 +335,20 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.date_range_rounded, color: AppTheme.primaryLight, size: 20),
+            Icon(
+              Icons.date_range_rounded,
+              color: AppTheme.primaryAccentColor(context),
+              size: 20,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'CURRENT CYCLE RANGE',
                     style: TextStyle(
-                      color: AppTheme.primaryLight,
+                      color: AppTheme.primaryAccentColor(context),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
@@ -349,8 +357,8 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                   const SizedBox(height: 2),
                   Text(
                     rangeText,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppTheme.textPrimaryColor(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -396,13 +404,17 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: AppTheme.subtleFillColor(context),
                   shape: BoxShape.circle,
                 ),
                 child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: AppTheme.textPrimaryColor(context),
+                    size: 20,
+                  ),
                   padding: EdgeInsets.zero,
-                  color: AppTheme.surfaceColor,
+                  color: AppTheme.surface(context),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                   ),
@@ -422,13 +434,15 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                           children: [
                             Icon(
                               isCompleted ? Icons.play_circle_outline_rounded : Icons.check_circle_outline_rounded,
-                              color: AppTheme.primaryLight,
+                              color: AppTheme.primaryAccentColor(context),
                               size: 20,
                             ),
                             const SizedBox(width: 12),
                             Text(
                               isCompleted ? 'Mark Active' : 'Mark Complete',
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(
+                                color: AppTheme.textPrimaryColor(context),
+                              ),
                             ),
                           ],
                         ),
@@ -466,7 +480,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                   controller: _categoryController,
                   readOnly: isEditing,
                   style: GoogleFonts.outfit(
-                    color: isEditing ? Colors.white54 : Colors.white,
+                    color: AppTheme.categoryTextColor(context, isEditing: isEditing),
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
                   ),
@@ -516,7 +530,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                   controller: _limitController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: GoogleFonts.outfit(
-                    color: Colors.white,
+                    color: AppTheme.textPrimaryColor(context),
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
                   ),
@@ -576,8 +590,20 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                   children: [
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Repeat Budget Cycle', style: TextStyle(fontSize: 14, color: Colors.white)),
-                      subtitle: const Text('Automatically reset and repeat this budget.', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                      title: Text(
+                        'Repeat Budget Cycle',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.textPrimaryColor(context),
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Automatically reset and repeat this budget.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textSecondaryColor(context),
+                        ),
+                      ),
                       value: _repeat,
                       activeThumbColor: AppTheme.primaryColor,
                       onChanged: (val) {
@@ -588,9 +614,12 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     ),
                     if (_repeat) ...[
                       const VGapSm(),
-                      const Text(
+                      Text(
                         'Track expenses logged on these weekdays:',
-                        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondaryColor(context),
+                        ),
                       ),
                       const VGapSm(),
                       Row(
@@ -620,11 +649,11 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                                 shape: BoxShape.circle,
                                 color: isSelected
                                     ? AppTheme.primaryColor.withValues(alpha: 0.2)
-                                    : AppTheme.surfaceColor.withValues(alpha: 0.3),
+                                    : AppTheme.surface(context).withValues(alpha: 0.3),
                                 border: Border.all(
                                   color: isSelected
                                       ? AppTheme.primaryColor.withValues(alpha: 0.7)
-                                      : Colors.white.withValues(alpha: 0.08),
+                                      : AppTheme.borderColor(context),
                                   width: 1.2,
                                 ),
                                 boxShadow: isSelected
@@ -641,7 +670,9 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                                 child: Text(
                                   dayLabels[index],
                                   style: TextStyle(
-                                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppTheme.textSecondaryColor(context),
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                     fontSize: 12,
                                   ),
@@ -661,33 +692,46 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor.withValues(alpha: 0.2),
+                        color: AppTheme.surface(context).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: AppTheme.borderColor(context),
                           width: 1,
                         ),
                       ),
                       child: ListTile(
-                        leading: const Icon(Icons.alarm_rounded, color: AppTheme.primaryLight, size: 22),
+                        leading: Icon(
+                          Icons.alarm_rounded,
+                          color: AppTheme.primaryAccentColor(context),
+                          size: 22,
+                        ),
                         title: Text(
                           _scheduledTime != null
                               ? 'Remind At: ${_formatTimeForDisplay(_scheduledTime!)}'
                               : 'Set Reminder Time',
                           style: TextStyle(
                             fontSize: 14,
-                            color: _scheduledTime != null ? Colors.white : AppTheme.textSecondary,
+                            color: _scheduledTime != null
+                                ? AppTheme.textPrimaryColor(context)
+                                : AppTheme.textSecondaryColor(context),
                             fontWeight: _scheduledTime != null ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                         trailing: _scheduledTime != null
                             ? IconButton(
-                                icon: const Icon(Icons.close_rounded, size: 18, color: AppTheme.textSecondary),
+                                icon: Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: AppTheme.textSecondaryColor(context),
+                                ),
                                 onPressed: () {
                                   setState(() => _scheduledTime = null);
                                 },
                               )
-                            : const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+                            : Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppTheme.textSecondaryColor(context),
+                              ),
                         onTap: () async {
                           final picked = await showTimePicker(
                             context: context,

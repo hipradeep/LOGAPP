@@ -19,6 +19,9 @@ class GlassModalSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Register dependency for dynamic theme switching
+    Theme.of(context);
+
     Widget content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -30,7 +33,7 @@ class GlassModalSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: AppTheme.borderColor(context),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -56,7 +59,7 @@ class GlassModalSheet extends StatelessWidget {
                       Text(
                         subtitle!,
                         style: AppTheme.bodyMedium.copyWith(
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryColor(context),
                           fontSize: 13,
                         ),
                       ),
@@ -67,19 +70,23 @@ class GlassModalSheet extends StatelessWidget {
               const HGapMd(),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: AppTheme.borderColor(context),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: Theme.of(context).iconTheme.color,
+                    size: 20,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         const VGapLg(),
-        const Divider(color: Colors.white10, height: 1, indent: 24, endIndent: 24),
+        Divider(color: AppTheme.borderColor(context), height: 1, indent: 24, endIndent: 24),
         const VGapMd(),
         if (isScrollable)
           Flexible(
@@ -109,12 +116,12 @@ class GlassModalSheet extends StatelessWidget {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.backgroundColor.withValues(alpha: 0.95),
+          color: AppTheme.background(context).withValues(alpha: 0.95),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+          border: Border.all(color: AppTheme.borderColor(context), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
+              color: AppTheme.shadowColor(context),
               blurRadius: 40,
               offset: const Offset(0, -10),
             ),

@@ -31,6 +31,7 @@ class AppTitleInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final trailingWidget = trailing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -40,12 +41,13 @@ class AppTitleInput extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.0,
               ),
             ),
-            ?trailing,
+            // ignore: use_null_aware_elements
+            if (trailingWidget != null) trailingWidget,
           ],
         ),
         const VGapSm(),
@@ -54,7 +56,7 @@ class AppTitleInput extends StatelessWidget {
           focusNode: focusNode,
           autofocus: false,
           style: GoogleFonts.outfit(
-            color: Colors.white,
+            color: AppTheme.textPrimaryColor(context),
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -71,18 +73,24 @@ class AppTitleInput extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: GoogleFonts.outfit(
-              color: AppTheme.textSecondary.withValues(alpha: 0.5),
+              color: AppTheme.hintColor(context),
               fontSize: 20,
               fontWeight: FontWeight.w500,
             ),
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             filled: false,
             fillColor: Colors.transparent,
-            border: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white10, width: 1.5),
+            border: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: AppTheme.inputBorderColor(context),
+                width: 1.5,
+              ),
             ),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white10, width: 1.5),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: AppTheme.inputBorderColor(context),
+                width: 1.5,
+              ),
             ),
             focusedBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
@@ -91,7 +99,7 @@ class AppTitleInput extends StatelessWidget {
               padding: const EdgeInsets.only(right: 12),
               child: Icon(
                 icon,
-                color: AppTheme.primaryLight,
+                color: AppTheme.primaryAccentColor(context),
                 size: 28,
               ),
             ),

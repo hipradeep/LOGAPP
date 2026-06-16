@@ -26,9 +26,9 @@ class SessionDetailCard extends StatelessWidget {
       child: Container(
         padding: AppTheme.defaultCardPadding,
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
+          color: AppTheme.surface(context),
           borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: AppTheme.borderColor(context)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.1),

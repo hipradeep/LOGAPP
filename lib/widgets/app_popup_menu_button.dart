@@ -17,9 +17,13 @@ class AppPopupMenuButton extends StatelessWidget {
     return Transform.translate(
       offset: const Offset(16, 0),
       child: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+        icon: Icon(
+          Icons.more_vert,
+          color: AppTheme.textPrimaryColor(context),
+          size: 20,
+        ),
         padding: EdgeInsets.zero,
-        color: AppTheme.surfaceColor,
+        color: AppTheme.surface(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
         ),

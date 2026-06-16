@@ -14,7 +14,7 @@ class ManageQuickActionsScreen extends StatefulWidget {
 
 class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
   final CacheService _cacheService = CacheService();
-  final List<String> _allActions = ['Focus 25m', 'Log Food', 'Water 250ml', 'New note'];
+  final List<String> _allActions = ['Focus 25m', 'Water 250ml', 'New note'];
   List<String> _enabledActions = [];
   bool _isLoading = true;
 
@@ -49,6 +49,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     return FullScreenPage(
       showScaffold: true,
       isScrollable: true,
@@ -80,14 +81,15 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
               Text(
                 'Configure dashboard shortcuts'.toUpperCase(),
                 style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.textSecondaryColor(context),
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.0,
                 ),
               ),
               const VGapSm(),
-              const Text(
+              Text(
                 'Enable or disable shortcut actions appearing at the top of your dashboard screen.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
+                style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 13, height: 1.4),
               ),
             ],
           ),
@@ -104,10 +106,10 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                 )
               : Container(
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor.withValues(alpha: 0.45),
+                    color: AppTheme.surface(context).withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.05),
+                      color: AppTheme.borderColor(context),
                       width: 1,
                     ),
                   ),
@@ -122,10 +124,6 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                         emoji = '🎯';
                         description = 'Focus session timer';
                         accentColor = AppTheme.primaryColor;
-                      } else if (action == 'Log Food') {
-                        emoji = '🍎';
-                        description = 'Calorie tracking log';
-                        accentColor = AppTheme.successColor;
                       } else if (action == 'Water 250ml') {
                         emoji = '💧';
                         description = 'Hydration counter';
@@ -133,7 +131,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                       } else {
                         emoji = '📝';
                         description = 'note entry text log';
-                        accentColor = AppTheme.primaryLight;
+                        accentColor = AppTheme.primaryAccentColor(context);
                       }
 
                       return Column(
@@ -166,7 +164,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                                       const VGapXs(),
                                       Text(
                                         description,
-                                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary, fontSize: 11),
+                                        style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondaryColor(context), fontSize: 11),
                                       ),
                                     ],
                                   ),
@@ -175,8 +173,8 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                                   value: isEnabled,
                                   activeThumbColor: accentColor,
                                   activeTrackColor: accentColor.withValues(alpha: 0.4),
-                                  inactiveThumbColor: AppTheme.textSecondary,
-                                  inactiveTrackColor: Colors.white12,
+                                  inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+                                  inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
                                   onChanged: (val) {
                                     if (!val && _enabledActions.length <= 1) {
                                       ScaffoldMessenger.of(context).clearSnackBars();
@@ -198,7 +196,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                             Divider(
                               height: 1,
                               thickness: 1,
-                              color: Colors.white.withValues(alpha: 0.05),
+                              color: AppTheme.borderColor(context),
                               indent: 16,
                               endIndent: 16,
                             ),
