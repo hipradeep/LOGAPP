@@ -5,14 +5,15 @@ import 'app_spacers.dart';
 
 class NoteOptionsSheet extends StatelessWidget {
   final NoteEntity entry;
-  final VoidCallback onEdit;
   final VoidCallback onDelete;
+  /// If provided, shows a Pin/Unpin option in the sheet.
+  final VoidCallback? onPinToggle;
 
   const NoteOptionsSheet({
     super.key,
     required this.entry,
-    required this.onEdit,
     required this.onDelete,
+    this.onPinToggle,
   });
 
   @override
@@ -64,14 +65,22 @@ class NoteOptionsSheet extends StatelessWidget {
                 ),
               ),
             Divider(color: AppTheme.borderColor(context)),
-            ListTile(
-              leading: Icon(Icons.edit_rounded, color: AppTheme.primaryAccentColor(context)),
-              title: Text('Edit Entry', style: AppTheme.bodyLarge),
-              onTap: () {
-                Navigator.pop(context);
-                onEdit();
-              },
-            ),
+
+            if (onPinToggle != null)
+              ListTile(
+                leading: Icon(
+                  entry.isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                  color: AppTheme.primaryAccentColor(context),
+                ),
+                title: Text(
+                  entry.isPinned ? 'Unpin Entry' : 'Pin Entry',
+                  style: AppTheme.bodyLarge,
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  onPinToggle!();
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.delete_forever_rounded, color: AppTheme.errorColor),
               title: Text('Delete Entry', style: AppTheme.bodyLarge.copyWith(color: AppTheme.errorColor)),

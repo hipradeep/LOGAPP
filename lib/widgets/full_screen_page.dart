@@ -32,6 +32,7 @@ class FullScreenPage extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? floatingActionButton;
   final Widget? leading;
+  final double? headerSpacing;
 
   const FullScreenPage({
     super.key,
@@ -50,6 +51,7 @@ class FullScreenPage extends StatelessWidget {
     this.actions,
     this.floatingActionButton,
     this.leading,
+    this.headerSpacing,
   });
 
   MainAxisAlignment _getMainAxisAlignment() {
@@ -110,19 +112,15 @@ class FullScreenPage extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    if (title == null && !showBackButton && leading == null && (actions == null || actions!.isEmpty)) return const SizedBox.shrink();
+    final hasDrawer = Scaffold.maybeOf(context)?.hasDrawer ?? false;
+    if (title == null && !showBackButton && leading == null && !hasDrawer && (actions == null || actions!.isEmpty)) return const SizedBox.shrink();
 
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            AppTheme.defaultScreenPadding.left,
-            12,
-            AppTheme.defaultScreenPadding.right,
-            12,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.transparent,
             border: Border(
@@ -139,43 +137,47 @@ class FullScreenPage extends StatelessWidget {
                 if (leading != null)
                   leading!
                 else if (showBackButton)
-                  Transform.translate(
-                    offset: const Offset(-8, 0),
-                    child: GestureDetector(
-                      onTap: onBackPress ?? () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.borderColor(context),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Theme.of(context).iconTheme.color,
-                          size: 16,
-                        ),
+                  GestureDetector(
+                    onTap: onBackPress ?? () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.borderColor(context),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Theme.of(context).iconTheme.color,
+                        size: 16,
+                      ),
+                    ),
+                  )
+                else if (hasDrawer)
+                  GestureDetector(
+                    onTap: () => Scaffold.of(context).openDrawer(),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      color: Colors.transparent,
+                      child: Icon(
+                        Icons.menu_rounded,
+                        color: Theme.of(context).iconTheme.color,
+                        size: 24,
                       ),
                     ),
                   ),
-                if ((leading != null || showBackButton) && title != null) const HGapMd(),
+                if ((leading != null || showBackButton || hasDrawer) && title != null) const HGapMd(),
                 if (title != null)
                   Expanded(
-                    child: Transform.translate(
-                      offset: const Offset(-8, 0),
-                      child: Text(
-                        title!,
-                        style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    child: Text(
+                      title!,
+                      style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 if (actions != null)
-                  Transform.translate(
-                    offset: const Offset(16, 0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: actions!,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: actions!,
                   ),
               ],
             ),
@@ -190,8 +192,11 @@ class FullScreenPage extends StatelessWidget {
     final mainAxis = _getMainAxisAlignment();
     final crossAxis = _getCrossAxisAlignment();
     
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
-    final double headerPadding = (title != null || showBackButton || leading != null) ? (statusBarHeight + 72.0) : 0.0;
+    final hasDrawer = Scaffold.maybeOf(context)?.hasDrawer ?? false;
+    final double statusBarHeight = MediaQuery.paddingOf(context).top;
+    final double headerPadding = (title != null || showBackButton || leading != null || hasDrawer)
+        ? (statusBarHeight + (headerSpacing ?? 72.0))
+        : 0.0;
 
     Widget content;
     if (isScrollable) {
@@ -242,7 +247,7 @@ class FullScreenPage extends StatelessWidget {
       );
     }
 
-    if (useSafeArea && !((title != null || showBackButton))) {
+    if (useSafeArea && !((title != null || showBackButton || leading != null || hasDrawer))) {
       content = SafeArea(child: content);
     }
 
@@ -258,12 +263,14 @@ class FullScreenPage extends StatelessWidget {
         children: [
           if (backgroundWidgets != null) ...backgroundWidgets!,
           content,
-          if (title != null || showBackButton)
+          if (title != null || showBackButton || leading != null || hasDrawer)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: _buildHeader(context),
+              child: RepaintBoundary(
+                child: _buildHeader(context),
+              ),
             ),
         ],
       ),

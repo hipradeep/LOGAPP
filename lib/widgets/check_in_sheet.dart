@@ -231,7 +231,7 @@ class _CheckInSheetState extends State<CheckInSheet> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(20),
-                              borderSide: const BorderSide(color: AppTheme.primaryColor),
+                              borderSide: BorderSide(color: AppTheme.primaryColor),
                             ),
                             contentPadding: const EdgeInsets.all(20),
                           ),

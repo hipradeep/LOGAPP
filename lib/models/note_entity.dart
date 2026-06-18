@@ -7,6 +7,7 @@ class NoteEntity {
   final DateTime timestamp;
   final String mood;
   final List<String> tags;
+  final bool isPinned;
 
   NoteEntity({
     required this.id,
@@ -15,6 +16,7 @@ class NoteEntity {
     required this.timestamp,
     required this.mood,
     required this.tags,
+    this.isPinned = false,
   });
 
   // Convert to Firestore Map
@@ -25,6 +27,7 @@ class NoteEntity {
       'timestamp': Timestamp.fromDate(timestamp),
       'mood': mood,
       'tags': tags,
+      'isPinned': isPinned,
     };
   }
 
@@ -51,6 +54,7 @@ class NoteEntity {
       timestamp: dateTime,
       mood: data['mood'] as String? ?? '😊',
       tags: tagsList,
+      isPinned: data['isPinned'] as bool? ?? false,
     );
   }
 
@@ -62,6 +66,7 @@ class NoteEntity {
     DateTime? timestamp,
     String? mood,
     List<String>? tags,
+    bool? isPinned,
   }) {
     return NoteEntity(
       id: id ?? this.id,
@@ -70,6 +75,7 @@ class NoteEntity {
       timestamp: timestamp ?? this.timestamp,
       mood: mood ?? this.mood,
       tags: tags ?? this.tags,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

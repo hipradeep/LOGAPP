@@ -251,7 +251,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    final isKeyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     if (_wasKeyboardVisible && !isKeyboardVisible && _focusNode.hasFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -262,7 +262,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
     _wasKeyboardVisible = isKeyboardVisible;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: DraggableScrollableSheet(
         controller: _sheetController,
         initialChildSize: 0.65,
@@ -394,7 +394,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(color: AppTheme.primaryColor),
+                                borderSide: BorderSide(color: AppTheme.primaryColor),
                               ),
                             ),
                             textInputAction: TextInputAction.done,
@@ -466,12 +466,12 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
                                 );
                               }
                               if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(16.0),
-                                    child: CircularProgressIndicator(color: AppTheme.primaryColor),
-                                  ),
-                                );
+                                  return Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(16.0),
+                                      child: CircularProgressIndicator(color: AppTheme.primaryColor),
+                                    ),
+                                  );
                               }
                               final allTasks = snapshot.data ?? [];
                               final filteredTasks = allTasks

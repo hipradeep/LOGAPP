@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import 'add_activity_screen.dart';
 import 'activity_details_screen.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
-import '../services/activity_service.dart';
-import '../services/check_in_service.dart';
+import '../controllers/track_activities_controller.dart';
+import '../widgets/app_provider.dart';
 
 class TrackActivitiesScreen extends StatefulWidget {
   const TrackActivitiesScreen({super.key});
@@ -19,119 +18,89 @@ class TrackActivitiesScreen extends StatefulWidget {
 }
 
 class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
-  final ActivityService _activityService = ActivityService();
-  final CheckInService _checkInService = CheckInService();
+  late final TrackActivitiesController _controller;
   
-  static const _dayLabelsShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
   @override
   void initState() {
     super.initState();
+    _controller = TrackActivitiesController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FullScreenPage(
-      showScaffold: true,
-      isScrollable: true,
-      title: 'Track Activities',
-      showBackButton: true,
-      padding: EdgeInsets.zero,
-      actions: [
-        GestureDetector(
-          onTap: _navigateToAddActivity,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppTheme.borderColor(context),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.add,
-              color: AppTheme.textPrimaryColor(context),
-              size: 20,
-            ),
-          ),
-        ),
-      ],
-      backgroundWidgets: const [
-        GlowBlob(
-          top: -40,
-          left: -40,
-          size: 240,
-          color: AppTheme.primaryColor,
-          opacity: 0.1,
-        ),
-        GlowBlob(
-          bottom: -50,
-          right: -50,
-          size: 280,
-          color: AppTheme.secondaryColor,
-          opacity: 0.05,
-        ),
-      ],
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  'Select activities to show on homepage'.toUpperCase(),
-                  style: AppTheme.bodySmall.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
+    return AppProvider<TrackActivitiesController>(
+      notifier: _controller,
+      child: Builder(
+        builder: (context) {
+          final controller = AppProvider.watch<TrackActivitiesController>(context);
+          return FullScreenPage(
+            showScaffold: true,
+            isScrollable: true,
+            title: 'Track Activities',
+            showBackButton: true,
+            padding: EdgeInsets.zero,
+            actions: [
+              GestureDetector(
+                onTap: _navigateToAddActivity,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.borderColor(context),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.add,
+                    color: AppTheme.textPrimaryColor(context),
+                    size: 20,
                   ),
                 ),
               ),
             ],
-          ),
-        ),
-        const VGapMd(),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _buildFirestoreList(),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildFirestoreList() {
-    return StreamBuilder<List<Activity>>(
-      stream: _activityService.getActivitiesStream(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Center(
-            child: Text('Error loading activities', style: TextStyle(color: AppTheme.errorColor)),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Select activities to show on homepage'.toUpperCase(),
+                        style: AppTheme.bodySmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const VGapMd(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: controller.isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+                      )
+                    : (controller.errorMessage != null
+                        ? Center(
+                            child: Text(
+                              controller.errorMessage!,
+                              style: TextStyle(color: AppTheme.errorColor),
+                            ),
+                          )
+                        : _buildList(controller.activities, controller.checkIns, controller.tasks)),
+              ),
+            ],
           );
         }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppTheme.primaryColor),
-          );
-        }
-
-        final activities = snapshot.data ?? [];
-        if (activities.isEmpty) {
-          return _buildEmptyState();
-        }
-
-        return StreamBuilder<List<CheckIn>>(
-          stream: _checkInService.getActiveActivitiesCheckInsStream(),
-          builder: (context, checkinSnapshot) {
-            final checkIns = checkinSnapshot.data ?? [];
-            return StreamBuilder<List<Task>>(
-              stream: _activityService.getTasksStream(),
-              builder: (context, tasksSnapshot) {
-                final tasks = tasksSnapshot.data ?? [];
-                return _buildList(activities, checkIns, tasks);
-              },
-            );
-          },
-        );
-      },
+      ),
     );
   }
 
@@ -234,19 +203,45 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         if (active.isNotEmpty) ...[
           _buildSectionHeader('Active Activities (${active.length})', AppTheme.primaryColor),
           const VGapSm(),
-          ...active.map((a) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildActivityCard(a),
-          )),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: active.length,
+            itemBuilder: (context, index) {
+              final a = active[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ActivityCard(
+                  key: ValueKey(a.id),
+                  activity: a,
+                  onTap: () => _navigateToActivityDetails(a),
+                ),
+              );
+            },
+          ),
           const VGapMd(),
         ],
         if (inactive.isNotEmpty) ...[
           _buildSectionHeader('Inactive Activities (${inactive.length})', AppTheme.successColor),
           const VGapSm(),
-          ...inactive.map((a) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildActivityCard(a),
-          )),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: inactive.length,
+            itemBuilder: (context, index) {
+              final a = inactive[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ActivityCard(
+                  key: ValueKey(a.id),
+                  activity: a,
+                  onTap: () => _navigateToActivityDetails(a),
+                ),
+              );
+            },
+          ),
           const VGapMd(),
         ],
         const VGapXxl(),
@@ -283,6 +278,120 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.playlist_add,
+            size: 64,
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+          ),
+          const VGapMd(),
+          Text(
+            'No Activities Tracked',
+            style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const VGapSm(),
+          Text(
+            'Tap the (+) button to create an activity checklist item.',
+            textAlign: TextAlign.center,
+            style: AppTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToAddActivity() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddActivityScreen(
+          onAdd: (name, trackingType, targetCount, {
+            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+            String? scheduledTime,
+            DateTime? startDate,
+            DateTime? endDate,
+            List<String> subTaskTemplates = const [],
+            String? description,
+            bool skippable = false,
+            bool reminderEnabled = true,
+          }) {
+            _addActivity(
+              name, trackingType, targetCount,
+              repeatDays: repeatDays,
+              scheduledTime: scheduledTime,
+              startDate: startDate,
+              endDate: endDate,
+              subTaskTemplates: subTaskTemplates,
+              description: description,
+              skippable: skippable,
+              reminderEnabled: reminderEnabled,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _navigateToActivityDetails(Activity activity) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActivityDetailsScreen(
+          activityId: activity.id,
+        ),
+      ),
+    );
+  }
+
+  void _addActivity(
+    String name, String trackingType, int targetCount, {
+    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+    String? scheduledTime,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String> subTaskTemplates = const [],
+    String? description,
+    bool skippable = false,
+    bool reminderEnabled = true,
+  }) async {
+    try {
+      await _controller.createActivity(
+        name, trackingType, targetCount,
+        repeatDays: repeatDays,
+        scheduledTime: scheduledTime,
+        startDate: startDate,
+        endDate: endDate,
+        subTaskTemplates: subTaskTemplates,
+        description: description,
+        skippable: skippable,
+        reminderEnabled: reminderEnabled,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add activity: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    }
+  }
+}
+
+class ActivityCard extends StatelessWidget {
+  final Activity activity;
+  final VoidCallback onTap;
+
+  const ActivityCard({
+    super.key,
+    required this.activity,
+    required this.onTap,
+  });
+
+  static const _dayLabelsShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
   String _getRepeatDaysLabel(List<int> days) {
     if (days.length == 7) return 'Every day';
     if (days.length == 5 && !days.contains(6) && !days.contains(7)) return 'Weekdays';
@@ -313,7 +422,68 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     }
   }
 
-  Widget _buildActivityCard(Activity activity) {
+  Widget _buildMetaChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color.withValues(alpha: 0.7)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.8),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityProgressIcon(Activity activity) {
+    final isActive = activity.isActive;
+    final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
+    
+    IconData typeIcon;
+    switch (activity.trackingType) {
+      case 'multiple':
+        typeIcon = Icons.repeat_rounded;
+        break;
+      case 'milestone':
+        typeIcon = Icons.flag_rounded;
+        break;
+      case 'single':
+      default:
+        typeIcon = Icons.bolt_rounded;
+        break;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: accentColor,
+        border: Border.all(color: accentColor, width: 2),
+      ),
+      child: Icon(typeIcon, size: 14, color: Colors.white),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isActive = activity.isActive;
     final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
     final typeBadge = _getTypeBadge(activity.trackingType);
@@ -339,7 +509,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     }
 
     return GestureDetector(
-      onTap: () => _navigateToActivityDetails(activity),
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -450,174 +620,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                   ],
                 ),
               ),
-
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildMetaChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color.withValues(alpha: 0.7)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color.withValues(alpha: 0.8),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActivityProgressIcon(Activity activity) {
-    final isActive = activity.isActive;
-    final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
-    
-    IconData typeIcon;
-    switch (activity.trackingType) {
-      case 'multiple':
-        typeIcon = Icons.repeat_rounded;
-        break;
-      case 'milestone':
-        typeIcon = Icons.flag_rounded;
-        break;
-      case 'single':
-      default:
-        typeIcon = Icons.bolt_rounded;
-        break;
-    }
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: accentColor,
-        border: Border.all(color: accentColor, width: 2),
-      ),
-      child: Icon(typeIcon, size: 14, color: Colors.white),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.playlist_add,
-            size: 64,
-            color: AppTheme.primaryColor.withValues(alpha: 0.3),
-          ),
-          const VGapMd(),
-          Text(
-            'No Activities Tracked',
-            style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const VGapSm(),
-          Text(
-            'Tap the (+) button to create an activity checklist item.',
-            textAlign: TextAlign.center,
-            style: AppTheme.bodyMedium,
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _navigateToAddActivity() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddActivityScreen(
-          onAdd: (name, trackingType, targetCount, {
-            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
-            String? scheduledTime,
-            DateTime? startDate,
-            DateTime? endDate,
-            List<String> subTaskTemplates = const [],
-            String? description,
-            bool skippable = false,
-            bool reminderEnabled = true,
-          }) {
-            _addActivity(
-              name, trackingType, targetCount,
-              repeatDays: repeatDays,
-              scheduledTime: scheduledTime,
-              startDate: startDate,
-              endDate: endDate,
-              subTaskTemplates: subTaskTemplates,
-              description: description,
-              skippable: skippable,
-              reminderEnabled: reminderEnabled,
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  void _navigateToActivityDetails(Activity activity) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ActivityDetailsScreen(
-          activityId: activity.id,
-        ),
-      ),
-    );
-  }
-
-  void _addActivity(
-    String name, String trackingType, int targetCount, {
-    List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
-    String? scheduledTime,
-    DateTime? startDate,
-    DateTime? endDate,
-    List<String> subTaskTemplates = const [],
-    String? description,
-    bool skippable = false,
-    bool reminderEnabled = true,
-  }) async {
-    try {
-      await _activityService.createActivity(
-        name,
-        trackingType: trackingType,
-        targetCount: targetCount,
-        repeatDays: repeatDays,
-        scheduledTime: scheduledTime,
-        startDate: startDate,
-        endDate: endDate,
-        subTaskTemplates: subTaskTemplates,
-        description: description ?? '',
-        skippable: skippable,
-        reminderEnabled: reminderEnabled,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add activity: $e'), backgroundColor: AppTheme.errorColor),
-        );
-      }
-    }
   }
 }

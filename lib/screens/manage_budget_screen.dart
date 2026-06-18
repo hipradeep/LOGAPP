@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_popup_menu_button.dart';
 import '../models/budget.dart';
@@ -89,10 +88,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
           itemBuilder: _buildMenuItems,
         ),
       ],
-      backgroundWidgets: const [
-        GlowBlob(top: -40, left: -40, size: 240, color: AppTheme.primaryColor, opacity: 0.1),
-        GlowBlob(bottom: -50, right: -50, size: 280, color: AppTheme.secondaryColor, opacity: 0.05),
-      ],
+
       children: [
         const VGapMd(),
         _buildSectionLabel(),
@@ -152,7 +148,7 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
         listenable: _controller,
         builder: (context, _) {
           if (_controller.isLoading) {
-            return const Center(
+            return Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: CircularProgressIndicator(color: AppTheme.primaryColor),
@@ -173,8 +169,8 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
       return _buildEmptyState();
     }
 
-    final active = budgets.where((b) => b.checked).toList();
-    final completed = budgets.where((b) => !b.checked).toList();
+    final active = budgets.where((b) => b.isActive).toList();
+    final completed = budgets.where((b) => !b.isActive).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +283,7 @@ class _BudgetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = budget.checked;
+    final isActive = budget.isActive;
     final isOver = budget.isOverBudget(transactions);
     final spent = budget.spentForCurrentPeriod(transactions);
     final percent = budget.limit > 0 ? (spent / budget.limit).clamp(0.0, 1.0) : 0.0;
@@ -402,7 +398,7 @@ class _BudgetCard extends StatelessWidget {
         const HGapMd(),
         Expanded(
           child: Text(
-            budget.category,
+            '${budget.name} (${budget.categoryName})',
             style: AppTheme.bodyLarge.copyWith(
               color: isActive
                   ? AppTheme.textPrimaryColor(context)
@@ -460,12 +456,6 @@ class _BudgetCard extends StatelessWidget {
             label: _formatScheduledTime(budget.scheduledTime!),
             color: AppTheme.primaryLight,
           ),
-        if (budget.repeatDays.isNotEmpty && budget.repeatDays.length < 7)
-          _buildMetaChip(
-            icon: Icons.calendar_view_week_rounded,
-            label: _getRepeatDaysLabel(budget.repeatDays),
-            color: AppTheme.textSecondary,
-          ),
         if (budget.startDate != null && budget.endDate != null)
           _buildMetaChip(
             icon: Icons.date_range_rounded,
@@ -505,6 +495,7 @@ class _BudgetCard extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element — kept for future use when repeatDays chip is re-enabled
   String _getRepeatDaysLabel(List<int> days) {
     const dayLabelsShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     if (days.length == 7) return 'Every day';

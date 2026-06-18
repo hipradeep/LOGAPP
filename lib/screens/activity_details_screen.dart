@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_text_action_button.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
+import '../controllers/activity_details_controller.dart';
+import '../widgets/app_provider.dart';
 import '../services/activity_service.dart';
-import '../services/check_in_service.dart';
+import '../services/service_locator.dart';
 import '../widgets/activity_graph.dart';
 import 'add_activity_screen.dart';
 
@@ -29,19 +30,19 @@ class ActivityDetailsScreen extends StatefulWidget {
 }
 
 class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
-  final ActivityService _activityService = ActivityService();
-  final CheckInService _checkInService = CheckInService();
-
-  late Stream<Activity?> _activityStream;
-  late Stream<List<CheckIn>> _checkInsStream;
-  late Stream<List<Task>> _tasksStream;
+  final ActivityService _activityService = getIt<ActivityService>();
+  late final ActivityDetailsController _controller;
 
   @override
   void initState() {
     super.initState();
-    _activityStream = _activityService.getActivityStream(widget.activityId);
-    _checkInsStream = _checkInService.getCheckInsStreamForActivity(widget.activityId);
-    _tasksStream = _activityService.getTasksForActivityStream(widget.activityId);
+    _controller = ActivityDetailsController(activityId: widget.activityId);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   String _getRepeatDaysLabel(List<int> days) {
@@ -106,62 +107,53 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
-    return StreamBuilder<Activity?>(
-      stream: _activityStream,
-      builder: (context, activitySnapshot) {
-        if (activitySnapshot.hasError) {
-          return Scaffold(
-            body: Center(
-              child: Text(
-                'Error loading activity: ${activitySnapshot.error}',
-                style: const TextStyle(color: AppTheme.errorColor),
+    return AppProvider<ActivityDetailsController>(
+      notifier: _controller,
+      child: Builder(
+        builder: (context) {
+          final controller = AppProvider.watch<ActivityDetailsController>(context);
+          if (controller.isLoading) {
+            return Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(color: AppTheme.primaryColor),
               ),
-            ),
-          );
-        }
-        if (activitySnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: AppTheme.primaryColor),
-            ),
-          );
-        }
-        final activity = activitySnapshot.data;
-        if (activity == null) {
-          return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Activity not found',
-                    style: TextStyle(color: AppTheme.textPrimaryColor(context)),
-                  ),
-                  const VGapMd(),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Go Back'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return StreamBuilder<List<CheckIn>>(
-          stream: _checkInsStream,
-          builder: (context, checkInsSnapshot) {
-            final checkIns = checkInsSnapshot.data ?? [];
-            return StreamBuilder<List<Task>>(
-              stream: _tasksStream,
-              builder: (context, tasksSnapshot) {
-                final tasks = tasksSnapshot.data ?? [];
-                return _buildDetailsScreen(activity, checkIns, tasks);
-              },
             );
-          },
-        );
-      },
+          }
+          if (controller.errorMessage != null) {
+            return Scaffold(
+              body: Center(
+                child: Text(
+                  'Error loading activity: ${controller.errorMessage}',
+                  style: TextStyle(color: AppTheme.errorColor),
+                ),
+              ),
+            );
+          }
+          final activity = controller.activity;
+          if (activity == null) {
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Activity not found',
+                      style: TextStyle(color: AppTheme.textPrimaryColor(context)),
+                    ),
+                    const VGapMd(),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Go Back'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return _buildDetailsScreen(activity, controller.checkIns, controller.tasks);
+        },
+      ),
     );
   }
 
@@ -182,22 +174,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               ),
             ]
           : null,
-      backgroundWidgets: const [
-        GlowBlob(
-          top: -40,
-          left: -40,
-          size: 240,
-          color: AppTheme.primaryColor,
-          opacity: 0.1,
-        ),
-        GlowBlob(
-          bottom: -50,
-          right: -50,
-          size: 280,
-          color: AppTheme.secondaryColor,
-          opacity: 0.05,
-        ),
-      ],
+
       children: [
         // 1. Header Card (Name, Category, Description)
         Container(
@@ -434,7 +411,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.access_time_rounded,
                           size: 10,
                           color: AppTheme.primaryLight,
@@ -442,7 +419,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                         const SizedBox(width: 4),
                         Text(
                           formattedTime,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppTheme.primaryLight,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
@@ -544,7 +521,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.playlist_add_check_rounded,
                 color: AppTheme.primaryLight,
                 size: 16,
@@ -765,7 +742,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                     ),
                                     child: Text(
                                       cleanName,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         color: AppTheme.primaryLight,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w500,

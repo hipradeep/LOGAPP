@@ -7,6 +7,7 @@ import '../widgets/app_spacers.dart';
 import '../models/budget.dart';
 import '../services/budget_service.dart';
 import '../widgets/app_title_input.dart';
+import '../widgets/app_text_action_button.dart';
 
 class AddBudgetScreen extends StatefulWidget {
   final Budget? existingBudget;
@@ -21,10 +22,12 @@ class AddBudgetScreen extends StatefulWidget {
 }
 
 class _AddBudgetScreenState extends State<AddBudgetScreen> {
+  static final DateFormat _rangeFormatter = DateFormat('MMMM d, yyyy');
   final _formKey = GlobalKey<FormState>();
   final BudgetService _budgetService = BudgetService();
 
-  late TextEditingController _categoryController;
+  late TextEditingController _nameController;
+  late TextEditingController _categoryNameController;
   late TextEditingController _limitController;
   late TextEditingController _descriptionController;
 
@@ -33,14 +36,19 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   DateTime? _endDate;
   late bool _repeat;
   late List<int> _repeatDays;
-  TimeOfDay? _scheduledTime;
+  late TimeOfDay? _scheduledTime;
+  late double _alertThreshold;
 
   @override
   void initState() {
     super.initState();
 
     final budget = widget.existingBudget;
-    _categoryController = TextEditingController(text: budget?.category ?? '');
+    _nameController = TextEditingController(text: budget?.name ?? '');
+    _categoryNameController = TextEditingController(text: budget?.categoryName ?? '');
+    _categoryNameController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _limitController = TextEditingController(
       text: budget != null ? budget.limit.toStringAsFixed(0) : '',
     );
@@ -66,11 +74,13 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     } else {
       _scheduledTime = null;
     }
+    _alertThreshold = budget?.alertThreshold ?? 0.7;
   }
 
   @override
   void dispose() {
-    _categoryController.dispose();
+    _nameController.dispose();
+    _categoryNameController.dispose();
     _limitController.dispose();
     _descriptionController.dispose();
     super.dispose();
@@ -98,7 +108,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         backgroundColor: AppTheme.surfaceColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Budget Category'),
-        content: Text('Are you sure you want to delete "${widget.existingBudget!.category}"? This will delete all logged expenses under it.'),
+        content: Text('Are you sure you want to delete "${widget.existingBudget!.name}"? This will delete all logged expenses under it.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -128,14 +138,14 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
 
   void _toggleBudgetComplete() async {
     if (widget.existingBudget == null) return;
-    final newChecked = !widget.existingBudget!.checked;
+    final newActive = !widget.existingBudget!.isActive;
 
-    await _budgetService.toggleBudget(widget.existingBudget!.id, newChecked);
+    await _budgetService.toggleBudget(widget.existingBudget!.id, newActive);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(newChecked ? 'Budget marked as active.' : 'Budget completed/ended.'),
+          content: Text(newActive ? 'Budget marked as active.' : 'Budget completed/ended.'),
           backgroundColor: AppTheme.successColor,
         ),
       );
@@ -155,6 +165,8 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     if (isEditing) {
       await _budgetService.updateBudget(
         widget.existingBudget!.id,
+        name: _nameController.text.trim(),
+        categoryName: _categoryNameController.text.trim(),
         limit: limit,
         period: _selectedPeriod,
         description: _descriptionController.text.trim(),
@@ -163,6 +175,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         repeatDays: _repeatDays,
         scheduledTime: timeStr,
         repeat: _repeat,
+        alertThreshold: _alertThreshold,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,11 +187,13 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         Navigator.pop(context);
       }
     } else {
-      final category = _categoryController.text.trim();
-      if (category.isEmpty) return;
+      final name = _nameController.text.trim();
+      final categoryName = _categoryNameController.text.trim();
+      if (name.isEmpty || categoryName.isEmpty) return;
 
       await _budgetService.createBudget(
-        category,
+        name,
+        categoryName,
         limit,
         _selectedPeriod,
         description: _descriptionController.text.trim(),
@@ -187,6 +202,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         repeatDays: _repeatDays,
         scheduledTime: timeStr,
         repeat: _repeat,
+        alertThreshold: _alertThreshold,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -240,6 +256,42 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
           color: AppTheme.textSecondary,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickCategoryChip(String label) {
+    final isSelected = _categoryNameController.text.trim().toLowerCase() == label.toLowerCase();
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _categoryNameController.text = label;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryColor
+              : AppTheme.subtleFillColor(context),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primaryColor
+                : AppTheme.borderColor(context),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? AppTheme.selectedChipTextColor(context)
+                : AppTheme.textSecondaryColor(context),
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
       ),
     );
@@ -304,15 +356,14 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
 
   String _calculateDateRange(String period) {
     final now = DateTime.now();
-    final DateFormat formatter = DateFormat('MMMM d, yyyy');
     if (period == 'weekly') {
       final monday = now.subtract(Duration(days: now.weekday - 1));
       final sunday = monday.add(const Duration(days: 6));
-      return '${formatter.format(monday)} - ${formatter.format(sunday)}';
+      return '${_rangeFormatter.format(monday)} - ${_rangeFormatter.format(sunday)}';
     } else if (period == 'monthly') {
       final firstDay = DateTime(now.year, now.month, 1);
       final lastDay = DateTime(now.year, now.month + 1, 0);
-      return '${formatter.format(firstDay)} - ${formatter.format(lastDay)}';
+      return '${_rangeFormatter.format(firstDay)} - ${_rangeFormatter.format(lastDay)}';
     }
     return '';
   }
@@ -375,6 +426,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final isEditing = widget.existingBudget != null;
 
     return Scaffold(
@@ -385,84 +437,74 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         title: isEditing ? 'Edit Budget' : 'New Budget',
         showBackButton: true,
         actions: [
-          TextButton(
+          AppTextActionButton(
+            label: 'Save',
             onPressed: _saveBudget,
-            child: const Text(
-              'Save',
-              style: TextStyle(
-                color: AppTheme.primaryLight,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
           ),
           if (isEditing) ...[
             const SizedBox(width: 8),
-            Transform.translate(
-              offset: const Offset(10, 0),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppTheme.subtleFillColor(context),
-                  shape: BoxShape.circle,
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppTheme.subtleFillColor(context),
+                shape: BoxShape.circle,
+              ),
+              child: PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert,
+                  color: AppTheme.textPrimaryColor(context),
+                  size: 20,
                 ),
-                child: PopupMenuButton<String>(
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: AppTheme.textPrimaryColor(context),
-                    size: 20,
-                  ),
-                  padding: EdgeInsets.zero,
-                  color: AppTheme.surface(context),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                  ),
-                  onSelected: (value) {
-                    if (value == 'delete') {
-                      _deleteBudget();
-                    } else if (value == 'toggle_complete') {
-                      _toggleBudgetComplete();
-                    }
-                  },
-                  itemBuilder: (context) {
-                    final isCompleted = !(widget.existingBudget?.checked ?? true);
-                    return [
-                      PopupMenuItem<String>(
-                        value: 'toggle_complete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              isCompleted ? Icons.play_circle_outline_rounded : Icons.check_circle_outline_rounded,
-                              color: AppTheme.primaryAccentColor(context),
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              isCompleted ? 'Mark Active' : 'Mark Complete',
-                              style: TextStyle(
-                                color: AppTheme.textPrimaryColor(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
-                            SizedBox(width: 12),
-                            Text(
-                              'Delete Budget',
-                              style: TextStyle(color: AppTheme.errorColor),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ];
-                  },
+                padding: EdgeInsets.zero,
+                color: AppTheme.surface(context),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                 ),
+                onSelected: (value) {
+                  if (value == 'delete') {
+                    _deleteBudget();
+                  } else if (value == 'toggle_complete') {
+                    _toggleBudgetComplete();
+                  }
+                },
+                itemBuilder: (context) {
+                  final isCompleted = !(widget.existingBudget?.isActive ?? true);
+                  return [
+                    PopupMenuItem<String>(
+                      value: 'toggle_complete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            isCompleted ? Icons.play_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                            color: AppTheme.primaryAccentColor(context),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            isCompleted ? 'Mark Active' : 'Mark Complete',
+                            style: TextStyle(
+                              color: AppTheme.textPrimaryColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                          SizedBox(width: 12),
+                          Text(
+                            'Delete Budget',
+                            style: TextStyle(color: AppTheme.errorColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ];
+                },
               ),
             ),
           ],
@@ -474,10 +516,10 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionLabel('CATEGORY NAME'),
+                 _buildSectionLabel('BUDGET NAME'),
                 const VGapSm(),
                 TextFormField(
-                  controller: _categoryController,
+                  controller: _nameController,
                   readOnly: isEditing,
                   style: GoogleFonts.outfit(
                     color: AppTheme.categoryTextColor(context, isEditing: isEditing),
@@ -485,7 +527,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'e.g., Groceries, Rent, Transport',
+                    hintText: 'e.g., Budget PRO 🎯, Travel Budget',
                     hintStyle: GoogleFonts.outfit(
                       color: AppTheme.textSecondary.withValues(alpha: 0.5),
                       fontSize: 20,
@@ -493,17 +535,67 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     ),
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     filled: false,
-                    border: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white10, width: 1.5),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
                     ),
-                    enabledBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white10, width: 1.5),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
                     ),
-                    focusedBorder: const UnderlineInputBorder(
+                    focusedBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
                     ),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(right: 12),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Icon(
+                        Icons.star_border_rounded,
+                        color: AppTheme.primaryLight,
+                        size: 28,
+                      ),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter a budget name';
+                    }
+                    return null;
+                  },
+                ),
+                const VGapLg(),
+
+                _buildSectionLabel('CATEGORY NAME'),
+                const VGapSm(),
+                TextFormField(
+                  controller: _categoryNameController,
+                  readOnly: isEditing,
+                  style: GoogleFonts.outfit(
+                    color: AppTheme.categoryTextColor(context, isEditing: isEditing),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'e.g., Expenses, Salary, Earning',
+                    hintStyle: GoogleFonts.outfit(
+                      color: AppTheme.textSecondary.withValues(alpha: 0.5),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    filled: false,
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+                    ),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+                    ),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(right: 12),
                       child: Icon(
                         Icons.label_outline_rounded,
                         color: AppTheme.primaryLight,
@@ -522,6 +614,18 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     return null;
                   },
                 ),
+                if (!isEditing) ...[
+                  const VGapSm(),
+                  Row(
+                    children: [
+                      _buildQuickCategoryChip('Expenses'),
+                      const HGapSm(),
+                      _buildQuickCategoryChip('Salary'),
+                      const HGapSm(),
+                      _buildQuickCategoryChip('Earning'),
+                    ],
+                  ),
+                ],
                 const VGapLg(),
 
                 _buildSectionLabel('BUDGET LIMIT (₹)',),
@@ -543,21 +647,24 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     ),
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     filled: false,
-                    border: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white10, width: 1.5),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
                     ),
-                    enabledBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white10, width: 1.5),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
                     ),
-                    focusedBorder: const UnderlineInputBorder(
+                    focusedBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
                     ),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(right: 12),
-                      child: Icon(
-                        Icons.attach_money_rounded,
-                        color: AppTheme.primaryLight,
-                        size: 28,
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Text(
+                        '₹',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.primaryLight,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     prefixIconConstraints: const BoxConstraints(
@@ -576,6 +683,78 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     return null;
                   },
                 ),
+                const VGapLg(),
+
+                _buildSectionLabel('ALERT THRESHOLD'),
+                const VGapSm(),
+                Container(
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningColor.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                    border: Border.all(
+                      color: AppTheme.warningColor.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.notifications_active_rounded,
+                                  size: 16, color: AppTheme.warningColor),
+                              const HGapSm(),
+                              Text(
+                                'Alert me when spent reaches',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.textPrimaryColor(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.warningColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${(_alertThreshold * 100).round()}%',
+                              style: const TextStyle(
+                                color: AppTheme.warningColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: AppTheme.warningColor,
+                          inactiveTrackColor: AppTheme.warningColor.withValues(alpha: 0.15),
+                          thumbColor: AppTheme.warningColor,
+                          overlayColor: AppTheme.warningColor.withValues(alpha: 0.12),
+                          trackHeight: 4,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                        ),
+                        child: Slider(
+                          value: _alertThreshold,
+                          min: 0.1,
+                          max: 1.0,
+                          divisions: 90,
+                          onChanged: (val) => setState(() => _alertThreshold = val),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 const VGapLg(),
 
                 _buildSectionLabel('TRACKING PERIOD'),
@@ -738,7 +917,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                             initialTime: _scheduledTime ?? const TimeOfDay(hour: 9, minute: 0),
                             builder: (context, child) => Theme(
                               data: ThemeData.dark().copyWith(
-                                colorScheme: const ColorScheme.dark(
+                                colorScheme: ColorScheme.dark(
                                   primary: AppTheme.primaryColor,
                                   surface: AppTheme.surfaceColor,
                                 ),

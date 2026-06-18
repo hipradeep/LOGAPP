@@ -4,18 +4,22 @@ import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
 import 'app_spacers.dart';
+import '../services/milestone_service.dart';
+import '../services/service_locator.dart';
 
 class DashboardSummaryCard extends StatelessWidget {
   final List<Activity> activities;
   final List<CheckIn> checkIns;
   final List<Task> subTasks;
+  final MilestoneService milestoneService;
 
-  const DashboardSummaryCard({
+  DashboardSummaryCard({
     super.key,
     required this.activities,
     required this.checkIns,
     required this.subTasks,
-  });
+    MilestoneService? milestoneService,
+  }) : milestoneService = milestoneService ?? getIt<MilestoneService>();
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
@@ -75,17 +79,23 @@ class DashboardSummaryCard extends StatelessWidget {
     final todayCheckIns = checkIns.where((c) => _isToday(c.timestamp) && c.checked).toList();
 
     for (var activity in activities) {
-      final int todayCount;
-      if (activity.trackingType == 'multiple') {
-        final todayTask = subTasks.firstWhere(
-          (s) => s.activityId == activity.id && _isToday(s.timestamp),
-          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
-        );
-        todayCount = todayTask.subTasks.where((st) => st.checked).length;
+      final bool isCompleted;
+      if (activity.trackingType == 'milestone') {
+        isCompleted = milestoneService.isMilestoneCompletedToday(activity, subTasks);
       } else {
-        todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
+        final int todayCount;
+        if (activity.trackingType == 'multiple') {
+          final todayTask = subTasks.firstWhere(
+            (s) => s.activityId == activity.id && _isToday(s.timestamp),
+            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: DateTime.now(), checked: false),
+          );
+          todayCount = todayTask.subTasks.where((st) => st.checked).length;
+        } else {
+          todayCount = todayCheckIns.where((c) => c.activityId == activity.id).length;
+        }
+        isCompleted = todayCount >= activity.targetCount;
       }
-      if (todayCount >= activity.targetCount) {
+      if (isCompleted) {
         completedActivities++;
       }
     }

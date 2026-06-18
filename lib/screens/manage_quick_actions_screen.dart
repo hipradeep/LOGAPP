@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../services/cache_service.dart';
 
@@ -14,7 +13,7 @@ class ManageQuickActionsScreen extends StatefulWidget {
 
 class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
   final CacheService _cacheService = CacheService();
-  final List<String> _allActions = ['Focus 25m', 'Water 250ml', 'New note'];
+  final List<String> _allActions = ['Focus 25m', 'Water 250ml', 'New note', 'Add transaction'];
   List<String> _enabledActions = [];
   bool _isLoading = true;
 
@@ -56,22 +55,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
       title: 'Quick Actions',
       showBackButton: true,
       padding: EdgeInsets.zero,
-      backgroundWidgets: const [
-        GlowBlob(
-          top: -40,
-          left: -40,
-          size: 240,
-          color: AppTheme.primaryColor,
-          opacity: 0.1,
-        ),
-        GlowBlob(
-          bottom: -50,
-          right: -50,
-          size: 280,
-          color: AppTheme.secondaryColor,
-          opacity: 0.05,
-        ),
-      ],
+
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -98,7 +82,7 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: _isLoading
-              ? const Center(
+              ? Center(
                   child: Padding(
                     padding: EdgeInsets.all(32),
                     child: CircularProgressIndicator(color: AppTheme.primaryColor),
@@ -128,6 +112,10 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                         emoji = '💧';
                         description = 'Hydration counter';
                         accentColor = AppTheme.secondaryColor;
+                      } else if (action == 'Add transaction') {
+                        emoji = '💵';
+                        description = 'Log budget transaction';
+                        accentColor = AppTheme.successColor;
                       } else {
                         emoji = '📝';
                         description = 'note entry text log';

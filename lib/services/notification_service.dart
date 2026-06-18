@@ -8,10 +8,12 @@ import 'package:permission_handler/permission_handler.dart';
 import 'cache_service.dart';
 
 @pragma('vm:entry-point')
-void onNotificationActionCallback(NotificationResponse details) {
+Future<void> onNotificationActionCallback(NotificationResponse details) async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
-  NotificationService.handleNotificationAction(details);
+  // Await the handler so the background isolate is NOT terminated prematurely
+  // before async operations (cancel + reschedule + confirmation) complete.
+  await NotificationService.handleNotificationAction(details);
 }
 
 class NotificationService {
@@ -78,19 +80,10 @@ class NotificationService {
   /// Initialize the notification service
   static Future<void> init() async {
     try {
-      tz.initializeTimeZones();
+      await _initializeTimeZone();
       
       _androidImplementation = _notificationsPlugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
-
-      try {
-        final detectedName = _detectTimeZoneName();
-        tz.setLocalLocation(tz.getLocation(detectedName));
-      } catch (_) {
-        try {
-          tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
-        } catch (_) {}
-      }
 
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -107,11 +100,13 @@ class NotificationService {
     } catch (_) {}
   }
 
-  static void _handleNotificationResponse(NotificationResponse details) {
-    handleNotificationAction(details);
+  static Future<void> _handleNotificationResponse(NotificationResponse details) async {
+    // Fire-and-forget is acceptable here since we are on the main isolate
+    // and the app is foregrounded – the process will not be killed.
+    await handleNotificationAction(details);
   }
 
-  static void handleNotificationAction(NotificationResponse details) async {
+  static Future<void> handleNotificationAction(NotificationResponse details) async {
     final actionId = details.actionId;
     final payload = details.payload;
     
@@ -142,13 +137,8 @@ class NotificationService {
       final minutes = int.tryParse(minsStr);
       if (minutes != null && details.id != null) {
         debugPrint('Rescheduling notification "$title" (ID: ${details.id}) by $minutes minutes...');
-        // Ensure timezones are initialized in this background isolate
-        try {
-          tz.initializeTimeZones();
-          tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
-        } catch (e) {
-          debugPrint('Failed to initialize timezone in background isolate: $e');
-        }
+        // Dynamically initialize timezones in this background isolate
+        await _initializeTimeZone();
 
         final newTime = DateTime.now().add(Duration(minutes: minutes));
         await cancelNotification(details.id!);
@@ -172,6 +162,20 @@ class NotificationService {
     }
   }
 
+  /// Initializes timezone data and sets the local location dynamically
+  /// based on the device's current UTC offset.
+  static Future<void> _initializeTimeZone() async {
+    try {
+      tz.initializeTimeZones();
+      final detectedName = _detectTimeZoneName();
+      tz.setLocalLocation(tz.getLocation(detectedName));
+    } catch (_) {
+      try {
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      } catch (_) {}
+    }
+  }
+
   static String _detectTimeZoneName() {
     final offset = DateTime.now().timeZoneOffset;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -182,12 +186,14 @@ class NotificationService {
         return name;
       }
     }
-    return 'Asia/Kolkata'; // Fallback
+    return 'UTC'; // Fallback
   }
 
   static bool _isRequestingPermission = false;
 
-  /// Request permissions for showing notifications
+  /// Request permissions for showing notifications.
+  /// Note: Opening app settings when denied is intentionally omitted here;
+  /// that action is handled explicitly in permission_screen.dart.
   static Future<bool> requestPermissions() async {
     if (_isRequestingPermission) {
       return false;
@@ -201,12 +207,7 @@ class NotificationService {
       if (androidImpl != null) {
         final granted = await androidImpl.requestNotificationsPermission();
         await androidImpl.requestExactAlarmsPermission();
-        
-        final hasPermission = (granted ?? false);
-        if (!hasPermission) {
-          await openAppSettings();
-        }
-        return hasPermission;
+        return (granted ?? false);
       }
       return false;
     } catch (_) {
@@ -256,11 +257,7 @@ class NotificationService {
         await requestPermissions();
       }
 
-      // Ensure timezones are initialized
-      try {
-        tz.initializeTimeZones();
-        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
-      } catch (_) {}
+      await _initializeTimeZone();
 
       final parsedTime = parseTimeString(timeString);
       
@@ -284,13 +281,25 @@ class NotificationService {
         }
       }
 
+      // Use exact alarm if permitted, fall back to inexact on Android 14+.
+      // Wrap in try-catch to guard against MissingPluginException in tests
+      // and background isolates where permission_handler may not be available.
+      AndroidScheduleMode scheduleMode;
+      try {
+        scheduleMode = await Permission.scheduleExactAlarm.isGranted
+            ? AndroidScheduleMode.alarmClock
+            : AndroidScheduleMode.inexactAllowWhileIdle;
+      } catch (_) {
+        scheduleMode = AndroidScheduleMode.alarmClock;
+      }
+
       await _notificationsPlugin.zonedSchedule(
         id,
         title,
         body,
         scheduledDate,
         _notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.alarmClock,
+        androidScheduleMode: scheduleMode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
@@ -312,11 +321,7 @@ class NotificationService {
         await requestPermissions();
       }
 
-      // Ensure timezones are initialized
-      try {
-        tz.initializeTimeZones();
-        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
-      } catch (_) {}
+      await _initializeTimeZone();
 
       final now = tz.TZDateTime.now(tz.local);
       final scheduledDate = tz.TZDateTime.from(dateTime, tz.local);
@@ -325,13 +330,23 @@ class NotificationService {
         return;
       }
 
+      // Use exact alarm if permitted, fall back to inexact on Android 14+.
+      AndroidScheduleMode scheduleMode;
+      try {
+        scheduleMode = await Permission.scheduleExactAlarm.isGranted
+            ? AndroidScheduleMode.alarmClock
+            : AndroidScheduleMode.inexactAllowWhileIdle;
+      } catch (_) {
+        scheduleMode = AndroidScheduleMode.alarmClock;
+      }
+
       await _notificationsPlugin.zonedSchedule(
         id,
         title,
         body,
         scheduledDate,
         _notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.alarmClock,
+        androidScheduleMode: scheduleMode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: '$title|$body',

@@ -97,7 +97,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
         _sessionTimer?.cancel();
       },
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -151,7 +151,7 @@ class _FocusTimerSheetState extends State<FocusTimerSheet> {
                       value: _isCompleted ? 1.0 : (_totalSeconds - _secondsRemaining) / _totalSeconds,
                       strokeWidth: 10,
                       backgroundColor: AppTheme.subtleFillColor(context),
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
                     ),
                   ),
                   Text(

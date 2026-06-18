@@ -139,7 +139,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
-        bottom: MediaQuery.of(context).padding.bottom + 80,
+        bottom: MediaQuery.paddingOf(context).bottom + 80,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _handleShowAddSheet,
@@ -171,7 +171,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Widget _buildCategoryBody() {
     if (_controller.isLoading) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
           child: CircularProgressIndicator(color: AppTheme.primaryColor),
@@ -343,7 +343,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Container(
         decoration: BoxDecoration(
           color: AppTheme.surface(context),
@@ -354,7 +354,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
           left: 24,
           right: 24,
           top: 24,
-          bottom: 24 + MediaQuery.of(context).padding.bottom,
+          bottom: 24 + MediaQuery.paddingOf(context).bottom,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -423,7 +423,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppTheme.primaryColor, width: 1.5),
+              borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
             ),
           ),
         ),

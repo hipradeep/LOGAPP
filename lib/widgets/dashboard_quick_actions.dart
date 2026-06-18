@@ -8,12 +8,14 @@ class DashboardQuickActions extends StatefulWidget {
   final VoidCallback onFocus;
   final VoidCallback onWater;
   final VoidCallback onNewJournal;
+  final VoidCallback onAddTransaction;
 
   const DashboardQuickActions({
     super.key,
     required this.onFocus,
     required this.onWater,
     required this.onNewJournal,
+    required this.onAddTransaction,
   });
 
   @override
@@ -141,6 +143,15 @@ class _DashboardQuickActionsState extends State<DashboardQuickActions> {
         label: 'Journal',
         accentColor: AppTheme.primaryAccentColor(context),
         onTap: widget.onNewJournal,
+      );
+    } else if (action == 'Add transaction') {
+      return _buildActionButton(
+        context: context,
+        title: 'Add transaction',
+        emoji: '💵',
+        label: 'Expense',
+        accentColor: AppTheme.successColor,
+        onTap: widget.onAddTransaction,
       );
     }
     return null;

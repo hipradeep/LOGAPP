@@ -39,7 +39,7 @@ class AppTextField extends StatelessWidget {
       onSubmitted: onSubmitted,
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.02),
         isDense: true,
@@ -54,7 +54,7 @@ class AppTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppTheme.primaryColor),
+          borderSide: BorderSide(color: AppTheme.primaryColor),
         ),
       ),
     );

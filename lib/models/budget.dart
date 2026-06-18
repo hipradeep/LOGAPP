@@ -78,20 +78,23 @@ class Transaction {
 
 class Budget {
   final String id;
-  final String category;
+  final String name;
+  final String categoryName;
   final double limit;
   final String period; // 'daily', 'weekly', 'monthly', 'custom'
   final String description;
-  final List<int> repeatDays;
+  final List<int> repeatDays; // Weekdays (1=Mon…7=Sun) for notification scheduling only — NOT used to filter transactions
   final String? scheduledTime; // e.g. "09:00"
   final DateTime? startDate;
   final DateTime? endDate;
   final bool repeat;
-  final bool checked;
+  final bool isActive;
+  final double alertThreshold; // 0.0–1.0, e.g. 0.7 = alert at 70% of limit
 
   Budget({
     required this.id,
-    required this.category,
+    required this.name,
+    required this.categoryName,
     required this.limit,
     required this.period,
     this.description = '',
@@ -100,7 +103,8 @@ class Budget {
     this.startDate,
     this.endDate,
     this.repeat = true,
-    this.checked = true,
+    this.isActive = true,
+    this.alertThreshold = 0.7,
   });
 
   double spentForCurrentPeriod(List<Transaction> allTransactions) {
@@ -111,11 +115,6 @@ class Budget {
     final budgetTransactions = allTransactions.where((t) => t.budgetId == id);
 
     for (final exp in budgetTransactions) {
-      // Filter by repeatDays if set
-      if (repeatDays.isNotEmpty && !repeatDays.contains(exp.expenseDate.weekday)) {
-        continue;
-      }
-
       if (period == 'daily') {
         if (exp.expenseDate.year == now.year &&
             exp.expenseDate.month == now.month &&
@@ -157,7 +156,9 @@ class Budget {
 
   Map<String, dynamic> toFirestore() {
     return {
-      'category': category,
+      'name': name,
+      'categoryName': categoryName,
+      'category': name, // legacy field write
       'limit': limit,
       'period': period,
       'description': description,
@@ -166,7 +167,8 @@ class Budget {
       'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
       'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
       'repeat': repeat,
-      'checked': checked,
+      'isActive': isActive,
+      'alertThreshold': alertThreshold,
     };
   }
 
@@ -183,7 +185,8 @@ class Budget {
 
     return Budget(
       id: doc.id,
-      category: data['category'] as String? ?? '',
+      name: data['name'] as String? ?? data['category'] as String? ?? '',
+      categoryName: data['categoryName'] as String? ?? data['category'] as String? ?? '',
       limit: (data['limit'] as num?)?.toDouble() ?? 0.0,
       period: data['period'] as String? ?? 'monthly',
       description: data['description'] as String? ?? '',
@@ -192,7 +195,8 @@ class Budget {
       startDate: firestoreStartDate?.toDate(),
       endDate: firestoreEndDate?.toDate(),
       repeat: data['repeat'] as bool? ?? true,
-      checked: data['checked'] as bool? ?? true,
+      isActive: data['isActive'] as bool? ?? data['checked'] as bool? ?? true,
+      alertThreshold: (data['alertThreshold'] as num?)?.toDouble() ?? 0.7,
     );
   }
 
@@ -220,7 +224,8 @@ class Budget {
 
     return Budget(
       id: id,
-      category: data['category'] as String? ?? '',
+      name: data['name'] as String? ?? data['category'] as String? ?? '',
+      categoryName: data['categoryName'] as String? ?? data['category'] as String? ?? '',
       limit: (data['limit'] as num?)?.toDouble() ?? 0.0,
       period: data['period'] as String? ?? 'monthly',
       description: data['description'] as String? ?? '',
@@ -229,13 +234,15 @@ class Budget {
       startDate: parsedStartDate,
       endDate: parsedEndDate,
       repeat: data['repeat'] as bool? ?? true,
-      checked: data['checked'] as bool? ?? true,
+      isActive: data['isActive'] as bool? ?? data['checked'] as bool? ?? true,
+      alertThreshold: (data['alertThreshold'] as num?)?.toDouble() ?? 0.7,
     );
   }
 
   Budget copyWith({
     String? id,
-    String? category,
+    String? name,
+    String? categoryName,
     double? limit,
     String? period,
     String? description,
@@ -244,11 +251,13 @@ class Budget {
     DateTime? startDate,
     DateTime? endDate,
     bool? repeat,
-    bool? checked,
+    bool? isActive,
+    double? alertThreshold,
   }) {
     return Budget(
       id: id ?? this.id,
-      category: category ?? this.category,
+      name: name ?? this.name,
+      categoryName: categoryName ?? this.categoryName,
       limit: limit ?? this.limit,
       period: period ?? this.period,
       description: description ?? this.description,
@@ -257,7 +266,8 @@ class Budget {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       repeat: repeat ?? this.repeat,
-      checked: checked ?? this.checked,
+      isActive: isActive ?? this.isActive,
+      alertThreshold: alertThreshold ?? this.alertThreshold,
     );
   }
 }

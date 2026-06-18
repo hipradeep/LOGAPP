@@ -15,21 +15,38 @@ class AppTitleDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return DropdownButtonHideUnderline(
       child: DropdownButton<T>(
         value: value,
-        dropdownColor: AppTheme.surfaceColor,
+        dropdownColor: AppTheme.surface(context),
         isDense: true,
         items: items,
         onChanged: onChanged,
-        style: const TextStyle(
-          color: AppTheme.primaryLight,
+        selectedItemBuilder: (BuildContext context) {
+          return items.map<Widget>((DropdownMenuItem<T> item) {
+            final child = item.child;
+            if (child is Text) {
+              return Text(
+                child.data ?? '',
+                style: TextStyle(
+                  color: AppTheme.primaryAccentColor(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              );
+            }
+            return child;
+          }).toList();
+        },
+        style: TextStyle(
+          color: AppTheme.primaryAccentColor(context),
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
-        icon: const Icon(
+        icon: Icon(
           Icons.arrow_drop_down_rounded,
-          color: AppTheme.primaryLight,
+          color: AppTheme.primaryAccentColor(context),
           size: 18,
         ),
       ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/monthly_calendar.dart';
 import '../widgets/note_options_sheet.dart';
@@ -12,7 +11,6 @@ import '../models/check_in.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
 import '../services/note_service.dart';
-import 'note_write_screen.dart';
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key});
@@ -38,40 +36,6 @@ class _LogScreenState extends State<LogScreen> {
 
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
-  }
-
-  void _navigateToWriteScreen({NoteEntity? existingEntry}) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NoteWriteScreen(
-          existingEntry: existingEntry,
-        ),
-      ),
-    );
-
-    if (result != null && result is Map<String, dynamic>) {
-      final title = result['title'] as String;
-      final content = result['content'] as String;
-      final mood = result['mood'] as String;
-      final tags = result['tags'] as List<String>;
-
-      try {
-        if (existingEntry != null) {
-          await _noteService.updateEntry(existingEntry.id, title, content, mood, tags);
-        } else {
-          await _noteService.createEntry(title, content, mood, tags);
-        }
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save to Firestore. ($e)'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
-    }
   }
 
   void _handleDelete(String id) async {
@@ -124,22 +88,7 @@ class _LogScreenState extends State<LogScreen> {
         title: 'Activity Logs',
         showBackButton: true,
         padding: EdgeInsets.zero,
-        backgroundWidgets: const [
-          GlowBlob(
-            top: -40,
-            right: -40,
-            size: 240,
-            color: AppTheme.secondaryColor,
-            opacity: 0.08,
-          ),
-          GlowBlob(
-            bottom: -50,
-            left: -50,
-            size: 260,
-            color: AppTheme.primaryColor,
-            opacity: 0.05,
-          ),
-        ],
+
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -176,7 +125,7 @@ class _LogScreenState extends State<LogScreen> {
           return const Center(child: Text('Error loading activities'));
         }
         if (activitiesSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+          return Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
         }
 
         final activities = activitiesSnapshot.data ?? [];
@@ -188,7 +137,7 @@ class _LogScreenState extends State<LogScreen> {
               return const Center(child: Text('Error loading note entries'));
             }
             if (logsSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+              return Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
             }
 
             final logs = logsSnapshot.data ?? [];
@@ -200,7 +149,7 @@ class _LogScreenState extends State<LogScreen> {
                   return const Center(child: Text('Error loading check-ins'));
                 }
                 if (checkinsSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+                  return Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
                 }
 
                 final checkIns = checkinsSnapshot.data ?? [];
@@ -340,8 +289,10 @@ class _LogScreenState extends State<LogScreen> {
           color: AppTheme.surface(context).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppTheme.borderColor(context),
-            width: 1,
+            color: entry.isPinned
+                ? AppTheme.primaryColor.withValues(alpha: 0.4)
+                : AppTheme.borderColor(context),
+            width: entry.isPinned ? 1.5 : 1,
           ),
         ),
         child: Row(
@@ -387,6 +338,15 @@ class _LogScreenState extends State<LogScreen> {
                         ),
                       ),
                       const HGapSm(),
+                      if (entry.isPinned) ...
+                        [
+                          Icon(
+                            Icons.push_pin_rounded,
+                            size: 12,
+                            color: AppTheme.primaryColor.withValues(alpha: 0.8),
+                          ),
+                          const HGapSm(),
+                        ],
                       Text(
                         timeStr,
                         style: AppTheme.bodySmall.copyWith(fontSize: 10, color: AppTheme.textSecondary),
@@ -421,10 +381,21 @@ class _LogScreenState extends State<LogScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => NoteOptionsSheet(
         entry: entry,
-        onEdit: () => _navigateToWriteScreen(existingEntry: entry),
         onDelete: () => _handleDelete(entry.id),
+        onPinToggle: () => _handlePinToggle(entry),
       ),
     );
+  }
+
+  void _handlePinToggle(NoteEntity entry) async {
+    try {
+      await _noteService.togglePin(entry.id, !entry.isPinned);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update pin: $e'), backgroundColor: AppTheme.errorColor),
+      );
+    }
   }
 
 
@@ -491,7 +462,7 @@ class _LogScreenState extends State<LogScreen> {
                                 color: AppTheme.primaryColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Sub-task',
                                 style: TextStyle(
                                   color: AppTheme.primaryLight,
@@ -508,7 +479,7 @@ class _LogScreenState extends State<LogScreen> {
                                 color: AppTheme.primaryColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Multi',
                                 style: TextStyle(
                                   color: AppTheme.primaryLight,

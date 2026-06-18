@@ -42,17 +42,17 @@ IconData getIconDataByName(String name) {
 }
 
 class AddTransactionSheet extends StatefulWidget {
-  final String budgetId;
-  final String categoryName;
-  final Future<void> Function(String tag, String description, double amount, DateTime date) onAddTransaction;
+  final String? budgetId;
+  final String? categoryName;
+  final Future<void> Function(String tag, String description, double amount, DateTime date)? onAddTransaction;
   final Transaction? existingTransaction;
   final List<Budget>? budgets;
 
   const AddTransactionSheet({
     super.key,
-    required this.budgetId,
-    required this.categoryName,
-    required this.onAddTransaction,
+    this.budgetId,
+    this.categoryName,
+    this.onAddTransaction,
     this.existingTransaction,
     this.budgets,
   });
@@ -79,11 +79,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   List<_ExpenseTag> _expenseTags = [];
   bool _isLoadingTags = true;
+  List<Budget> _availableBudgets = [];
+  bool _isLoadingBudgets = false;
+  String? _selectedCategoryName;
 
   @override
   void initState() {
     super.initState();
-    _selectedBudgetId = widget.budgetId;
+    _selectedBudgetId = widget.budgetId ?? '';
+    _selectedCategoryName = widget.categoryName;
     
     final tx = widget.existingTransaction;
     if (tx != null) {
@@ -101,6 +105,49 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
 
     _loadExpenseTags();
+    _initBudgets();
+  }
+
+  void _initBudgets() async {
+    if (widget.budgets != null) {
+      setState(() {
+        _availableBudgets = widget.budgets!;
+        _updateSelectedBudgetAndCategory();
+      });
+    } else if (widget.budgetId == null || widget.budgetId!.isEmpty) {
+      setState(() {
+        _isLoadingBudgets = true;
+      });
+      try {
+        final budgetsList = await _budgetService.getBudgetsStream().first;
+        if (mounted) {
+          setState(() {
+            _availableBudgets = budgetsList;
+            _isLoadingBudgets = false;
+            _updateSelectedBudgetAndCategory();
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoadingBudgets = false;
+          });
+        }
+      }
+    }
+  }
+
+  void _updateSelectedBudgetAndCategory() {
+    if (_availableBudgets.isNotEmpty) {
+      if (_selectedBudgetId.isEmpty) {
+        final active = _availableBudgets.firstWhere((b) => b.isActive, orElse: () => _availableBudgets.first);
+        _selectedBudgetId = active.id;
+        _selectedCategoryName = active.categoryName;
+      } else {
+        final matching = _availableBudgets.firstWhere((b) => b.id == _selectedBudgetId, orElse: () => _availableBudgets.first);
+        _selectedCategoryName = matching.categoryName;
+      }
+    }
   }
 
   Future<void> _loadExpenseTags() async {
@@ -156,6 +203,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     final customDesc = _descController.text.trim();
 
+    if (_selectedBudgetId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select or create a budget category first'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
     if (_selectedTagIndex == null || _expenseTags.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -214,7 +270,17 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           Navigator.pop(context);
         }
       } else {
-        await widget.onAddTransaction(tag.label, customDesc, finalAmount, _selectedDate);
+        if (widget.onAddTransaction != null) {
+          await widget.onAddTransaction!(tag.label, customDesc, finalAmount, _selectedDate);
+        } else {
+          await _budgetService.addTransaction(
+            _selectedBudgetId,
+            tag.label,
+            customDesc,
+            finalAmount,
+            timestamp: _selectedDate,
+          );
+        }
         
         await _cacheService.incrementCategoryCount(tag.label);
 
@@ -269,7 +335,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   void _onDateChanged(DateTime date) {
-    _selectedDate = date;
+    _selectedDate = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      _selectedDate.hour,
+      _selectedDate.minute,
+    );
   }
 
   void _onTagSelected(int index) {
@@ -284,6 +356,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     if (val != null) {
       setState(() {
         _selectedBudgetId = val;
+        if (_availableBudgets.isNotEmpty) {
+          final matching = _availableBudgets.firstWhere((b) => b.id == val, orElse: () => _availableBudgets.first);
+          _selectedCategoryName = matching.categoryName;
+        }
       });
     }
   }
@@ -309,15 +385,24 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 style: AppTheme.headingMedium.copyWith(fontSize: 24),
               ),
               const SizedBox(height: 4),
-              if (widget.existingTransaction != null && widget.budgets != null)
+              if (_isLoadingBudgets)
+                SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryColor),
+                )
+              else if (_availableBudgets.isNotEmpty)
                 AppTitleDropdown<String>(
                   value: _selectedBudgetId,
-                  items: widget.budgets!.map((b) {
+                  items: _availableBudgets.map((b) {
                     return DropdownMenuItem<String>(
                       value: b.id,
                       child: Text(
-                        b.category,
-                        style: TextStyle(color: AppTheme.textPrimaryColor(context), fontSize: 13),
+                        b.name,
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.textPrimaryColor(context),
+                          fontSize: 13,
+                        ),
                       ),
                     );
                   }).toList(),
@@ -325,7 +410,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 )
               else
                 Text(
-                  'Category: ${widget.categoryName}',
+                  'Category: ${widget.categoryName ?? _selectedCategoryName ?? ''}',
                   style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
                 ),
             ],
@@ -352,16 +437,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       focusNode: _amountFocus,
       label: 'Amount (₹)',
       hintText: 'e.g. 250.00',
-      icon: Icons.attach_money_rounded,
+      icon: Icons.currency_rupee_rounded,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      trailing: widget.existingTransaction != null
-          ? AppBinaryToggle(
-              value: _isExpense,
-              onChanged: _onExpenseTypeChanged,
-              trueLabel: 'Debit',
-              falseLabel: 'Credit',
-            )
-          : null,
+      trailing: AppBinaryToggle(
+        value: _isExpense,
+        onChanged: _onExpenseTypeChanged,
+        trueLabel: 'Debit',
+        falseLabel: 'Credit',
+      ),
     );
   }
 
@@ -403,8 +486,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: DraggableScrollableSheet(
         controller: _sheetController,
         initialChildSize: 0.65,
@@ -456,7 +540,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           const VGapLg(),
                           Text(
                             'Select Date',
-                            style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 15, fontWeight: FontWeight.bold),
+                            style: AppTheme.headingSmall.copyWith(
+                              color: AppTheme.textSecondaryColor(context),
+                              fontSize: 15,
+                            ),
                           ),
                           const VGapMd(),
                           _DateSelector(
@@ -466,11 +553,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           const VGapLg(),
                           Text(
                             'What was it for?',
-                            style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 15, fontWeight: FontWeight.bold),
+                            style: AppTheme.headingSmall.copyWith(
+                              color: AppTheme.textSecondaryColor(context),
+                              fontSize: 15,
+                            ),
                           ),
                           const VGapMd(),
                           if (_isLoadingTags)
-                            const Center(
+                            Center(
                               child: Padding(
                                 padding: EdgeInsets.all(16.0),
                                 child: CircularProgressIndicator(color: AppTheme.primaryColor),
@@ -510,6 +600,7 @@ class _RawBodyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -522,19 +613,27 @@ class _RawBodyCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.auto_awesome, color: AppTheme.warningColor, size: 14),
-              SizedBox(width: 6),
+            children: [
+              const Icon(Icons.auto_awesome, color: AppTheme.warningColor, size: 14),
+              const SizedBox(width: 6),
               Text(
                 'Auto-Intercepted Notification Body',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.warningColor),
+                style: AppTheme.bodySmall.copyWith(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.warningColor,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             rawText,
-            style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryColor(context), height: 1.3),
+            style: AppTheme.bodyMedium.copyWith(
+              fontSize: 11,
+              color: AppTheme.textSecondaryColor(context),
+              height: 1.3,
+            ),
           ),
         ],
       ),
@@ -585,6 +684,7 @@ class _TagSelectorState extends State<_TagSelector> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
@@ -606,12 +706,12 @@ class _TagSelectorState extends State<_TagSelector> {
                     height: 44,
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? tag.color.withValues(alpha: 0.18)
+                          ? tag.color
                           : AppTheme.subtleFillColor(context),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: isSelected
-                            ? tag.color.withValues(alpha: 0.5)
+                            ? tag.color
                             : AppTheme.borderColor(context),
                         width: isSelected ? 1.8 : 1,
                       ),
@@ -619,16 +719,18 @@ class _TagSelectorState extends State<_TagSelector> {
                     child: Icon(
                       tag.icon,
                       size: 18,
-                      color: isSelected ? tag.color : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
+                      color: isSelected ? Colors.white : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     tag.label,
-                    style: TextStyle(
+                    style: AppTheme.bodySmall.copyWith(
                       fontSize: 8,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
+                      color: isSelected
+                          ? AppTheme.textPrimaryColor(context)
+                          : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                     ),
                   ),
                 ],
@@ -655,12 +757,23 @@ class _DateSelector extends StatefulWidget {
 }
 
 class _DateSelectorState extends State<_DateSelector> {
+  static final DateFormat _calendarFormatter = DateFormat('MMM d');
   late DateTime _selectedDate;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = widget.initialDate;
+  }
+
+  @override
+  void didUpdateWidget(covariant _DateSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialDate != oldWidget.initialDate) {
+      setState(() {
+        _selectedDate = widget.initialDate;
+      });
+    }
   }
 
   void _handleDateSelection(DateTime date) {
@@ -681,9 +794,10 @@ class _DateSelectorState extends State<_DateSelector> {
       firstDate: firstDate,
       lastDate: lastDate,
       builder: (context, child) {
+        final theme = Theme.of(context);
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: ColorScheme.dark(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
               primary: AppTheme.primaryColor,
               surface: AppTheme.surface(context),
             ),
@@ -706,6 +820,7 @@ class _DateSelectorState extends State<_DateSelector> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -714,14 +829,29 @@ class _DateSelectorState extends State<_DateSelector> {
     final isYesterday = _isSameDay(_selectedDate, yesterday);
     final isCustom = !isToday && !isYesterday;
 
-    return Row(
-      children: [
-        _buildDateChip('Today', today, isToday, () => _onTodayTap(today)),
-        const HGapSm(),
-        _buildDateChip('Yesterday', yesterday, isYesterday, () => _onYesterdayTap(yesterday)),
-        const HGapSm(),
-        _buildCustomDateChip(isCustom),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildCalendarIconButton(isCustom),
+          const HGapSm(),
+          _buildDateChip('Today', today, isToday, () => _onTodayTap(today)),
+          const HGapSm(),
+          _buildDateChip('Yesterday', yesterday, isYesterday, () => _onYesterdayTap(yesterday)),
+          const HGapSm(),
+          _TimePickerButton(
+            selectedDate: _selectedDate,
+            onTimeChanged: (newDateTime) {
+              setState(() {
+                _selectedDate = newDateTime;
+              });
+              widget.onDateChanged(newDateTime);
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -733,19 +863,21 @@ class _DateSelectorState extends State<_DateSelector> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected 
-              ? AppTheme.primaryColor.withValues(alpha: 0.15) 
+              ? AppTheme.primaryColor 
               : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected 
-                ? AppTheme.primaryColor.withValues(alpha: 0.3) 
+                ? AppTheme.primaryColor 
                 : AppTheme.borderColor(context),
           ),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: isSelected ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
+          style: AppTheme.bodyMedium.copyWith(
+            color: isSelected
+                ? AppTheme.selectedChipTextColor(context)
+                : AppTheme.textSecondaryColor(context),
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
@@ -754,9 +886,8 @@ class _DateSelectorState extends State<_DateSelector> {
     );
   }
 
-  Widget _buildCustomDateChip(bool isCustom) {
-    final DateFormat formatter = DateFormat('MMM d');
-    final label = isCustom ? formatter.format(_selectedDate) : 'Select Date';
+  Widget _buildCalendarIconButton(bool isCustom) {
+    final label = isCustom ? _calendarFormatter.format(_selectedDate) : null;
 
     return GestureDetector(
       onTap: _pickCustomDate,
@@ -765,12 +896,12 @@ class _DateSelectorState extends State<_DateSelector> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isCustom 
-              ? AppTheme.primaryColor.withValues(alpha: 0.15) 
+              ? AppTheme.primaryColor 
               : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isCustom 
-                ? AppTheme.primaryColor.withValues(alpha: 0.3) 
+                ? AppTheme.primaryColor 
                 : AppTheme.borderColor(context),
           ),
         ),
@@ -780,15 +911,101 @@ class _DateSelectorState extends State<_DateSelector> {
             Icon(
               Icons.calendar_month_rounded, 
               size: 14, 
-              color: isCustom ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+              color: isCustom ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
+            ),
+            if (label != null) ...[
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: AppTheme.bodyMedium.copyWith(
+                  color: isCustom
+                      ? AppTheme.selectedChipTextColor(context)
+                      : AppTheme.textSecondaryColor(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimePickerButton extends StatelessWidget {
+  static final DateFormat _timeFormatter = DateFormat('h:mm a');
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onTimeChanged;
+
+  const _TimePickerButton({
+    required this.selectedDate,
+    required this.onTimeChanged,
+  });
+
+  Future<void> _pickTime(BuildContext context) async {
+    final timeOfDay = TimeOfDay.fromDateTime(selectedDate);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: timeOfDay,
+      builder: (context, child) {
+        final theme = Theme.of(context);
+        return Theme(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
+              primary: AppTheme.primaryColor,
+              surface: AppTheme.surface(context),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final newDateTime = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        picked.hour,
+        picked.minute,
+      );
+      onTimeChanged(newDateTime);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context);
+    final formattedTime = _timeFormatter.format(selectedDate);
+
+    return GestureDetector(
+      onTap: () => _pickTime(context),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.subtleFillColor(context),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppTheme.borderColor(context),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.access_time_rounded,
+              size: 14,
+              color: AppTheme.primaryAccentColor(context),
             ),
             const SizedBox(width: 4),
             Text(
-              label,
-              style: TextStyle(
-                color: isCustom ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
+              formattedTime,
+              style: AppTheme.bodyMedium.copyWith(
+                color: AppTheme.textPrimaryColor(context),
                 fontSize: 12,
-                fontWeight: isCustom ? FontWeight.bold : FontWeight.normal,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ],

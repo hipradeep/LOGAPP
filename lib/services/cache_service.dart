@@ -98,9 +98,14 @@ class CacheService {
     final cache = await _readCache();
     final list = cache['quick_actions'] as List<dynamic>?;
     if (list != null) {
-      return list.map((e) => e.toString()).toList();
+      final actions = list.map((e) => e.toString()).toList();
+      if (!actions.contains('Add transaction')) {
+        actions.add('Add transaction');
+        await saveQuickActions(actions);
+      }
+      return actions;
     }
-    return ['Focus 25m', 'Log Food', 'Water 250ml', 'New note'];
+    return ['Focus 25m', 'Water 250ml', 'New note', 'Add transaction'];
   }
 
   Future<void> clearAllCache() async {
@@ -285,16 +290,5 @@ class CacheService {
   Future<bool> getNotificationScannerEnabled() async {
     final cache = await _readCache();
     return cache['notification_scanner_enabled'] as bool? ?? true;
-  }
-
-  Future<void> saveSmsScannerEnabled(bool enabled) async {
-    final cache = await _readCache();
-    cache['sms_scanner_enabled'] = enabled;
-    await _writeCache(cache);
-  }
-
-  Future<bool> getSmsScannerEnabled() async {
-    final cache = await _readCache();
-    return cache['sms_scanner_enabled'] as bool? ?? false;
   }
 }

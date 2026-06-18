@@ -9,6 +9,7 @@ class NoteController extends ChangeNotifier {
   StreamSubscription<List<NoteEntity>>? _notesub;
 
   List<NoteEntity> _notes = [];
+  List<NoteEntity> _pinnedNotes = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
   String? _errorMessage;
@@ -16,11 +17,12 @@ class NoteController extends ChangeNotifier {
 
   // Getters
   List<NoteEntity> get notes => _notes;
+  List<NoteEntity> get pinnedNotes => _pinnedNotes;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   String? get errorMessage => _errorMessage;
 
-  // Memoized grouped journals for masonry layout
+  // Memoized grouped journals for masonry layout (unpinned only)
   Map<String, List<NoteEntity>> _groupedJournals = {};
   Map<String, List<NoteEntity>> get groupedJournals => _groupedJournals;
 
@@ -61,9 +63,13 @@ class NoteController extends ChangeNotifier {
       (journalsData) {
         _notes = journalsData;
 
-        // Pre-compute grouped journals for masonry layout
+        // Partition into pinned and unpinned
+        _pinnedNotes = _notes.where((n) => n.isPinned).toList();
+        final unpinned = _notes.where((n) => !n.isPinned).toList();
+
+        // Pre-compute grouped journals (unpinned only) for masonry layout
         final Map<String, List<NoteEntity>> newGrouped = {};
-        for (var entry in _notes) {
+        for (var entry in unpinned) {
           final label = _getFormattedDateLabel(entry.timestamp);
           newGrouped.putIfAbsent(label, () => []).add(entry);
         }
@@ -99,9 +105,15 @@ class NoteController extends ChangeNotifier {
 
   // ==================== ACTIONS ====================
 
-  Future<void> createEntry(String title, String content, String mood, List<String> tags) async {
+  Future<void> createEntry(
+    String title,
+    String content,
+    String mood,
+    List<String> tags, {
+    bool isPinned = false,
+  }) async {
     try {
-      await _noteService.createEntry(title, content, mood, tags);
+      await _noteService.createEntry(title, content, mood, tags, isPinned: isPinned);
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
@@ -109,9 +121,26 @@ class NoteController extends ChangeNotifier {
     }
   }
 
-  Future<void> updateEntry(String id, String title, String content, String mood, List<String> tags) async {
+  Future<void> updateEntry(
+    String id,
+    String title,
+    String content,
+    String mood,
+    List<String> tags, {
+    bool isPinned = false,
+  }) async {
     try {
-      await _noteService.updateEntry(id, title, content, mood, tags);
+      await _noteService.updateEntry(id, title, content, mood, tags, isPinned: isPinned);
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> togglePin(String id, bool isPinned) async {
+    try {
+      await _noteService.togglePin(id, isPinned);
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();

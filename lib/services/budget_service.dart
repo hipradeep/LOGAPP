@@ -41,16 +41,17 @@ class BudgetService {
   }
 
   Future<void> _deactivateOtherFirestoreBudgets(String activeBudgetId) async {
-    final query = await _budgetsCollection.where('checked', isEqualTo: true).get();
+    final query = await _budgetsCollection.where('isActive', isEqualTo: true).get();
     for (var doc in query.docs) {
       if (doc.id != activeBudgetId) {
-        await doc.reference.update({'checked': false});
+        await doc.reference.update({'isActive': false});
       }
     }
   }
 
   Future<void> createBudget(
-    String category,
+    String name,
+    String categoryName,
     double limit,
     String period, {
     String description = '',
@@ -59,11 +60,13 @@ class BudgetService {
     List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     String? scheduledTime,
     bool repeat = true,
-    bool checked = true,
+    bool isActive = true,
+    double alertThreshold = 0.7,
   }) async {
     final newItem = Budget(
       id: '',
-      category: category,
+      name: name,
+      categoryName: categoryName,
       limit: limit,
       period: period,
       description: description,
@@ -72,16 +75,19 @@ class BudgetService {
       repeatDays: repeatDays,
       scheduledTime: scheduledTime,
       repeat: repeat,
-      checked: checked,
+      isActive: isActive,
+      alertThreshold: alertThreshold,
     );
     final docRef = await _budgetsCollection.add(newItem.toFirestore());
-    if (checked) {
+    if (isActive) {
       await _deactivateOtherFirestoreBudgets(docRef.id);
     }
   }
 
   Future<void> updateBudget(
     String budgetId, {
+    String? name,
+    String? categoryName,
     double? limit,
     String? period,
     String? description,
@@ -90,9 +96,17 @@ class BudgetService {
     List<int>? repeatDays,
     String? scheduledTime,
     bool? repeat,
-    bool? checked,
+    bool? isActive,
+    double? alertThreshold,
   }) async {
     final Map<String, dynamic> updates = {};
+    if (name != null) {
+      updates['name'] = name;
+      updates['category'] = name;
+    }
+    if (categoryName != null) {
+      updates['categoryName'] = categoryName;
+    }
     if (limit != null) updates['limit'] = limit;
     if (period != null) updates['period'] = period;
     if (description != null) updates['description'] = description;
@@ -101,16 +115,19 @@ class BudgetService {
     if (repeatDays != null) updates['repeatDays'] = repeatDays;
     if (scheduledTime != null) updates['scheduledTime'] = scheduledTime;
     if (repeat != null) updates['repeat'] = repeat;
-    if (checked != null) updates['checked'] = checked;
+    if (isActive != null) {
+      updates['isActive'] = isActive;
+    }
+    if (alertThreshold != null) updates['alertThreshold'] = alertThreshold;
     await _budgetsCollection.doc(budgetId).update(updates);
-    if (checked == true) {
+    if (isActive == true) {
       await _deactivateOtherFirestoreBudgets(budgetId);
     }
   }
 
-  Future<void> toggleBudget(String budgetId, bool checked) async {
-    await _budgetsCollection.doc(budgetId).update({'checked': checked});
-    if (checked) {
+  Future<void> toggleBudget(String budgetId, bool isActive) async {
+    await _budgetsCollection.doc(budgetId).update({'isActive': isActive});
+    if (isActive) {
       await _deactivateOtherFirestoreBudgets(budgetId);
     }
   }

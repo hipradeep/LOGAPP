@@ -7,7 +7,7 @@ class GlowBlob extends StatelessWidget {
   final double? left;
   final double? right;
   final double size;
-  final Color color;
+  final Color? color;
   final double opacity;
 
   const GlowBlob({
@@ -17,7 +17,7 @@ class GlowBlob extends StatelessWidget {
     this.left,
     this.right,
     this.size = 300,
-    this.color = AppTheme.primaryColor,
+    this.color,
     this.opacity = 0.05,
   });
 
@@ -33,7 +33,7 @@ class GlowBlob extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: color.withValues(alpha: opacity),
+          color: (color ?? AppTheme.primaryColor).withValues(alpha: opacity),
         ),
       ),
     );

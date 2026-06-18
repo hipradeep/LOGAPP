@@ -31,6 +31,7 @@ class AppTitleInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final trailingWidget = trailing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +93,7 @@ class AppTitleInput extends StatelessWidget {
                 width: 1.5,
               ),
             ),
-            focusedBorder: const UnderlineInputBorder(
+            focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
             ),
             prefixIcon: Padding(

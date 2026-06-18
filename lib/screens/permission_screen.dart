@@ -3,7 +3,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/glow_blob.dart';
 import '../services/notification_transaction_service.dart';
 import 'main_navigation_screen.dart';
 
@@ -113,7 +112,7 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
         const VGapMd(),
         _PermissionCard(
           title: 'Transaction Scanner',
-          description: 'LOG reads incoming SMS and transaction alerts locally on your device to automatically import expenses into your active budgets.',
+          description: 'LOG reads incoming transaction alerts locally on your device to automatically import expenses into your active budgets.',
           icon: Icons.receipt_long_rounded,
           isGranted: _isScannerGranted,
           onTap: _requestScannerPermission,
@@ -169,24 +168,6 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
     );
   }
 
-  List<Widget> _buildBackgroundBlobs() {
-    return const [
-      GlowBlob(
-        top: -40,
-        left: -40,
-        size: 220,
-        color: AppTheme.primaryColor,
-        opacity: 0.12,
-      ),
-      GlowBlob(
-        bottom: -50,
-        right: -50,
-        size: 260,
-        color: AppTheme.secondaryColor,
-        opacity: 0.08,
-      ),
-    ];
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +178,7 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
       showScaffold: true,
       isScrollable: true,
       alignment: PageAlignment.center,
-      backgroundWidgets: _buildBackgroundBlobs(),
+
       children: [
         const _PermissionHeader(),
         const VGapXl(),
@@ -223,7 +204,7 @@ class _PermissionHeader extends StatelessWidget {
             shape: BoxShape.circle,
             color: AppTheme.primaryColor.withValues(alpha: 0.1),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.notifications_active_rounded,
             color: AppTheme.primaryColor,
             size: 64,
@@ -342,7 +323,7 @@ class _PermissionCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppTheme.successColor.withValues(alpha: 0.3)),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.check_circle_rounded, color: AppTheme.successColor, size: 12),
@@ -367,7 +348,7 @@ class _PermissionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
       ),
-      child: const Text(
+      child: Text(
         'Configure',
         style: TextStyle(
           color: AppTheme.primaryColor,

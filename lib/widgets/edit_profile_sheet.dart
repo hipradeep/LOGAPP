@@ -47,7 +47,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         left: 24,
         right: 24,
         top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 32,
       ),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),

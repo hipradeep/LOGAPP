@@ -29,6 +29,7 @@ class MilestonesController extends ChangeNotifier {
 
   // Getters
   List<Activity> get milestoneActivities => _milestoneActivities.where((a) => a.isActive).toList();
+  List<Activity> get allMilestoneActivities => _milestoneActivities;
   Activity? get selectedMilestoneActivity => _selectedMilestoneActivity;
   List<Task> get allTasks => _allTasks;
   String get selectedCategory => _selectedCategory;

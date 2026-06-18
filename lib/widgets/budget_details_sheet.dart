@@ -4,6 +4,7 @@ import '../models/budget.dart';
 import '../services/budget_service.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import 'budget_progress_bar.dart';
 
 class BudgetDetailsSheet extends StatefulWidget {
   final Budget budget;
@@ -15,6 +16,7 @@ class BudgetDetailsSheet extends StatefulWidget {
 }
 
 class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
+  static final DateFormat _historyFormatter = DateFormat('MMM d, yyyy • h:mm a');
   final BudgetService _budgetService = BudgetService();
   final _limitController = TextEditingController();
   final _expenseDescController = TextEditingController();
@@ -95,7 +97,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.surface(context),
         title: const Text('Delete Budget Category'),
-        content: Text('Are you sure you want to delete "${widget.budget.category}"? This will delete all logged expenses under it.'),
+        content: Text('Are you sure you want to delete "${widget.budget.name}"? This will delete all logged expenses under it.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -120,7 +122,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     
     return StreamBuilder<List<Budget>>(
       stream: _budgetService.getBudgetsStream(),
@@ -187,7 +189,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                budget.category,
+                                budget.name,
                                 style: AppTheme.headingMedium,
                               ),
                               Text(
@@ -237,14 +239,11 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                             ],
                           ),
                           const VGapSm(),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: percent,
-                              backgroundColor: AppTheme.subtleFillColor(context),
-                              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                              minHeight: 8,
-                            ),
+                          BudgetProgressBar(
+                            percent: percent,
+                            alertThreshold: budget.alertThreshold,
+                            statusColor: statusColor,
+                            minHeight: 8,
                           ),
                           const VGapXs(),
                           Row(
@@ -446,7 +445,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                         itemCount: sortedExpenses.length,
                         itemBuilder: (context, index) {
                           final expense = sortedExpenses[index];
-                          final formattedDate = DateFormat('MMM d, yyyy • h:mm a').format(expense.expenseDate);
+                          final formattedDate = _historyFormatter.format(expense.expenseDate);
                           
                           return Container(
                             margin: const EdgeInsets.symmetric(vertical: 4),

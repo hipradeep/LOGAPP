@@ -4,20 +4,22 @@ import '../theme/app_theme.dart';
 class AppPremiumFab extends StatelessWidget {
   final VoidCallback onPressed;
   final IconData icon;
+  final double right;
 
   const AppPremiumFab({
     super.key,
     required this.onPressed,
     this.icon = Icons.add_rounded,
+    this.right = 0.0,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
 
     return Positioned(
       bottom: bottomPadding + 36,
-      right: 0,
+      right: right,
       child: Container(
         decoration: BoxDecoration(
           gradient: AppTheme.primaryGradient,

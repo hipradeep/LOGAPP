@@ -6,9 +6,8 @@ import '../widgets/glass_modal_sheet.dart';
 import '../models/upcoming_reminder.dart';
 import '../models/activity.dart';
 import '../controllers/reminders_controller.dart';
-import '../widgets/base_management_tab.dart';
+import '../widgets/app_provider.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 
 class ActivityReminderScreen extends StatefulWidget {
   const ActivityReminderScreen({super.key});
@@ -18,9 +17,6 @@ class ActivityReminderScreen extends StatefulWidget {
 }
 
 class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
-  static final _timeFormatter = DateFormat('HH:mm');
-  static const _weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
   late RemindersController _controller;
 
   @override
@@ -41,46 +37,53 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FullScreenPage(
-      isScrollable: false,
-      title: 'Activity Reminder',
-      showBackButton: true,
-      backgroundWidgets: const [
-        GlowBlob(
-          top: -40,
-          left: -40,
-          size: 220,
-          color: AppTheme.primaryColor,
-          opacity: 0.08,
+    return AppProvider<RemindersController>(
+      notifier: _controller,
+      child: ListenableBuilder(
+        listenable: _controller,
+        builder: (context, _) {
+          return FullScreenPage(
+            isScrollable: false,
+            title: 'Activity Reminder',
+            showBackButton: true,
+
+            children: [
+              Expanded(
+                child: _buildBody(context),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_controller.isLoading) {
+      return Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      );
+    }
+
+    final error = _controller.errorMessage;
+    if (error != null) {
+      return Center(
+        child: Text(
+          'Failed to load data:\n$error',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppTheme.errorColor),
         ),
-        GlowBlob(
-          bottom: -50,
-          right: -50,
-          size: 260,
-          color: AppTheme.secondaryColor,
-          opacity: 0.05,
-        ),
-      ],
-      children: [
-        Expanded(
-          child: BaseManagementTab<RemindersController>(
-            controller: _controller,
-            isLoading: (ctrl) => ctrl.isLoading,
-            errorMessage: (ctrl) => ctrl.errorMessage,
-            isEmpty: (ctrl) => false,
-            emptyIcon: Icons.notifications_none,
-            emptyMessage: 'No reminders active.',
-            onRefresh: _handleRefresh,
-            onFabPressed: () {},
-            showFab: false,
-            builder: (context, controller) {
-              final bottomPadding = MediaQuery.of(context).padding.bottom;
-              final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
-              return _buildRemindersTab(bottomPadding, viewInsetsBottom, controller);
-            },
-          ),
-        ),
-      ],
+      );
+    }
+
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
+
+    return RefreshIndicator(
+      onRefresh: _handleRefresh,
+      color: AppTheme.primaryColor,
+      backgroundColor: AppTheme.surface(context),
+      child: _buildRemindersTab(bottomPadding, viewInsetsBottom, _controller),
     );
   }
 
@@ -138,24 +141,40 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
                 orElse: () => Activity(id: '', name: 'Unknown', isActive: false, timestamp: DateTime.now()),
               );
 
-              return _buildActivityGroupCard(context, activity, list, controller);
+              return ActivityGroupCard(
+                activity: activity,
+                reminders: list,
+                controller: controller,
+              );
             }),
           ],
         ],
       ),
     );
   }
+}
 
-  Widget _buildActivityGroupCard(
-    BuildContext context,
-    Activity activity,
-    List<UpcomingReminder> reminders,
-    RemindersController controller,
-  ) {
+class ActivityGroupCard extends StatelessWidget {
+  final Activity activity;
+  final List<UpcomingReminder> reminders;
+  final RemindersController controller;
+
+  const ActivityGroupCard({
+    super.key,
+    required this.activity,
+    required this.reminders,
+    required this.controller,
+  });
+
+  static const _weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context); // Crucial Flutter theme gotcha register
+
     if (reminders.isEmpty) return const SizedBox.shrink();
 
     final symbol = activity.symbolValue ?? '🔔';
-    final weekdays = _weekdays;
 
     return Card(
       color: AppTheme.surface(context).withValues(alpha: 0.3),
@@ -194,21 +213,36 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
             ),
             const VGapSm(),
 
-            // Weekdays Repeat Schedule Row (once per activity container card)
+            // Weekdays Repeat Schedule Row (with tiny circular backgrounds)
             Row(
               children: List.generate(7, (i) {
                 final dayNum = i + 1;
                 final isRepeat = activity.repeatDays.contains(dayNum);
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
+                return Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: isRepeat
+                        ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                        : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isRepeat
+                          ? AppTheme.primaryAccentColor(context).withValues(alpha: 0.3)
+                          : Colors.transparent,
+                      width: 1,
+                    ),
+                  ),
+                  alignment: Alignment.center,
                   child: Text(
-                    weekdays[i],
+                    _weekdays[i],
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.bold,
                       color: isRepeat
                           ? AppTheme.primaryAccentColor(context)
-                          : AppTheme.textSecondaryColor(context).withValues(alpha: 0.25),
+                          : AppTheme.textSecondaryColor(context).withValues(alpha: 0.3),
                     ),
                   ),
                 );
@@ -228,14 +262,20 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
               itemCount: reminders.length,
               itemBuilder: (context, index) {
                 final reminder = reminders[index];
-                
+
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildTaskItemRow(context, activity, reminder, controller),
-                    const VGapMd(),
-                    Divider(color: AppTheme.borderColor(context), height: 1),
-                    if (index < reminders.length - 1) const VGapMd(),
+                    TaskItemRow(
+                      activity: activity,
+                      reminder: reminder,
+                      controller: controller,
+                    ),
+                    if (index < reminders.length - 1) ...[
+                      const VGapMd(),
+                      Divider(color: AppTheme.borderColor(context), height: 1),
+                      const VGapMd(),
+                    ],
                   ],
                 );
               },
@@ -245,15 +285,31 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
       ),
     );
   }
+}
 
-  Widget _buildTaskItemRow(
-    BuildContext context,
-    Activity activity,
-    UpcomingReminder reminder,
-    RemindersController controller,
-  ) {
+class TaskItemRow extends StatelessWidget {
+  final Activity activity;
+  final UpcomingReminder reminder;
+  final RemindersController controller;
+
+  const TaskItemRow({
+    super.key,
+    required this.activity,
+    required this.reminder,
+    required this.controller,
+  });
+
+  static final _timeFormatter = DateFormat('HH:mm');
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context); // Crucial Flutter theme gotcha register
+
     final timeStr = _timeFormatter.format(reminder.scheduledDateTime);
-    final displayTitle = reminder.subTaskTitle ?? (reminder.type == 'task' && reminder.task != null ? reminder.task!.taskName : reminder.title);
+    final displayTitle = reminder.subTaskTitle ??
+        (reminder.type == 'task' && reminder.task != null
+            ? reminder.task!.taskName
+            : reminder.title);
 
     final IconData pillIcon;
     if (reminder.type == 'subtask') {
@@ -265,8 +321,8 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
     }
 
     final Color timeColor = activity.reminderEnabled
-        ? Theme.of(context).textTheme.bodyLarge!.color!
-        : AppTheme.textSecondary.withValues(alpha: 0.4);
+        ? AppTheme.textPrimaryColor(context)
+        : AppTheme.textSecondaryColor(context).withValues(alpha: 0.4);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -276,68 +332,86 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
           child: InkWell(
             onTap: () => _showReminderActionsSheet(context, reminder, controller),
             borderRadius: BorderRadius.circular(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  timeStr,
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: timeColor,
-                    letterSpacing: -1.0,
-                  ),
-                ),
-                const VGapSm(),
-                // Pill Badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                      width: 0.8,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  // Time
+                  Text(
+                    timeStr,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: timeColor,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        pillIcon,
-                        size: 11,
-                        color: AppTheme.primaryAccentColor(context),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        displayTitle,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.pillBadgeTextColor(context),
+                  const HGapMd(),
+                  // Pill Badge
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                          width: 0.8,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            pillIcon,
+                            size: 11,
+                            color: AppTheme.primaryAccentColor(context),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              displayTitle,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.pillBadgeTextColor(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
         const HGapMd(),
-        Switch(
-          value: activity.reminderEnabled,
-          activeThumbColor: AppTheme.successColor,
-          activeTrackColor: AppTheme.successColor.withValues(alpha: 0.4),
-          onChanged: (val) {
-            controller.toggleReminderEnabled(activity, val);
-          },
+        Transform.scale(
+          scale: 0.8,
+          child: Switch(
+            value: activity.reminderEnabled,
+            activeThumbColor: AppTheme.successColor,
+            activeTrackColor: AppTheme.successColor.withValues(alpha: 0.4),
+            inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+            inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            onChanged: (val) {
+              controller.toggleReminderEnabled(activity, val);
+            },
+          ),
         ),
       ],
     );
   }
 
-  void _showReminderActionsSheet(BuildContext context, UpcomingReminder reminder, RemindersController controller) {
+  void _showReminderActionsSheet(
+    BuildContext context,
+    UpcomingReminder reminder,
+    RemindersController controller,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -347,7 +421,7 @@ class _ActivityReminderScreenState extends State<ActivityReminderScreen> {
           subtitle: 'Reminder Action',
           children: [
             ListTile(
-              leading: const Icon(Icons.next_plan_rounded, color: AppTheme.warningColor),
+              leading: Icon(Icons.next_plan_rounded, color: AppTheme.warningColor),
               title: Text(
                 'Skip for Today',
                 style: TextStyle(

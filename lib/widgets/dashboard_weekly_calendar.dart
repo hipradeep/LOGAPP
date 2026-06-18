@@ -4,18 +4,22 @@ import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
 import 'app_spacers.dart';
+import '../services/milestone_service.dart';
+import '../services/service_locator.dart';
 
 class DashboardWeeklyCalendar extends StatelessWidget {
   final List<Activity> activities;
   final List<CheckIn> checkIns;
   final List<Task> subTasks;
+  final MilestoneService milestoneService;
 
-  const DashboardWeeklyCalendar({
+  DashboardWeeklyCalendar({
     super.key,
     required this.activities,
     required this.checkIns,
     required this.subTasks,
-  });
+    MilestoneService? milestoneService,
+  }) : milestoneService = milestoneService ?? getIt<MilestoneService>();
 
   bool _isSameDay(DateTime d1, DateTime d2) {
     return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
@@ -83,22 +87,27 @@ class DashboardWeeklyCalendar extends StatelessWidget {
                 // Calculate completion for this day
                 int completed = 0;
                 for (var activity in activities) {
-                  final int todayCount;
-                  if (activity.trackingType == 'multiple') {
-                    final dayTask = subTasks.firstWhere(
-                      (s) => s.activityId == activity.id && _isSameDay(s.timestamp, day),
-                      orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
-                    );
-                    todayCount = dayTask.subTasks.where((st) => st.checked).length;
+                  final bool isDone;
+                  if (activity.trackingType == 'milestone') {
+                    isDone = milestoneService.isMilestoneCompletedOnDay(activity, subTasks, day);
                   } else {
-                    todayCount = checkIns
-                        .where((c) =>
-                            c.activityId == activity.id &&
-                            _isSameDay(c.timestamp, day) &&
-                            c.checked)
-                        .length;
+                    final int todayCount;
+                    if (activity.trackingType == 'multiple') {
+                      final dayTask = subTasks.firstWhere(
+                        (s) => s.activityId == activity.id && _isSameDay(s.timestamp, day),
+                        orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
+                      );
+                      todayCount = dayTask.subTasks.where((st) => st.checked).length;
+                    } else {
+                      todayCount = checkIns
+                          .where((c) =>
+                              c.activityId == activity.id &&
+                              _isSameDay(c.timestamp, day) &&
+                              c.checked)
+                          .length;
+                    }
+                    isDone = todayCount >= activity.targetCount;
                   }
-                  final bool isDone = todayCount >= activity.targetCount;
                   if (isDone) completed++;
                 }
 

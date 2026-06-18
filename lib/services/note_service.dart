@@ -20,7 +20,36 @@ class NoteService {
     });
   }
 
-  Future<void> createEntry(String title, String content, String mood, List<String> tags) async {
+  Future<int> getNextDayNumber() async {
+    final snapshot = await _logsCollection.get();
+    final uniqueDates = <String>{};
+    final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month}-${now.day}';
+    
+    for (var doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>? ?? {};
+      final Timestamp? ts = data['timestamp'] as Timestamp?;
+      if (ts != null) {
+        final date = ts.toDate();
+        final dateStr = '${date.year}-${date.month}-${date.day}';
+        uniqueDates.add(dateStr);
+      }
+    }
+    
+    if (uniqueDates.contains(todayStr)) {
+      return uniqueDates.length;
+    } else {
+      return uniqueDates.length + 1;
+    }
+  }
+
+  Future<void> createEntry(
+    String title,
+    String content,
+    String mood,
+    List<String> tags, {
+    bool isPinned = false,
+  }) async {
     final newEntry = NoteEntity(
       id: '',
       title: title,
@@ -28,6 +57,7 @@ class NoteService {
       timestamp: DateTime.now(),
       mood: mood,
       tags: tags,
+      isPinned: isPinned,
     );
     await _logsCollection.add(newEntry.toFirestore());
   }
@@ -37,14 +67,20 @@ class NoteService {
     String title,
     String content,
     String mood,
-    List<String> tags,
-  ) async {
+    List<String> tags, {
+    bool isPinned = false,
+  }) async {
     await _logsCollection.doc(id).update({
       'title': title,
       'content': content,
       'mood': mood,
       'tags': tags,
+      'isPinned': isPinned,
     });
+  }
+
+  Future<void> togglePin(String id, bool isPinned) async {
+    await _logsCollection.doc(id).update({'isPinned': isPinned});
   }
 
   Future<void> deleteEntry(String id) async {

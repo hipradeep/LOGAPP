@@ -415,7 +415,7 @@ class _TaskCardState extends State<TaskCard> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.calendar_month_rounded, size: 14, color: AppTheme.primaryLight),
+                            Icon(Icons.calendar_month_rounded, size: 14, color: AppTheme.primaryLight),
                             const SizedBox(width: 6),
                             Text(
                               widget.task.scheduledTime != null
@@ -428,8 +428,8 @@ class _TaskCardState extends State<TaskCard> {
                       ),
                       TextButton.icon(
                         onPressed: () => widget.onEditTask(widget.task),
-                        icon: const Icon(Icons.edit_outlined, size: 14, color: AppTheme.primaryLight),
-                        label: const Text('Edit', style: TextStyle(color: AppTheme.primaryLight, fontSize: 11)),
+                        icon: Icon(Icons.edit_outlined, size: 14, color: AppTheme.primaryLight),
+                        label: Text('Edit', style: TextStyle(color: AppTheme.primaryLight, fontSize: 11)),
                         style: TextButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.08),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -458,7 +458,7 @@ class _TaskCardState extends State<TaskCard> {
             style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 12),
             decoration: InputDecoration(
               hintText: 'Add checklist sub-item...',
-              hintStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
               filled: true,
               fillColor: AppTheme.surface(context).withValues(alpha: 0.5),
               isDense: true,
@@ -473,7 +473,7 @@ class _TaskCardState extends State<TaskCard> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppTheme.primaryColor),
+                borderSide: BorderSide(color: AppTheme.primaryColor),
               ),
             ),
             textInputAction: TextInputAction.next,
@@ -507,7 +507,7 @@ class _TaskCardState extends State<TaskCard> {
                 width: 1,
               ),
             ),
-            child: const Text(
+            child: Text(
               'Add',
               style: TextStyle(
                 color: AppTheme.primaryLight,

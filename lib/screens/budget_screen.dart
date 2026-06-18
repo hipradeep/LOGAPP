@@ -4,7 +4,7 @@ import '../models/budget.dart';
 import '../services/budget_service.dart';
 import '../services/notification_transaction_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/base_management_tab.dart';
+import '../widgets/app_premium_fab.dart';
 import '../controllers/budget_controller.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/transaction_filter_sheet.dart';
@@ -12,6 +12,9 @@ import '../widgets/add_transaction_sheet.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
+import '../widgets/budget_7days_expense_graph.dart';
+import '../widgets/category_breakdown_sheet.dart';
+import '../widgets/budget_progress_bar.dart';
 
 class BudgetScreen extends StatefulWidget {
   final String? selectedBudgetId;
@@ -33,7 +36,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
   DateTime? _filterEndDate;
   String _filterType = 'all'; // 'all', 'debit', 'credit'
   String _filterValidation = 'all'; // 'all', 'validated', 'pending'
-  String? _deletingExpenseId;
 
   @override
   void initState() {
@@ -69,91 +71,146 @@ class _BudgetScreenState extends State<BudgetScreen> {
     super.dispose();
   }
 
-  void _deleteTransaction(Budget budget, String expenseId) async {
-    await _controller.deleteTransaction(budget, expenseId);
-  }
+
 
   @override
   Widget build(BuildContext context) {
-    return FullScreenPage(
-      showScaffold: false,
-      isScrollable: false,
-      title: 'Budget',
-      backgroundWidgets: const [
-        GlowBlob(
-          top: -40,
-          left: -40,
-          size: 220,
-          color: AppTheme.primaryColor,
-          opacity: 0.08,
-        ),
-        GlowBlob(
-          bottom: -50,
-          right: -50,
-          size: 260,
-          color: AppTheme.secondaryColor,
-          opacity: 0.05,
-        ),
-      ],
-      children: [
-        Expanded(
-          child: BaseManagementTab<BudgetController>(
-            controller: _controller,
-            isLoading: (ctrl) => ctrl.isLoading,
-            errorMessage: (ctrl) => ctrl.errorMessage,
-            isEmpty: (ctrl) => ctrl.budgets.isEmpty,
-            emptyIcon: Icons.account_balance_wallet_outlined,
-            emptyMessage: 'No budget limits added yet.',
-            onRefresh: () async => await _controller.refresh(),
-            onFabPressed: () {
-              if (_controller.selectedBudget != null) {
-                _showAddTransactionSheet(context, _controller.selectedBudget!);
-              }
-            },
-            builder: (context, controller) {
-              final budgets = controller.budgets;
-              final selectedBudget = controller.selectedBudget;
-
-              final bottomPadding = MediaQuery.of(context).padding.bottom;
-              final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
-
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Dropdown Selector Row
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 180,
-                          child: _buildBudgetDropdown(budgets, controller),
-                        ),
-                        const HGapSm(),
-                        _buildCalendarButton(context, selectedBudget),
-                        const HGapSm(),
-                        _buildProgressButton(context, selectedBudget),
-                        const HGapSm(),
-                        _buildScannerStatusButton(context, selectedBudget),
-                        const Spacer(),
-                      ],
-                    ),
-                    const VGapMd(),
-
-                    // Render selected budget details
-                    if (selectedBudget == null)
-                      _buildEmptyState('Select a budget category above.')
-                    else ...[
-                      _buildSelectedBudgetDetails(selectedBudget, controller),
-                    ],
-                  ],
+    return AppProvider<BudgetController>(
+      notifier: _controller,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: FullScreenPage(
+              showScaffold: false,
+              isScrollable: false,
+              title: 'Budget',
+              //headerSpacing: 48.0,
+              backgroundWidgets: [
+                GlowBlob(
+                  top: -40,
+                  left: -40,
+                  size: 220,
+                  color: AppTheme.primaryColor,
+                  opacity: 0.08,
                 ),
-              );
+                GlowBlob(
+                  bottom: -50,
+                  right: -50,
+                  size: 260,
+                  color: AppTheme.secondaryColor,
+                  opacity: 0.05,
+                ),
+              ],
+              children: [
+                Expanded(
+                  child: ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, _) => _buildBody(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ListenableBuilder(
+            listenable: _controller,
+            builder: (context, _) {
+              final hasBudgets = _controller.budgets.isNotEmpty;
+              if (hasBudgets && !_controller.isLoading && _controller.errorMessage == null) {
+                return AppPremiumFab(
+                  right: 24,
+                  onPressed: () {
+                    if (_controller.selectedBudget != null) {
+                      _showAddTransactionSheet(context, _controller.selectedBudget!);
+                    }
+                  },
+                );
+              }
+              return const SizedBox.shrink();
             },
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_controller.isLoading) {
+      return Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      );
+    }
+
+    if (_controller.errorMessage != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Center(
+          child: Text(
+            'Failed to load data:\n${_controller.errorMessage}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.errorColor),
+          ),
         ),
-      ],
+      );
+    }
+
+    if (_controller.budgets.isEmpty) {
+      final secondaryColor = AppTheme.textSecondaryColor(context);
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
+              const VGapMd(),
+              Text(
+                'No budget limits added yet.',
+                style: AppTheme.headingSmall.copyWith(color: secondaryColor),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final budgets = _controller.budgets;
+    final selectedBudget = _controller.selectedBudget;
+
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const VGapSm(),
+          Row(
+            children: [
+              SizedBox(
+                width: 180,
+                child: _buildBudgetDropdown(budgets, _controller),
+              ),
+              const HGapSm(),
+              _buildCalendarButton(context, selectedBudget),
+              const HGapSm(),
+              _buildProgressButton(context, selectedBudget),
+              const HGapSm(),
+              _buildScannerStatusButton(context, selectedBudget),
+              const Spacer(),
+            ],
+          ),
+          const VGapMd(),
+
+          // Render selected budget details
+          if (selectedBudget == null)
+            _buildEmptyState('Select a budget category above.')
+          else ...[
+            _buildSelectedBudgetDetails(selectedBudget, _controller),
+          ],
+        ],
+      ),
     );
   }
 
@@ -164,7 +221,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => AddTransactionSheet(
         budgetId: budget.id,
-        categoryName: budget.category,
+        categoryName: budget.categoryName,
         onAddTransaction: (tag, desc, amount, date) async {
           await BudgetService().addTransaction(budget.id, tag, desc, amount, timestamp: date);
         },
@@ -199,13 +256,13 @@ class _BudgetScreenState extends State<BudgetScreen> {
             ),
           ),
           items: budgets.map((budget) {
-            final suffix = budget.checked ? '' : ' (Completed)';
+            final suffix = budget.isActive ? '' : ' (Completed)';
             return DropdownMenuItem<String>(
               value: budget.id,
               child: Text(
-                '${budget.category}$suffix',
+                '${budget.name}$suffix',
                 style: TextStyle(
-                  color: budget.checked
+                  color: budget.isActive
                       ? AppTheme.textPrimaryColor(context)
                       : AppTheme.textSecondaryColor(context),
                   fontSize: 12,
@@ -229,7 +286,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
     final spent = budget.spentForCurrentPeriod(controller.transactions);
     final percent = budget.limit > 0 ? (spent / budget.limit).clamp(0.0, 1.0) : 0.0;
     final isOver = budget.isOverBudget(controller.transactions);
-    final isActive = budget.checked;
+    final isActive = budget.isActive;
 
     final Color statusColor = !isActive
         ? AppTheme.successColor
@@ -264,11 +321,27 @@ class _BudgetScreenState extends State<BudgetScreen> {
                         Row(
                           children: [
                             Text(
-                              budget.category,
+                              budget.name,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textPrimaryColor(context),
                                 fontSize: 15,
+                              ),
+                            ),
+                            const HGapSm(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                budget.categoryName.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: AppTheme.primaryAccentColor(context),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             const HGapSm(),
@@ -289,46 +362,54 @@ class _BudgetScreenState extends State<BudgetScreen> {
                             ),
                           ],
                         ),
-                        if (budget.period == 'custom' || budget.scheduledTime != null || (budget.repeatDays.isNotEmpty && budget.repeatDays.length < 7)) ...[
+                        if (budget.period == 'custom' && budget.startDate != null && budget.endDate != null) ...[
                           const SizedBox(height: 6),
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
                             children: [
-                              if (budget.startDate != null && budget.endDate != null)
-                                _buildCardTag(
-                                  Icons.calendar_today_rounded,
-                                  '${DateFormat('MMM d').format(budget.startDate!)} - ${DateFormat('MMM d').format(budget.endDate!)}',
-                                ),
-                              if (budget.repeatDays.isNotEmpty && budget.repeatDays.length < 7)
-                                _buildCardTag(
-                                  Icons.repeat_rounded,
-                                  '${budget.repeatDays.length} days/wk',
-                                ),
-                              if (budget.scheduledTime != null)
-                                _buildCardTag(
-                                  Icons.notifications_active_outlined,
-                                  budget.scheduledTime!,
-                                ),
+                              _buildCardTag(
+                                Icons.calendar_today_rounded,
+                                '${DateFormat('MMM d').format(budget.startDate!)} - ${DateFormat('MMM d').format(budget.endDate!)}',
+                              ),
                             ],
                           ),
                         ],
                       ],
                     ),
                   ),
-                  if (!isActive)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppTheme.successColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.successColor.withValues(alpha: 0.3)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.successColor.withValues(alpha: 0.3)),
+                          ),
+                          child: const Text(
+                            'COMPLETED',
+                            style: TextStyle(color: AppTheme.successColor, fontSize: 8, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      const HGapSm(),
+                      GestureDetector(
+                        onTap: () => _showCategoryBreakdownSheet(budget, controller.selectedBudgetTransactions),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: statusColor.withValues(alpha: 0.25), width: 1),
+                          ),
+                          child: Icon(Icons.pie_chart_outline_rounded, size: 14, color: statusColor),
+                        ),
                       ),
-                      child: const Text(
-                        'COMPLETED',
-                        style: TextStyle(color: AppTheme.successColor, fontSize: 8, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
               const VGapMd(),
@@ -353,17 +434,23 @@ class _BudgetScreenState extends State<BudgetScreen> {
                   ),
                 ],
               ),
-              const VGapSm(),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: percent,
-                  backgroundColor: AppTheme.textPrimaryColor(context).withValues(alpha: 0.05),
-                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                  minHeight: 6,
-                ),
+              const VGapMd(),
+              BudgetProgressBar(
+                percent: percent,
+                alertThreshold: budget.alertThreshold,
+                statusColor: statusColor,
+                minHeight: 6,
               ),
             ],
+          ),
+        ),
+        const VGapMd(),
+
+        // 7-Day Expense Bar Graph
+        RepaintBoundary(
+          child: Budget7DaysExpenseGraph(
+            budget: budget,
+            transactions: controller.transactions,
           ),
         ),
         const VGapMd(),
@@ -431,6 +518,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
           return ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
             itemCount: displayExpenses.length,
             itemBuilder: (context, index) {
               final expense = displayExpenses[index];
@@ -439,110 +527,94 @@ class _BudgetScreenState extends State<BudgetScreen> {
               final iconColor = _getTagColor(lookup);
               final iconData = _getTagIcon(lookup);
               final tagName = expense.tag.isNotEmpty ? expense.tag : _getTagName(expense.description);
-              final isDeletingThis = _deletingExpenseId == expense.id;
               final isGain = expense.amount < 0;
-
               return GestureDetector(
-                onLongPress: () {
-                  setState(() {
-                    _deletingExpenseId = isDeletingThis ? null : expense.id;
-                  });
-                },
                 onTap: () => _handleExpenseTap(budget, expense),
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isDeletingThis 
-                        ? AppTheme.errorColor.withValues(alpha: 0.1) 
-                        : (expense.isValidated ? AppTheme.surface(context).withValues(alpha: 0.5) : Colors.transparent),
+                    color: expense.isValidated ? AppTheme.surface(context).withValues(alpha: 0.5) : Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isDeletingThis 
-                          ? AppTheme.errorColor 
-                          : (expense.isValidated 
-                              ? AppTheme.borderColor(context) 
-                              : AppTheme.warningColor.withValues(alpha: 0.35)),
+                      color: expense.isValidated 
+                          ? AppTheme.borderColor(context) 
+                          : AppTheme.warningColor.withValues(alpha: 0.35),
                       width: expense.isValidated ? 1.0 : 1.2,
                     ),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: iconColor.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: iconColor.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(iconData, color: iconColor, size: 16),
                             ),
-                            child: Icon(iconData, color: iconColor, size: 16),
-                          ),
-                          const HGapMd(),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                            const HGapMd(),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          expense.description.isNotEmpty
+                                              ? '$tagName | ${expense.description}'
+                                              : tagName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.textPrimaryColor(context),
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                      if (!expense.isValidated) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.warningColor.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.3)),
+                                          ),
+                                          child: const Text(
+                                            'Pending',
+                                            style: TextStyle(color: AppTheme.warningColor, fontSize: 8, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
                                   Text(
-                                    tagName,
+                                    formattedDate,
                                     style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimaryColor(context),
-                                      fontSize: 13,
+                                      color: AppTheme.textSecondaryColor(context),
+                                      fontSize: 10,
                                     ),
                                   ),
-                                  if (!expense.isValidated) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.warningColor.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.3)),
-                                      ),
-                                      child: const Text(
-                                        'Pending',
-                                        style: TextStyle(color: AppTheme.warningColor, fontSize: 8, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                formattedDate,
-                                style: TextStyle(
-                                  color: AppTheme.textSecondaryColor(context),
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Text(
-                            '${isGain ? '+' : '-'}₹${expense.amount.abs().toStringAsFixed(1)}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isGain ? AppTheme.successColor : AppTheme.errorColor,
-                              fontSize: 14,
-                            ),
-                          ),
-                          if (isDeletingThis) ...[
-                            const HGapMd(),
-                            IconButton(
-                              constraints: const BoxConstraints(),
-                              padding: EdgeInsets.zero,
-                              icon: const Icon(Icons.delete_forever_rounded, color: AppTheme.errorColor, size: 20),
-                              onPressed: () => _deleteTransaction(budget, expense.id),
                             ),
                           ],
-                        ],
+                        ),
+                      ),
+                      const HGapMd(),
+                      Text(
+                        '${isGain ? '+' : '-'}₹${expense.amount.abs().toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isGain ? AppTheme.successColor : AppTheme.errorColor,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
@@ -597,7 +669,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
               backgroundColor: AppTheme.surface(context),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Text(
-                budget.category,
+                budget.name,
                 style: TextStyle(
                   color: AppTheme.textPrimaryColor(context),
                   fontWeight: FontWeight.bold,
@@ -699,7 +771,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Close', style: TextStyle(color: AppTheme.primaryColor)),
+                  child: Text('Close', style: TextStyle(color: AppTheme.primaryColor)),
                 ),
               ],
             ),
@@ -739,7 +811,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
     final spent = budget.spentForCurrentPeriod(controller.transactions);
     final percent = total > 0 ? (spent / total).clamp(0.0, 1.0) : 0.0;
     final isOver = budget.isOverBudget(controller.transactions);
-    final isActive = budget.checked;
+    final isActive = budget.isActive;
 
     final Color statusColor = !isActive
         ? AppTheme.successColor
@@ -839,7 +911,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
             ),
           ),
           content: Text(
-            'LOG requires Notification Access to automatically scan and import transaction alerts from banking, UPI, and SMS apps in real time. Your messages are parsed locally on your device.',
+            'LOG requires Notification Access to automatically scan and import transaction alerts from banking and UPI apps in real time. Your messages are parsed locally on your device.',
             style: TextStyle(
               color: AppTheme.textSecondaryColor(context),
               fontSize: 13,
@@ -890,6 +962,21 @@ class _BudgetScreenState extends State<BudgetScreen> {
     await NotificationTransactionService.requestPermission();
   }
 
+  void _showCategoryBreakdownSheet(Budget budget, List<Transaction> transactions) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => CategoryBreakdownSheet(
+        budget: budget,
+        transactions: transactions,
+        getTagIcon: _getTagIcon,
+        getTagColor: _getTagColor,
+        getTagName: _getTagName,
+      ),
+    );
+  }
+
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -915,22 +1002,18 @@ class _BudgetScreenState extends State<BudgetScreen> {
   }
 
   void _handleExpenseTap(Budget budget, Transaction expense) {
-    if (_deletingExpenseId != null) {
-      setState(() => _deletingExpenseId = null);
-    } else {
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: (context) => AddTransactionSheet(
-          budgetId: budget.id,
-          categoryName: budget.category,
-          existingTransaction: expense,
-          budgets: _controller.budgets,
-          onAddTransaction: (tag, desc, amount, date) async {},
-        ),
-      );
-    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => AddTransactionSheet(
+        budgetId: budget.id,
+        categoryName: budget.categoryName,
+        existingTransaction: expense,
+        budgets: _controller.budgets,
+        onAddTransaction: (tag, desc, amount, date) async {},
+      ),
+    );
   }
 
   Widget _buildEmptyState(String text) {
@@ -1010,3 +1093,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
     return AppTheme.primaryColor;
   }
 }
+
+
+

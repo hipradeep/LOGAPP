@@ -9,9 +9,12 @@ import 'controllers/theme_controller.dart';
 import 'services/notification_service.dart';
 import 'services/activity_notification_sync.dart';
 import 'services/notification_transaction_service.dart';
+import 'services/service_locator.dart';
+import 'services/activity_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setupLocator();
 
   // Initialize Firebase (fails gracefully if google-services.json is a dummy)
   try {
@@ -20,23 +23,45 @@ void main() async {
     debugPrint("Firebase initialization failed/bypassed: $e");
   }
 
-  // Initialize Notification Service for banner reminders
-  await NotificationService.init();
-
-  // Start syncing activities/subtasks with native local notifications
-  ActivityNotificationSync.init();
-
-  // Start notification transaction scanner if permission is granted
-  try {
-    final hasScannerPermission = await NotificationTransactionService.isPermissionGranted();
-    if (hasScannerPermission) {
-      await NotificationTransactionService.startService();
-    }
-  } catch (e) {
-    debugPrint("Failed to auto-start Notification Transaction Service: $e");
-  }
-
   runApp(const MyApp());
+
+  // Non-essential services initialization runs asynchronously in the background
+  _initBackgroundServices();
+}
+
+void _initBackgroundServices() {
+  Future.microtask(() async {
+    // Deactivate finished activities on startup
+    try {
+      await getIt<ActivityService>().deactivateFinishedActivities();
+    } catch (e) {
+      debugPrint("Failed to deactivate finished activities on startup: $e");
+    }
+
+    // Initialize Notification Service for banner reminders
+    try {
+      await NotificationService.init();
+    } catch (e) {
+      debugPrint("Failed to initialize Notification Service: $e");
+    }
+
+    // Start syncing activities/subtasks with native local notifications
+    try {
+      ActivityNotificationSync.init();
+    } catch (e) {
+      debugPrint("Failed to init ActivityNotificationSync: $e");
+    }
+
+    // Start notification transaction scanner if permission is granted
+    try {
+      final hasScannerPermission = await NotificationTransactionService.isPermissionGranted();
+      if (hasScannerPermission) {
+        await NotificationTransactionService.startService();
+      }
+    } catch (e) {
+      debugPrint("Failed to auto-start Notification Transaction Service: $e");
+    }
+  });
 }
 
 class MyApp extends StatefulWidget {
@@ -89,10 +114,19 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Resolve isDark dynamically based on the current theme mode and system settings
-    final resolvedBrightness = _themeController.themeMode == ThemeMode.system
+    // Resolve isDark dynamically based on the current theme type
+    final resolvedBrightness = _themeController.themeType == AppThemeType.system
         ? MediaQuery.platformBrightnessOf(context)
-        : (_themeController.themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light);
+        : ((_themeController.themeType == AppThemeType.dark || _themeController.themeType == AppThemeType.orix) ? Brightness.dark : Brightness.light);
+
+    // Update activeThemeType dynamically
+    if (_themeController.themeType == AppThemeType.system) {
+      AppTheme.activeThemeType = resolvedBrightness == Brightness.dark
+          ? AppThemeType.dark
+          : AppThemeType.light;
+    } else {
+      AppTheme.activeThemeType = _themeController.themeType;
+    }
     AppTheme.isDark = resolvedBrightness == Brightness.dark;
 
     return AppProvider<ThemeController>(

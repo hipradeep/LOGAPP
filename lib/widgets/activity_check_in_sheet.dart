@@ -9,7 +9,9 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
-import 'burn_chart.dart';
+import 'activity_heatmap.dart';
+import 'activity_bar_graph.dart';
+import 'activity_burnup_chart.dart';
 
 class ActivityCheckInSheet extends StatefulWidget {
   final Activity activity;
@@ -50,7 +52,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: DraggableScrollableSheet(
         initialChildSize: 0.8,
         minChildSize: 0.5,
@@ -84,7 +86,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                       );
                     }
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
+                      return Center(
                         child: CircularProgressIndicator(color: AppTheme.primaryColor),
                       );
                     }
@@ -99,7 +101,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                           );
                         }
                         if (tasksSnapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(
+                          return Center(
                             child: CircularProgressIndicator(color: AppTheme.primaryColor),
                           );
                         }
@@ -257,11 +259,29 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               ],
               
               // Activity details graph
-              BurnChart(
-                activity: widget.activity,
-                checkIns: checkIns,
-                tasks: tasks,
-              ),
+              if (widget.activity.trackingType == 'single')
+                ActivityHeatmap(
+                  activity: widget.activity,
+                  checkIns: checkIns,
+                  tasks: tasks,
+                  heatmapWeeks: 12,
+                )
+              else if (widget.activity.trackingType == 'multiple')
+                ActivityBarGraph(
+                  activity: widget.activity,
+                  checkIns: checkIns,
+                  tasks: tasks,
+                  daysWindow: 7,
+                  showWindowButtons: false,
+                )
+              else
+                ActivityBurnupChart(
+                  activity: widget.activity,
+                  checkIns: checkIns,
+                  tasks: tasks,
+                  daysWindow: 7,
+                  showTitle: false,
+                ),
               const VGapLg(),
               
               // 2. History Section Title
@@ -518,7 +538,7 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                                       ? 'Task: ${item.subTaskName!.split('|').first} (${_formatTimeString(item.subTaskName!.split('|').last)})'
                                       : 'Task: ${item.subTaskName!.split('|').first}')
                                   : 'Task: ${item.subTaskName}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppTheme.primaryLight,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -584,6 +604,25 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               final updatedTask = taskForDay.copyWith(subTasks: updatedSubTasks, checked: allChecked);
               await _activityService.updateTask(updatedTask);
             }
+          }
+        } else if (widget.activity.trackingType == 'milestone') {
+          // Find the milestone task by matching name
+          final milestoneTask = tasks.firstWhere(
+            (t) {
+              final cleanTaskName = t.taskName.contains('|') ? t.taskName.split('|').first : t.taskName;
+              final cleanSubTaskName = item.subTaskName != null && item.subTaskName!.contains('|')
+                  ? item.subTaskName!.split('|').first
+                  : item.subTaskName;
+              return cleanTaskName == cleanSubTaskName && t.checked;
+            },
+            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: item.timestamp, checked: false),
+          );
+          if (milestoneTask.id.isNotEmpty) {
+            final updatedTask = milestoneTask.copyWith(
+              checked: false,
+              completionTime: null,
+            );
+            await _activityService.updateTask(updatedTask);
           }
         }
       } catch (e) {

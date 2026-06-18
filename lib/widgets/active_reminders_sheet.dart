@@ -57,7 +57,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
   Widget build(BuildContext context) {
     Theme.of(context);
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -66,7 +66,7 @@ class _ActiveRemindersSheetState extends State<ActiveRemindersSheet> {
           border: Border.all(color: AppTheme.borderColor(context), width: 1),
         ),
         child: _isLoading
-            ? const Center(
+            ? Center(
                 child: Padding(
                   padding: EdgeInsets.all(16.0),
                   child: CircularProgressIndicator(color: AppTheme.primaryColor),

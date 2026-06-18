@@ -1,35 +1,85 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+enum AppThemeType {
+  light,
+  dark,
+  orix,
+  system,
+}
+
 class AppTheme {
   // Dynamic theme state updated from MyApp root
   static bool isDark = true;
+  static AppThemeType activeThemeType = AppThemeType.dark;
 
   // === App Colors ===
   
   // Brand Primary (Violet 500)
   // Use for: Main buttons, primary active states, and dominant branding elements.
-  static const primaryColor = Color(0xFF8B5CF6); 
+  static Color get primaryColor {
+    switch (activeThemeType) {
+      case AppThemeType.orix:
+        return const Color(0xFFF0C38E);
+      default:
+        return const Color(0xFF8B5CF6);
+    }
+  }
   
   // Brand Light (Violet 300)
   // Use for: Active text labels, glowing indicators, highlights on dark backgrounds.
-  static const primaryLight = Color(0xFFC4B5FD); 
+  static Color get primaryLight {
+    switch (activeThemeType) {
+      case AppThemeType.orix:
+        return const Color(0xFFF1AA9B);
+      default:
+        return const Color(0xFFC4B5FD);
+    }
+  }
   
   // Brand Dark (Violet 700)
   // Use for: Gradients, deep shadows, and pressed button states.
-  static const primaryDark = Color(0xFF6D28D9);  
+  static Color get primaryDark {
+    switch (activeThemeType) {
+      case AppThemeType.orix:
+        return const Color(0xFF312C51);
+      default:
+        return const Color(0xFF6D28D9);
+    }
+  }
   
   // Secondary Accent (Blue 500)
   // Use for: Secondary actions, links, or contrasting gradient blends.
-  static const secondaryColor = Color(0xFF3B82F6); 
+  static Color get secondaryColor {
+    switch (activeThemeType) {
+      case AppThemeType.orix:
+        return const Color(0xFFF1AA9B);
+      default:
+        return const Color(0xFF3B82F6);
+    }
+  }
   
   // Background Deep (Slate 900)
   // Use for: The absolute bottom layer of the app, main screen backgrounds.
-  static const backgroundColor = Color(0xFF0F172A); 
+  static Color get backgroundColor {
+    switch (activeThemeType) {
+      case AppThemeType.orix:
+        return const Color(0xFF312C51);
+      default:
+        return const Color(0xFF0F172A);
+    }
+  }
   
   // Surface Elevated (Slate 800)
   // Use for: Cards, bottom navigation bars, dialogs, and text fields.
-  static const surfaceColor = Color(0xFF1E293B);    
+  static Color get surfaceColor {
+    switch (activeThemeType) {
+      case AppThemeType.orix:
+        return const Color(0xFF48426D);
+      default:
+        return const Color(0xFF1E293B);
+    }
+  }    
   
   // Destructive/Error (Rose 500)
   // Use for: Error messages, delete buttons, missed attendance, failed actions.
@@ -96,8 +146,8 @@ class AppTheme {
   /// Returns the border/divider color for the current theme.
   static Color borderColor(BuildContext context) =>
       isDarkMode(context)
-          ? Colors.white.withValues(alpha: 0.07)
-          : lightBorderColor;
+          ? Colors.white.withValues(alpha: 0.12)
+          : const Color(0xFFCBD5E1);
 
   /// Returns the primary text color for the current theme.
   static Color textPrimaryColor(BuildContext context) =>
@@ -123,11 +173,13 @@ class AppTheme {
 
   /// Returns the border/divider color for inputs/containers.
   static Color inputBorderColor(BuildContext context) =>
-      isDarkMode(context) ? Colors.white10 : lightBorderColor;
+      isDarkMode(context)
+          ? Colors.white.withValues(alpha: 0.24)
+          : lightTextMuted.withValues(alpha: 0.25);
 
   /// Returns the background color for quick action cards.
   static Color quickActionCardColor(BuildContext context) =>
-      isDarkMode(context) ? Colors.white.withValues(alpha: 0.04) : lightSurfaceColor;
+      isDarkMode(context) ? Colors.white.withValues(alpha: 0.08) : lightSurfaceColor;
 
   /// Returns the shadow color for quick action cards.
   static Color quickActionShadowColor(BuildContext context, Color accentColor) =>
@@ -135,13 +187,13 @@ class AppTheme {
 
   /// Returns the border color for quick action cards.
   static Color quickActionBorderColor(BuildContext context) =>
-      isDarkMode(context) ? Colors.white.withValues(alpha: 0.05) : borderColor(context);
+      isDarkMode(context) ? Colors.white.withValues(alpha: 0.1) : borderColor(context);
 
   /// Returns the subtle background fill color for interactive items.
   static Color subtleFillColor(BuildContext context) =>
       isDarkMode(context)
-          ? Colors.white.withValues(alpha: 0.05)
-          : Colors.black.withValues(alpha: 0.05);
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.black.withValues(alpha: 0.07);
 
   /// Returns the text color for selected choice chips.
   static Color selectedChipTextColor(BuildContext context) =>
@@ -220,7 +272,7 @@ class AppTheme {
   static const double subtaskCheckboxSize = 18.0;
 
   // Common Gradients
-  static const LinearGradient backgroundGradient = LinearGradient(
+  static LinearGradient get backgroundGradient => LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [backgroundColor, surfaceColor],
@@ -232,7 +284,7 @@ class AppTheme {
     colors: [lightBackgroundColor, lightSurfaceVariant],
   );
 
-  static const LinearGradient primaryGradient = LinearGradient(
+  static LinearGradient get primaryGradient => LinearGradient(
     colors: [primaryColor, secondaryColor],
   );
 
@@ -378,7 +430,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(defaultBorderRadius),
-          borderSide: const BorderSide(color: primaryColor),
+          borderSide: BorderSide(color: primaryColor),
         ),
         labelStyle: const TextStyle(color: lightTextSecondary),
         hintStyle: TextStyle(color: lightTextSecondary.withValues(alpha: 0.5)),

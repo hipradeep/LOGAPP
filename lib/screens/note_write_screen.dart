@@ -5,7 +5,8 @@ import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../models/note_entity.dart';
-import '../widgets/glow_blob.dart';
+import '../widgets/app_text_action_button.dart';
+import '../widgets/app_popup_menu_button.dart';
 
 class MoodItem {
   final String emoji;
@@ -28,16 +29,18 @@ class NoteWriteController extends ChangeNotifier {
   
   late DateTime timestamp;
   late String selectedMood;
+  late bool isPinned;
   
   // History for content undo/redo
   final List<String> _history = [];
   int _historyIndex = -1;
   bool _isPerformingUndoRedo = false;
 
-  NoteWriteController({this.existingEntry}) {
+  NoteWriteController({this.existingEntry, String? initialTitle}) {
     selectedMood = existingEntry?.mood ?? '';
+    isPinned = existingEntry?.isPinned ?? false;
     
-    final titleText = existingEntry?.title ?? '';
+    final titleText = existingEntry?.title ?? initialTitle ?? '';
     
     titleController = TextEditingController(text: titleText);
     contentController = TextEditingController(text: existingEntry?.content ?? '');
@@ -103,6 +106,11 @@ class NoteWriteController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void togglePin() {
+    isPinned = !isPinned;
+    notifyListeners();
+  }
+
   void updateTimestamp(DateTime newDate) {
     timestamp = newDate;
     notifyListeners();
@@ -121,10 +129,12 @@ class NoteWriteController extends ChangeNotifier {
 
 class NoteWriteScreen extends StatefulWidget {
   final NoteEntity? existingEntry;
+  final String? initialTitle;
 
   const NoteWriteScreen({
     super.key,
     this.existingEntry,
+    this.initialTitle,
   });
 
   @override
@@ -152,7 +162,10 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
   @override
   void initState() {
     super.initState();
-    _writeController = NoteWriteController(existingEntry: widget.existingEntry);
+    _writeController = NoteWriteController(
+      existingEntry: widget.existingEntry,
+      initialTitle: widget.initialTitle,
+    );
   }
 
   @override
@@ -171,6 +184,7 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
         'content': _writeController.contentController.text.trim(),
         'mood': selectedMood,
         'tags': <String>[],
+        'isPinned': _writeController.isPinned,
       });
     }
   }
@@ -231,61 +245,63 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
         isScrollable: true,
         title: widget.existingEntry != null ? 'Edit note' : 'New note',
         showBackButton: true,
-        backgroundWidgets: [
-          ListenableBuilder(
-            listenable: _writeController,
-            builder: (context, _) {
-              final activeMood = _moods.firstWhere(
-                (m) => m.emoji == _writeController.selectedMood,
-                orElse: () => _moods.first,
-              );
-              return GlowBlob(
-                bottom: -40,
-                right: -40,
-                size: 260,
-                color: activeMood.glowColor,
-                opacity: 0.12,
-              );
-            },
-          ),
-        ],
+
         actions: [
-          TextButton(
-            onPressed: _saveLog,
-            child: Text(
-              widget.existingEntry != null ? 'UPDATE' : 'SAVE',
-              style: TextStyle(
-                color: AppTheme.primaryAccentColor(context),
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
+          Transform.translate(
+            offset: const Offset(8, 0),
+            child: AppTextActionButton(
+              label: widget.existingEntry != null ? 'UPDATE' : 'SAVE',
+              onPressed: _saveLog,
             ),
           ),
-          if (widget.existingEntry != null)
-            PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              onSelected: (value) {
-                if (value == 'delete') {
-                  _handleDelete();
-                }
+          Transform.translate(
+            offset: const Offset(8, 0),
+            child: ListenableBuilder(
+              listenable: _writeController,
+              builder: (context, _) {
+                return AppPopupMenuButton(
+                  onSelected: (value) {
+                    if (value == 'pin') {
+                      _writeController.togglePin();
+                    } else if (value == 'delete') {
+                      _handleDelete();
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    PopupMenuItem<String>(
+                      value: 'pin',
+                      child: Row(
+                        children: [
+                          Icon(
+                            _writeController.isPinned
+                                ? Icons.push_pin_rounded
+                                : Icons.push_pin_outlined,
+                            color: _writeController.isPinned
+                                ? AppTheme.primaryColor
+                                : Theme.of(context).iconTheme.color,
+                            size: 20,
+                          ),
+                          const HGapSm(),
+                          Text(_writeController.isPinned ? 'Unpin Note' : 'Pin Note'),
+                        ],
+                      ),
+                    ),
+                    if (widget.existingEntry != null)
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                            HGapSm(),
+                            Text('Delete Note', style: TextStyle(color: AppTheme.errorColor)),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
               },
-              icon: Icon(
-                Icons.more_vert_rounded,
-                color: Theme.of(context).iconTheme.color,
-              ),
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem<String>(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
-                      HGapSm(),
-                      Text('Delete Note', style: TextStyle(color: AppTheme.errorColor)),
-                    ],
-                  ),
-                ),
-              ],
             ),
+          ),
         ],
         children: [
           const VGapSm(),
@@ -378,7 +394,7 @@ class NoteDateField extends StatelessWidget {
         return Theme(
           data: AppTheme.isDarkMode(context)
               ? AppTheme.darkTheme.copyWith(
-                  colorScheme: const ColorScheme.dark(
+                  colorScheme: ColorScheme.dark(
                     primary: AppTheme.primaryColor,
                     onPrimary: Colors.white,
                     surface: AppTheme.surfaceColor,
@@ -386,7 +402,7 @@ class NoteDateField extends StatelessWidget {
                   ),
                 )
               : AppTheme.lightTheme.copyWith(
-                  colorScheme: const ColorScheme.light(
+                  colorScheme: ColorScheme.light(
                     primary: AppTheme.primaryColor,
                     onPrimary: Colors.white,
                     surface: AppTheme.lightSurfaceColor,

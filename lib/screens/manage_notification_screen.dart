@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../widgets/app_spacers.dart';
 import '../controllers/settings_controller.dart';
 import '../services/notification_service.dart';
 import '../services/notification_transaction_service.dart';
 import 'activity_reminder_screen.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class ManageNotificationScreen extends StatelessWidget {
   final SettingsController controller;
@@ -26,24 +24,7 @@ class ManageNotificationScreen extends StatelessWidget {
           title: 'Manage Notification',
           showBackButton: true,
           isScrollable: true,
-          backgroundWidgets: const [
-            GlowBlob(
-              top: -40,
-              left: -40,
-              size: 240,
-              color: AppTheme.primaryColor,
-              opacity: 0.1,
-              key: ValueKey('glow_blob_top'),
-            ),
-            GlowBlob(
-              bottom: -60,
-              right: -40,
-              size: 260,
-              color: AppTheme.secondaryColor,
-              opacity: 0.06,
-              key: ValueKey('glow_blob_bottom'),
-            ),
-          ],
+
           children: [
             const VGapMd(),
             _buildNotificationSection(context),
@@ -113,15 +94,6 @@ class ManageNotificationScreen extends StatelessWidget {
                 subtitle: 'Auto-track payments from active screen notifications (requires persistent banner)',
                 value: controller.notificationScannerEnabled,
                 onChanged: (val) => _handleNotificationScannerToggle(context, val),
-              ),
-              const _Divider(),
-              _SwitchItem(
-                icon: Icons.sms_outlined,
-                iconBgColor: AppTheme.primaryLight,
-                title: 'SMS Transaction Scanner',
-                subtitle: 'Auto-track payments from background bank SMS messages (no persistent banner)',
-                value: controller.smsScannerEnabled,
-                onChanged: (val) => _handleSmsScannerToggle(context, val),
               ),
               const _Divider(),
               _MenuItem(
@@ -214,76 +186,6 @@ class ManageNotificationScreen extends StatelessWidget {
     await controller.toggleNotificationScanner(val);
   }
 
-  Future<void> _handleSmsScannerToggle(BuildContext context, bool val) async {
-    if (val) {
-      final hasPermission = await Permission.sms.isGranted;
-      if (!context.mounted) return;
-      if (!hasPermission) {
-        final confirmed = await _showSmsScannerSetupDialog(context);
-        if (!confirmed) return;
-        final status = await Permission.sms.request();
-        if (!status.isGranted) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('SMS permission is required to enable the SMS Scanner.'),
-                backgroundColor: AppTheme.warningColor,
-              ),
-            );
-          }
-          return;
-        }
-      }
-    }
-    await controller.toggleSmsScanner(val);
-  }
-
-  Future<bool> _showSmsScannerSetupDialog(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'SMS Scanner Access',
-          style: TextStyle(
-            color: AppTheme.textPrimaryColor(context),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          'LOG requires SMS permission to automatically scan and import transaction alerts from banking SMS messages in real time. Your messages are parsed completely offline and locally on your device.',
-          style: TextStyle(
-            color: AppTheme.textSecondaryColor(context),
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: AppTheme.textSecondaryColor(context),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Enable Access',
-              style: TextStyle(
-                color: AppTheme.primaryAccentColor(context),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
 
   Future<bool> _showNotificationScannerSetupDialog(BuildContext context) async {
     final result = await showDialog<bool>(

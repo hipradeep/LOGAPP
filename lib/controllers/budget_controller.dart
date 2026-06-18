@@ -31,7 +31,7 @@ class BudgetController extends ChangeNotifier {
     }
     
     if (_budgets.isNotEmpty) {
-      final activeBudgets = _budgets.where((b) => b.checked).toList();
+      final activeBudgets = _budgets.where((b) => b.isActive).toList();
       return activeBudgets.isNotEmpty ? activeBudgets.first : _budgets.first;
     }
     return null;
@@ -108,7 +108,7 @@ class BudgetController extends ChangeNotifier {
         onBudgetChanged?.call(selectedBudget);
       }
     } else if (_budgets.isNotEmpty) {
-      final activeBudgets = _budgets.where((b) => b.checked).toList();
+      final activeBudgets = _budgets.where((b) => b.isActive).toList();
       _selectedBudgetId = activeBudgets.isNotEmpty ? activeBudgets.first.id : _budgets.first.id;
       onBudgetChanged?.call(selectedBudget);
     }

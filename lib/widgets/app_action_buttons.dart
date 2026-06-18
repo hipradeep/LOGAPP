@@ -11,7 +11,7 @@ class AppActionButtons extends StatelessWidget {
   final VoidCallback? onSecondaryPressed;
   final bool isPrimaryLoading;
   final bool isSecondaryLoading;
-  final Color primaryColor;
+  final Color? primaryColor;
   final Color secondaryColor;
   final int primaryFlex;
   final int secondaryFlex;
@@ -25,7 +25,7 @@ class AppActionButtons extends StatelessWidget {
     this.onSecondaryPressed,
     this.isPrimaryLoading = false,
     this.isSecondaryLoading = false,
-    this.primaryColor = AppTheme.primaryColor,
+    this.primaryColor,
     this.secondaryColor = AppTheme.errorColor,
     this.primaryFlex = 2,
     this.secondaryFlex = 1,
@@ -34,13 +34,14 @@ class AppActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final actualPrimaryColor = primaryColor ?? AppTheme.primaryColor;
     final hasSecondary = onSecondaryPressed != null && secondaryLabel != null && secondaryLabel!.isNotEmpty;
 
     final primaryBtn = ElevatedButton(
       onPressed: (isPrimaryLoading || isSecondaryLoading) ? null : onPrimaryPressed,
       style: ElevatedButton.styleFrom(
         minimumSize: Size(double.infinity, height),
-        backgroundColor: primaryColor,
+        backgroundColor: actualPrimaryColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),

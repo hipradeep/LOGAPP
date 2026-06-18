@@ -133,7 +133,7 @@ class _CheckInHistorySheetState extends State<CheckInHistorySheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) {
                         return SizedBox(
-                          width: (MediaQuery.of(context).size.width - 48 - 48) / 7, // Account for list padding and grid gaps
+                          width: (MediaQuery.sizeOf(context).width - 48 - 48) / 7, // Account for list padding and grid gaps
                           child: Center(
                             child: Text(
                               day,

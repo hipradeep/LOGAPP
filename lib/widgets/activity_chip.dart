@@ -9,6 +9,8 @@ class ActivityChip extends StatefulWidget {
   final VoidCallback? onLongPress;
   final bool isSkipped;
   final bool isSelected;
+  final int? targetCountOverride;
+  final bool? isCompletedOverride;
 
   const ActivityChip({
     super.key,
@@ -18,6 +20,8 @@ class ActivityChip extends StatefulWidget {
     this.onLongPress,
     this.isSkipped = false,
     this.isSelected = false,
+    this.targetCountOverride,
+    this.isCompletedOverride,
   });
 
   @override
@@ -68,9 +72,9 @@ class _ActivityChipState extends State<ActivityChip>
     final activity = widget.activity;
     final todayCount = widget.todayCount;
     final isSkipped = widget.isSkipped;
-    final targetCount = activity.targetCount;
+    final targetCount = widget.targetCountOverride ?? activity.targetCount;
     final isMultiple = targetCount > 1;
-    final isCompleted = todayCount >= targetCount && !isSkipped;
+    final isCompleted = widget.isCompletedOverride ?? (todayCount >= targetCount && !isSkipped);
     final double progress = targetCount > 0
         ? (isSkipped ? 1.0 : (todayCount / targetCount).clamp(0.0, 1.0))
         : 0.0;

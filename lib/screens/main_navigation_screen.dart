@@ -28,7 +28,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late final SettingsController _settingsController;
 
   final List<Widget> _screens = [
-    const DashboardScreen(),
+    DashboardScreen(),
     const MilestonesScreen(),
     const BudgetScreen(),
     const NotesScreen(),
@@ -93,7 +93,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Widget _buildBottomNavigationBar(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
       color: Colors.transparent,
       child: ClipRRect(
@@ -279,7 +279,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             context,
                             icon: Icons.palette_outlined,
                             title: 'Theme',
-                            trailingText: _getThemeModeName(themeController.themeMode),
+                            trailingText: _getThemeTypeName(themeController.themeType),
                             onTap: () {
                               _showThemeSelectionDialog(context, themeController);
                             },
@@ -428,7 +428,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             width: 54,
             height: 54,
             padding: const EdgeInsets.all(2),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: AppTheme.primaryGradient,
               shape: BoxShape.circle,
             ),
@@ -508,9 +508,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildThemeOptionTile(context, themeController, ThemeMode.light, 'Light Mode', Icons.light_mode_rounded),
-            _buildThemeOptionTile(context, themeController, ThemeMode.dark, 'Dark Mode', Icons.dark_mode_rounded),
-            _buildThemeOptionTile(context, themeController, ThemeMode.system, 'System Default', Icons.settings_suggest_rounded),
+            _buildThemeOptionTile(context, themeController, AppThemeType.light, 'Light Mode', Icons.light_mode_rounded),
+            _buildThemeOptionTile(context, themeController, AppThemeType.dark, 'Classic Dark', Icons.dark_mode_rounded),
+            _buildThemeOptionTile(context, themeController, AppThemeType.orix, 'Orix Theme', Icons.palette_rounded),
+            _buildThemeOptionTile(context, themeController, AppThemeType.system, 'System Default', Icons.settings_suggest_rounded),
           ],
         ),
       ),
@@ -520,11 +521,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget _buildThemeOptionTile(
     BuildContext context,
     ThemeController themeController,
-    ThemeMode mode,
+    AppThemeType type,
     String title,
     IconData icon,
   ) {
-    final isSelected = themeController.themeMode == mode;
+    final isSelected = themeController.themeType == type;
     final primaryAccent = AppTheme.primaryAccentColor(context);
     return ListTile(
       leading: Icon(icon, color: isSelected ? primaryAccent : AppTheme.textSecondaryColor(context)),
@@ -537,19 +538,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
       trailing: isSelected ? Icon(Icons.check_circle_rounded, color: primaryAccent, size: 20) : null,
       onTap: () {
-        themeController.setThemeMode(mode);
+        themeController.setThemeType(type);
         Navigator.pop(context);
       },
     );
   }
 
-  String _getThemeModeName(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
+  String _getThemeTypeName(AppThemeType type) {
+    switch (type) {
+      case AppThemeType.light:
         return 'Light';
-      case ThemeMode.dark:
-        return 'Dark';
-      case ThemeMode.system:
+      case AppThemeType.dark:
+        return 'Classic Dark';
+      case AppThemeType.orix:
+        return 'Orix Theme';
+      case AppThemeType.system:
         return 'System';
     }
   }
@@ -745,7 +748,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     width: 1,
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Soon',
                   style: TextStyle(
                     color: AppTheme.primaryLight,

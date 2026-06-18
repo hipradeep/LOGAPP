@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/activity.dart';
 import '../models/task.dart';
@@ -25,6 +26,11 @@ class ActivityService {
     });
   }
 
+  Future<List<Activity>> getAllActivities() async {
+    final snapshot = await _activitiesCollection.get();
+    return snapshot.docs.map((doc) => Activity.fromFirestore(doc)).toList();
+  }
+
   Stream<Activity?> getActivityStream(String id) {
     return _activitiesCollection.doc(id).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -43,7 +49,43 @@ class ActivityService {
     });
   }
 
-  Future<void> createActivity(
+  Future<void> deactivateFinishedActivities() async {
+    try {
+      final today = DateTime.now();
+      final todayMidnight = DateTime(today.year, today.month, today.day);
+
+      final snapshot = await _activitiesCollection
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final writeBatch = FirebaseFirestore.instance.batch();
+      int count = 0;
+
+      for (var doc in snapshot.docs) {
+        final activity = Activity.fromFirestore(doc);
+        if (activity.endDate != null) {
+          final endMidnight = DateTime(
+            activity.endDate!.year,
+            activity.endDate!.month,
+            activity.endDate!.day,
+          );
+          if (todayMidnight.isAfter(endMidnight)) {
+            writeBatch.update(doc.reference, {'isActive': false});
+            count++;
+          }
+        }
+      }
+
+      if (count > 0) {
+        await writeBatch.commit();
+        debugPrint("Background task: Deactivated $count finished activities.");
+      }
+    } catch (e) {
+      debugPrint("Error in deactivateFinishedActivities: $e");
+    }
+  }
+
+  Future<String> createActivity(
     String name, {
     required String trackingType,
     required int targetCount,
@@ -104,6 +146,8 @@ class ActivityService {
       );
       await _tasksCollection.add(newTask.toFirestore());
     }
+
+    return docRef.id;
   }
 
   Future<void> toggleActivity(String id, bool isActive) async {
@@ -346,6 +390,9 @@ class ActivityService {
       subTasks: subTasks,
     );
     await _tasksCollection.add(newTask.toFirestore());
+    
+    // Auto-reactivate parent activity when adding a task to it
+    await _activitiesCollection.doc(activityId).update({'isActive': true});
     if (checked) {
       final checkIn = CheckIn(
         id: '',

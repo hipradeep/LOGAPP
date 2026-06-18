@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/full_screen_page.dart';
-import '../widgets/glow_blob.dart';
 import '../models/activity.dart';
 import '../widgets/app_popup_menu_button.dart';
 import '../widgets/app_text_action_button.dart';
@@ -261,11 +260,9 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         actions: [
           AppTextActionButton(
             label: 'Save',
-            offset: const Offset(16, 0),
             onPressed: _submit,
           ),
           if (widget.initialActivity != null) ...[
-            const SizedBox(width: 8),
             AppPopupMenuButton(
               onSelected: (value) {
                 if (value == 'delete') {
@@ -301,11 +298,11 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                        Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
                         SizedBox(width: 12),
                         Text(
                           'Delete Activity',
-                          style: TextStyle(color: AppTheme.errorColor),
+                          style: TextStyle(color: Colors.red),
                         ),
                       ],
                     ),
@@ -315,22 +312,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             ),
           ],
         ],
-        backgroundWidgets: const [
-          GlowBlob(
-            top: -40,
-            left: -40,
-            size: 240,
-            color: AppTheme.primaryColor,
-            opacity: 0.1,
-          ),
-          GlowBlob(
-            bottom: -50,
-            right: -50,
-            size: 280,
-            color: AppTheme.secondaryColor,
-            opacity: 0.05,
-          ),
-        ],
+
         children: [
           // Text Field
           _buildInputField(),
@@ -615,7 +597,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                 width: 1.5,
               ),
             ),
-            focusedBorder: const UnderlineInputBorder(
+            focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
             ),
             prefixIcon: Padding(
@@ -954,7 +936,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             widthFactor: progressPercent,
             child: Container(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [AppTheme.primaryColor, AppTheme.primaryLight],
                 ),
                 borderRadius: BorderRadius.circular(3),
@@ -1105,7 +1087,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
                       enabledBorder: UnderlineInputBorder(
                         borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1),
                       ),
-                      focusedBorder: const UnderlineInputBorder(
+                      focusedBorder: UnderlineInputBorder(
                         borderSide: BorderSide(color: AppTheme.primaryColor, width: 1.5),
                       ),
                       isDense: true,

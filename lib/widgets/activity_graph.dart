@@ -4,44 +4,42 @@ import '../theme/app_theme.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
+import 'activity_heatmap.dart';
+import 'activity_bar_graph.dart';
+import 'activity_burnup_chart.dart';
+import '../services/milestone_service.dart';
+import '../services/service_locator.dart';
 
-class _HeatmapCellData {
-  final DateTime date;
-  final double completion;
-  final bool isFuture;
-  final bool isToday;
-  final bool isScheduled;
-  final bool isSkipped;
-
-  _HeatmapCellData({
-    required this.date,
-    required this.completion,
-    required this.isFuture,
-    required this.isToday,
-    required this.isScheduled,
-    required this.isSkipped,
-  });
-}
 
 class ActivityGraphCard extends StatefulWidget {
   final Activity activity;
   final List<CheckIn> checkIns;
   final List<Task> tasks;
+  final int initialTab;
+  final MilestoneService milestoneService;
 
-  const ActivityGraphCard({
+  ActivityGraphCard({
     super.key,
     required this.activity,
     required this.checkIns,
     required this.tasks,
-  });
+    this.initialTab = 0,
+    MilestoneService? milestoneService,
+  }) : milestoneService = milestoneService ?? getIt<MilestoneService>();
 
   @override
   State<ActivityGraphCard> createState() => _ActivityGraphCardState();
 }
 
 class _ActivityGraphCardState extends State<ActivityGraphCard> {
-  int _activeTab = 0; // 0 = Completion Trends (Line Graph), 1 = Consistency Heatmap
+  late int _activeTab; // 0 = Completion Trends (Line Graph), 1 = Consistency Heatmap
   int _daysWindow = 7; // 7 or 30 days for Line Graph
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTab = widget.initialTab;
+  }
 
   // Helper to check if a date is same day as target
   bool _isSameDay(DateTime a, DateTime b) {
@@ -179,248 +177,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
     return streak;
   }
 
-  // Heatmap: Get 12 weeks of data ending with current week
-  List<List<_HeatmapCellData>> _getHeatmapGridData() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final weekday = today.weekday;
-    
-    final startOfWeek = today.subtract(Duration(days: weekday - 1));
-    final gridStartDate = startOfWeek.subtract(const Duration(days: 11 * 7)); // 11 weeks ago Monday
-    
-    final List<List<_HeatmapCellData>> grid = [];
-    
-    for (int col = 0; col < 12; col++) {
-      final List<_HeatmapCellData> column = [];
-      final weekMonday = gridStartDate.add(Duration(days: col * 7));
-      
-      for (int row = 0; row < 7; row++) {
-        final date = weekMonday.add(Duration(days: row));
-        final isFuture = date.isAfter(today);
-        final isToday = _isSameDay(date, today);
-        final isScheduled = _isScheduledDay(date);
-        
-        double completion = 0.0;
-        bool isSkipped = false;
-        if (!isFuture) {
-          completion = _calculateDailyCompletion(date);
-          isSkipped = _isDaySkipped(date);
-        }
-        
-        column.add(_HeatmapCellData(
-          date: date,
-          completion: completion,
-          isFuture: isFuture,
-          isToday: isToday,
-          isScheduled: isScheduled,
-          isSkipped: isSkipped,
-        ));
-      }
-      grid.add(column);
-    }
-    return grid;
-  }
 
-  Widget _buildHeatmapGrid(BuildContext context, Color typeColor) {
-    final grid = _getHeatmapGridData();
-    const rowLabels = ['M', '', 'W', '', 'F', '', 'S'];
-    
-    final List<Widget> monthHeaders = [];
-    int? lastMonthVal;
-    
-    for (int colIdx = 0; colIdx < 12; colIdx++) {
-      final weekMonday = grid[colIdx].first.date;
-      final String monthName = DateFormat('MMM').format(weekMonday);
-      final bool showHeader = lastMonthVal == null || weekMonday.month != lastMonthVal;
-      if (showHeader) {
-        lastMonthVal = weekMonday.month;
-      }
-      monthHeaders.add(
-        Expanded(
-          child: Text(
-            showHeader ? monthName : '',
-            style: TextStyle(
-              color: AppTheme.textSecondary.withValues(alpha: 0.7),
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Month headers
-        Padding(
-          padding: const EdgeInsets.only(left: 24, bottom: 6),
-          child: Row(children: monthHeaders),
-        ),
-        
-        // Grid with labels
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Row Labels
-            Column(
-              children: List.generate(7, (rowIdx) {
-                return Container(
-                  height: 12,
-                  width: 16,
-                  margin: const EdgeInsets.only(bottom: 3),
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    rowLabels[rowIdx],
-                    style: TextStyle(
-                      color: AppTheme.textSecondary.withValues(alpha: 0.5),
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(width: 8),
-            
-            // 12 Weeks Columns
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(12, (colIdx) {
-                  final column = grid[colIdx];
-                  return Expanded(
-                    child: Column(
-                      children: List.generate(7, (rowIdx) {
-                        final cell = column[rowIdx];
-                        return _buildHeatmapCell(cell, typeColor);
-                      }),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ],
-        ),
-        
-        const SizedBox(height: 12),
-        // Legend Row
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              'Less',
-              style: TextStyle(
-                color: AppTheme.textSecondary.withValues(alpha: 0.6),
-                fontSize: 9,
-              ),
-            ),
-            const SizedBox(width: 6),
-            _buildLegendCell(Colors.white.withValues(alpha: 0.03), hasBorder: true),
-            const SizedBox(width: 3),
-            _buildLegendCell(typeColor.withValues(alpha: 0.25)),
-            const SizedBox(width: 3),
-            _buildLegendCell(typeColor.withValues(alpha: 0.55)),
-            const SizedBox(width: 3),
-            _buildLegendCell(typeColor),
-            const SizedBox(width: 6),
-            Text(
-              'More',
-              style: TextStyle(
-                color: AppTheme.textSecondary.withValues(alpha: 0.6),
-                fontSize: 9,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeatmapCell(_HeatmapCellData cell, Color typeColor) {
-    if (cell.isFuture) {
-      return Container(
-        height: 12,
-        margin: const EdgeInsets.only(bottom: 3, left: 1, right: 1),
-        decoration: const BoxDecoration(
-          color: Colors.transparent,
-        ),
-      );
-    }
-
-    Color cellColor;
-    BoxBorder? cellBorder;
-    Widget? innerWidget;
-
-    if (cell.isSkipped) {
-      cellColor = typeColor.withValues(alpha: 0.15);
-      cellBorder = Border.all(
-        color: typeColor.withValues(alpha: 0.35),
-        width: 1,
-      );
-      innerWidget = Center(
-        child: Icon(
-          Icons.double_arrow_rounded,
-          size: 7,
-          color: typeColor.withValues(alpha: 0.7),
-        ),
-      );
-    } else if (cell.completion >= 0.01) {
-      // Opacity maps to actual completion percentage to support partial fills
-      cellColor = typeColor.withValues(alpha: (cell.completion * 0.75 + 0.15).clamp(0.15, 0.9));
-      cellBorder = null;
-    } else if (cell.isScheduled) {
-      cellColor = Colors.white.withValues(alpha: 0.03);
-      cellBorder = Border.all(
-        color: Colors.white.withValues(alpha: 0.08),
-        width: 1,
-      );
-    } else {
-      cellColor = Colors.white.withValues(alpha: 0.01);
-      cellBorder = null;
-    }
-
-    if (cell.isToday) {
-      cellBorder = Border.all(
-        color: Colors.white.withValues(alpha: 0.8),
-        width: 1.5,
-      );
-    }
-
-    return Container(
-      height: 12,
-      margin: const EdgeInsets.only(bottom: 3, left: 1, right: 1),
-      decoration: BoxDecoration(
-        color: cellColor,
-        borderRadius: BorderRadius.circular(2.5),
-        border: cellBorder,
-        boxShadow: cell.isToday && cell.completion >= 0.99
-            ? [
-                BoxShadow(
-                  color: typeColor.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                  spreadRadius: 0.5,
-                )
-              ]
-            : null,
-      ),
-      child: innerWidget,
-    );
-  }
-
-  Widget _buildLegendCell(Color color, {bool hasBorder = false}) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(2),
-        border: hasBorder
-            ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5)
-            : null,
-      ),
-    );
-  }
 
   // Completion Line Chart for Trends Tab (Works uniformly for all activities, supports 7D vs 30D selectors)
   Widget _buildTrendsLineGraph(
@@ -441,7 +198,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(4, (index) => Container(
                   height: 1,
-                  color: Colors.white.withValues(alpha: 0.04),
+                  color: AppTheme.borderColor(context).withValues(alpha: 0.5),
                 )),
               ),
               
@@ -487,8 +244,8 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
                       label,
                       style: TextStyle(
                         color: isToday
-                            ? Colors.white
-                            : (isScheduled ? AppTheme.textSecondary : Colors.white24),
+                            ? AppTheme.textPrimaryColor(context)
+                            : (isScheduled ? AppTheme.textSecondaryColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.3)),
                         fontSize: 11,
                         fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
                       ),
@@ -508,7 +265,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
                 Text(
                   DateFormat('MMM d').format(dates.first),
                   style: TextStyle(
-                    color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                    color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
@@ -516,7 +273,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
                 Text(
                   DateFormat('MMM d').format(dates[15]),
                   style: TextStyle(
-                    color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                    color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                     fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
@@ -527,10 +284,10 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
                     color: typeColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Today',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: typeColor,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -561,7 +318,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
         child: Text(
           title,
           style: TextStyle(
-            color: isActive ? Colors.white : AppTheme.textSecondary,
+            color: isActive ? typeColor : AppTheme.textSecondaryColor(context),
             fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
@@ -581,17 +338,17 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: isActive ? Colors.white.withValues(alpha: 0.06) : Colors.transparent,
+          color: isActive ? AppTheme.subtleFillColor(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isActive ? Colors.white.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.04),
+            color: isActive ? AppTheme.borderColor(context) : AppTheme.borderColor(context).withValues(alpha: 0.4),
             width: 1,
           ),
         ),
         child: Text(
           title,
           style: TextStyle(
-            color: isActive ? Colors.white : AppTheme.textSecondary.withValues(alpha: 0.8),
+            color: isActive ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
             fontSize: 9,
             fontWeight: FontWeight.w600,
           ),
@@ -602,6 +359,9 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
 
   @override
   Widget build(BuildContext context) {
+    // CRITICAL: Registers this component to rebuild on theme switch
+    Theme.of(context);
+
     final typeColor = widget.activity.trackingType == 'multiple'
         ? AppTheme.secondaryColor
         : (widget.activity.trackingType == 'milestone' ? AppTheme.warningColor : AppTheme.primaryColor);
@@ -628,6 +388,13 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
     }
     final String bestDayLabel = DateFormat('EEEE').format(last7Days[bestDayIndex]);
 
+    // Milestone-specific stats calculations
+    final milestoneStats = widget.milestoneService.calculateMilestoneStats(widget.tasks);
+    final int milestoneTotal = milestoneStats.total;
+    final int milestoneCompleted = milestoneStats.completed;
+    final int milestonePending = milestoneStats.pending;
+    final double milestoneProgress = milestoneStats.progress;
+
     // Data points for Trends Graph window
     final List<DateTime> trendsDates = List.generate(_daysWindow, (index) {
       final date = now.subtract(Duration(days: _daysWindow - 1 - index));
@@ -644,12 +411,12 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
           end: Alignment.bottomRight,
           colors: [
             typeColor.withValues(alpha: 0.12),
-            AppTheme.surfaceColor.withValues(alpha: 0.15),
+            AppTheme.surface(context).withValues(alpha: 0.15),
           ],
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: AppTheme.borderColor(context),
           width: 1.5,
         ),
       ),
@@ -687,28 +454,29 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
               ),
               
               // Tabs (Trends vs Heatmap)
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    width: 1,
+              if (widget.activity.trackingType != 'milestone')
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.subtleFillColor(context),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppTheme.borderColor(context),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildTabButton(0, 'Trends', typeColor),
+                      _buildTabButton(1, 'Heatmap', typeColor),
+                    ],
                   ),
                 ),
-                child: Row(
-                  children: [
-                    _buildTabButton(0, 'Trends', typeColor),
-                    _buildTabButton(1, 'Heatmap', typeColor),
-                  ],
-                ),
-              ),
             ],
           ),
 
-          // Window toggles row (Visible only on Trends tab)
-          if (_activeTab == 0) ...[
+          // Window toggles row (Visible on Trends tab, or always for milestone)
+          if (_activeTab == 0 || widget.activity.trackingType == 'milestone') ...[
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -723,10 +491,34 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
           const SizedBox(height: 20),
 
           // Dynamic Body Area
-          if (_activeTab == 0) ...[
-            _buildTrendsLineGraph(context, trendsCompletionRates, trendsDates, typeColor),
+          if (widget.activity.trackingType == 'milestone')
+            ActivityBurnupChart(
+              activity: widget.activity,
+              checkIns: widget.checkIns,
+              tasks: widget.tasks,
+              daysWindow: _daysWindow,
+              showTitle: false,
+            )
+          else if (_activeTab == 0) ...[
+            if (widget.activity.trackingType == 'multiple')
+              ActivityBarGraph(
+                activity: widget.activity,
+                checkIns: widget.checkIns,
+                tasks: widget.tasks,
+                daysWindow: _daysWindow,
+                showTitle: false,
+                showWindowButtons: false,
+              )
+            else
+              _buildTrendsLineGraph(context, trendsCompletionRates, trendsDates, typeColor),
           ] else ...[
-            _buildHeatmapGrid(context, typeColor),
+            ActivityHeatmap(
+              activity: widget.activity,
+              checkIns: widget.checkIns,
+              tasks: widget.tasks,
+              heatmapWeeks: 12,
+              showTitle: false,
+            ),
           ],
           
           const SizedBox(height: 24),
@@ -735,60 +527,106 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.02),
+              color: AppTheme.subtleFillColor(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.04),
+                color: AppTheme.borderColor(context),
                 width: 1,
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                // Streak Stat
-                _buildRedesignedStat(
-                  icon: Icons.local_fire_department_rounded,
-                  iconColor: Colors.orangeAccent,
-                  bgColor: Colors.orange.withValues(alpha: 0.1),
-                  label: 'Active Streak',
-                  value: currentStreak == 1 ? '1 Day' : '$currentStreak Days',
-                ),
-                
-                // Divider
-                Container(
-                  width: 1,
-                  height: 32,
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-                
-                // Weekly Rate Stat
-                _buildRedesignedStat(
-                  icon: Icons.check_circle_rounded,
-                  iconColor: typeColor,
-                  bgColor: typeColor.withValues(alpha: 0.1),
-                  label: 'Weekly Avg',
-                  value: '${(averageCompletion * 100).toStringAsFixed(0)}%',
-                ),
-                
-                // Divider (only if best day is shown)
-                if (maxCompletion > 0.01) ...[
-                  Container(
-                    width: 1,
-                    height: 32,
-                    color: Colors.white.withValues(alpha: 0.08),
+            child: widget.activity.trackingType == 'milestone'
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // Overall Progress
+                      _buildRedesignedStat(
+                        icon: Icons.track_changes_rounded,
+                        iconColor: AppTheme.warningColor,
+                        bgColor: AppTheme.warningColor.withValues(alpha: 0.1),
+                        label: 'Overall Progress',
+                        value: '${(milestoneProgress * 100).toStringAsFixed(0)}%',
+                      ),
+                      
+                      // Divider
+                      Container(
+                        width: 1,
+                        height: 32,
+                        color: AppTheme.borderColor(context),
+                      ),
+                      
+                      // Completed / Total Milestones
+                      _buildRedesignedStat(
+                        icon: Icons.playlist_add_check_rounded,
+                        iconColor: AppTheme.successColor,
+                        bgColor: AppTheme.successColor.withValues(alpha: 0.1),
+                        label: 'Milestones',
+                        value: '$milestoneCompleted/$milestoneTotal',
+                      ),
+                      
+                      // Divider
+                      Container(
+                        width: 1,
+                        height: 32,
+                        color: AppTheme.borderColor(context),
+                      ),
+                      
+                      // Active Tasks pending
+                      _buildRedesignedStat(
+                        icon: Icons.hourglass_empty_rounded,
+                        iconColor: AppTheme.secondaryColor,
+                        bgColor: AppTheme.secondaryColor.withValues(alpha: 0.1),
+                        label: 'Active Tasks',
+                        value: milestonePending == 1 ? '1 Pending' : '$milestonePending Pending',
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // Streak Stat
+                      _buildRedesignedStat(
+                        icon: Icons.local_fire_department_rounded,
+                        iconColor: Colors.orangeAccent,
+                        bgColor: Colors.orange.withValues(alpha: 0.1),
+                        label: 'Active Streak',
+                        value: currentStreak == 1 ? '1 Day' : '$currentStreak Days',
+                      ),
+                      
+                      // Divider
+                      Container(
+                        width: 1,
+                        height: 32,
+                        color: AppTheme.borderColor(context),
+                      ),
+                      
+                      // Weekly Rate Stat
+                      _buildRedesignedStat(
+                        icon: Icons.check_circle_rounded,
+                        iconColor: typeColor,
+                        bgColor: typeColor.withValues(alpha: 0.1),
+                        label: 'Weekly Avg',
+                        value: '${(averageCompletion * 100).toStringAsFixed(0)}%',
+                      ),
+                      
+                      // Divider (only if best day is shown)
+                      if (maxCompletion > 0.01) ...[
+                        Container(
+                          width: 1,
+                          height: 32,
+                          color: AppTheme.borderColor(context),
+                        ),
+                        
+                        // Best Day Stat
+                        _buildRedesignedStat(
+                          icon: Icons.star_rounded,
+                          iconColor: AppTheme.successColor,
+                          bgColor: AppTheme.successColor.withValues(alpha: 0.1),
+                          label: 'Best Day',
+                          value: bestDayLabel,
+                        ),
+                      ],
+                    ],
                   ),
-                  
-                  // Best Day Stat
-                  _buildRedesignedStat(
-                    icon: Icons.star_rounded,
-                    iconColor: AppTheme.successColor,
-                    bgColor: AppTheme.successColor.withValues(alpha: 0.1),
-                    label: 'Best Day',
-                    value: bestDayLabel,
-                  ),
-                ],
-              ],
-            ),
           ),
         ],
       ),
@@ -824,8 +662,8 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppTheme.textPrimaryColor(context),
               fontSize: 14,
               fontWeight: FontWeight.bold,
               letterSpacing: -0.2,
@@ -836,7 +674,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
             label.toUpperCase(),
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppTheme.textSecondary.withValues(alpha: 0.5),
+              color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
               fontSize: 8,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.3,

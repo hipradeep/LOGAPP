@@ -7,8 +7,9 @@ class AppToast {
     required String message,
     String? actionLabel,
     VoidCallback? onActionPressed,
-    Color backgroundColor = AppTheme.primaryColor,
+    Color? backgroundColor,
   }) {
+    final actualBgColor = backgroundColor ?? AppTheme.primaryColor;
     ScaffoldMessenger.of(context).clearSnackBars();
     final controller = ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -21,7 +22,7 @@ class AppToast {
           ),
         ),
         duration: const Duration(seconds: 3),
-        backgroundColor: backgroundColor,
+        backgroundColor: actualBgColor,
         behavior: SnackBarBehavior.floating,
         elevation: 6,
         shape: RoundedRectangleBorder(

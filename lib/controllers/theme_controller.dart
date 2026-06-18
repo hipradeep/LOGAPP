@@ -1,17 +1,31 @@
 import 'package:flutter/material.dart';
 import '../services/cache_service.dart';
+import '../theme/app_theme.dart';
 
-/// Manages the app-wide theme mode (dark / light).
+/// Manages the app-wide theme mode (dark / light / orix / system).
 /// Persists the user's choice via [CacheService] and notifies listeners
 /// so [AppProvider<ThemeController>] can trigger a [MaterialApp] rebuild.
 class ThemeController extends ChangeNotifier {
   final CacheService _cache = CacheService();
-  ThemeMode _themeMode = ThemeMode.dark; // default: dark
+  AppThemeType _themeType = AppThemeType.dark; // default: dark
 
-  ThemeMode get themeMode => _themeMode;
+  AppThemeType get themeType => _themeType;
 
-  /// True when the current mode is [ThemeMode.dark].
-  bool get isDark => _themeMode == ThemeMode.dark;
+  /// Compatibility getter for MaterialApp's themeMode config.
+  ThemeMode get themeMode {
+    switch (_themeType) {
+      case AppThemeType.light:
+        return ThemeMode.light;
+      case AppThemeType.dark:
+      case AppThemeType.orix:
+        return ThemeMode.dark;
+      case AppThemeType.system:
+        return ThemeMode.system;
+    }
+  }
+
+  /// True when the current mode is dark (Classic Dark or Orix Dark).
+  bool get isDark => _themeType == AppThemeType.dark || _themeType == AppThemeType.orix;
 
   ThemeController() {
     _load();
@@ -19,36 +33,57 @@ class ThemeController extends ChangeNotifier {
 
   Future<void> _load() async {
     final saved = await _cache.getThemeMode();
-    _themeMode = _parse(saved);
+    _themeType = _parse(saved);
     notifyListeners();
   }
 
-  /// Persists and applies [mode] app-wide.
+  /// Persists and applies [type] app-wide.
+  Future<void> setThemeType(AppThemeType type) async {
+    if (_themeType == type) return;
+    _themeType = type;
+    await _cache.saveThemeMode(_toString(type));
+    notifyListeners();
+  }
+
+  // Support old API for backward compatibility
   Future<void> setThemeMode(ThemeMode mode) async {
-    if (_themeMode == mode) return;
-    _themeMode = mode;
-    await _cache.saveThemeMode(_toString(mode));
-    notifyListeners();
+    final type = _fromThemeMode(mode);
+    await setThemeType(type);
   }
 
-  ThemeMode _parse(String? value) {
-    switch (value) {
-      case 'light':
-        return ThemeMode.light;
-      case 'system':
-        return ThemeMode.system;
-      default:
-        return ThemeMode.dark;
+  AppThemeType _fromThemeMode(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return AppThemeType.light;
+      case ThemeMode.system:
+        return AppThemeType.system;
+      case ThemeMode.dark:
+        return AppThemeType.dark;
     }
   }
 
-  String _toString(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        return 'light';
-      case ThemeMode.system:
-        return 'system';
+  AppThemeType _parse(String? value) {
+    switch (value) {
+      case 'light':
+        return AppThemeType.light;
+      case 'orix':
+        return AppThemeType.orix;
+      case 'system':
+        return AppThemeType.system;
       default:
+        return AppThemeType.dark;
+    }
+  }
+
+  String _toString(AppThemeType type) {
+    switch (type) {
+      case AppThemeType.light:
+        return 'light';
+      case AppThemeType.orix:
+        return 'orix';
+      case AppThemeType.system:
+        return 'system';
+      case AppThemeType.dark:
         return 'dark';
     }
   }

@@ -41,8 +41,11 @@ void main() {
 
   group('NotificationService handleNotificationAction Tests', () {
     test('handleNotificationAction ignores action when actionId or payload is empty', () async {
+      // Await each call so their async chains fully complete before the next
+      // test's setUp runs — prevents mock-bleed between tests.
+
       // 1. Empty actionId
-      NotificationService.handleNotificationAction(
+      await NotificationService.handleNotificationAction(
         const NotificationResponse(
           notificationResponseType: NotificationResponseType.selectedNotificationAction,
           id: 1,
@@ -53,7 +56,7 @@ void main() {
       expect(log, isEmpty);
 
       // 2. Empty payload
-      NotificationService.handleNotificationAction(
+      await NotificationService.handleNotificationAction(
         const NotificationResponse(
           notificationResponseType: NotificationResponseType.selectedNotificationAction,
           id: 1,
@@ -64,7 +67,7 @@ void main() {
       expect(log, isEmpty);
 
       // 3. Invalid payload parts
-      NotificationService.handleNotificationAction(
+      await NotificationService.handleNotificationAction(
         const NotificationResponse(
           notificationResponseType: NotificationResponseType.selectedNotificationAction,
           id: 1,
@@ -76,8 +79,10 @@ void main() {
     });
 
     test('handleNotificationAction reschedules notification and shows confirmation on reschedule_10', () async {
-      // Trigger a 10 min reschedule
-      NotificationService.handleNotificationAction(
+      // Await directly — handleNotificationAction returns Future<void> and
+      // must be awaited so all async hops (cancel, zonedSchedule, show) complete
+      // before we inspect the mock log.
+      await NotificationService.handleNotificationAction(
         const NotificationResponse(
           notificationResponseType: NotificationResponseType.selectedNotificationAction,
           id: 9999,
@@ -86,14 +91,10 @@ void main() {
         ),
       );
 
-      // Give it a tiny bit of time for async execution
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-
       // We expect:
       // 1. cancel (for id: 9999)
       // 2. zonedSchedule (for rescheduled notification with id: 9999)
       // 3. show (for confirmation notification with id: (9999 + 12345) & 0x7FFFFFFF)
-      
       final cancelCalls = log.where((call) => call.method == 'cancel').toList();
       final scheduleCalls = log.where((call) => call.method == 'zonedSchedule').toList();
       final showCalls = log.where((call) => call.method == 'show').toList();
@@ -114,8 +115,8 @@ void main() {
     });
 
     test('handleNotificationAction reschedules notification and shows confirmation on reschedule_30', () async {
-      // Trigger a 30 min reschedule
-      NotificationService.handleNotificationAction(
+      // Await directly — handleNotificationAction returns Future<void>.
+      await NotificationService.handleNotificationAction(
         const NotificationResponse(
           notificationResponseType: NotificationResponseType.selectedNotificationAction,
           id: 123,
@@ -123,9 +124,6 @@ void main() {
           payload: 'Meeting|Team Sync',
         ),
       );
-
-      // Give it a tiny bit of time for async execution
-      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       final cancelCalls = log.where((call) => call.method == 'cancel').toList();
       final scheduleCalls = log.where((call) => call.method == 'zonedSchedule').toList();

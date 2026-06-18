@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../utils/responsive.dart';
@@ -14,45 +15,57 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../services/note_service.dart';
 import '../services/check_in_service.dart';
+import '../services/milestone_service.dart';
+import '../services/service_locator.dart';
 import 'note_write_screen.dart';
 import '../controllers/dashboard_controller.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/focus_timer_sheet.dart';
 import '../widgets/dashboard_quick_actions.dart';
+import '../widgets/add_transaction_sheet.dart';
 
 import '../widgets/dashboard_summary_card.dart';
 import '../widgets/dashboard_weekly_calendar.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final CheckInService checkInService;
+  final NoteService noteService;
+  final MilestoneService milestoneService;
+
+  DashboardScreen({
+    super.key,
+    CheckInService? checkInService,
+    NoteService? noteService,
+    MilestoneService? milestoneService,
+  })  : checkInService = checkInService ?? getIt<CheckInService>(),
+        noteService = noteService ?? getIt<NoteService>(),
+        milestoneService = milestoneService ?? getIt<MilestoneService>();
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final CheckInService _checkInService = CheckInService();
-  final NoteService _noteService = NoteService();
+  late final CheckInService _checkInService;
+  late final NoteService _noteService;
   
   final ValueNotifier<Set<String>> _selectedActivityIds = ValueNotifier({});
   late final DashboardController _controller;
   static final DateFormat _dateFormat = DateFormat('EEEE, MMM d');
 
-  final List<Map<String, String>> _moods = [
-    {'emoji': '😊', 'label': 'Happy'},
-    {'emoji': '🚀', 'label': 'Excited'},
-    {'emoji': '🌌', 'label': 'Calm'},
-    {'emoji': '😔', 'label': 'Down'},
-    {'emoji': '🔥', 'label': 'Motivated'},
-    {'emoji': '💤', 'label': 'Tired'},
-  ];
+
 
 
 
   @override
   void initState() {
     super.initState();
-    _controller = DashboardController();
+    _checkInService = widget.checkInService;
+    _noteService = widget.noteService;
+    _controller = DashboardController(
+      checkInService: widget.checkInService,
+      milestoneService: widget.milestoneService,
+    );
   }
 
   @override
@@ -73,69 +86,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Builder(
         builder: (context) {
           final controller = AppProvider.watch<DashboardController>(context);
-          if (controller.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppTheme.primaryColor),
-            );
-          }
           return FullScreenPage(
             showScaffold: false,
             isScrollable: true,
             title: 'LOG',
             padding: EdgeInsets.zero,
-            leading: _buildDrawerButton(context),
             backgroundWidgets: _buildBackgroundWidgets(context),
-            children: [
-              _buildHeaderDate(context),
-              const VGapMd(),
-              DashboardSummaryCard(
-                activities: controller.todayActivities,
-                checkIns: controller.checkIns,
-                subTasks: controller.tasks,
-              ),
-              const VGapSm(),
-              DashboardQuickActions(
-                onFocus: _handleFocusAction,
-                onWater: _handleWaterAction,
-                onNewJournal: _handleNewJournalAction,
-              ),
-              const VGapSm(),
-              _buildActivitiesAndCalendarSection(context, controller),
-              const VGapXxl(),
-              const VGapXxl(),
-              const VGapXxl(),
-            ],
+            children: controller.errorMessage != null
+                ? [
+                    SizedBox(
+                      height: MediaQuery.sizeOf(context).height - 200,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            'Failed to load dashboard:\n${controller.errorMessage}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppTheme.errorColor),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]
+                : (controller.isLoading
+                    ? [
+                        SizedBox(
+                          height: MediaQuery.sizeOf(context).height - 200,
+                          child: Center(
+                            child: CircularProgressIndicator(color: AppTheme.primaryColor),
+                          ),
+                        ),
+                      ]
+                    : [
+                        _buildHeaderDate(context),
+                        const VGapMd(),
+                        DashboardSummaryCard(
+                          activities: controller.todayActivities,
+                          checkIns: controller.checkIns,
+                          subTasks: controller.tasks,
+                        ),
+                        const VGapSm(),
+                        DashboardQuickActions(
+                          onFocus: _handleFocusAction,
+                          onWater: _handleWaterAction,
+                          onNewJournal: _handleNewJournalAction,
+                          onAddTransaction: _handleAddTransactionAction,
+                        ),
+                        const VGapSm(),
+                        _buildActivitiesAndCalendarSection(context, controller),
+                        const VGapXxl(),
+                        const VGapXxl(),
+                        const VGapXxl(),
+                      ]),
           );
         }
       ),
     );
   }
 
-  Widget _buildDrawerButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _openDrawer(context),
-      child: Transform.translate(
-        offset: const Offset(-8, 0),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          color: Colors.transparent,
-          child: Icon(
-            Icons.menu_rounded,
-            color: Theme.of(context).iconTheme.color,
-            size: 24,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openDrawer(BuildContext context) {
-    Scaffold.of(context).openDrawer();
-  }
-
   List<Widget> _buildBackgroundWidgets(BuildContext context) {
     return [
-      const GlowBlob(
+      GlowBlob(
         top: -50,
         left: -50,
         size: 250,
@@ -191,8 +202,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           checkIns: controller.checkIns,
           subTasks: controller.tasks,
         ),
-        const VGapSm(),
-        _buildQuickMoodSection(),
         const VGapSm(),
       ],
     );
@@ -345,6 +354,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             runSpacing: 8,
             children: activities.map((activity) {
               final int count;
+              int? targetCountOverride;
+              bool? isCompletedOverride;
+
               if (activity.trackingType == 'multiple') {
                 final todayTask = allTasks.firstWhere(
                   (s) => s.activityId == activity.id && _isToday(s.timestamp) && s.subTasks.isNotEmpty,
@@ -352,7 +364,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
                 count = todayTask.subTasks.where((st) => st.checked).length;
               } else if (activity.trackingType == 'milestone') {
-                count = allTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp) && s.checked).length;
+                final todayTasks = allTasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp)).toList();
+                count = todayTasks.where((s) => s.checked).length;
+                targetCountOverride = todayTasks.length;
+                isCompletedOverride = widget.milestoneService.isMilestoneCompletedToday(activity, allTasks) && !isSkippedList;
               } else {
                 count = todayCheckIns.where((c) => c.activityId == activity.id).length;
               }
@@ -361,6 +376,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 key: ValueKey(activity.id),
                 activity: activity,
                 todayCount: count,
+                targetCountOverride: targetCountOverride,
+                isCompletedOverride: isCompletedOverride,
                 isSkipped: isSkippedList,
                 isSelected: selectedIds.contains(activity.id),
                 onTap: () {
@@ -405,64 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
 
-  // QUICK MOOD CHECK-IN PANEL
-  Widget _buildQuickMoodSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: AppTheme.defaultCardPadding,
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context).withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        border: Border.all(
-          color: AppTheme.borderColor(context),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'How are you feeling right now?',
-            style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const VGapSm(),
-          SizedBox(
-            height: 54,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _moods.length,
-              itemBuilder: (context, index) {
-                final mood = _moods[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: InkWell(
-                    onTap: () => _handleQuickMood(mood['emoji']!, mood['label']!),
-                    borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                    child: Container(
-                      width: 54,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppTheme.surface(context).withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                        border: Border.all(
-                          color: AppTheme.borderColor(context),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        mood['emoji']!,
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   void _handleSkipSelected(BuildContext context, List<Activity> sectionActivities) {
     final selectedIds = _selectedActivityIds.value;
@@ -554,32 +514,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
 
-  // QUICK MOOD LOGGING ACTION
-  void _handleQuickMood(String emoji, String label) async {
-    try {
-      await _noteService.createEntry(
-        'Feeling $label',
-        'Logged a quick check-in.',
-        emoji,
-        ['QuickCheck'],
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Quick check-in logged: Feeling $label $emoji'),
-          backgroundColor: AppTheme.primaryColor,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to save to Firestore. Check connection. ($e)'),
-          backgroundColor: AppTheme.errorColor,
-        ),
-      );
-    }
-  }
+
 
   // QUICK ACTIONS NAMED HANDLERS
   void _handleFocusAction() {
@@ -594,12 +529,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _handleWaterAction() async {
     try {
-      await _noteService.createEntry(
-        'Logged Water Intake',
-        'Drank 250ml of water.',
-        '💧',
-        ['Health', 'Water'],
-      );
+      await _controller.logWater();
       if (!mounted) return;
       AppToast.show(
         context: context,
@@ -617,10 +547,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _handleNewJournalAction() async {
+    int dayNum = 1;
+    try {
+      dayNum = await _noteService.getNextDayNumber();
+    } catch (e) {
+      // fallback to 1
+    }
+
+    if (!mounted) return;
+
+    String tagName = 'Daily';
+    if (_controller.activeActivities.isNotEmpty) {
+      final random = Random();
+      tagName = _controller.activeActivities[random.nextInt(_controller.activeActivities.length)].name;
+    }
+    final defaultTitle = 'Day $dayNum | "$tagName Feeling"';
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const NoteWriteScreen(),
+        builder: (context) => NoteWriteScreen(initialTitle: defaultTitle),
       ),
     );
     if (result != null && result is Map<String, dynamic>) {
@@ -645,5 +591,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     }
+  }
+
+  void _handleAddTransactionAction() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const AddTransactionSheet(),
+    );
   }
 }

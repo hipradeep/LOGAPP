@@ -5,10 +5,13 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
+import '../services/milestone_service.dart';
+import '../services/service_locator.dart';
 
 class DashboardController extends ChangeNotifier {
-  final ActivityService _activityService = ActivityService();
-  final CheckInService _checkInService = CheckInService();
+  final ActivityService _activityService;
+  final CheckInService _checkInService;
+  final MilestoneService _milestoneService;
 
   StreamSubscription<List<Activity>>? _activitiesSub;
   StreamSubscription<List<CheckIn>>? _checkInsSub;
@@ -19,6 +22,10 @@ class DashboardController extends ChangeNotifier {
   List<Task> _tasks = [];
 
   bool _isLoading = true;
+  bool _activitiesLoaded = false;
+  bool _checkInsLoaded = false;
+  bool _tasksLoaded = false;
+  String? _errorMessage;
 
   // Cached classified lists
   List<Activity> _pendingActivities = [];
@@ -31,6 +38,7 @@ class DashboardController extends ChangeNotifier {
   List<CheckIn> get checkIns => _checkIns;
   List<Task> get tasks => _tasks;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
   List<Activity> get pendingActivities => _pendingActivities;
   List<Activity> get completedActivities => _completedActivities;
@@ -38,25 +46,56 @@ class DashboardController extends ChangeNotifier {
   List<CheckIn> get todayCheckIns => _todayCheckIns;
   List<Activity> get todayActivities => [..._pendingActivities, ..._completedActivities, ..._skippedActivities];
 
-  DashboardController() {
+  DashboardController({
+    ActivityService? activityService,
+    CheckInService? checkInService,
+    MilestoneService? milestoneService,
+  }) : _activityService = activityService ?? getIt<ActivityService>(),
+       _checkInService = checkInService ?? getIt<CheckInService>(),
+       _milestoneService = milestoneService ?? getIt<MilestoneService>() {
+    _deactivateAndInit();
+  }
+
+  void _deactivateAndInit() {
     _initStreams();
+    _activityService.deactivateFinishedActivities().catchError((e) {
+      debugPrint("Error deactivating finished activities in DashboardController: $e");
+    });
+  }
+
+  void _handleStreamError(Object error) {
+    _isLoading = false;
+    _errorMessage = error.toString();
+    notifyListeners();
   }
 
   void _initStreams() {
-    _activitiesSub = _activityService.getActiveActivitiesStream().listen((activities) {
-      _activeActivities = activities;
-      _recomputeAndNotify();
-    });
+    _activitiesSub = _activityService.getActiveActivitiesStream().listen(
+      (activities) {
+        _activeActivities = activities;
+        _activitiesLoaded = true;
+        _recomputeAndNotify();
+      },
+      onError: _handleStreamError,
+    );
 
-    _checkInsSub = _checkInService.getCheckInsStreamForCurrentWeek().listen((checkIns) {
-      _checkIns = checkIns;
-      _recomputeAndNotify();
-    });
+    _checkInsSub = _checkInService.getCheckInsStreamForCurrentWeek().listen(
+      (checkIns) {
+        _checkIns = checkIns;
+        _checkInsLoaded = true;
+        _recomputeAndNotify();
+      },
+      onError: _handleStreamError,
+    );
 
-    _tasksSub = _activityService.getTasksStreamForCurrentWeek().listen((tasks) {
-      _tasks = tasks;
-      _recomputeAndNotify();
-    });
+    _tasksSub = _activityService.getTasksStreamForCurrentWeek().listen(
+      (tasks) {
+        _tasks = tasks;
+        _tasksLoaded = true;
+        _recomputeAndNotify();
+      },
+      onError: _handleStreamError,
+    );
   }
 
   bool _isToday(DateTime date, DateTime today) {
@@ -95,20 +134,23 @@ class DashboardController extends ChangeNotifier {
         continue;
       }
 
-      final int todayCount;
-      if (activity.trackingType == 'multiple') {
-        final todayTask = _tasks.firstWhere(
-          (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
-          orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
-        );
-        todayCount = todayTask.subTasks.where((st) => st.checked).length;
-      } else if (activity.trackingType == 'milestone') {
-        todayCount = _tasks.where((s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.checked).length;
+      final bool isCompleted;
+      if (activity.trackingType == 'milestone') {
+        isCompleted = _milestoneService.isMilestoneCompletedToday(activity, _tasks);
       } else {
-        todayCount = _todayCheckIns.where((c) => c.activityId == activity.id).length;
+        final int todayCount;
+        if (activity.trackingType == 'multiple') {
+          final todayTask = _tasks.firstWhere(
+            (s) => s.activityId == activity.id && _isToday(s.timestamp, today) && s.subTasks.isNotEmpty,
+            orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: today, checked: false),
+          );
+          todayCount = todayTask.subTasks.where((st) => st.checked).length;
+        } else {
+          todayCount = _todayCheckIns.where((c) => c.activityId == activity.id).length;
+        }
+        isCompleted = todayCount >= activity.targetCount;
       }
 
-      final bool isCompleted = todayCount >= activity.targetCount;
       if (isCompleted) {
         completed.add(activity);
       } else {
@@ -165,8 +207,51 @@ class DashboardController extends ChangeNotifier {
     _completedActivities = completed;
     _skippedActivities = skipped;
     
-    _isLoading = false;
+    if (_activitiesLoaded && _checkInsLoaded && _tasksLoaded) {
+      _isLoading = false;
+    }
+    _errorMessage = null;
     notifyListeners();
+  }
+
+  Future<void> logWater() async {
+    final activities = await _activityService.getAllActivities();
+    Activity? waterActivity;
+    for (var activity in activities) {
+      final nameLower = activity.name.toLowerCase();
+      if (nameLower == 'water' ||
+          nameLower == 'drink water' ||
+          nameLower == 'hydration' ||
+          nameLower.contains('water') ||
+          nameLower.contains('hydration')) {
+        waterActivity = activity;
+        break;
+      }
+    }
+
+    String waterActivityId;
+    if (waterActivity != null) {
+      waterActivityId = waterActivity.id;
+      if (!waterActivity.isActive) {
+        await _activityService.toggleActivity(waterActivity.id, true);
+      }
+    } else {
+      waterActivityId = await _activityService.createActivity(
+        'Water',
+        trackingType: 'single',
+        targetCount: 8,
+        description: 'Track daily water intake',
+        category: 'Health',
+        symbolType: 'emoji',
+        symbolValue: '💧',
+      );
+    }
+
+    await _checkInService.createCheckIn(
+      waterActivityId,
+      DateTime.now(),
+      true,
+    );
   }
 
   @override
