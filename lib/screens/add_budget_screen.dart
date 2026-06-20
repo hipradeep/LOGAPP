@@ -8,6 +8,7 @@ import '../models/budget.dart';
 import '../services/budget_service.dart';
 import '../widgets/app_title_input.dart';
 import '../widgets/app_text_action_button.dart';
+import '../widgets/app_popup_menu_button.dart';
 
 class AddBudgetScreen extends StatefulWidget {
   final Budget? existingBudget;
@@ -460,70 +461,51 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
             onPressed: _saveBudget,
           ),
           if (isEditing) ...[
-            const SizedBox(width: 8),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppTheme.subtleFillColor(context),
-                shape: BoxShape.circle,
-              ),
-              child: PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert,
-                  color: AppTheme.textPrimaryColor(context),
-                  size: 20,
-                ),
-                padding: EdgeInsets.zero,
-                color: AppTheme.surface(context),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                ),
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    _deleteBudget();
-                  } else if (value == 'toggle_complete') {
-                    _toggleBudgetComplete();
-                  }
-                },
-                itemBuilder: (context) {
-                  final isCompleted = !(widget.existingBudget?.isActive ?? true);
-                  return [
-                    PopupMenuItem<String>(
-                      value: 'toggle_complete',
-                      child: Row(
-                        children: [
-                          Icon(
-                            isCompleted ? Icons.play_circle_outline_rounded : Icons.check_circle_outline_rounded,
-                            color: AppTheme.primaryAccentColor(context),
-                            size: 20,
+            AppPopupMenuButton(
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _deleteBudget();
+                } else if (value == 'toggle_complete') {
+                  _toggleBudgetComplete();
+                }
+              },
+              itemBuilder: (context) {
+                final isCompleted = !(widget.existingBudget?.isActive ?? true);
+                return [
+                  PopupMenuItem<String>(
+                    value: 'toggle_complete',
+                    child: Row(
+                      children: [
+                        Icon(
+                          isCompleted ? Icons.play_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                          color: AppTheme.primaryAccentColor(context),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          isCompleted ? 'Mark Active' : 'Mark Complete',
+                          style: TextStyle(
+                            color: AppTheme.textPrimaryColor(context),
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            isCompleted ? 'Mark Active' : 'Mark Complete',
-                            style: TextStyle(
-                              color: AppTheme.textPrimaryColor(context),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
-                          SizedBox(width: 12),
-                          Text(
-                            'Delete Budget',
-                            style: TextStyle(color: AppTheme.errorColor),
-                          ),
-                        ],
-                      ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline_rounded, color: AppTheme.errorColor, size: 20),
+                        SizedBox(width: 12),
+                        Text(
+                          'Delete Budget',
+                          style: TextStyle(color: AppTheme.errorColor),
+                        ),
+                      ],
                     ),
-                  ];
-                },
-              ),
+                  ),
+                ];
+              },
             ),
           ],
         ],

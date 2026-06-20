@@ -49,16 +49,6 @@ class _TaskCardState extends State<TaskCard> {
     super.dispose();
   }
 
-  void _addNestedItem(String label) {
-    final newList = List<SubTask>.from(widget.task.subTasks);
-    newList.add(SubTask(
-      id: 'item-${DateTime.now().millisecondsSinceEpoch}',
-      title: label,
-      checked: false,
-    ));
-    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
-  }
-
   void _toggleNestedItem(int index, bool val) {
     final newList = List<SubTask>.from(widget.task.subTasks);
     newList[index] = newList[index].copyWith(checked: val);
@@ -95,28 +85,25 @@ class _TaskCardState extends State<TaskCard> {
         .where((i) => i.durationMinutes != null)
         .fold<int>(0, (sum, i) => sum + i.durationMinutes!);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onLongPress: () => widget.onEditTask(widget.task),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: widget.task.checked
-              ? AppTheme.surface(context).withValues(alpha: 0.15)
-              : AppTheme.surface(context).withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: widget.isExpanded
-                ? AppTheme.primaryColor.withValues(alpha: 0.3)
-                : AppTheme.borderColor(context),
-            width: 1,
-          ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: widget.task.checked
+            ? AppTheme.surface(context).withValues(alpha: 0.15)
+            : AppTheme.surface(context).withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: widget.isExpanded
+              ? AppTheme.primaryColor.withValues(alpha: 0.3)
+              : AppTheme.borderColor(context),
+          width: 1,
         ),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => widget.onEditTask(widget.task),
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
@@ -167,277 +154,133 @@ class _TaskCardState extends State<TaskCard> {
                             decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
                           ),
                         ),
-                        if (parent.repeatDays.length < 7 || totalCount > 0) ...[
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              if (totalCount > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.secondaryColor.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: AppTheme.secondaryColor.withValues(alpha: 0.25),
-                                      width: 0.5,
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surface(context).withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: AppTheme.borderColor(context),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.calendar_month_rounded,
+                                    size: 9,
+                                    color: AppTheme.primaryLight,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    widget.task.scheduledTime != null
+                                        ? '${DateFormat('MMM d').format(widget.task.timestamp)} • ${_formatTimeString(widget.task.scheduledTime!)}'
+                                        : DateFormat('MMM d').format(widget.task.timestamp),
+                                    style: TextStyle(
+                                      color: AppTheme.textSecondaryColor(context),
+                                      fontSize: 9,
                                     ),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
+                                ],
+                              ),
+                            ),
+                            if (totalCount > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.secondaryColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: AppTheme.secondaryColor.withValues(alpha: 0.25),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.account_tree_outlined,
+                                      size: 9,
+                                      color: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '$completedCount/$totalCount',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: AppTheme.secondaryColor.withValues(alpha: 0.9),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (totalDuration > 0) ...[
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        '•',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: AppTheme.secondaryColor.withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
                                       Icon(
-                                        Icons.account_tree_outlined,
+                                        Icons.timer_outlined,
                                         size: 9,
                                         color: AppTheme.secondaryColor.withValues(alpha: 0.8),
                                       ),
-                                      const SizedBox(width: 3),
+                                      const SizedBox(width: 2),
                                       Text(
-                                        '$completedCount/$totalCount',
+                                        '${totalDuration}m',
                                         style: TextStyle(
                                           fontSize: 9,
                                           color: AppTheme.secondaryColor.withValues(alpha: 0.9),
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      if (totalDuration > 0) ...[
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          '•',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            color: AppTheme.secondaryColor.withValues(alpha: 0.4),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Icon(
-                                          Icons.timer_outlined,
-                                          size: 9,
-                                          color: AppTheme.secondaryColor.withValues(alpha: 0.8),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          '${totalDuration}m',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            color: AppTheme.secondaryColor.withValues(alpha: 0.9),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
                                     ],
-                                  ),
+                                  ],
                                 ),
-                              // Repeat arrows badge
-                              if (parent.repeatDays.length < 7)
-                                Icon(
-                                  Icons.repeat_rounded,
-                                  size: 12,
-                                  color: AppTheme.textSecondary.withValues(alpha: 0.5),
-                                ),
-                            ],
-                          ),
-                        ],
+                              ),
+                            if (parent.repeatDays.length < 7)
+                              Icon(
+                                Icons.repeat_rounded,
+                                size: 12,
+                                color: AppTheme.textSecondary.withValues(alpha: 0.5),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 14),
                   
-                  // 3. Right Symbol Indicator
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: SymbolIndicator(
-                      task: widget.task,
-                      onTap: () => _showSymbolSelectionDialog(widget.task),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          // Expanded panel showing nested items and actions
-          if (widget.isExpanded) ...[
-            Divider(color: AppTheme.borderColor(context), height: 1, indent: 16, endIndent: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Parent milestone label
-                  if (parent.name.isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: AppTheme.secondaryColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: AppTheme.secondaryColor.withValues(alpha: 0.25),
-                          width: 0.5,
-                        ),
+                  // 3. Right Column (Symbol Indicator & Expand Arrow)
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SymbolIndicator(
+                        task: widget.task,
+                        onTap: () => _showSymbolSelectionDialog(widget.task),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.flag_rounded,
-                            size: 9,
-                            color: AppTheme.secondaryColor.withValues(alpha: 0.8),
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            parent.name,
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: AppTheme.secondaryColor.withValues(alpha: 0.9),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  // Nested Checklist items
-                  if (widget.task.subTasks.isNotEmpty) ...[
-                    const Text(
-                      'Checklist Items:',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...List.generate(widget.task.subTasks.length, (idx) {
-                      final item = widget.task.subTasks[idx];
-                      final isDeleting = _deletingNestedItemId == item.id;
-
-                      return GestureDetector(
-                        onLongPress: () {
-                          setState(() {
-                            if (isDeleting) {
-                              _deletingNestedItemId = null;
-                            } else {
-                              _deletingNestedItemId = item.id;
-                            }
-                          });
-                        },
-                        onTap: () {
-                          if (isDeleting) {
-                            setState(() {
-                              _deletingNestedItemId = null;
-                            });
-                          } else {
-                            _toggleNestedItem(idx, !item.checked);
-                          }
-                        },
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: widget.onTap,
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: AppTheme.subtaskCheckboxSize,
-                                height: AppTheme.subtaskCheckboxSize,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: item.checked
-                                      ? AppTheme.primaryColor
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color: item.checked
-                                        ? AppTheme.primaryColor
-                                        : AppTheme.borderColor(context),
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: item.checked
-                                    ? Icon(Icons.check, size: 11, color: Theme.of(context).colorScheme.onPrimary)
-                                    : null,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  item.title,
-                                  style: TextStyle(
-                                    color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Theme.of(context).textTheme.bodyMedium!.color,
-                                    fontSize: 13,
-                                    decoration: item.checked ? TextDecoration.lineThrough : null,
-                                    decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
-                                  ),
-                                ),
-                              ),
-                              if (isDeleting)
-                                GestureDetector(
-                                  onTap: () {
-                                    _deleteNestedItem(idx);
-                                    setState(() {
-                                      _deletingNestedItemId = null;
-                                    });
-                                  },
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    child: Icon(
-                                      Icons.delete_outline,
-                                      size: 16,
-                                      color: AppTheme.errorColor,
-                                    ),
-                                  ),
-                                )
-                              else
-                                _buildChecklistItemDurationMenu(idx, item),
-                            ],
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(
+                            widget.isExpanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 20,
+                            color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                           ),
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // Inline Add Nested Item form
-                  _buildAddNestedItemForm(),
-                  const SizedBox(height: 12),
-
-                  // Subtask Meta actions (Date/Time badge & Edit button)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surface(context).withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: AppTheme.borderColor(context),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.calendar_month_rounded, size: 14, color: AppTheme.primaryLight),
-                            const SizedBox(width: 6),
-                            Text(
-                              widget.task.scheduledTime != null
-                                  ? '${DateFormat('MMM d, yyyy').format(widget.task.timestamp)} • ${_formatTimeString(widget.task.scheduledTime!)}'
-                                  : DateFormat('MMM d, yyyy').format(widget.task.timestamp),
-                              style: TextStyle(color: Theme.of(context).textTheme.bodySmall!.color, fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => widget.onEditTask(widget.task),
-                        icon: Icon(Icons.edit_outlined, size: 14, color: AppTheme.primaryLight),
-                        label: Text('Edit', style: TextStyle(color: AppTheme.primaryLight, fontSize: 11)),
-                        style: TextButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.08),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          minimumSize: Size.zero,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ],
@@ -445,83 +288,114 @@ class _TaskCardState extends State<TaskCard> {
                 ],
               ),
             ),
+          ),
+          
+          // Expanded panel showing nested items
+          if (widget.isExpanded && widget.task.subTasks.isNotEmpty) ...[
+            Divider(color: AppTheme.borderColor(context), height: 1, indent: 16, endIndent: 16),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Checklist Items:',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...List.generate(widget.task.subTasks.length, (idx) {
+                    final item = widget.task.subTasks[idx];
+                    final isDeleting = _deletingNestedItemId == item.id;
+
+                    return GestureDetector(
+                      onLongPress: () {
+                        setState(() {
+                          if (isDeleting) {
+                            _deletingNestedItemId = null;
+                          } else {
+                            _deletingNestedItemId = item.id;
+                          }
+                        });
+                      },
+                      onTap: () {
+                        if (isDeleting) {
+                          setState(() {
+                            _deletingNestedItemId = null;
+                          });
+                        } else {
+                          _toggleNestedItem(idx, !item.checked);
+                        }
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: AppTheme.subtaskCheckboxSize,
+                              height: AppTheme.subtaskCheckboxSize,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: item.checked
+                                    ? AppTheme.primaryColor
+                                    : Colors.transparent,
+                                border: Border.all(
+                                  color: item.checked
+                                      ? AppTheme.primaryColor
+                                      : AppTheme.borderColor(context),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: item.checked
+                                  ? Icon(Icons.check, size: 11, color: Theme.of(context).colorScheme.onPrimary)
+                                  : null,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: TextStyle(
+                                  color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Theme.of(context).textTheme.bodyMedium!.color,
+                                  fontSize: 13,
+                                  decoration: item.checked ? TextDecoration.lineThrough : null,
+                                  decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
+                                ),
+                              ),
+                            ),
+                            if (isDeleting)
+                              GestureDetector(
+                                onTap: () {
+                                  _deleteNestedItem(idx);
+                                  setState(() {
+                                    _deletingNestedItemId = null;
+                                  });
+                                },
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  child: Icon(
+                                    Icons.delete_outline,
+                                    size: 16,
+                                    color: AppTheme.errorColor,
+                                  ),
+                                ),
+                              )
+                            else
+                              _buildChecklistItemDurationMenu(idx, item),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
           ],
         ],
       ),
-    ),
-  );
-}
-
-  Widget _buildAddNestedItemForm() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _nestedController,
-            focusNode: _nestedFocusNode,
-            style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 12),
-            decoration: InputDecoration(
-              hintText: 'Add checklist sub-item...',
-              hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-              filled: true,
-              fillColor: AppTheme.surface(context).withValues(alpha: 0.5),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: AppTheme.borderColor(context)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: AppTheme.borderColor(context)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: AppTheme.primaryColor),
-              ),
-            ),
-            textInputAction: TextInputAction.next,
-            onSubmitted: (val) {
-              final text = val.trim();
-              if (text.isNotEmpty) {
-                _addNestedItem(text);
-                _nestedController.clear();
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: 6),
-        GestureDetector(
-          onTap: () {
-            final text = _nestedController.text.trim();
-            if (text.isNotEmpty) {
-              _addNestedItem(text);
-              _nestedController.clear();
-            }
-          },
-          child: Container(
-            height: 32,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AppTheme.primaryColor.withValues(alpha: 0.35),
-                width: 1,
-              ),
-            ),
-            child: Text(
-              'Add',
-              style: TextStyle(
-                color: AppTheme.primaryLight,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

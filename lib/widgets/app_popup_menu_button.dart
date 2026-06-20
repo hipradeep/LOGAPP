@@ -15,11 +15,6 @@ class AppPopupMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: Icon(
-        Icons.more_vert,
-        color: AppTheme.textPrimaryColor(context),
-        size: 20,
-      ),
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
       color: AppTheme.surface(context),
@@ -28,6 +23,15 @@ class AppPopupMenuButton extends StatelessWidget {
       ),
       onSelected: onSelected,
       itemBuilder: itemBuilder,
+      child: Container(
+        padding: const EdgeInsets.only(left: 12, right: 4, top: 8, bottom: 8),
+        color: Colors.transparent,
+        child: Icon(
+          Icons.more_vert,
+          color: AppTheme.textPrimaryColor(context),
+          size: 20,
+        ),
+      ),
     );
   }
 }

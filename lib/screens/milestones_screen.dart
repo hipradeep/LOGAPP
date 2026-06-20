@@ -5,7 +5,6 @@ import '../models/task.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/milestone_section.dart';
 import '../controllers/milestones_controller.dart';
-import '../widgets/add_milestone_task_sheet.dart';
 import 'activity_details_screen.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
@@ -88,52 +87,9 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
             builder: (context, _) {
               final hasMilestones = _controller.milestoneActivities.isNotEmpty;
               if (hasMilestones && !_controller.isLoading && _controller.errorMessage == null) {
-                final bottomPadding = MediaQuery.paddingOf(context).bottom;
-                return Stack(
-                  children: [
-                    AppPremiumFab(
-                      right: 24,
-                      onPressed: () => _showAddTaskSheet(context),
-                    ),
-                    Positioned(
-                      bottom: bottomPadding + 36 + 64,
-                      right: 24,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _navigateToNewTaskScreen(context),
-                            customBorder: const CircleBorder(),
-                            child: Container(
-                              width: 52,
-                              height: 52,
-                              alignment: Alignment.center,
-                              child: const Icon(
-                                Icons.playlist_add_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                return AppPremiumFab(
+                  right: 24,
+                  onPressed: () => _navigateToNewTaskScreen(context),
                 );
               }
               return const SizedBox.shrink();
@@ -363,31 +319,6 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
         );
       }
     });
-  }
-
-  void _showAddTaskSheet(BuildContext context) {
-    final String? initialId;
-    if (_controller.selectedCategory == 'All') {
-      initialId = null;
-    } else {
-      initialId = _controller.milestoneActivities
-          .where((a) => a.name == _controller.selectedCategory)
-          .map((a) => a.id)
-          .firstOrNull;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AddMilestoneTaskSheet(
-        milestones: _controller.allMilestoneActivities,
-        initialActivityId: initialId,
-        onAddTask: (activity, taskName, timestamp) async {
-          await _controller.createTask(activity, taskName, timestamp);
-        },
-      ),
-    );
   }
 
   void _showEditTaskSheet(BuildContext context, Task task) {

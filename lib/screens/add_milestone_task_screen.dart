@@ -283,7 +283,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         const Divider(height: 1),
         const VGapLg(),
         Text(
-          'Select Date',
+          'Select Due Date',
           style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondaryColor(context)),
         ),
         const VGapMd(),
@@ -495,6 +495,9 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                   controller: controller,
                   focusNode: focusNode,
                   readOnly: isDeleting,
+                  keyboardType: TextInputType.multiline,
+                  maxLines: null,
+                  minLines: 1,
                   style: GoogleFonts.inter(
                     color: item.checked 
                         ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.5) 
@@ -659,7 +662,9 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       onTap: () => setState(() => _selectedDate = date),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        height: 28,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: isSelected 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
@@ -691,7 +696,9 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       onTap: _pickCustomDate,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        height: 28,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: isCustom 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
@@ -705,6 +712,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
               Icons.calendar_month_rounded, 
@@ -736,7 +744,9 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       onTap: _pickCustomTime,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        height: 28,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: hasTime 
               ? AppTheme.primaryColor.withValues(alpha: 0.15) 
@@ -750,6 +760,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
               Icons.access_time_rounded, 
