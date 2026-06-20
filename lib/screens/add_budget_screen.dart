@@ -26,6 +26,21 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   final _formKey = GlobalKey<FormState>();
   final BudgetService _budgetService = BudgetService();
 
+  static const List<String> _predefinedCategories = [
+    'Grocery',
+    'Fast Food',
+    'Supplements',
+    'Travel',
+    'Care',
+    'Home',
+    'Bills',
+    'Timepass',
+    'Transfer',
+    'QuickMart',
+    'Shopping',
+    'Other',
+  ];
+
   late TextEditingController _nameController;
   late TextEditingController _categoryNameController;
   late TextEditingController _limitController;
@@ -267,6 +282,9 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
       onTap: () {
         setState(() {
           _categoryNameController.text = label;
+          if (_nameController.text.trim().isEmpty) {
+            _nameController.text = '$label Budget';
+          }
         });
       },
       child: AnimatedContainer(
@@ -568,62 +586,127 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
 
                 _buildSectionLabel('CATEGORY NAME'),
                 const VGapSm(),
-                TextFormField(
-                  controller: _categoryNameController,
-                  readOnly: isEditing,
-                  style: GoogleFonts.outfit(
-                    color: AppTheme.categoryTextColor(context, isEditing: isEditing),
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'e.g., Expenses, Salary, Earning',
-                    hintStyle: GoogleFonts.outfit(
-                      color: AppTheme.textSecondary.withValues(alpha: 0.5),
+                if (isEditing)
+                  TextFormField(
+                    controller: _categoryNameController,
+                    readOnly: true,
+                    style: GoogleFonts.outfit(
+                      color: AppTheme.categoryTextColor(context, isEditing: true),
                       fontSize: 20,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                    filled: false,
-                    border: UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
-                    ),
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                    ),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Icon(
-                        Icons.label_outline_rounded,
-                        color: AppTheme.primaryLight,
-                        size: 28,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      filled: false,
+                      border: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+                      ),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+                      ),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Icon(
+                          Icons.label_outline_rounded,
+                          color: AppTheme.primaryLight,
+                          size: 28,
+                        ),
+                      ),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
                       ),
                     ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(_categoryNameController.text),
+                    initialValue: _predefinedCategories.contains(_categoryNameController.text)
+                        ? _categoryNameController.text
+                        : null,
+                    dropdownColor: AppTheme.surface(context),
+                    icon: Icon(
+                      Icons.arrow_drop_down_rounded,
+                      color: AppTheme.primaryLight,
+                      size: 28,
                     ),
+                    style: GoogleFonts.outfit(
+                      color: AppTheme.categoryTextColor(context, isEditing: false),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Select category',
+                      hintStyle: GoogleFonts.outfit(
+                        color: AppTheme.textSecondary.withValues(alpha: 0.5),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      filled: false,
+                      border: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+                      ),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+                      ),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Icon(
+                          Icons.label_outline_rounded,
+                          color: AppTheme.primaryLight,
+                          size: 28,
+                        ),
+                      ),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
+                    ),
+                    items: _predefinedCategories.map((String category) {
+                      return DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(
+                          category,
+                          style: GoogleFonts.outfit(
+                            color: AppTheme.textPrimaryColor(context),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _categoryNameController.text = newValue;
+                          if (_nameController.text.isEmpty) {
+                            _nameController.text = '$newValue Budget';
+                          }
+                        });
+                      }
+                    },
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Please select a category';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) {
-                      return 'Please enter a category name';
-                    }
-                    return null;
-                  },
-                ),
                 if (!isEditing) ...[
                   const VGapSm(),
-                  Row(
-                    children: [
-                      _buildQuickCategoryChip('Expenses'),
-                      const HGapSm(),
-                      _buildQuickCategoryChip('Salary'),
-                      const HGapSm(),
-                      _buildQuickCategoryChip('Earning'),
-                    ],
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _predefinedCategories
+                        .map((category) => _buildQuickCategoryChip(category))
+                        .toList(),
                   ),
                 ],
                 const VGapLg(),

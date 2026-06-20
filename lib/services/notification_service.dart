@@ -97,7 +97,9 @@ class NotificationService {
         onDidReceiveNotificationResponse: _handleNotificationResponse,
         onDidReceiveBackgroundNotificationResponse: onNotificationActionCallback,
       );
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService init error: $e\n$s');
+    }
   }
 
   static Future<void> _handleNotificationResponse(NotificationResponse details) async {
@@ -169,10 +171,13 @@ class NotificationService {
       tz.initializeTimeZones();
       final detectedName = _detectTimeZoneName();
       tz.setLocalLocation(tz.getLocation(detectedName));
-    } catch (_) {
+    } catch (e) {
+      debugPrint('NotificationService _initializeTimeZone error: $e. Falling back to UTC.');
       try {
         tz.setLocalLocation(tz.getLocation('UTC'));
-      } catch (_) {}
+      } catch (err) {
+        debugPrint('NotificationService fallback to UTC also failed: $err');
+      }
     }
   }
 
@@ -210,7 +215,8 @@ class NotificationService {
         return (granted ?? false);
       }
       return false;
-    } catch (_) {
+    } catch (e, s) {
+      debugPrint('NotificationService requestPermissions error: $e\n$s');
       return false;
     } finally {
       _isRequestingPermission = false;
@@ -305,7 +311,9 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
         payload: '$title|$body',
       );
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService scheduleDailyNotification error: $e\n$s');
+    }
   }
 
   /// Schedule a single one-shot notification at a specific date and time
@@ -351,7 +359,9 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: '$title|$body',
       );
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService scheduleOneShotNotification error: $e\n$s');
+    }
   }
 
   /// Log all currently scheduled pending notifications (silent now)
@@ -373,7 +383,9 @@ class NotificationService {
         _notificationDetails,
         payload: '$title|$body',
       );
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService showInstantNotification error: $e\n$s');
+    }
   }
 
   /// Display a simple notification immediately without action buttons
@@ -389,20 +401,26 @@ class NotificationService {
         body,
         _simpleNotificationDetails,
       );
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService showSimpleInstantNotification error: $e\n$s');
+    }
   }
 
   /// Cancel a scheduled notification by ID
   static Future<void> cancelNotification(int id) async {
     try {
       await _notificationsPlugin.cancel(id);
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService cancelNotification error: $e\n$s');
+    }
   }
 
   /// Cancel all scheduled notifications
   static Future<void> cancelAllNotifications() async {
     try {
       await _notificationsPlugin.cancelAll();
-    } catch (_) {}
+    } catch (e, s) {
+      debugPrint('NotificationService cancelAllNotifications error: $e\n$s');
+    }
   }
 }

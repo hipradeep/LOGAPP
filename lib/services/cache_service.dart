@@ -147,23 +147,79 @@ class CacheService {
     await _writeCache(cache);
   }
 
-  Future<List<Map<String, dynamic>>> getExpenseCategories() async {
+  Future<void> savePaymentModes(List<Map<String, dynamic>> modes) async {
     final cache = await _readCache();
-    final list = cache['expense_categories'] as List<dynamic>?;
+    cache['payment_modes'] = modes;
+    await _writeCache(cache);
+  }
+
+  Future<List<Map<String, dynamic>>> getPaymentModes() async {
+    final cache = await _readCache();
+    final list = cache['payment_modes'] as List<dynamic>?;
     if (list != null) {
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
     final defaults = [
-      {'label': 'Travel', 'icon': 'flight_rounded', 'color': 0xFF3F51B5, 'count': 0},
-      {'label': 'Snack', 'icon': 'fastfood_rounded', 'color': 0xFFFF9800, 'count': 0},
-      {'label': 'Drink', 'icon': 'local_cafe_rounded', 'color': 0xFF795548, 'count': 0},
+      {'label': 'Cash', 'icon': 'attach_money_rounded', 'color': 0xFF4CAF50, 'count': 0},
+      {'label': 'PNB', 'icon': 'account_balance_rounded', 'color': 0xFF880E4F, 'count': 0},
+      {'label': 'ICICI', 'icon': 'account_balance_rounded', 'color': 0xFFFF6D00, 'count': 0},
+      {'label': 'SBI', 'icon': 'account_balance_rounded', 'color': 0xFF0288D1, 'count': 0},
+      {'label': 'CBI', 'icon': 'account_balance_rounded', 'color': 0xFF00C853, 'count': 0},
+      {'label': 'HDFC CC', 'icon': 'credit_card_rounded', 'color': 0xFF0D47A1, 'count': 0},
+      {'label': 'AXIS CC', 'icon': 'credit_card_rounded', 'color': 0xFF800020, 'count': 0},
+      {'label': 'IDFC CC', 'icon': 'credit_card_rounded', 'color': 0xFFD50000, 'count': 0},
+      {'label': 'Wallet', 'icon': 'account_balance_wallet_rounded', 'color': 0xFF7C4DFF, 'count': 0},
+      {'label': 'Net Banking', 'icon': 'language_rounded', 'color': 0xFF0097A7, 'count': 0},
+    ];
+    await savePaymentModes(defaults);
+    return defaults;
+  }
+
+  Future<void> incrementPaymentModeCount(String label) async {
+    final modes = await getPaymentModes();
+    bool found = false;
+    for (var m in modes) {
+      if (m['label'].toString().toLowerCase() == label.toLowerCase()) {
+        m['count'] = (m['count'] as int? ?? 0) + 1;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      modes.add({
+        'label': label,
+        'icon': 'payment_rounded',
+        'color': 0xFF9E9E9E,
+        'count': 1,
+      });
+    }
+    await savePaymentModes(modes);
+  }
+
+  Future<List<Map<String, dynamic>>> getExpenseCategories() async {
+    final cache = await _readCache();
+    final list = cache['expense_categories'] as List<dynamic>?;
+    if (list != null) {
+      final categories = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final hasReceive = categories.any((cat) => cat['label'].toString().toLowerCase() == 'receive');
+      if (hasReceive) {
+        categories.removeWhere((cat) => cat['label'].toString().toLowerCase() == 'receive');
+        await saveExpenseCategories(categories);
+      }
+      return categories;
+    }
+    final defaults = [
       {'label': 'Grocery', 'icon': 'local_grocery_store_rounded', 'color': 0xFF4CAF50, 'count': 0},
+      {'label': 'Fast Food', 'icon': 'fastfood_rounded', 'color': 0xFFFF9800, 'count': 0},
+      {'label': 'Supplements', 'icon': 'medication_rounded', 'color': 0xFF009688, 'count': 0},
+      {'label': 'Travel', 'icon': 'flight_rounded', 'color': 0xFF3F51B5, 'count': 0},
+      {'label': 'Care', 'icon': 'favorite_rounded', 'color': 0xFFFF4081, 'count': 0},
+      {'label': 'Home', 'icon': 'home_rounded', 'color': 0xFF607D8B, 'count': 0},
+      {'label': 'Bills', 'icon': 'receipt_long_rounded', 'color': 0xFFFF5252, 'count': 0},
+      {'label': 'Timepass', 'icon': 'sports_esports_rounded', 'color': 0xFF9C27B0, 'count': 0},
+      {'label': 'Transfer', 'icon': 'compare_arrows_rounded', 'color': 0xFF2196F3, 'count': 0},
       {'label': 'QuickMart', 'icon': 'storefront_rounded', 'color': 0xFF7C4DFF, 'count': 0},
-      {'label': 'Shopping', 'icon': 'shopping_bag_rounded', 'color': 0xFFFF4081, 'count': 0},
-      {'label': 'Bill', 'icon': 'receipt_long_rounded', 'color': 0xFFFF5252, 'count': 0},
-      {'label': 'Dinner', 'icon': 'dinner_dining_rounded', 'color': 0xFFFFC107, 'count': 0},
-      {'label': 'Fuel', 'icon': 'local_gas_station_rounded', 'color': 0xFF2196F3, 'count': 0},
-      {'label': 'Health', 'icon': 'medical_services_rounded', 'color': 0xFF009688, 'count': 0},
+      {'label': 'Shopping', 'icon': 'shopping_bag_rounded', 'color': 0xFFE91E63, 'count': 0},
       {'label': 'Other', 'icon': 'more_horiz_rounded', 'color': 0xFF9E9E9E, 'count': 0},
     ];
     await saveExpenseCategories(defaults);

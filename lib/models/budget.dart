@@ -10,6 +10,7 @@ class Transaction {
   final DateTime expenseDate;
   final bool isValidated;
   final String? rawBody;
+  final String paymentMethod;
 
   Transaction({
     required this.id,
@@ -21,6 +22,7 @@ class Transaction {
     required this.expenseDate,
     this.isValidated = true,
     this.rawBody,
+    this.paymentMethod = 'PNB',
   });
 
   Map<String, dynamic> toMap() {
@@ -33,6 +35,7 @@ class Transaction {
       'expenseDate': Timestamp.fromDate(expenseDate),
       'isValidated': isValidated,
       'rawBody': rawBody,
+      'paymentMethod': paymentMethod,
     };
   }
 
@@ -72,6 +75,7 @@ class Transaction {
       expenseDate: parsedExpenseDate,
       isValidated: map['isValidated'] as bool? ?? true,
       rawBody: map['rawBody'] as String?,
+      paymentMethod: map['paymentMethod'] as String? ?? 'PNB',
     );
   }
 }

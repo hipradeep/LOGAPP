@@ -16,6 +16,7 @@ import 'manage_quick_actions_screen.dart';
 import 'track_activities_screen.dart';
 import 'log_screen.dart';
 import 'crash_log_screen.dart';
+import 'water_log_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -283,6 +284,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             trailingText: _getThemeTypeName(themeController.themeType),
                             onTap: () {
                               _showThemeSelectionDialog(context, themeController);
+                            },
+                          ),
+                          _buildDrawerDivider(context),
+                          _buildDrawerItem(
+                            context,
+                            icon: Icons.local_drink_rounded,
+                            title: 'Water Log',
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const WaterLogScreen(),
+                                ),
+                              );
                             },
                           ),
                           _buildDrawerDivider(context),

@@ -24,6 +24,7 @@ import '../widgets/app_provider.dart';
 import '../widgets/focus_timer_sheet.dart';
 import '../widgets/dashboard_quick_actions.dart';
 import '../widgets/add_transaction_sheet.dart';
+import '../widgets/water_log_sheet.dart';
 
 import '../widgets/dashboard_summary_card.dart';
 import '../widgets/dashboard_weekly_calendar.dart';
@@ -545,23 +546,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
 
-  void _handleWaterAction() async {
-    try {
-      await _controller.logWater();
-      if (!mounted) return;
-      AppToast.show(
-        context: context,
-        message: 'Drank 250ml water logged! 💧',
-        backgroundColor: AppTheme.successColor,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.show(
-        context: context,
-        message: 'Failed to log: $e',
-        backgroundColor: AppTheme.errorColor,
-      );
-    }
+  void _handleWaterAction() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const WaterLogSheet(),
+    );
   }
 
   void _handleNewJournalAction() async {

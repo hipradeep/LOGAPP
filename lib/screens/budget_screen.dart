@@ -222,8 +222,8 @@ class _BudgetScreenState extends State<BudgetScreen> {
       builder: (_) => AddTransactionSheet(
         budgetId: budget.id,
         categoryName: budget.categoryName,
-        onAddTransaction: (tag, desc, amount, date) async {
-          await BudgetService().addTransaction(budget.id, tag, desc, amount, timestamp: date);
+        onAddTransaction: (tag, desc, amount, date, paymentMethod) async {
+          await BudgetService().addTransaction(budget.id, tag, desc, amount, timestamp: date, paymentMethod: paymentMethod);
         },
       ),
     );
@@ -567,8 +567,8 @@ class _BudgetScreenState extends State<BudgetScreen> {
                                       Expanded(
                                         child: Text(
                                           expense.description.isNotEmpty
-                                              ? '$tagName | ${expense.description}'
-                                              : tagName,
+                                              ? '$tagName | ${expense.description} [${expense.paymentMethod}]'
+                                              : '$tagName [${expense.paymentMethod}]',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: AppTheme.textPrimaryColor(context),
@@ -1011,7 +1011,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
         categoryName: budget.categoryName,
         existingTransaction: expense,
         budgets: _controller.budgets,
-        onAddTransaction: (tag, desc, amount, date) async {},
+        onAddTransaction: (tag, desc, amount, date, paymentMethod) async {},
       ),
     );
   }
@@ -1034,33 +1034,51 @@ class _BudgetScreenState extends State<BudgetScreen> {
   // ── Tag-based icon/color lookup (matches expense description) ──
 
   static const _tagIcons = <String, IconData>{
+    'grocery': Icons.local_grocery_store_rounded,
+    'fast food': Icons.fastfood_rounded,
+    'supplements': Icons.medication_rounded,
+    'travel': Icons.flight_rounded,
+    'care': Icons.favorite_rounded,
+    'home': Icons.home_rounded,
+    'bills': Icons.receipt_long_rounded,
+    'timepass': Icons.sports_esports_rounded,
+    'transfer': Icons.compare_arrows_rounded,
+    'quickmart': Icons.storefront_rounded,
+    'shopping': Icons.shopping_bag_rounded,
+    'receive': Icons.call_received_rounded,
+    'other': Icons.more_horiz_rounded,
+    // Keep backward compatible tags
     'bill': Icons.receipt_long_rounded,
     'credit card': Icons.credit_card_rounded,
     'dinner': Icons.dinner_dining_rounded,
     'drink': Icons.local_cafe_rounded,
     'fuel': Icons.local_gas_station_rounded,
-    'grocery': Icons.local_grocery_store_rounded,
     'health': Icons.medical_services_rounded,
-    'quickmart': Icons.storefront_rounded,
-    'shopping': Icons.shopping_bag_rounded,
     'snack': Icons.fastfood_rounded,
-    'travel': Icons.flight_rounded,
-    'other': Icons.more_horiz_rounded,
   };
 
   static const _tagColors = <String, Color>{
+    'grocery': Colors.green,
+    'fast food': Colors.orange,
+    'supplements': Colors.teal,
+    'travel': Colors.indigo,
+    'care': Colors.pink,
+    'home': Colors.blueGrey,
+    'bills': Colors.redAccent,
+    'timepass': Colors.purple,
+    'transfer': Colors.blue,
+    'quickmart': Colors.deepPurpleAccent,
+    'shopping': Colors.pinkAccent,
+    'receive': Colors.greenAccent,
+    'other': Colors.grey,
+    // Keep backward compatible tags
     'bill': Colors.redAccent,
     'credit card': Colors.indigo,
     'dinner': Colors.amber,
     'drink': Colors.brown,
     'fuel': Colors.blue,
-    'grocery': Colors.green,
     'health': Colors.teal,
-    'quickmart': Colors.deepPurpleAccent,
-    'shopping': Colors.pinkAccent,
     'snack': Colors.orange,
-    'travel': Colors.indigo,
-    'other': Colors.grey,
   };
 
   String _getTagName(String description) {

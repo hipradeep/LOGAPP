@@ -8,6 +8,7 @@ import '../models/budget.dart';
 import '../controllers/budget_controller.dart';
 import 'add_budget_screen.dart';
 import 'expense_category_screen.dart';
+import 'payment_mode_screen.dart';
 
 class ManageBudgetScreen extends StatefulWidget {
   const ManageBudgetScreen({super.key});
@@ -52,9 +53,18 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
     );
   }
 
+  void _navigateToPaymentMode() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PaymentModeScreen()),
+    );
+  }
+
   void _handleMenuSelection(String value) {
     if (value == 'expense_category') {
       _navigateToExpenseCategory();
+    } else if (value == 'payment_mode') {
+      _navigateToPaymentMode();
     }
   }
 
@@ -110,6 +120,23 @@ class _ManageBudgetScreenState extends State<ManageBudgetScreen> {
             const HGapSm(),
             Text(
               'Expense Category',
+              style: TextStyle(
+                color: AppTheme.textPrimaryColor(context),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'payment_mode',
+        child: Row(
+          children: [
+            Icon(Icons.payment_rounded, color: AppTheme.primaryAccentColor(context), size: 18),
+            const HGapSm(),
+            Text(
+              'Payment Mode',
               style: TextStyle(
                 color: AppTheme.textPrimaryColor(context),
                 fontSize: 13,

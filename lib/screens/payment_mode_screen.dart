@@ -6,33 +6,24 @@ import '../services/cache_service.dart';
 
 // ==================== ICON/COLOR CONSTANTS ====================
 
-const List<Map<String, dynamic>> _availableIcons = [
-  {'name': 'flight_rounded', 'icon': Icons.flight_rounded},
-  {'name': 'fastfood_rounded', 'icon': Icons.fastfood_rounded},
-  {'name': 'local_cafe_rounded', 'icon': Icons.local_cafe_rounded},
-  {'name': 'local_grocery_store_rounded', 'icon': Icons.local_grocery_store_rounded},
+const List<Map<String, dynamic>> _availablePaymentIcons = [
+  {'name': 'attach_money_rounded', 'icon': Icons.attach_money_rounded},
+  {'name': 'account_balance_rounded', 'icon': Icons.account_balance_rounded},
+  {'name': 'credit_card_rounded', 'icon': Icons.credit_card_rounded},
+  {'name': 'account_balance_wallet_rounded', 'icon': Icons.account_balance_wallet_rounded},
+  {'name': 'language_rounded', 'icon': Icons.language_rounded},
+  {'name': 'payment_rounded', 'icon': Icons.payment_rounded},
+  {'name': 'smartphone_rounded', 'icon': Icons.smartphone_rounded},
+  {'name': 'computer_rounded', 'icon': Icons.computer_rounded},
   {'name': 'storefront_rounded', 'icon': Icons.storefront_rounded},
-  {'name': 'shopping_bag_rounded', 'icon': Icons.shopping_bag_rounded},
-  {'name': 'receipt_long_rounded', 'icon': Icons.receipt_long_rounded},
-  {'name': 'dinner_dining_rounded', 'icon': Icons.dinner_dining_rounded},
-  {'name': 'local_gas_station_rounded', 'icon': Icons.local_gas_station_rounded},
-  {'name': 'medical_services_rounded', 'icon': Icons.medical_services_rounded},
-  {'name': 'medication_rounded', 'icon': Icons.medication_rounded},
-  {'name': 'favorite_rounded', 'icon': Icons.favorite_rounded},
-  {'name': 'compare_arrows_rounded', 'icon': Icons.compare_arrows_rounded},
-  {'name': 'call_received_rounded', 'icon': Icons.call_received_rounded},
-  {'name': 'school_rounded', 'icon': Icons.school_rounded},
-  {'name': 'sports_esports_rounded', 'icon': Icons.sports_esports_rounded},
-  {'name': 'pets_rounded', 'icon': Icons.pets_rounded},
-  {'name': 'home_rounded', 'icon': Icons.home_rounded},
-  {'name': 'directions_car_rounded', 'icon': Icons.directions_car_rounded},
+  {'name': 'more_horiz_rounded', 'icon': Icons.more_horiz_rounded},
 ];
 
-const List<Color> _availableColors = [
+const List<Color> _availablePaymentColors = [
+  Colors.green,
   Colors.indigo,
   Colors.orange,
   Colors.brown,
-  Colors.green,
   Colors.deepPurpleAccent,
   Colors.pinkAccent,
   Colors.redAccent,
@@ -42,83 +33,73 @@ const List<Color> _availableColors = [
   Colors.grey,
 ];
 
-IconData getIconDataByName(String name) {
+IconData getPaymentIconByName(String name) {
   switch (name) {
-    case 'flight_rounded': return Icons.flight_rounded;
-    case 'fastfood_rounded': return Icons.fastfood_rounded;
-    case 'local_cafe_rounded': return Icons.local_cafe_rounded;
-    case 'local_grocery_store_rounded': return Icons.local_grocery_store_rounded;
+    case 'attach_money_rounded': return Icons.attach_money_rounded;
+    case 'account_balance_rounded': return Icons.account_balance_rounded;
+    case 'credit_card_rounded': return Icons.credit_card_rounded;
+    case 'account_balance_wallet_rounded': return Icons.account_balance_wallet_rounded;
+    case 'language_rounded': return Icons.language_rounded;
+    case 'smartphone_rounded': return Icons.smartphone_rounded;
+    case 'computer_rounded': return Icons.computer_rounded;
     case 'storefront_rounded': return Icons.storefront_rounded;
-    case 'shopping_bag_rounded': return Icons.shopping_bag_rounded;
-    case 'receipt_long_rounded': return Icons.receipt_long_rounded;
-    case 'dinner_dining_rounded': return Icons.dinner_dining_rounded;
-    case 'local_gas_station_rounded': return Icons.local_gas_station_rounded;
-    case 'medical_services_rounded': return Icons.medical_services_rounded;
-    case 'medication_rounded': return Icons.medication_rounded;
-    case 'favorite_rounded': return Icons.favorite_rounded;
-    case 'compare_arrows_rounded': return Icons.compare_arrows_rounded;
-    case 'call_received_rounded': return Icons.call_received_rounded;
-    case 'school_rounded': return Icons.school_rounded;
-    case 'sports_esports_rounded': return Icons.sports_esports_rounded;
-    case 'pets_rounded': return Icons.pets_rounded;
-    case 'home_rounded': return Icons.home_rounded;
-    case 'directions_car_rounded': return Icons.directions_car_rounded;
+    case 'payment_rounded': return Icons.payment_rounded;
     default: return Icons.more_horiz_rounded;
   }
 }
 
 // ==================== CONTROLLER ====================
 
-class ExpenseCategoryController extends ChangeNotifier {
+class PaymentModeController extends ChangeNotifier {
   final CacheService _cacheService = CacheService();
 
-  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _paymentModes = [];
   bool _isLoading = true;
 
-  List<Map<String, dynamic>> get categories => _categories;
+  List<Map<String, dynamic>> get paymentModes => _paymentModes;
   bool get isLoading => _isLoading;
 
-  ExpenseCategoryController() {
-    _loadCategories();
+  PaymentModeController() {
+    _loadPaymentModes();
   }
 
-  Future<void> _loadCategories() async {
-    final list = await _cacheService.getExpenseCategories();
-    _categories = list;
+  Future<void> _loadPaymentModes() async {
+    final list = await _cacheService.getPaymentModes();
+    _paymentModes = list;
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> addCategory(String label, String iconName, int colorValue) async {
-    final updated = List<Map<String, dynamic>>.from(_categories);
+  Future<void> addPaymentMode(String label, String iconName, int colorValue) async {
+    final updated = List<Map<String, dynamic>>.from(_paymentModes);
     updated.add({
       'label': label,
       'icon': iconName,
       'color': colorValue,
       'count': 0,
     });
-    await _cacheService.saveExpenseCategories(updated);
-    _categories = updated;
+    await _cacheService.savePaymentModes(updated);
+    _paymentModes = updated;
     notifyListeners();
   }
 }
 
 // ==================== SCREEN ====================
 
-class ExpenseCategoryScreen extends StatefulWidget {
-  const ExpenseCategoryScreen({super.key});
+class PaymentModeScreen extends StatefulWidget {
+  const PaymentModeScreen({super.key});
 
   @override
-  State<ExpenseCategoryScreen> createState() => _ExpenseCategoryScreenState();
+  State<PaymentModeScreen> createState() => _PaymentModeScreenState();
 }
 
-class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
-  late final ExpenseCategoryController _controller;
+class _PaymentModeScreenState extends State<PaymentModeScreen> {
+  late final PaymentModeController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = ExpenseCategoryController();
+    _controller = PaymentModeController();
   }
 
   @override
@@ -132,7 +113,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _AddCategorySheet(onAdd: _controller.addCategory),
+      builder: (ctx) => _AddPaymentModeSheet(onAdd: _controller.addPaymentMode),
     );
   }
 
@@ -142,7 +123,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     return FullScreenPage(
       showScaffold: true,
       isScrollable: true,
-      title: 'Expense Categories',
+      title: 'Payment Modes',
       showBackButton: true,
       padding: EdgeInsets.only(
         left: 24,
@@ -160,7 +141,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         const VGapMd(),
         ListenableBuilder(
           listenable: _controller,
-          builder: (context, _) => _buildCategoryBody(),
+          builder: (context, _) => _buildPaymentModeBody(),
         ),
       ],
     );
@@ -168,7 +149,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Widget _buildSectionLabel() {
     return Text(
-      'Manage transaction tags & usage frequency'.toUpperCase(),
+      'Manage payment modes & usage frequency'.toUpperCase(),
       style: AppTheme.bodySmall.copyWith(
         color: AppTheme.textSecondaryColor(context),
         fontWeight: FontWeight.bold,
@@ -177,21 +158,21 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     );
   }
 
-  Widget _buildCategoryBody() {
+  Widget _buildPaymentModeBody() {
     if (_controller.isLoading) {
       return Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
+          padding: const EdgeInsets.symmetric(vertical: 40),
           child: CircularProgressIndicator(color: AppTheme.primaryColor),
         ),
       );
     }
-    if (_controller.categories.isEmpty) {
+    if (_controller.paymentModes.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 40),
           child: Text(
-            'No categories defined.',
+            'No payment modes defined.',
             style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
           ),
         ),
@@ -201,20 +182,20 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
-      itemCount: _controller.categories.length,
-      itemBuilder: (context, index) => _CategoryItem(
-        data: _controller.categories[index],
+      itemCount: _controller.paymentModes.length,
+      itemBuilder: (context, index) => _PaymentModeItem(
+        data: _controller.paymentModes[index],
       ),
     );
   }
 }
 
-// ==================== CATEGORY LIST ITEM ====================
+// ==================== LIST ITEM ====================
 
-class _CategoryItem extends StatelessWidget {
+class _PaymentModeItem extends StatelessWidget {
   final Map<String, dynamic> data;
 
-  const _CategoryItem({required this.data});
+  const _PaymentModeItem({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +204,7 @@ class _CategoryItem extends StatelessWidget {
     final int colorVal = data['color'] as int? ?? Colors.grey.toARGB32();
     final int count = data['count'] as int? ?? 0;
     final Color color = Color(colorVal);
-    final IconData icon = getIconDataByName(iconName);
+    final IconData icon = getPaymentIconByName(iconName);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -291,18 +272,18 @@ class _CategoryItem extends StatelessWidget {
   }
 }
 
-// ==================== ADD CATEGORY BOTTOM SHEET ====================
+// ==================== ADD SHEET ====================
 
-class _AddCategorySheet extends StatefulWidget {
+class _AddPaymentModeSheet extends StatefulWidget {
   final Future<void> Function(String label, String iconName, int colorValue) onAdd;
 
-  const _AddCategorySheet({required this.onAdd});
+  const _AddPaymentModeSheet({required this.onAdd});
 
   @override
-  State<_AddCategorySheet> createState() => _AddCategorySheetState();
+  State<_AddPaymentModeSheet> createState() => _AddPaymentModeSheetState();
 }
 
-class _AddCategorySheetState extends State<_AddCategorySheet> {
+class _AddPaymentModeSheetState extends State<_AddPaymentModeSheet> {
   final TextEditingController _nameController = TextEditingController();
   final FocusNode _nameFocus = FocusNode();
   int _selectedIconIndex = 0;
@@ -341,8 +322,8 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
       return;
     }
 
-    final iconName = _availableIcons[_selectedIconIndex]['name'] as String;
-    final colorVal = _availableColors[_selectedColorIndex].toARGB32();
+    final iconName = _availablePaymentIcons[_selectedIconIndex]['name'] as String;
+    final colorVal = _availablePaymentColors[_selectedColorIndex].toARGB32();
 
     widget.onAdd(name, iconName, colorVal);
     Navigator.pop(context);
@@ -390,7 +371,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Add Category',
+          'Add Payment Mode',
           style: AppTheme.headingMedium.copyWith(fontSize: 20),
         ),
         IconButton(
@@ -406,7 +387,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Category Name'.toUpperCase(),
+          'Payment Mode Name'.toUpperCase(),
           style: AppTheme.bodySmall.copyWith(
             color: AppTheme.textSecondaryColor(context),
             fontWeight: FontWeight.bold,
@@ -420,7 +401,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
           autofocus: true,
           style: TextStyle(color: AppTheme.textPrimaryColor(context)),
           decoration: InputDecoration(
-            hintText: 'e.g. Subscriptions',
+            hintText: 'e.g. HDFC Debit Card',
             hintStyle: TextStyle(color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             filled: true,
@@ -455,8 +436,8 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         Wrap(
           spacing: 12,
           runSpacing: 12,
-          children: List.generate(_availableIcons.length, (index) {
-            final item = _availableIcons[index];
+          children: List.generate(_availablePaymentIcons.length, (index) {
+            final item = _availablePaymentIcons[index];
             final IconData icon = item['icon'] as IconData;
             final isSelected = _selectedIconIndex == index;
 
@@ -505,8 +486,8 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         Wrap(
           spacing: 12,
           runSpacing: 12,
-          children: List.generate(_availableColors.length, (index) {
-            final Color color = _availableColors[index];
+          children: List.generate(_availablePaymentColors.length, (index) {
+            final Color color = _availablePaymentColors[index];
             final isSelected = _selectedColorIndex == index;
 
             return GestureDetector(
@@ -549,7 +530,7 @@ class _AddCategorySheetState extends State<_AddCategorySheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       child: const Text(
-        'Add Category',
+        'Add Payment Mode',
         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
       ),
     );

@@ -538,11 +538,11 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
 
     return Row(
       children: [
+        _buildCustomDateChip(isCustom),
+        const HGapSm(),
         _buildDateChip('Today', today, isToday),
         const HGapSm(),
         _buildDateChip('Tomorrow', tomorrow, isTomorrow),
-        const HGapSm(),
-        _buildCustomDateChip(isCustom),
         const HGapSm(),
         _buildTimeSelectorChip(),
       ],
@@ -580,7 +580,7 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
 
   Widget _buildCustomDateChip(bool isCustom) {
     final DateFormat formatter = DateFormat('MMM d');
-    final label = isCustom ? formatter.format(_selectedDate) : 'Select Date';
+    final label = isCustom ? formatter.format(_selectedDate) : null;
 
     return GestureDetector(
       onTap: _pickCustomDate,
@@ -606,15 +606,17 @@ class _AddMilestoneTaskSheetState extends State<AddMilestoneTaskSheet> {
               size: 13, 
               color: isCustom ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
             ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isCustom ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
-                fontSize: 11,
-                fontWeight: isCustom ? FontWeight.bold : FontWeight.normal,
+            if (isCustom) ...[
+              const SizedBox(width: 4),
+              Text(
+                label!,
+                style: TextStyle(
+                  color: AppTheme.selectedChipTextColor(context),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

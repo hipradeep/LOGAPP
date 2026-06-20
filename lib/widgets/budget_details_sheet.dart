@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../services/budget_service.dart';
+import '../services/cache_service.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 import 'budget_progress_bar.dart';
@@ -24,12 +25,31 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
 
   String _selectedPeriod = 'monthly';
   String _selectedTag = 'Other';
+  String _selectedPaymentMethod = 'PNB';
+  List<String> _paymentMethods = ['PNB'];
 
   @override
   void initState() {
     super.initState();
     _limitController.text = widget.budget.limit.toStringAsFixed(0);
     _selectedPeriod = widget.budget.period;
+    _loadPaymentMethods();
+  }
+
+  void _loadPaymentMethods() async {
+    try {
+      final list = await CacheService().getPaymentModes();
+      list.sort((a, b) => (b['count'] as int? ?? 0).compareTo(a['count'] as int? ?? 0));
+      final modes = list.map((item) => item['label'] as String).toList();
+      if (mounted) {
+        setState(() {
+          _paymentMethods = modes;
+          if (modes.isNotEmpty) {
+            _selectedPaymentMethod = modes.contains('PNB') ? 'PNB' : modes.first;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -61,9 +81,23 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
 
   String _extractTag(String text) {
     final lower = text.toLowerCase();
-    const tags = ['bill', 'dinner', 'drink', 'fuel', 'grocery', 'health', 'shopping', 'snack', 'travel'];
-    for (final t in tags) {
-      if (lower.contains(t)) return t[0].toUpperCase() + t.substring(1);
+    const tags = {
+      'grocery': 'Grocery',
+      'fast food': 'Fast Food',
+      'fastfood': 'Fast Food',
+      'supplement': 'Supplements',
+      'travel': 'Travel',
+      'care': 'Care',
+      'home': 'Home',
+      'bill': 'Bills',
+      'timepass': 'Timepass',
+      'transfer': 'Transfer',
+      'quickmart': 'QuickMart',
+      'shopping': 'Shopping',
+      'shoping': 'Shopping',
+    };
+    for (final entry in tags.entries) {
+      if (lower.contains(entry.key)) return entry.value;
     }
     return '';
   }
@@ -79,12 +113,16 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
       _selectedTag,
       descText,
       amount,
+      paymentMethod: _selectedPaymentMethod,
     );
+
+    await CacheService().incrementPaymentModeCount(_selectedPaymentMethod);
 
     _expenseDescController.clear();
     _expenseAmountController.clear();
     setState(() {
       _selectedTag = 'Other';
+      _selectedPaymentMethod = _paymentMethods.contains('PNB') ? 'PNB' : (_paymentMethods.isNotEmpty ? _paymentMethods.first : 'PNB');
     });
     if (mounted) {
       FocusScope.of(context).unfocus();
@@ -376,6 +414,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                           Row(
                             children: [
                               Expanded(
+                                flex: 4,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   decoration: BoxDecoration(
@@ -388,7 +427,7 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                       value: _selectedTag,
                                       isExpanded: true,
                                       dropdownColor: AppTheme.surface(context),
-                                      items: ['Bill', 'Dinner', 'Drink', 'Fuel', 'Grocery', 'Health', 'Other', 'Shopping', 'Snack', 'Travel'].map((t) {
+                                      items: ['Grocery', 'Fast Food', 'Supplements', 'Travel', 'Care', 'Home', 'Bills', 'Timepass', 'Transfer', 'QuickMart', 'Shopping', 'Other'].map((t) {
                                         return DropdownMenuItem(
                                           value: t,
                                           child: Text(t, style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryColor(context))),
@@ -406,10 +445,42 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                 ),
                               ),
                               const HGapSm(),
+                              Expanded(
+                                flex: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.surface(context),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppTheme.borderColor(context)),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _paymentMethods.contains(_selectedPaymentMethod) ? _selectedPaymentMethod : (_paymentMethods.isNotEmpty ? _paymentMethods.first : 'PNB'),
+                                      isExpanded: true,
+                                      dropdownColor: AppTheme.surface(context),
+                                      items: _paymentMethods.map((m) {
+                                        return DropdownMenuItem(
+                                          value: m,
+                                          child: Text(m, style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryColor(context))),
+                                        );
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          setState(() {
+                                            _selectedPaymentMethod = val;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const HGapSm(),
                               ElevatedButton(
                                 onPressed: _addExpense,
                                 style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(54, 46),
+                                  minimumSize: const Size(46, 46),
                                   padding: EdgeInsets.zero,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
@@ -479,6 +550,14 @@ class _BudgetDetailsSheetState extends State<BudgetDetailsSheet> {
                                                 style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimaryColor(context)),
                                               ),
                                             ],
+                                            TextSpan(
+                                              text: ' [${expense.paymentMethod}]',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                                color: AppTheme.textSecondaryColor(context),
+                                                fontSize: 11,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),

@@ -12,7 +12,6 @@ import 'services/activity_notification_sync.dart';
 import 'services/notification_transaction_service.dart';
 import 'services/service_locator.dart';
 import 'services/activity_service.dart';
-import 'services/crash_reporting_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,13 +19,13 @@ void main() async {
   // Capture Flutter framework errors (e.g. layout, widget build errors)
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    CrashReportingService.logCrash(details.exception, details.stack);
+    // CrashReportingService.logCrash(details.exception, details.stack); // Temporarily disabled
   };
 
   // Capture asynchronous and Dart zone-level errors
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    CrashReportingService.logCrash(error, stack);
-    return true;
+    // CrashReportingService.logCrash(error, stack); // Temporarily disabled
+    return false; // Let the error print to console normally
   };
 
   setupLocator();

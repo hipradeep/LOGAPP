@@ -37,15 +37,17 @@ class NotificationTransactionService {
   ];
 
   static const _tagKeywords = {
-    'Bill': ['bill', 'recharge', 'electricity', 'water', 'internet', 'dth', 'mobile recharge', 'broadband'],
-    'Dinner': ['restaurant', 'cafe', 'dinner', 'lunch', 'food', 'zomato', 'swiggy', 'eat', 'pizza', 'burger'],
-    'Drink': ['drink', 'bar', 'beer', 'wine', 'coffee', 'tea', 'chai', 'starbucks'],
-    'Fuel': ['fuel', 'petrol', 'diesel', 'gas', 'indian oil', 'hpcl', 'bpcl', 'shell'],
-    'Grocery': ['grocery', 'supermarket', 'dmart', 'bigbasket', 'reliance fresh', 'zepto', 'blinkit', 'instamart'],
-    'Shopping': ['amazon', 'flipkart', 'myntra', 'shopping', 'meesho', 'ajio', 'nykaa', 'purchase'],
-    'Health': ['medical', 'hospital', 'pharmacy', 'doctor', 'medicine', 'apollo', 'health', 'clinic'],
-    'Snack': ['snack', 'fast food', 'mcdonald', 'kfc', 'domino', 'subway', 'chaat'],
-    'Travel': ['flight', 'travel', 'train', 'uber', 'ola', 'rapido', 'bus', 'metro', 'cab', 'irctc', 'make my trip'],
+    'Grocery': ['grocery', 'supermarket', 'dmart', 'bigbasket', 'reliance fresh'],
+    'Fast Food': ['restaurant', 'cafe', 'dinner', 'lunch', 'food', 'zomato', 'swiggy', 'eat', 'pizza', 'burger', 'drink', 'bar', 'beer', 'wine', 'coffee', 'tea', 'chai', 'starbucks', 'snack', 'fast food', 'fastfood', 'mcdonald', 'kfc', 'domino', 'subway', 'chaat'],
+    'Supplements': ['supplement', 'vitamin', 'protein', 'creatine', 'whey', 'herb', 'capsule', 'tablet'],
+    'Travel': ['flight', 'travel', 'train', 'uber', 'ola', 'rapido', 'bus', 'metro', 'cab', 'irctc', 'make my trip', 'fuel', 'petrol', 'diesel', 'gas', 'indian oil', 'hpcl', 'bpcl', 'shell'],
+    'Care': ['care', 'health', 'medical', 'hospital', 'pharmacy', 'doctor', 'medicine', 'apollo', 'clinic', 'spa', 'salon', 'parlour', 'grooming', 'haircut'],
+    'Home': ['home', 'rent', 'furniture', 'decor', 'appliances', 'maintenance', 'repair', 'hardware', 'cleaning'],
+    'Bills': ['bill', 'recharge', 'electricity', 'water', 'internet', 'dth', 'mobile recharge', 'broadband', 'insurance', 'subscription', 'netflix', 'prime', 'spotify'],
+    'Timepass': ['timepass', 'movie', 'cinema', 'game', 'gaming', 'arcade', 'play', 'ott', 'entertainment', 'show', 'ticket', 'fun'],
+    'Transfer': ['transfer', 'sent to', 'send to', 'tf to', 'trf to', 'upi transfer', 'payment to'],
+    'QuickMart': ['quickmart', 'quick mart', 'blinkit', 'zepto', 'instamart', 'store'],
+    'Shopping': ['amazon', 'flipkart', 'myntra', 'shopping', 'meesho', 'ajio', 'nykaa', 'purchase', 'mall', 'store', 'retail'],
   };
 
   /// Check if the app currently has Notification Access permission
@@ -218,6 +220,7 @@ class NotificationTransactionService {
         'expenseDate': Timestamp.fromDate(DateTime.now()), // defaults to entry date
         'isValidated': false,
         'rawBody': '$title: $text',
+        'paymentMethod': _detectPaymentMethod(title, text, packageName),
       });
 
       developer.log('Successfully auto-inserted transaction into budget category: $budgetCategoryName', name: _logName);
@@ -324,5 +327,43 @@ class NotificationTransactionService {
       }
     }
     return 'Other';
+  }
+
+  static String _detectPaymentMethod(String title, String body, String packageName) {
+    final lowerTitle = title.toLowerCase();
+    final lowerBody = body.toLowerCase();
+    final lowerPackage = packageName.toLowerCase();
+
+    if (lowerPackage.contains('paisa') || lowerPackage.contains('phonepe') || lowerPackage.contains('paytm')) {
+      return 'Wallet';
+    }
+    if (lowerBody.contains('sbi') || lowerTitle.contains('sbi') || lowerPackage.contains('sbi')) {
+      return 'SBI';
+    }
+    if (lowerBody.contains('hdfc') || lowerTitle.contains('hdfc') || lowerPackage.contains('hdfc')) {
+      return 'HDFC CC';
+    }
+    if (lowerBody.contains('icici') || lowerTitle.contains('icici') || lowerPackage.contains('icici')) {
+      return 'ICICI';
+    }
+    if (lowerBody.contains('axis') || lowerTitle.contains('axis') || lowerPackage.contains('axis')) {
+      return 'AXIS CC';
+    }
+    if (lowerBody.contains('idfc') || lowerTitle.contains('idfc') || lowerPackage.contains('idfc')) {
+      return 'IDFC CC';
+    }
+    if (lowerBody.contains('cbi') || lowerTitle.contains('cbi')) {
+      return 'CBI';
+    }
+    if (lowerBody.contains('pnb') || lowerTitle.contains('pnb')) {
+      return 'PNB';
+    }
+    if (lowerBody.contains('wallet') || lowerBody.contains('paytm') || lowerBody.contains('gpay') || lowerBody.contains('phonepe')) {
+      return 'Wallet';
+    }
+    if (lowerBody.contains('netbanking') || lowerBody.contains('net banking')) {
+      return 'Net Banking';
+    }
+    return 'Wallet';
   }
 }

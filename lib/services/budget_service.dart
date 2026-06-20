@@ -137,7 +137,7 @@ class BudgetService {
 
   // ==================== TRANSACTION OPERATIONS ====================
 
-  Future<void> addTransaction(String budgetId, String tag, String description, double amount, {DateTime? timestamp}) async {
+  Future<void> addTransaction(String budgetId, String tag, String description, double amount, {DateTime? timestamp, String paymentMethod = 'Cash'}) async {
     final expenseTime = timestamp ?? DateTime.now();
     await _transactionsCollection.add({
       'budgetId': budgetId,
@@ -148,6 +148,7 @@ class BudgetService {
       'expenseDate': Timestamp.fromDate(expenseTime),
       'isValidated': true,
       'rawBody': null,
+      'paymentMethod': paymentMethod,
     });
   }
 

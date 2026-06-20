@@ -32,6 +32,10 @@ IconData getIconDataByName(String name) {
     case 'dinner_dining_rounded': return Icons.dinner_dining_rounded;
     case 'local_gas_station_rounded': return Icons.local_gas_station_rounded;
     case 'medical_services_rounded': return Icons.medical_services_rounded;
+    case 'medication_rounded': return Icons.medication_rounded;
+    case 'favorite_rounded': return Icons.favorite_rounded;
+    case 'compare_arrows_rounded': return Icons.compare_arrows_rounded;
+    case 'call_received_rounded': return Icons.call_received_rounded;
     case 'school_rounded': return Icons.school_rounded;
     case 'sports_esports_rounded': return Icons.sports_esports_rounded;
     case 'pets_rounded': return Icons.pets_rounded;
@@ -44,7 +48,7 @@ IconData getIconDataByName(String name) {
 class AddTransactionSheet extends StatefulWidget {
   final String? budgetId;
   final String? categoryName;
-  final Future<void> Function(String tag, String description, double amount, DateTime date)? onAddTransaction;
+  final Future<void> Function(String tag, String description, double amount, DateTime date, String paymentMethod)? onAddTransaction;
   final Transaction? existingTransaction;
   final List<Budget>? budgets;
 
@@ -83,6 +87,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool _isLoadingBudgets = false;
   String? _selectedCategoryName;
 
+  String _selectedPaymentMethod = 'PNB';
+  List<String> _paymentMethods = ['PNB'];
+  bool _isLoadingPaymentMethods = true;
+
   @override
   void initState() {
     super.initState();
@@ -99,13 +107,39 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       }
       _selectedDate = tx.expenseDate;
       _isExpense = tx.amount >= 0;
+      _selectedPaymentMethod = tx.paymentMethod;
     } else {
       _selectedDate = DateTime.now();
       _isExpense = true;
+      _selectedPaymentMethod = 'PNB';
     }
 
     _loadExpenseTags();
+    _loadPaymentMethods();
     _initBudgets();
+  }
+
+  void _loadPaymentMethods() async {
+    try {
+      final list = await _cacheService.getPaymentModes();
+      list.sort((a, b) => (b['count'] as int? ?? 0).compareTo(a['count'] as int? ?? 0));
+      final modes = list.map((item) => item['label'] as String).toList();
+      if (mounted) {
+        setState(() {
+          _paymentMethods = modes;
+          _isLoadingPaymentMethods = false;
+          if (widget.existingTransaction == null && modes.isNotEmpty) {
+            _selectedPaymentMethod = modes.contains('PNB') ? 'PNB' : modes.first;
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoadingPaymentMethods = false;
+        });
+      }
+    }
   }
 
   void _initBudgets() async {
@@ -247,6 +281,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           expenseDate: _selectedDate,
           isValidated: true,
           rawBody: widget.existingTransaction!.rawBody,
+          paymentMethod: _selectedPaymentMethod,
         );
 
         if (_selectedBudgetId != widget.budgetId) {
@@ -259,6 +294,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         }
 
         await _cacheService.incrementCategoryCount(tag.label);
+        await _cacheService.incrementPaymentModeCount(_selectedPaymentMethod);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -271,7 +307,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         }
       } else {
         if (widget.onAddTransaction != null) {
-          await widget.onAddTransaction!(tag.label, customDesc, finalAmount, _selectedDate);
+          await widget.onAddTransaction!(tag.label, customDesc, finalAmount, _selectedDate, _selectedPaymentMethod);
         } else {
           await _budgetService.addTransaction(
             _selectedBudgetId,
@@ -279,10 +315,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             customDesc,
             finalAmount,
             timestamp: _selectedDate,
+            paymentMethod: _selectedPaymentMethod,
           );
         }
         
         await _cacheService.incrementCategoryCount(tag.label);
+        await _cacheService.incrementPaymentModeCount(_selectedPaymentMethod);
 
         if (mounted) {
           Navigator.pop(context);
@@ -459,6 +497,84 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
   }
 
+  IconData _getPaymentMethodIcon(String name) {
+    final lower = name.toLowerCase();
+    if (lower == 'cash') {
+      return Icons.payments_rounded;
+    } else if (lower.contains('cc') || lower.contains('card')) {
+      return Icons.credit_card_rounded;
+    } else if (lower.contains('wallet')) {
+      return Icons.account_balance_wallet_rounded;
+    } else {
+      return Icons.account_balance_rounded;
+    }
+  }
+
+  Widget _buildPaymentMethodInput() {
+    if (_isLoadingPaymentMethods) {
+      return const SizedBox.shrink();
+    }
+    
+    final currentSelected = _paymentMethods.contains(_selectedPaymentMethod)
+        ? _selectedPaymentMethod
+        : (_paymentMethods.isNotEmpty ? _paymentMethods.first : 'PNB');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Payment Method',
+          style: AppTheme.headingSmall.copyWith(
+            color: AppTheme.textSecondaryColor(context),
+            fontSize: 15,
+          ),
+        ),
+        const VGapSm(),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: _paymentMethods.map((method) {
+              final isSelected = currentSelected == method;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  avatar: Icon(
+                    _getPaymentMethodIcon(method),
+                    size: 14,
+                    color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+                  ),
+                  label: Text(method),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedPaymentMethod = method;
+                      });
+                    }
+                  },
+                  selectedColor: AppTheme.segmentedSelectedBgColor(context),
+                  backgroundColor: AppTheme.surface(context).withValues(alpha: 0.25),
+                  side: BorderSide(
+                    color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
+                    width: 1.2,
+                  ),
+                  labelStyle: TextStyle(
+                    color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  ),
+                  showCheckmark: false,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActionButtons() {
     if (widget.existingTransaction != null) {
       return AppActionButtons(
@@ -576,6 +692,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           _buildAmountInput(),
                           const VGapLg(),
                           _buildDescriptionInput(),
+                          const VGapLg(),
+                          _buildPaymentMethodInput(),
                           const VGapLg(),
                           _buildActionButtons(),
                           const VGapXl(),

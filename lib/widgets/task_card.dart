@@ -95,25 +95,28 @@ class _TaskCardState extends State<TaskCard> {
         .where((i) => i.durationMinutes != null)
         .fold<int>(0, (sum, i) => sum + i.durationMinutes!);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: widget.task.checked
-            ? AppTheme.surface(context).withValues(alpha: 0.15)
-            : AppTheme.surface(context).withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: widget.isExpanded
-              ? AppTheme.primaryColor.withValues(alpha: 0.3)
-              : AppTheme.borderColor(context),
-          width: 1,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => widget.onEditTask(widget.task),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: widget.task.checked
+              ? AppTheme.surface(context).withValues(alpha: 0.15)
+              : AppTheme.surface(context).withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: widget.isExpanded
+                ? AppTheme.primaryColor.withValues(alpha: 0.3)
+                : AppTheme.borderColor(context),
+            width: 1,
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
@@ -445,8 +448,9 @@ class _TaskCardState extends State<TaskCard> {
           ],
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAddNestedItemForm() {
     return Row(

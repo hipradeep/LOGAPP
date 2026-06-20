@@ -195,6 +195,12 @@ class AppTheme {
           ? Colors.white.withValues(alpha: 0.08)
           : Colors.black.withValues(alpha: 0.07);
 
+  /// Returns the background color for decrement/minus buttons in water logs.
+  static Color waterLogMinusButtonColor(BuildContext context) =>
+      isDarkMode(context)
+          ? const Color(0xFFEFF6FF).withValues(alpha: 0.12)
+          : const Color(0xFFEFF6FF).withValues(alpha: 0.7);
+
   /// Returns the text color for selected choice chips.
   static Color selectedChipTextColor(BuildContext context) =>
       isDarkMode(context) ? textPrimary : Colors.white;

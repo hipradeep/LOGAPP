@@ -6,6 +6,7 @@ import 'note_service.dart';
 import 'budget_service.dart';
 import 'notification_service.dart';
 import 'notification_transaction_service.dart';
+import 'water_service.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -17,4 +18,5 @@ void setupLocator() {
   getIt.registerLazySingleton<BudgetService>(() => BudgetService());
   getIt.registerLazySingleton<NotificationService>(() => NotificationService());
   getIt.registerLazySingleton<NotificationTransactionService>(() => NotificationTransactionService());
+  getIt.registerLazySingleton<WaterService>(() => WaterService());
 }
