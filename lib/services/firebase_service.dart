@@ -425,7 +425,6 @@ class FirebaseService {
     final Map<String, dynamic> updates = {};
     if (name != null) {
       updates['name'] = name;
-      updates['category'] = name;
     }
     if (categoryName != null) {
       updates['categoryName'] = categoryName;

@@ -12,7 +12,7 @@ import '../widgets/add_transaction_sheet.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
-import '../widgets/budget_7days_expense_graph.dart';
+import '../widgets/budget_expense_graph.dart';
 import '../widgets/category_breakdown_sheet.dart';
 import '../widgets/budget_progress_bar.dart';
 
@@ -446,9 +446,9 @@ class _BudgetScreenState extends State<BudgetScreen> {
         ),
         const VGapMd(),
 
-        // 7-Day Expense Bar Graph
+        // Expense History Bar Graph
         RepaintBoundary(
-          child: Budget7DaysExpenseGraph(
+          child: BudgetExpenseGraph(
             budget: budget,
             transactions: controller.transactions,
           ),

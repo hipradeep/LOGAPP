@@ -36,6 +36,14 @@ class _ActivityBarGraphState extends State<ActivityBarGraph> {
     _daysWindow = widget.daysWindow;
   }
 
+  @override
+  void didUpdateWidget(covariant ActivityBarGraph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.daysWindow != widget.daysWindow) {
+      _daysWindow = widget.daysWindow;
+    }
+  }
+
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }

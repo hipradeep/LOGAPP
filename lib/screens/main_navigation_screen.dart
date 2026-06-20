@@ -15,6 +15,7 @@ import 'manage_budget_screen.dart';
 import 'manage_quick_actions_screen.dart';
 import 'track_activities_screen.dart';
 import 'log_screen.dart';
+import 'crash_log_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -367,6 +368,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             title: 'Clear Cache & Reset',
                             onTap: () {
                               _resetCache(context, controller);
+                            },
+                          ),
+                          _buildDrawerDivider(context),
+                          _buildDrawerItem(
+                            context,
+                            icon: Icons.bug_report_outlined,
+                            title: 'Local Crash Logs',
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const CrashLogScreen(),
+                                ),
+                              );
                             },
                           ),
                           _buildDrawerDivider(context),

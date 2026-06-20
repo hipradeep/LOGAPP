@@ -158,7 +158,6 @@ class Budget {
     return {
       'name': name,
       'categoryName': categoryName,
-      'category': name, // legacy field write
       'limit': limit,
       'period': period,
       'description': description,

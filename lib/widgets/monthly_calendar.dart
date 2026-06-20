@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/note_entity.dart';
 import '../models/check_in.dart';
@@ -40,24 +41,31 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
     }
   }
 
-  List<DateTime?> _generateMonthGridDates(DateTime monthDate) {
+  List<DateTime> _generateMonthGridDates(DateTime monthDate) {
     final firstDayOfMonth = DateTime(monthDate.year, monthDate.month, 1);
     final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
     
-    final startPadding = firstDayOfMonth.weekday == 7 ? 0 : firstDayOfMonth.weekday;
+    // Monday-start padding (weekday: 1=Mon, 7=Sun)
+    final startPadding = firstDayOfMonth.weekday - 1;
     
-    final List<DateTime?> gridDates = [];
-    for (int i = 0; i < startPadding; i++) {
-      gridDates.add(null);
+    final List<DateTime> gridDates = [];
+    
+    // Trailing days of previous month
+    final prevMonthLastDay = DateTime(monthDate.year, monthDate.month, 0);
+    for (int i = startPadding - 1; i >= 0; i--) {
+      gridDates.add(DateTime(prevMonthLastDay.year, prevMonthLastDay.month, prevMonthLastDay.day - i));
     }
     
+    // Days of current month
     final totalDays = lastDayOfMonth.day;
     for (int i = 1; i <= totalDays; i++) {
       gridDates.add(DateTime(monthDate.year, monthDate.month, i));
     }
     
+    // Leading days of next month
+    int nextMonthDay = 1;
     while (gridDates.length % 7 != 0) {
-      gridDates.add(null);
+      gridDates.add(DateTime(monthDate.year, monthDate.month + 1, nextMonthDay++));
     }
     
     return gridDates;
@@ -153,7 +161,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
   }
 
   Widget _buildWeekdaysHeader() {
-    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -177,6 +185,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
   }
 
   Widget _buildDayCell(DateTime date, DateTime today) {
+    final isCurrentMonth = date.month == _currentMonth.month;
     final isSelected = _isSameDay(date, widget.selectedDate);
     final isTodayDate = _isSameDay(date, today);
     final isFuture = _isFutureDay(date);
@@ -184,29 +193,56 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
     final hasLog = widget.logs.any((l) => _isSameDay(l.timestamp, date));
     final hasCheckIn = widget.checkIns.any((c) => _isSameDay(c.timestamp, date) && c.checked);
     
-    final dayNumber = DateFormat('d').format(date);
+    final dayNumber = date.day.toString();
+    
+    final isDark = AppTheme.isDarkMode(context);
+    
+    final Color textColor;
+    final Color bgColor;
+    final Border? border;
+    
+    if (!isCurrentMonth) {
+      textColor = isDark ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.15);
+      bgColor = Colors.transparent;
+      border = null;
+    } else if (isSelected) {
+      textColor = Colors.white;
+      bgColor = isDark ? AppTheme.primaryColor : const Color(0xFF1E293B);
+      border = null;
+    } else if (isTodayDate) {
+      textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+      bgColor = isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white;
+      border = Border.all(
+        color: isDark ? AppTheme.primaryColor : Colors.black.withValues(alpha: 0.25),
+        width: 1.2,
+      );
+    } else {
+      textColor = isDark ? Colors.white.withValues(alpha: 0.8) : Colors.black.withValues(alpha: 0.8);
+      bgColor = isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05);
+      border = null;
+    }
     
     return GestureDetector(
       onTap: isFuture
           ? null
           : () {
-              setState(() {
-                _currentMonth = date;
-              });
+              if (date.month != _currentMonth.month) {
+                setState(() {
+                  _currentMonth = date;
+                });
+              }
               widget.onDateSelected(date);
             },
       child: Opacity(
-        opacity: isFuture ? 0.3 : 1.0,
+        opacity: isFuture && isCurrentMonth ? 0.3 : 1.0,
         child: Container(
           width: 36,
           height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: bgColor,
             shape: BoxShape.circle,
-            border: isTodayDate && !isSelected
-                ? Border.all(color: AppTheme.primaryColor, width: 1.2)
-                : null,
+            border: border,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -214,42 +250,40 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
             children: [
               Text(
                 dayNumber,
-                style: TextStyle(
+                style: GoogleFonts.outfit(
                   fontSize: 13,
                   fontWeight: isSelected || isTodayDate ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected
-                      ? AppTheme.lightTextPrimary  // always dark on white circle
-                      : Theme.of(context).textTheme.bodySmall!.color,
+                  color: textColor,
                 ),
               ),
-              const SizedBox(height: 0.5),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (hasLog)
-                    Container(
-                      width: 2.5,
-                      height: 2.5,
-                      margin: const EdgeInsets.only(right: 1),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isSelected ? AppTheme.primaryDark : AppTheme.primaryLight,
+              if (isCurrentMonth && (hasLog || hasCheckIn)) ...[
+                const SizedBox(height: 1),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasLog)
+                      Container(
+                        width: 2.5,
+                        height: 2.5,
+                        margin: const EdgeInsets.only(right: 1),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isSelected ? Colors.white : AppTheme.primaryLight,
+                        ),
                       ),
-                    ),
-                  if (hasCheckIn)
-                    Container(
-                      width: 2.5,
-                      height: 2.5,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppTheme.successColor,
+                    if (hasCheckIn)
+                      Container(
+                        width: 2.5,
+                        height: 2.5,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isSelected ? Colors.white : AppTheme.successColor,
+                        ),
                       ),
-                    ),
-                  if (!hasLog && !hasCheckIn)
-                    const SizedBox(height: 2.5),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -268,9 +302,6 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: weekDates.map((date) {
-            if (date == null) {
-              return const SizedBox(width: 36, height: 36);
-            }
             return _buildDayCell(date, today);
           }).toList(),
         ),
@@ -287,6 +318,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppTheme.isDarkMode(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       padding: const EdgeInsets.all(8),
@@ -301,6 +333,18 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
           _buildWeekdaysHeader(),
           const SizedBox(height: 4),
           _buildMonthGrid(),
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
         ],
       ),
     );

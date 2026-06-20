@@ -34,6 +34,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     return AppProvider<TrackActivitiesController>(
       notifier: _controller,
       child: Builder(
@@ -81,7 +82,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                   ],
                 ),
               ),
-              const VGapMd(),
+              const VGapSm(), // Compact: reduced spacer
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: controller.isLoading
@@ -211,7 +212,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             itemBuilder: (context, index) {
               final a = active[index];
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(bottom: 8), // Compact: reduced bottom card padding
                 child: ActivityCard(
                   key: ValueKey(a.id),
                   activity: a,
@@ -220,7 +221,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               );
             },
           ),
-          const VGapMd(),
+          const VGapSm(), // Compact: reduced spacer
         ],
         if (inactive.isNotEmpty) ...[
           _buildSectionHeader('Inactive Activities (${inactive.length})', AppTheme.successColor),
@@ -233,7 +234,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             itemBuilder: (context, index) {
               final a = inactive[index];
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(bottom: 8), // Compact: reduced bottom card padding
                 child: ActivityCard(
                   key: ValueKey(a.id),
                   activity: a,
@@ -242,11 +243,9 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               );
             },
           ),
-          const VGapMd(),
+          const VGapSm(), // Compact: reduced spacer
         ],
-        const VGapXxl(),
-        const VGapXxl(),
-        const VGapXxl(),
+        const VGapLg(), // Compact: reduced bottom layout padding
       ],
     );
   }
@@ -394,8 +393,6 @@ class ActivityCard extends StatelessWidget {
 
   String _getRepeatDaysLabel(List<int> days) {
     if (days.length == 7) return 'Every day';
-    if (days.length == 5 && !days.contains(6) && !days.contains(7)) return 'Weekdays';
-    if (days.length == 2 && days.contains(6) && days.contains(7)) return 'Weekends';
     return days.map((d) => _dayLabelsShort[d - 1][0]).join(', ');
   }
 
@@ -484,6 +481,7 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // CRITICAL: Registers this component to rebuild on theme switch
     final isActive = activity.isActive;
     final accentColor = isActive ? AppTheme.primaryColor : AppTheme.successColor;
     final typeBadge = _getTypeBadge(activity.trackingType);
@@ -527,7 +525,7 @@ class ActivityCard extends StatelessWidget {
           child: Stack(
             children: [
               // Whole card background progress bar (light color)
-              if (start != null && end != null && progressPercent > 0)
+              if (isActive && start != null && end != null && progressPercent > 0) // Completed/Inactive: hide progress background bar
                 Positioned.fill(
                   child: FractionallySizedBox(
                     alignment: Alignment.centerLeft,
@@ -541,30 +539,31 @@ class ActivityCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: 4,
-                      decoration: BoxDecoration(
-                        color: typeBadge.color.withValues(alpha: 0.8),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(AppTheme.defaultBorderRadius),
-                          bottomLeft: Radius.circular(AppTheme.defaultBorderRadius),
+                    if (isActive) // Completed/Inactive: hide left colored accent bar
+                      Container(
+                        width: 4,
+                        decoration: BoxDecoration(
+                          color: typeBadge.color.withValues(alpha: 0.8),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(AppTheme.defaultBorderRadius),
+                            bottomLeft: Radius.circular(AppTheme.defaultBorderRadius),
                         ),
                       ),
                     ),
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), // Compact: reduced padding
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
                                 _buildActivityProgressIcon(activity),
-                                const HGapMd(),
+                                const HGapSm(), // Compact: reduced gap between icon and text
                                 Expanded(
                                   child: Text(
                                     activity.name,
-                                    style: AppTheme.bodyLarge.copyWith(
+                                    style: AppTheme.bodyMedium.copyWith( // Compact: stepped down text style
                                       color: isActive ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -572,47 +571,49 @@ class ActivityCard extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                if (activity.skippable) ...[
+                                if (isActive && activity.skippable) ...[ // Completed/Inactive: hide skippable arrow
                                   const HGapSm(),
                                   Icon(
                                     Icons.double_arrow_rounded,
-                                    size: 20,
+                                    size: 16, // Compact: reduced icon size
                                     color: AppTheme.warningColor.withValues(alpha: 0.8),
                                   ),
                                 ],
                               ],
                             ),
-                            const VGapSm(),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: Wrap(
-                                    spacing: 8,
-                                    runSpacing: 6,
-                                    children: [
-                                      if (activity.targetCount > 1)
+                            if (isActive) ...[ // Completed/Inactive: hide all metadata chips
+                              const VGapXs(), // Compact: reduced spacer
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: Wrap(
+                                      spacing: 4, // Compact: reduced tag wrap margins
+                                      runSpacing: 4,
+                                      children: [
+                                        if (activity.targetCount > 1)
+                                          _buildMetaChip(
+                                            icon: Icons.repeat_rounded,
+                                            label: '${activity.targetCount}x/day',
+                                            color: AppTheme.secondaryColor,
+                                          ),
+                                        if (activity.scheduledTime != null)
+                                          _buildMetaChip(
+                                            icon: Icons.access_time_rounded,
+                                            label: _formatScheduledTime(activity.scheduledTime!),
+                                            color: AppTheme.primaryAccentColor(context),
+                                          ),
                                         _buildMetaChip(
-                                          icon: Icons.repeat_rounded,
-                                          label: '${activity.targetCount}x/day',
-                                          color: AppTheme.secondaryColor,
+                                          icon: Icons.calendar_view_week_rounded,
+                                          label: _getRepeatDaysLabel(activity.repeatDays),
+                                          color: AppTheme.textSecondaryColor(context),
                                         ),
-                                      if (activity.scheduledTime != null)
-                                        _buildMetaChip(
-                                          icon: Icons.access_time_rounded,
-                                          label: _formatScheduledTime(activity.scheduledTime!),
-                                          color: AppTheme.primaryLight,
-                                        ),
-                                      _buildMetaChip(
-                                        icon: Icons.calendar_view_week_rounded,
-                                        label: _getRepeatDaysLabel(activity.repeatDays),
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),

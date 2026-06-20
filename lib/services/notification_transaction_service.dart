@@ -204,7 +204,9 @@ class NotificationTransactionService {
       }
 
       final activeDoc = budgetsQuery.docs.first;
-      final budgetCategoryName = activeDoc.data()['category'] as String? ?? 'Active Budget';
+      final budgetCategoryName = (activeDoc.data() as Map<String, dynamic>?)?['name'] as String? ?? 
+          (activeDoc.data() as Map<String, dynamic>?)?['categoryName'] as String? ?? 
+          'Active Budget';
       
       // 5. Add direct transaction document to 'transactions' collection
       await FirebaseFirestore.instance.collection('transactions').add({

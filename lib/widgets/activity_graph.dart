@@ -32,13 +32,11 @@ class ActivityGraphCard extends StatefulWidget {
 }
 
 class _ActivityGraphCardState extends State<ActivityGraphCard> {
-  late int _activeTab; // 0 = Completion Trends (Line Graph), 1 = Consistency Heatmap
-  int _daysWindow = 7; // 7 or 30 days for Line Graph
+  int _daysWindow = 7; // 7 or 30 days for graph window
 
   @override
   void initState() {
     super.initState();
-    _activeTab = widget.initialTab;
   }
 
   // Helper to check if a date is same day as target
@@ -107,8 +105,6 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
     return 0.0;
   }
 
-  // Calculate absolute milestone completion rate
-
   // Check if a day was skipped
   bool _isDaySkipped(DateTime date) {
     final day = DateTime(date.year, date.month, date.day);
@@ -175,156 +171,6 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
     }
 
     return streak;
-  }
-
-
-
-  // Completion Line Chart for Trends Tab (Works uniformly for all activities, supports 7D vs 30D selectors)
-  Widget _buildTrendsLineGraph(
-    BuildContext context,
-    List<double> completionRates,
-    List<DateTime> dates,
-    Color typeColor,
-  ) {
-    final now = DateTime.now();
-    return Column(
-      children: [
-        SizedBox(
-          height: 120,
-          child: Stack(
-            children: [
-              // Grid lines
-              Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(4, (index) => Container(
-                  height: 1,
-                  color: AppTheme.borderColor(context).withValues(alpha: 0.5),
-                )),
-              ),
-              
-              // Custom paint curve
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: ActivityGraphPainter(
-                    dataPoints: completionRates,
-                    lineColor: typeColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // Timeline Day Labels Row
-        if (_daysWindow == 7)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(7, (index) {
-              final date = dates[index];
-              final isToday = _isSameDay(date, now);
-              final isScheduled = _isScheduledDay(date);
-              final label = DateFormat('E').format(date).substring(0, 1);
-
-              return Expanded(
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: isToday
-                        ? BoxDecoration(
-                            color: typeColor.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: typeColor.withValues(alpha: 0.4),
-                              width: 1,
-                            ),
-                          )
-                        : null,
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: isToday
-                            ? AppTheme.textPrimaryColor(context)
-                            : (isScheduled ? AppTheme.textSecondaryColor(context) : AppTheme.textSecondaryColor(context).withValues(alpha: 0.3)),
-                        fontSize: 11,
-                        fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          )
-        else
-          // For 30D, show start date, middle date, and today
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  DateFormat('MMM d').format(dates.first),
-                  style: TextStyle(
-                    color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  DateFormat('MMM d').format(dates[15]),
-                  style: TextStyle(
-                    color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: typeColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Today',
-                    style: TextStyle(
-                      color: typeColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  // Header button builders
-  Widget _buildTabButton(int index, String title, Color typeColor) {
-    final isActive = _activeTab == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _activeTab = index;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: isActive ? typeColor.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: isActive ? typeColor : AppTheme.textSecondaryColor(context),
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildWindowButton(int days, String title) {
@@ -395,13 +241,6 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
     final int milestonePending = milestoneStats.pending;
     final double milestoneProgress = milestoneStats.progress;
 
-    // Data points for Trends Graph window
-    final List<DateTime> trendsDates = List.generate(_daysWindow, (index) {
-      final date = now.subtract(Duration(days: _daysWindow - 1 - index));
-      return DateTime(date.year, date.month, date.day);
-    });
-    final List<double> trendsCompletionRates = trendsDates.map((d) => _calculateDailyCompletion(d)).toList();
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -423,7 +262,7 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row with Title and Tab Toggles
+          // Header Row with Title and optional Window Toggles
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -452,74 +291,46 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
                   ),
                 ],
               ),
-              
-              // Tabs (Trends vs Heatmap)
-              if (widget.activity.trackingType != 'milestone')
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.subtleFillColor(context),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppTheme.borderColor(context),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      _buildTabButton(0, 'Trends', typeColor),
-                      _buildTabButton(1, 'Heatmap', typeColor),
-                    ],
-                  ),
+              // Window toggles (Visible for multiple and milestone types)
+              if (widget.activity.trackingType == 'multiple' || widget.activity.trackingType == 'milestone')
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildWindowButton(7, '7 Days'),
+                    const SizedBox(width: 8),
+                    _buildWindowButton(30, '30 Days'),
+                  ],
                 ),
             ],
           ),
-
-          // Window toggles row (Visible on Trends tab, or always for milestone)
-          if (_activeTab == 0 || widget.activity.trackingType == 'milestone') ...[
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _buildWindowButton(7, '7 Days'),
-                const SizedBox(width: 8),
-                _buildWindowButton(30, '30 Days'),
-              ],
-            ),
-          ],
-          
           const SizedBox(height: 20),
 
-          // Dynamic Body Area
-          if (widget.activity.trackingType == 'milestone')
-            ActivityBurnupChart(
-              activity: widget.activity,
-              checkIns: widget.checkIns,
-              tasks: widget.tasks,
-              daysWindow: _daysWindow,
-              showTitle: false,
-            )
-          else if (_activeTab == 0) ...[
-            if (widget.activity.trackingType == 'multiple')
-              ActivityBarGraph(
-                activity: widget.activity,
-                checkIns: widget.checkIns,
-                tasks: widget.tasks,
-                daysWindow: _daysWindow,
-                showTitle: false,
-                showWindowButtons: false,
-              )
-            else
-              _buildTrendsLineGraph(context, trendsCompletionRates, trendsDates, typeColor),
-          ] else ...[
+          // Dynamic Body Area matching check-in sheet
+          if (widget.activity.trackingType == 'single')
             ActivityHeatmap(
               activity: widget.activity,
               checkIns: widget.checkIns,
               tasks: widget.tasks,
               heatmapWeeks: 12,
               showTitle: false,
+            )
+          else if (widget.activity.trackingType == 'multiple')
+            ActivityBarGraph(
+              activity: widget.activity,
+              checkIns: widget.checkIns,
+              tasks: widget.tasks,
+              daysWindow: _daysWindow,
+              showTitle: false,
+              showWindowButtons: false,
+            )
+          else
+            ActivityBurnupChart(
+              activity: widget.activity,
+              checkIns: widget.checkIns,
+              tasks: widget.tasks,
+              daysWindow: _daysWindow,
+              showTitle: false,
             ),
-          ],
           
           const SizedBox(height: 24),
           
@@ -683,113 +494,5 @@ class _ActivityGraphCardState extends State<ActivityGraphCard> {
         ],
       ),
     );
-  }
-}
-
-class ActivityGraphPainter extends CustomPainter {
-  final List<double> dataPoints; // List of completion rates (0.0 to 1.0)
-  final Color lineColor;
-
-  ActivityGraphPainter({
-    required this.dataPoints,
-    required this.lineColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (dataPoints.isEmpty) return;
-
-    final double widthBetweenPoints = size.width / (dataPoints.length - 1);
-    
-    final double topLimit = size.height * 0.1;
-    final double bottomLimit = size.height * 0.9;
-    final double heightRange = bottomLimit - topLimit;
-    
-    final List<Offset> points = [];
-    for (int i = 0; i < dataPoints.length; i++) {
-      final double x = i * widthBetweenPoints;
-      final double y = bottomLimit - (dataPoints[i] * heightRange);
-      points.add(Offset(x, y));
-    }
-
-    // Draw area gradient under the curve
-    final Path areaPath = Path();
-    areaPath.moveTo(0, bottomLimit);
-    areaPath.lineTo(points[0].dx, points[0].dy);
-
-    for (int i = 0; i < points.length - 1; i++) {
-      final Offset p0 = points[i];
-      final Offset p1 = points[i + 1];
-      final double controlX = p0.dx + (p1.dx - p0.dx) / 2.0;
-      areaPath.cubicTo(controlX, p0.dy, controlX, p1.dy, p1.dx, p1.dy);
-    }
-    
-    areaPath.lineTo(size.width, bottomLimit);
-    areaPath.close();
-
-    final Paint areaPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          lineColor.withValues(alpha: 0.25),
-          lineColor.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromLTRB(0, topLimit, size.width, bottomLimit))
-      ..style = PaintingStyle.fill;
-      
-    canvas.drawPath(areaPath, areaPaint);
-
-    // Draw the main line curve
-    final Path linePath = Path();
-    linePath.moveTo(points[0].dx, points[0].dy);
-    
-    for (int i = 0; i < points.length - 1; i++) {
-      final Offset p0 = points[i];
-      final Offset p1 = points[i + 1];
-      final double controlX = p0.dx + (p1.dx - p0.dx) / 2.0;
-      linePath.cubicTo(controlX, p0.dy, controlX, p1.dy, p1.dx, p1.dy);
-    }
-
-    final Paint shadowPaint = Paint()
-      ..color = lineColor.withValues(alpha: 0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-    final Paint linePaint = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawPath(linePath, shadowPaint);
-    canvas.drawPath(linePath, linePaint);
-
-    // Draw the circles on points (skip intermediates for 30D to avoid clutter)
-    final bool drawCircles = dataPoints.length <= 10;
-    
-    final Paint pointInnerPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final Paint pointOuterPaint = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.fill;
-
-    for (int i = 0; i < points.length; i++) {
-      // Draw circles on all points if count <= 10, or only on the last point (today) for 30D
-      if (drawCircles || i == points.length - 1) {
-        canvas.drawCircle(points[i], 5.0, pointOuterPaint);
-        canvas.drawCircle(points[i], 2.5, pointInnerPaint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant ActivityGraphPainter oldDelegate) {
-    return oldDelegate.lineColor != lineColor || 
-        oldDelegate.dataPoints != dataPoints;
   }
 }

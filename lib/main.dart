@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
@@ -11,9 +12,23 @@ import 'services/activity_notification_sync.dart';
 import 'services/notification_transaction_service.dart';
 import 'services/service_locator.dart';
 import 'services/activity_service.dart';
+import 'services/crash_reporting_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Capture Flutter framework errors (e.g. layout, widget build errors)
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    CrashReportingService.logCrash(details.exception, details.stack);
+  };
+
+  // Capture asynchronous and Dart zone-level errors
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    CrashReportingService.logCrash(error, stack);
+    return true;
+  };
+
   setupLocator();
 
   // Initialize Firebase (fails gracefully if google-services.json is a dummy)

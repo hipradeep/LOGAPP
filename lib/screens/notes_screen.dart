@@ -117,29 +117,12 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   void _onFabPressed() async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => const NoteWriteScreen(),
       ),
     );
-    if (result != null && result is Map<String, dynamic>) {
-      try {
-        await _controller.createEntry(
-          result['title'],
-          result['content'],
-          result['mood'],
-          List<String>.from(result['tags']),
-          isPinned: result['isPinned'] as bool? ?? false,
-        );
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to save note: $e')),
-          );
-        }
-      }
-    }
   }
 
   Widget _buildBody(BuildContext context) {
@@ -534,33 +517,11 @@ class _NoteCard extends StatelessWidget {
   }
 
   void _handleTap(BuildContext context) async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NoteWriteScreen(existingEntry: entry),
       ),
     );
-    if (result != null && result is Map<String, dynamic>) {
-      try {
-        if (result['delete'] == true) {
-          await controller.deleteEntry(entry.id);
-        } else {
-          await controller.updateEntry(
-            entry.id,
-            result['title'],
-            result['content'],
-            result['mood'],
-            List<String>.from(result['tags']),
-            isPinned: result['isPinned'] as bool? ?? entry.isPinned,
-          );
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to update note: $e')),
-          );
-        }
-      }
-    }
   }
 }

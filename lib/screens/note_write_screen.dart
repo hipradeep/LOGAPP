@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../models/note_entity.dart';
-import '../widgets/app_text_action_button.dart';
+
 import '../widgets/app_popup_menu_button.dart';
+import '../services/note_service.dart';
+import '../widgets/app_toast.dart';
 
 class MoodItem {
   final String emoji;
@@ -30,6 +32,14 @@ class NoteWriteController extends ChangeNotifier {
   late DateTime timestamp;
   late String selectedMood;
   late bool isPinned;
+  late List<String> tags;
+
+  String? noteId;
+  String _lastSavedTitle = '';
+  String _lastSavedContent = '';
+  String _lastSavedMood = '';
+  bool _lastSavedPinned = false;
+  DateTime? _lastSavedTimestamp;
   
   // History for content undo/redo
   final List<String> _history = [];
@@ -37,8 +47,10 @@ class NoteWriteController extends ChangeNotifier {
   bool _isPerformingUndoRedo = false;
 
   NoteWriteController({this.existingEntry, String? initialTitle}) {
-    selectedMood = existingEntry?.mood ?? '';
+    noteId = existingEntry?.id;
+    selectedMood = existingEntry?.mood ?? '📝';
     isPinned = existingEntry?.isPinned ?? false;
+    tags = existingEntry?.tags ?? <String>[];
     
     final titleText = existingEntry?.title ?? initialTitle ?? '';
     
@@ -47,6 +59,12 @@ class NoteWriteController extends ChangeNotifier {
     titleFocusNode = FocusNode();
     contentFocusNode = FocusNode();
     timestamp = existingEntry?.timestamp ?? DateTime.now();
+
+    _lastSavedTitle = existingEntry?.title ?? '';
+    _lastSavedContent = existingEntry?.content ?? '';
+    _lastSavedMood = existingEntry?.mood ?? '';
+    _lastSavedPinned = existingEntry?.isPinned ?? false;
+    _lastSavedTimestamp = existingEntry?.timestamp;
 
     // Initialize history
     _history.add(contentController.text);
@@ -116,6 +134,40 @@ class NoteWriteController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void markAsSaved({
+    required String id,
+    required String title,
+    required String content,
+    required String mood,
+    required bool pinned,
+    required DateTime time,
+  }) {
+    noteId = id;
+    _lastSavedTitle = title;
+    _lastSavedContent = content;
+    _lastSavedMood = mood;
+    _lastSavedPinned = pinned;
+    _lastSavedTimestamp = time;
+  }
+
+  bool get isDirty {
+    final currentTitle = titleController.text.trim();
+    final currentContent = contentController.text.trim();
+    final currentMood = selectedMood;
+    final currentPinned = isPinned;
+    final currentTime = timestamp;
+
+    if (noteId == null) {
+      return currentTitle.isNotEmpty || currentContent.isNotEmpty;
+    }
+
+    return currentTitle != _lastSavedTitle ||
+        currentContent != _lastSavedContent ||
+        currentMood != _lastSavedMood ||
+        currentPinned != _lastSavedPinned ||
+        (currentTime.millisecondsSinceEpoch != _lastSavedTimestamp?.millisecondsSinceEpoch);
+  }
+
   @override
   void dispose() {
     contentController.removeListener(_onContentChanged);
@@ -141,9 +193,11 @@ class NoteWriteScreen extends StatefulWidget {
   State<NoteWriteScreen> createState() => _NoteWriteScreenState();
 }
 
-class _NoteWriteScreenState extends State<NoteWriteScreen> {
+class _NoteWriteScreenState extends State<NoteWriteScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   late final NoteWriteController _writeController;
+  final NoteService _noteService = NoteService();
+  bool _isExplicitlySavingOrDeleting = false;
 
   final List<MoodItem> _moods = const [
     MoodItem(emoji: '📝', label: 'Note', glowColor: Colors.grey),
@@ -162,6 +216,7 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _writeController = NoteWriteController(
       existingEntry: widget.existingEntry,
       initialTitle: widget.initialTitle,
@@ -170,24 +225,83 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _writeController.dispose();
     super.dispose();
   }
 
-  void _saveLog() {
-    if (_formKey.currentState!.validate()) {
-      final selectedMood = _writeController.selectedMood;
-      final rawTitle = _writeController.titleController.text.trim();
-
-      Navigator.pop(context, {
-        'title': rawTitle,
-        'content': _writeController.contentController.text.trim(),
-        'mood': selectedMood,
-        'tags': <String>[],
-        'isPinned': _writeController.isPinned,
-      });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _saveOnLifecycleChange();
     }
   }
+
+  Future<void> _saveOnLifecycleChange() async {
+    if (_isExplicitlySavingOrDeleting) return;
+
+    final id = _writeController.noteId;
+    final title = _writeController.titleController.text.trim();
+    final content = _writeController.contentController.text.trim();
+    final mood = _writeController.selectedMood;
+    final pinned = _writeController.isPinned;
+    final time = _writeController.timestamp;
+    final tags = _writeController.tags;
+
+    if (_writeController.isDirty) {
+      try {
+        if (id == null) {
+          final newId = await _noteService.createEntry(title, content, mood, tags, isPinned: pinned);
+          _writeController.markAsSaved(
+            id: newId,
+            title: title,
+            content: content,
+            mood: mood,
+            pinned: pinned,
+            time: time,
+          );
+        } else {
+          await _noteService.updateEntry(id, title, content, mood, tags, isPinned: pinned);
+          _writeController.markAsSaved(
+            id: id,
+            title: title,
+            content: content,
+            mood: mood,
+            pinned: pinned,
+            time: time,
+          );
+        }
+      } catch (e) {
+        debugPrint('Error auto-creating/updating note on lifecycle: $e');
+      }
+    }
+  }
+
+  Future<void> _saveOnPop() async {
+    if (_isExplicitlySavingOrDeleting) return;
+
+    final id = _writeController.noteId;
+    final title = _writeController.titleController.text.trim();
+    final content = _writeController.contentController.text.trim();
+    final mood = _writeController.selectedMood;
+    final pinned = _writeController.isPinned;
+    final tags = _writeController.tags;
+
+    if (_writeController.isDirty) {
+      _isExplicitlySavingOrDeleting = true;
+      try {
+        if (id == null) {
+          await _noteService.createEntry(title, content, mood, tags, isPinned: pinned);
+        } else {
+          await _noteService.updateEntry(id, title, content, mood, tags, isPinned: pinned);
+        }
+      } catch (e) {
+        debugPrint('Error auto-creating/updating note on pop: $e');
+      }
+    }
+  }
+
+
 
   void _handleDelete() {
     showDialog(
@@ -229,31 +343,57 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
     Navigator.pop(context);
   }
 
-  void _confirmDelete() {
+  void _confirmDelete() async {
+    _isExplicitlySavingOrDeleting = true;
     Navigator.pop(context); // Pop dialog
-    Navigator.pop(context, {'delete': true}); // Return delete action to caller
+    
+    final id = _writeController.noteId;
+    if (id != null) {
+      try {
+        await _noteService.deleteEntry(id);
+        if (mounted) {
+          AppToast.show(
+            context: context,
+            message: 'Note deleted 🗑️',
+            backgroundColor: AppTheme.errorColor,
+          );
+        }
+      } catch (e) {
+        debugPrint('Error deleting note: $e');
+      }
+    }
+    
+    if (mounted) {
+      Navigator.pop(context); // Return to notes list
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
     
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: FullScreenPage(
-        showScaffold: false,
-        isScrollable: true,
-        title: widget.existingEntry != null ? 'Edit note' : 'New note',
-        showBackButton: true,
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _saveOnPop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        resizeToAvoidBottomInset: false,
+        body: FullScreenPage(
+          showScaffold: false,
+          isScrollable: true,
+          title: widget.existingEntry != null ? 'Edit note' : 'New note',
+          showBackButton: true,
+          padding: AppTheme.defaultScreenPadding.resolve(TextDirection.ltr).copyWith(
+                bottom: AppTheme.defaultScreenPadding.resolve(TextDirection.ltr).bottom +
+                    MediaQuery.viewInsetsOf(context).bottom,
+              ),
 
         actions: [
-          Transform.translate(
-            offset: const Offset(8, 0),
-            child: AppTextActionButton(
-              label: widget.existingEntry != null ? 'UPDATE' : 'SAVE',
-              onPressed: _saveLog,
-            ),
-          ),
+
           Transform.translate(
             offset: const Offset(8, 0),
             child: ListenableBuilder(
@@ -326,8 +466,9 @@ class _NoteWriteScreenState extends State<NoteWriteScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class NoteTitleField extends StatelessWidget {

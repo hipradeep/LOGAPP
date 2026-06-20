@@ -18,6 +18,7 @@ import '../services/check_in_service.dart';
 import '../services/milestone_service.dart';
 import '../services/service_locator.dart';
 import 'note_write_screen.dart';
+import 'calendar_scheduler_screen.dart';
 import '../controllers/dashboard_controller.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/focus_timer_sheet.dart';
@@ -91,6 +92,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
             isScrollable: true,
             title: 'LOG',
             padding: EdgeInsets.zero,
+            actions: [
+              GestureDetector(
+                onTap: _navigateToCalendar,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.borderColor(context),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.calendar_today_rounded,
+                    color: AppTheme.textPrimaryColor(context),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
             backgroundWidgets: _buildBackgroundWidgets(context),
             children: controller.errorMessage != null
                 ? [
@@ -563,34 +581,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     final defaultTitle = 'Day $dayNum | "$tagName Feeling"';
 
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => NoteWriteScreen(initialTitle: defaultTitle),
       ),
     );
-    if (result != null && result is Map<String, dynamic>) {
-      final title = result['title'] as String;
-      final content = result['content'] as String;
-      final mood = result['mood'] as String;
-      final tags = result['tags'] as List<String>;
-      try {
-        await _noteService.createEntry(title, content, mood, tags);
-        if (!mounted) return;
-        AppToast.show(
-          context: context,
-          message: 'Journal entry saved! 📝',
-          backgroundColor: AppTheme.successColor,
-        );
-      } catch (e) {
-        if (!mounted) return;
-        AppToast.show(
-          context: context,
-          message: 'Failed to save: $e',
-          backgroundColor: AppTheme.errorColor,
-        );
-      }
-    }
   }
 
   void _handleAddTransactionAction() {
@@ -599,6 +595,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const AddTransactionSheet(),
+    );
+  }
+
+  void _navigateToCalendar() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CalendarSchedulerScreen(),
+      ),
     );
   }
 }

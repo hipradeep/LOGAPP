@@ -43,7 +43,7 @@ class NoteService {
     }
   }
 
-  Future<void> createEntry(
+  Future<String> createEntry(
     String title,
     String content,
     String mood,
@@ -59,7 +59,8 @@ class NoteService {
       tags: tags,
       isPinned: isPinned,
     );
-    await _logsCollection.add(newEntry.toFirestore());
+    final docRef = await _logsCollection.add(newEntry.toFirestore());
+    return docRef.id;
   }
 
   Future<void> updateEntry(

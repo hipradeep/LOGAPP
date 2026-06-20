@@ -231,14 +231,30 @@ Fix:   Identify whether issue originates from:
        - Paint phase
        Then optimize the correct layer.
 
+---
+
+RULE 23: HELPER FUNCTION VS WIDGET GRAVITY
+--------------------------------------------
+Check: Are you using helper methods (like _buildCell()) inside lists, columns, or grids that rebuild?
+Test:  Locate list/grid cell generation. Are items returned by calling a class-level helper method?
+Fail:  Row(children: items.map((i) => _buildCell(i)).toList()) inside build.
+Fix:   Extract helper methods returning Widgets into separate `const StatelessWidget` classes. This prevents parent updates from rebuilding unchanged sub-elements.
+
+---
+
+RULE 24: STATIC BACKGROUND LAYER GRAVITY
+-----------------------------------------
+Check: Do heavy background grids, paint decors, or calendar grid lines repaint on scroll?
+Test:  Turn on Repaint Rainbow in DevTools and scroll/drag. Does the background grid flash/repaint?
+Fail:  Static hourly timeline grid or backdrop graphics repainting on every scroll event.
+Fix:   Wrap the static background layout widget in a `RepaintBoundary` to isolate and cache its pixel paint output.
+
 ===================================================
 UPDATED SCORE
 ===================================================
 SCORE: Count how many rules your screen passes.
-22/22 = Production Grade
-18-21 = Very Good
-14-17 = Acceptable, fix remaining rules soon
-10-13 = Needs Optimization
-Below 10 = High Risk of Jank
-
-
+24/24 = Production Grade
+20-23 = Very Good
+16-19 = Acceptable, fix remaining rules soon
+12-15 = Needs Optimization
+Below 12 = High Risk of Jank

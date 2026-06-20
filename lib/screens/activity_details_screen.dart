@@ -48,9 +48,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   String _getRepeatDaysLabel(List<int> days) {
     const dayLabelsShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     if (days.length == 7) return 'Every day';
-    if (days.length == 5 && !days.contains(6) && !days.contains(7)) return 'Weekdays';
-    if (days.length == 2 && days.contains(6) && days.contains(7)) return 'Weekends';
-    return days.map((d) => dayLabelsShort[d - 1]).join(', ');
+    return days.map((d) => dayLabelsShort[d - 1][0]).join(', ');
   }
 
   String _formatScheduledTime(String timeStr) {
@@ -179,10 +177,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         // 1. Header Card (Name, Category, Description)
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(12), // Compact: reduced padding
           decoration: BoxDecoration(
             color: AppTheme.surface(context).withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16), // Compact: matched standard border radius
             border: Border.all(
               color: AppTheme.borderColor(context),
               width: 1,
@@ -196,8 +194,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 children: [
                   // Icon
                   Container(
-                    width: 56,
-                    height: 56,
+                    width: 44, // Compact: reduced icon container size
+                    height: 44,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [typeColor, typeColor.withValues(alpha: 0.6)],
@@ -208,12 +206,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                       boxShadow: [
                         BoxShadow(
                           color: typeColor.withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                          blurRadius: 8, // Compact: reduced shadow blur
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
-                    child: Icon(typeIcon, color: Colors.white, size: 26),
+                    child: Icon(typeIcon, color: Colors.white, size: 20), // Compact: reduced icon size
                   ),
                   const HGapMd(),
                   // Name and Type
@@ -223,14 +221,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                       children: [
                         Text(
                           activity.name,
-                          style: AppTheme.headingMedium.copyWith(fontSize: 22),
+                          style: AppTheme.headingSmall.copyWith(fontSize: 18), // Compact: stepped down typography
                         ),
                         const VGapXs(),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), // Compact: tighter tag padding
                           decoration: BoxDecoration(
                             color: typeColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(6), // Compact: matched tag border radius
                             border: Border.all(
                               color: typeColor.withValues(alpha: 0.3),
                               width: 1,
@@ -240,7 +238,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                             _getTrackingTypeLabel(activity.trackingType).toUpperCase(),
                             style: TextStyle(
                               color: typeColor,
-                              fontSize: 10,
+                              fontSize: 9, // Compact: micro text size
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
                             ),
@@ -252,9 +250,9 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 ],
               ),
               if (activity.description != null && activity.description!.isNotEmpty) ...[
-                const VGapMd(),
+                const VGapSm(), // Compact: reduced spacer
                 Divider(color: AppTheme.borderColor(context), height: 1),
-                const VGapMd(),
+                const VGapSm(), // Compact: reduced spacer
                 Text(
                   'Description',
                   style: AppTheme.bodySmall.copyWith(
@@ -265,22 +263,25 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 const VGapXs(),
                 Text(
                   activity.description!,
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.textSecondaryColor(context)),
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: AppTheme.textSecondaryColor(context),
+                    fontSize: 13, // Compact: slightly smaller body font size
+                  ),
                 ),
               ],
             ],
           ),
         ),
-        const VGapLg(),
+        const VGapSm(), // Compact: reduced space between cards
 
         // 2. Schedule Card Details
         _buildScheduleDetailsCard(activity),
-        const VGapLg(),
+        const VGapSm(), // Compact: reduced space between cards
 
         // 3. Tasks Checklist Section
         if (activity.hasSubTasks) ...[
           _buildTaskListSection(activity, tasks),
-          const VGapLg(),
+          const VGapSm(), // Compact: reduced space between cards
         ],
 
         // 4. Analytics Section
@@ -289,11 +290,11 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           checkIns: checkIns,
           tasks: tasks,
         ),
-        const VGapLg(),
+        const VGapSm(), // Compact: reduced space between cards
 
         // 4. Timeline Section
         _buildHistoryTimeline(activity, checkIns, tasks),
-        const VGapXxl(),
+        const VGapLg(), // Compact: reduced bottom safe area gap
       ],
     );
   }
@@ -304,10 +305,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12), // Compact: reduced padding
       decoration: BoxDecoration(
         color: AppTheme.surface(context).withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16), // Compact: matched standard border radius
         border: Border.all(
           color: AppTheme.borderColor(context),
           width: 1,
@@ -324,14 +325,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               letterSpacing: 0.5,
             ),
           ),
-          const VGapMd(),
+          const VGapSm(), // Compact: reduced gap
           _buildDetailRow(
             icon: Icons.calendar_today_rounded,
             label: 'Repeat Days',
             value: _getRepeatDaysLabel(activity.repeatDays),
           ),
           if (activity.scheduledTime != null) ...[
-            const VGapSm(),
+            const VGapXs(), // Compact: reduced gap
             _buildDetailRow(
               icon: Icons.access_time_rounded,
               label: 'Reminder Time',
@@ -339,31 +340,29 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             ),
           ],
           if (start != null || end != null) ...[
-            const VGapSm(),
+            const VGapXs(), // Compact: reduced gap
             _buildDetailRow(
               icon: Icons.date_range_rounded,
               label: 'Tracking Period',
               value: '${start != null ? DateFormat('MMM d, yyyy').format(start) : 'Start'} to ${end != null ? DateFormat('MMM d, yyyy').format(end) : 'Ongoing'}',
             ),
           ],
-          const VGapSm(),
+          const VGapXs(), // Compact: reduced gap
           _buildDetailRow(
             icon: Icons.settings_rounded,
-            label: 'Type Settings',
+            label: 'Type',
             value: activity.trackingType == 'multiple'
-                ? '${activity.subTaskTemplates.length} custom checklist tasks'
+                ? 'Multiple'
                 : (activity.trackingType == 'milestone'
-                    ? 'Flexible tasks checklist'
-                    : 'Simple checklist item'),
+                    ? 'Milestone'
+                    : 'Single'),
           ),
-          if (activity.skippable) ...[
-            const VGapSm(),
-            _buildDetailRow(
-              icon: Icons.double_arrow_rounded,
-              label: 'Skippable',
-              value: 'Yes (allows skipping daily without breaking streaks)',
-            ),
-          ],
+          const VGapXs(), // Compact: reduced gap
+          _buildDetailRow(
+            icon: Icons.double_arrow_rounded,
+            label: 'Skippable',
+            value: activity.skippable ? 'Yes' : 'No',
+          ),
         ],
       ),
     );
@@ -381,21 +380,21 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
         taskWidgets.add(
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 4), // Compact: reduced vertical padding
             child: Row(
               children: [
                 Icon(
                   Icons.circle,
-                  size: 8,
+                  size: 6, // Compact: reduced icon dot size
                   color: AppTheme.secondaryColor.withValues(alpha: 0.6),
                 ),
-                const HGapMd(),
+                const HGapSm(), // Compact: reduced horizontal gap
                 Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
                       color: AppTheme.textPrimaryColor(context),
-                      fontSize: 14,
+                      fontSize: 13, // Compact: stepped down size
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -403,7 +402,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 if (formattedTime != null) ...[
                   const HGapSm(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                     decoration: BoxDecoration(
                       color: AppTheme.primaryColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(6),
@@ -414,13 +413,13 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                         Icon(
                           Icons.access_time_rounded,
                           size: 10,
-                          color: AppTheme.primaryLight,
+                          color: AppTheme.primaryAccentColor(context), // Contrast: primaryAccentColor instead of primaryLight
                         ),
                         const SizedBox(width: 4),
                         Text(
                           formattedTime,
                           style: TextStyle(
-                            color: AppTheme.primaryLight,
+                            color: AppTheme.primaryAccentColor(context), // Contrast: primaryAccentColor instead of primaryLight
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -442,21 +441,21 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
         taskWidgets.add(
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 4), // Compact: reduced vertical padding
             child: Row(
               children: [
                 Icon(
                   Icons.circle,
-                  size: 8,
+                  size: 6, // Compact: reduced icon dot size
                   color: AppTheme.warningColor.withValues(alpha: 0.6),
                 ),
-                const HGapMd(),
+                const HGapSm(), // Compact: reduced horizontal gap
                 Expanded(
                   child: Text(
                     t.taskName,
                     style: TextStyle(
                       color: AppTheme.textPrimaryColor(context),
-                      fontSize: 14,
+                      fontSize: 13, // Compact: stepped down size
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -507,10 +506,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12), // Compact: reduced padding
       decoration: BoxDecoration(
         color: AppTheme.surface(context).withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16), // Compact: matched standard border radius
         border: Border.all(
           color: AppTheme.borderColor(context),
           width: 1,
@@ -523,21 +522,21 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             children: [
               Icon(
                 Icons.playlist_add_check_rounded,
-                color: AppTheme.primaryLight,
+                color: AppTheme.primaryAccentColor(context), // Contrast: primaryAccentColor instead of primaryLight
                 size: 16,
               ),
               const HGapSm(),
               Text(
                 'Tasks List'.toUpperCase(),
                 style: AppTheme.bodySmall.copyWith(
-                  color: AppTheme.primaryLight,
+                  color: AppTheme.primaryAccentColor(context), // Contrast: primaryAccentColor instead of primaryLight
                   fontWeight: FontWeight.bold,
                   letterSpacing: 0.5,
                 ),
               ),
             ],
           ),
-          const VGapMd(),
+          const VGapSm(), // Compact: reduced gap
           ...taskWidgets,
         ],
       ),
@@ -610,10 +609,11 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             ),
           ],
         ),
-        const VGapMd(),
+        const VGapSm(), // Compact: reduced from VGapMd
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
           itemCount: last7Days.length,
           itemBuilder: (context, index) {
             final day = last7Days[index];
@@ -649,8 +649,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     children: [
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
-                        width: 20,
-                        height: 20,
+                        width: 18, // Compact: reduced timeline dot size from 20
+                        height: 18,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: hasActivity
@@ -664,7 +664,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                           ),
                         ),
                         child: hasActivity
-                            ? const Icon(Icons.check, size: 12, color: AppTheme.successColor)
+                            ? const Icon(Icons.check, size: 10, color: AppTheme.successColor) // Compact: reduced icon size
                             : null,
                       ),
                       if (!isLast)
@@ -680,14 +680,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   const HGapMd(),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.only(bottom: 10), // Compact: reduced from 16
                       child: Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), // Compact: reduced from 14
                         decoration: BoxDecoration(
                           color: hasActivity
                               ? AppTheme.successColor.withValues(alpha: 0.03)
                               : AppTheme.surface(context).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12), // Compact: matched standard border radius
                           border: Border.all(
                             color: hasActivity
                                 ? AppTheme.successColor.withValues(alpha: 0.15)
@@ -706,7 +706,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                   style: TextStyle(
                                     color: hasActivity ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
                                     fontWeight: hasActivity ? FontWeight.bold : FontWeight.w500,
-                                    fontSize: 14,
+                                    fontSize: 13, // Compact: stepped down size
                                   ),
                                 ),
                                 if (hasActivity)
@@ -716,7 +716,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                         : 'Completed',
                                     style: TextStyle(
                                       color: hasActivity ? AppTheme.successColor : AppTheme.textSecondaryColor(context),
-                                      fontSize: 11,
+                                      fontSize: 10, // Compact: micro scale
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -725,16 +725,16 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                             if (hasActivity && (activity.trackingType == 'multiple' || activity.trackingType == 'milestone')) ...[
                               const VGapSm(),
                               Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
+                                spacing: 4, // Compact: reduced spacing
+                                runSpacing: 4,
                                 children: dayCheckIns.map((c) {
                                   final name = c.subTaskName ?? 'Task';
                                   final cleanName = name.contains('|') ? name.split('|').first : name;
                                   return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3), // Compact: tighter tag padding
                                     decoration: BoxDecoration(
                                       color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6), // Compact: matched border radius
                                       border: Border.all(
                                         color: AppTheme.primaryColor.withValues(alpha: 0.2),
                                         width: 1,
@@ -743,8 +743,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                     child: Text(
                                       cleanName,
                                       style: TextStyle(
-                                        color: AppTheme.primaryLight,
-                                        fontSize: 11,
+                                        color: AppTheme.primaryAccentColor(context), // Contrast: primaryAccentColor instead of primaryLight
+                                        fontSize: 10, // Compact: stepped down size
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -754,15 +754,15 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                             ] else if (hasActivity && activity.trackingType == 'single') ...[
                               const VGapSm(),
                               Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
+                                spacing: 4, // Compact: reduced spacing
+                                runSpacing: 4,
                                 children: dayCheckIns.map((c) {
                                   final timeStr = DateFormat('h:mm a').format(c.timestamp);
                                   return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3), // Compact: tighter tag padding
                                     decoration: BoxDecoration(
                                       color: AppTheme.successColor.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6), // Compact: matched border radius
                                       border: Border.all(
                                         color: AppTheme.successColor.withValues(alpha: 0.2),
                                         width: 1,
@@ -772,7 +772,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                       'Checked at $timeStr',
                                       style: const TextStyle(
                                         color: AppTheme.successColor,
-                                        fontSize: 11,
+                                        fontSize: 10, // Compact: stepped down size
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -785,7 +785,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                 'No activity logged',
                                 style: AppTheme.bodySmall.copyWith(
                                   color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.4),
-                                  fontSize: 12,
+                                  fontSize: 11, // Compact: stepped down size
                                 ),
                               ),
                             ],

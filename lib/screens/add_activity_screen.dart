@@ -258,10 +258,11 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         showBackButton: true,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         actions: [
-          AppTextActionButton(
-            label: 'Save',
-            onPressed: _submit,
-          ),
+          if (widget.initialActivity == null || widget.initialActivity!.isActive)
+            AppTextActionButton(
+              label: 'Save',
+              onPressed: _submit,
+            ),
           if (widget.initialActivity != null) ...[
             AppPopupMenuButton(
               onSelected: (value) {
@@ -322,18 +323,15 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           _buildSectionLabel('ACTIVITY TYPE'),
           const VGapSm(),
           _buildTypeChips(),
+          const VGapMd(),
+          _buildTypeDescription(),
 
-          // Show recurring tasks input for Multiple, or informational label for Milestone
+          // Show recurring tasks input for Multiple
           if (_trackingType == 'multiple') ...[
             const VGapLg(),
             _buildSectionLabel('RECURRING TASKS (REQUIRED)'),
             const VGapSm(),
             _buildSubTaskTemplatesField(),
-          ] else if (_trackingType == 'milestone') ...[
-            const VGapLg(),
-            _buildSectionLabel('MILESTONE TASKS'),
-            const VGapSm(),
-            _buildMilestoneInfoLabel(),
           ],
           const VGapLg(),
 
@@ -1022,10 +1020,28 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     }
   }
 
-  Widget _buildMilestoneInfoLabel() {
+  Widget _buildTypeDescription() {
+    String description;
+    IconData icon;
+    switch (_trackingType) {
+      case 'single':
+        description = 'Single tracking is for simple habits or daily tasks that you check off once a day (e.g., gym, reading).';
+        icon = Icons.bolt_rounded;
+        break;
+      case 'multiple':
+        description = 'Multiple tracking is for activities that consist of a checklist of recurring sub-tasks that you complete individually throughout the day.';
+        icon = Icons.repeat_rounded;
+        break;
+      case 'milestone':
+      default:
+        description = 'Milestone activities help you track progress toward long-term goals by completing specific, chronological tasks. These tasks are added and managed directly on the Milestones Tab.';
+        icon = Icons.flag_rounded;
+        break;
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surface(context).withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
@@ -1035,20 +1051,24 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline_rounded,
-            color: AppTheme.primaryAccentColor(context).withValues(alpha: 0.7),
-            size: 18,
+          Padding(
+            padding: const EdgeInsets.only(top: 2.0),
+            child: Icon(
+              icon,
+              color: AppTheme.primaryAccentColor(context).withValues(alpha: 0.7),
+              size: 18,
+            ),
           ),
           const HGapMd(),
           Expanded(
             child: Text(
-              'Tasks for milestone activities are added and managed on the Milestones Tab.',
+              description,
               style: TextStyle(
                 color: AppTheme.textSecondaryColor(context),
                 fontSize: 13,
-                height: 1.3,
+                height: 1.35,
               ),
             ),
           ),
