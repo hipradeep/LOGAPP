@@ -25,6 +25,8 @@ import '../widgets/focus_timer_sheet.dart';
 import '../widgets/dashboard_quick_actions.dart';
 import '../widgets/add_transaction_sheet.dart';
 import '../widgets/water_log_sheet.dart';
+import '../widgets/app_empty_state.dart';
+import 'track_activities_screen.dart';
 
 import '../widgets/dashboard_summary_card.dart';
 import '../widgets/dashboard_weekly_calendar.dart';
@@ -202,6 +204,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildActivitiesAndCalendarSection(BuildContext context, DashboardController controller) {
+    if (controller.todayActivities.isEmpty) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppEmptyState(
+            icon: Icons.playlist_add_check_rounded,
+            title: 'No Activities for Today',
+            description: 'Choose activities to track, or customize your schedule in settings.',
+            actionLabel: 'Track Activities',
+            onActionPressed: _navigateToTrackActivities,
+          ),
+          const VGapSm(),
+          DashboardWeeklyCalendar(
+            activities: controller.activeActivities,
+            checkIns: controller.checkIns,
+            subTasks: controller.tasks,
+          ),
+          const VGapSm(),
+        ],
+      );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -594,6 +618,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => const CalendarSchedulerScreen(),
+      ),
+    );
+  }
+
+  void _navigateToTrackActivities() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TrackActivitiesScreen(),
       ),
     );
   }

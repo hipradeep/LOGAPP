@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import 'main_navigation_screen.dart';
-import 'permission_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -44,22 +42,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     
     if (!mounted) return;
 
-    // Check if notification permission is already granted
-    final isNotificationGranted = await Permission.notification.isGranted;
-
-    if (!mounted) return;
-
-    if (isNotificationGranted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const PermissionScreen()),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+    );
   }
 
   @override

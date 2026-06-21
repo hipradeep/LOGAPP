@@ -29,6 +29,7 @@ class DashboardSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (activities.isEmpty) {
+      final textSecColor = AppTheme.textSecondaryColor(context);
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -42,7 +43,7 @@ class DashboardSummaryCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.playlist_add_check_rounded, color: AppTheme.textSecondary, size: 28),
+            Icon(Icons.playlist_add_check_rounded, color: textSecColor, size: 28),
             const HGapMd(),
             Expanded(
               child: Column(
@@ -52,7 +53,7 @@ class DashboardSummaryCard extends StatelessWidget {
                   Text(
                     'No active activities selected.',
                     style: AppTheme.bodyMedium.copyWith(
-                      color: AppTheme.textSecondary,
+                      color: textSecColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
@@ -61,7 +62,7 @@ class DashboardSummaryCard extends StatelessWidget {
                   Text(
                     'Go to Settings > Track Activities to choose.',
                     style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textSecondary.withValues(alpha: 0.7),
+                      color: textSecColor.withValues(alpha: 0.7),
                       fontSize: 10,
                     ),
                   ),

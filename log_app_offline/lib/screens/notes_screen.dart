@@ -12,6 +12,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/grid_toggle_button.dart';
 import '../widgets/note_options_sheet.dart';
+import '../widgets/app_empty_state.dart';
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
@@ -101,8 +102,7 @@ class _NotesScreenState extends State<NotesScreen> {
           ListenableBuilder(
             listenable: _controller,
             builder: (context, _) {
-              final hasNotes = _controller.notes.isNotEmpty;
-              if (hasNotes && !_controller.isLoading && _controller.errorMessage == null) {
+              if (!_controller.isLoading && _controller.errorMessage == null) {
                 return AppPremiumFab(
                   right: 24,
                   onPressed: _onFabPressed,
@@ -146,22 +146,12 @@ class _NotesScreenState extends State<NotesScreen> {
     }
 
     if (_controller.notes.isEmpty) {
-      final secondaryColor = AppTheme.textSecondaryColor(context);
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.menu_book, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
-              const VGapMd(),
-              Text(
-                'No notes Yet',
-                style: AppTheme.headingSmall.copyWith(color: secondaryColor),
-              ),
-            ],
-          ),
-        ),
+      return AppEmptyState(
+        icon: Icons.menu_book_rounded,
+        title: 'No Notes Recorded',
+        description: 'Capture thoughts, log journals, or document your progress.',
+        actionLabel: 'Write a Note',
+        onActionPressed: _onFabPressed,
       );
     }
 

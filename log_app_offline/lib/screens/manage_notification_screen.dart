@@ -3,8 +3,6 @@ import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../controllers/settings_controller.dart';
-import '../services/notification_service.dart';
-
 import 'activity_reminder_screen.dart';
 
 class ManageNotificationScreen extends StatelessWidget {

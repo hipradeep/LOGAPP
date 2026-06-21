@@ -404,7 +404,9 @@ class TimeParser {
 
     if (isPm && hour < 12) {
       hour += 12;
-    } else if (isAm && hour == 12) hour = 0;
+    } else if (isAm && hour == 12) {
+      hour = 0;
+    }
 
     return TimeOfDay(hour: hour, minute: minute);
   }

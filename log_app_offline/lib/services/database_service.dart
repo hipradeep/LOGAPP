@@ -34,11 +34,11 @@ class DatabaseService {
 
     return openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       // Enable WAL mode for better concurrent read performance
-      onOpen: (db) async => await db.execute('PRAGMA journal_mode=WAL;'),
+      onOpen: (db) async => await db.rawQuery('PRAGMA journal_mode=WAL;'),
     );
   }
 
@@ -52,18 +52,24 @@ class DatabaseService {
     // Activities
     batch.execute('''
       CREATE TABLE activities (
-        id             TEXT PRIMARY KEY,
-        name           TEXT NOT NULL,
-        description    TEXT NOT NULL DEFAULT '',
-        emoji          TEXT NOT NULL DEFAULT '',
-        colorHex       TEXT NOT NULL DEFAULT '',
-        isActive       INTEGER NOT NULL DEFAULT 1,
-        trackingType   TEXT NOT NULL DEFAULT 'daily',
-        targetDays     TEXT NOT NULL DEFAULT '[]',
-        startDate      INTEGER,
-        endDate        INTEGER,
-        reminderTime   TEXT,
-        createdAt      INTEGER NOT NULL
+        id               TEXT PRIMARY KEY,
+        name             TEXT NOT NULL,
+        isActive         INTEGER NOT NULL DEFAULT 1,
+        timestamp        INTEGER NOT NULL,
+        trackingType     TEXT NOT NULL DEFAULT 'single',
+        targetCount      INTEGER NOT NULL DEFAULT 1,
+        reminderEnabled  INTEGER NOT NULL DEFAULT 1,
+        repeatDays       TEXT NOT NULL DEFAULT '[]',
+        scheduledTime    TEXT,
+        startDate        INTEGER,
+        endDate          INTEGER,
+        subTaskTemplates TEXT NOT NULL DEFAULT '[]',
+        description      TEXT NOT NULL DEFAULT '',
+        category         TEXT,
+        symbolType       TEXT,
+        symbolValue      TEXT,
+        skippable        INTEGER NOT NULL DEFAULT 0,
+        createdAt        INTEGER NOT NULL
       )
     ''');
 
@@ -72,9 +78,13 @@ class DatabaseService {
       CREATE TABLE tasks (
         id             TEXT PRIMARY KEY,
         activityId     TEXT NOT NULL,
-        date           INTEGER NOT NULL,
-        title          TEXT NOT NULL,
-        isCompleted    INTEGER NOT NULL DEFAULT 0,
+        taskName       TEXT NOT NULL,
+        timestamp      INTEGER NOT NULL,
+        checked        INTEGER NOT NULL DEFAULT 0,
+        symbolType     TEXT,
+        symbolValue    TEXT,
+        scheduledTime  TEXT,
+        completionTime INTEGER,
         subTasks       TEXT NOT NULL DEFAULT '[]',
         createdAt      INTEGER NOT NULL,
         FOREIGN KEY (activityId) REFERENCES activities(id) ON DELETE CASCADE
@@ -84,10 +94,12 @@ class DatabaseService {
     // Check-ins (activity completion records)
     batch.execute('''
       CREATE TABLE check_ins (
-        id             TEXT PRIMARY KEY,
-        activityId     TEXT NOT NULL,
-        timestamp      INTEGER NOT NULL,
-        note           TEXT NOT NULL DEFAULT '',
+        id          TEXT PRIMARY KEY,
+        activityId  TEXT NOT NULL,
+        timestamp   INTEGER NOT NULL,
+        checked     INTEGER NOT NULL DEFAULT 0,
+        skipped     INTEGER NOT NULL DEFAULT 0,
+        subTaskName TEXT,
         FOREIGN KEY (activityId) REFERENCES activities(id) ON DELETE CASCADE
       )
     ''');
@@ -100,13 +112,14 @@ class DatabaseService {
         categoryName   TEXT NOT NULL,
         limit_amount   REAL NOT NULL DEFAULT 0,
         period         TEXT NOT NULL DEFAULT 'monthly',
-        isActive       INTEGER NOT NULL DEFAULT 1,
         description    TEXT NOT NULL DEFAULT '',
-        alertThreshold REAL NOT NULL DEFAULT 0.8,
-        startDate      INTEGER,
-        endDate        INTEGER,
         repeatDays     TEXT NOT NULL DEFAULT '[]',
         scheduledTime  TEXT,
+        startDate      INTEGER,
+        endDate        INTEGER,
+        repeat         INTEGER NOT NULL DEFAULT 1,
+        isActive       INTEGER NOT NULL DEFAULT 1,
+        alertThreshold REAL NOT NULL DEFAULT 0.7,
         createdAt      INTEGER NOT NULL
       )
     ''');
@@ -114,15 +127,17 @@ class DatabaseService {
     // Transactions (expenses/credits under a budget)
     batch.execute('''
       CREATE TABLE transactions (
-        id             TEXT PRIMARY KEY,
-        budgetId       TEXT NOT NULL,
-        tag            TEXT NOT NULL DEFAULT '',
-        description    TEXT NOT NULL DEFAULT '',
-        amount         REAL NOT NULL,
-        paymentMethod  TEXT NOT NULL DEFAULT '',
-        isValidated    INTEGER NOT NULL DEFAULT 1,
-        expenseDate    INTEGER NOT NULL,
-        createdAt      INTEGER NOT NULL,
+        id            TEXT PRIMARY KEY,
+        budgetId      TEXT NOT NULL,
+        tag           TEXT NOT NULL DEFAULT '',
+        description   TEXT NOT NULL DEFAULT '',
+        amount        REAL NOT NULL,
+        entryDate     INTEGER NOT NULL,
+        expenseDate   INTEGER NOT NULL,
+        isValidated   INTEGER NOT NULL DEFAULT 1,
+        rawBody       TEXT,
+        paymentMethod TEXT NOT NULL DEFAULT 'Cash',
+        createdAt     INTEGER NOT NULL,
         FOREIGN KEY (budgetId) REFERENCES budgets(id) ON DELETE CASCADE
       )
     ''');
@@ -139,7 +154,14 @@ class DatabaseService {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Stub — add migration steps here as schema evolves:
-    // if (oldVersion < 2) { await db.execute('ALTER TABLE ...'); }
+    if (oldVersion < 3) {
+      await db.execute('DROP TABLE IF EXISTS activities');
+      await db.execute('DROP TABLE IF EXISTS tasks');
+      await db.execute('DROP TABLE IF EXISTS check_ins');
+      await db.execute('DROP TABLE IF EXISTS budgets');
+      await db.execute('DROP TABLE IF EXISTS transactions');
+      await db.execute('DROP TABLE IF EXISTS budget_settings');
+      await _onCreate(db, newVersion);
+    }
   }
 }

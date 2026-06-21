@@ -15,6 +15,8 @@ import '../widgets/glow_blob.dart';
 import '../widgets/budget_expense_graph.dart';
 import '../widgets/category_breakdown_sheet.dart';
 import '../widgets/budget_progress_bar.dart';
+import '../widgets/app_empty_state.dart';
+import 'add_budget_screen.dart';
 
 class BudgetScreen extends StatefulWidget {
   final String? selectedBudgetId;
@@ -105,13 +107,18 @@ class _BudgetScreenState extends State<BudgetScreen> {
           ListenableBuilder(
             listenable: _controller,
             builder: (context, _) {
-              final hasBudgets = _controller.budgets.isNotEmpty;
-              if (hasBudgets && !_controller.isLoading && _controller.errorMessage == null) {
+              if (!_controller.isLoading && _controller.errorMessage == null) {
                 return AppPremiumFab(
                   right: 24,
                   onPressed: () {
-                    if (_controller.selectedBudget != null) {
-                      _showAddTransactionSheet(context, _controller.selectedBudget!);
+                    if (_controller.budgets.isEmpty) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AddBudgetScreen()),
+                      );
+                    } else {
+                      final budget = _controller.selectedBudget ?? _controller.budgets.first;
+                      _showAddTransactionSheet(context, budget);
                     }
                   },
                 );
@@ -145,22 +152,17 @@ class _BudgetScreenState extends State<BudgetScreen> {
     }
 
     if (_controller.budgets.isEmpty) {
-      final secondaryColor = AppTheme.textSecondaryColor(context);
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.account_balance_wallet_outlined, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
-              const VGapMd(),
-              Text(
-                'No budget limits added yet.',
-                style: AppTheme.headingSmall.copyWith(color: secondaryColor),
-              ),
-            ],
-          ),
-        ),
+      return AppEmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: 'No Budget Limits Set',
+        description: 'Define limits for categories to track and optimize your spending.',
+        actionLabel: 'Set Budget Limit',
+        onActionPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddBudgetScreen()),
+          );
+        },
       );
     }
 

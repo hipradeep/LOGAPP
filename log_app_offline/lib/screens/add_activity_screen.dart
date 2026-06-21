@@ -20,6 +20,7 @@ class AddActivityScreen extends StatefulWidget {
     bool reminderEnabled,
   }) onAdd;
   final Activity? initialActivity;
+  final String? initialTrackingType;
   final Function(String name, String trackingType, int targetCount, {
     List<int> repeatDays,
     String? scheduledTime,
@@ -37,6 +38,7 @@ class AddActivityScreen extends StatefulWidget {
     super.key,
     required this.onAdd,
     this.initialActivity,
+    this.initialTrackingType,
     this.onEdit,
     this.onDelete,
     this.onToggleActive,
@@ -93,6 +95,8 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       }
       _skippable = a.skippable;
       _reminderEnabled = a.reminderEnabled;
+    } else if (widget.initialTrackingType != null) {
+      _trackingType = widget.initialTrackingType!;
     }
 
   }

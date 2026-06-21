@@ -9,6 +9,7 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../controllers/track_activities_controller.dart';
 import '../widgets/app_provider.dart';
+import '../widgets/app_empty_state.dart';
 
 class TrackActivitiesScreen extends StatefulWidget {
   const TrackActivitiesScreen({super.key});
@@ -278,28 +279,12 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.playlist_add,
-            size: 64,
-            color: AppTheme.primaryColor.withValues(alpha: 0.3),
-          ),
-          const VGapMd(),
-          Text(
-            'No Activities Tracked',
-            style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const VGapSm(),
-          Text(
-            'Tap the (+) button to create an activity checklist item.',
-            textAlign: TextAlign.center,
-            style: AppTheme.bodyMedium,
-          ),
-        ],
-      ),
+    return AppEmptyState(
+      icon: Icons.playlist_add_rounded,
+      title: 'No Activities Tracked',
+      description: 'Create daily check-in habits, recurring tasks, or milestone activities.',
+      actionLabel: 'Add Activity',
+      onActionPressed: _navigateToAddActivity,
     );
   }
 
