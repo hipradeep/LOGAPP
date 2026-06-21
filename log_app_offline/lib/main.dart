@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
@@ -16,6 +17,7 @@ import 'services/activity_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   // Capture Flutter framework errors (e.g. layout, widget build errors)
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -121,7 +123,7 @@ class _MyAppState extends State<MyApp> {
     // Resolve isDark dynamically based on the current theme type
     final resolvedBrightness = _themeController.themeType == AppThemeType.system
         ? MediaQuery.platformBrightnessOf(context)
-        : ((_themeController.themeType == AppThemeType.dark || _themeController.themeType == AppThemeType.orix) ? Brightness.dark : Brightness.light);
+        : ((_themeController.themeType == AppThemeType.dark || _themeController.themeType == AppThemeType.orix || _themeController.themeType == AppThemeType.logo) ? Brightness.dark : Brightness.light);
 
     // Update activeThemeType dynamically
     if (_themeController.themeType == AppThemeType.system) {

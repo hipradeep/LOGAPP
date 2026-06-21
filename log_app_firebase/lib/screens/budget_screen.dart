@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'add_budget_screen.dart';
 import '../models/budget.dart';
 import '../services/budget_service.dart';
 import '../services/notification_transaction_service.dart';
@@ -15,6 +16,7 @@ import '../widgets/glow_blob.dart';
 import '../widgets/budget_expense_graph.dart';
 import '../widgets/category_breakdown_sheet.dart';
 import '../widgets/budget_progress_bar.dart';
+import '../widgets/app_empty_state.dart';
 
 class BudgetScreen extends StatefulWidget {
   final String? selectedBudgetId;
@@ -84,6 +86,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
               showScaffold: false,
               isScrollable: false,
               title: 'Budget',
+              padding: EdgeInsets.zero,
               //headerSpacing: 48.0,
               backgroundWidgets: [
                 GlowBlob(
@@ -154,22 +157,17 @@ class _BudgetScreenState extends State<BudgetScreen> {
     }
 
     if (_controller.budgets.isEmpty) {
-      final secondaryColor = AppTheme.textSecondaryColor(context);
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.account_balance_wallet_outlined, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
-              const VGapMd(),
-              Text(
-                'No budget limits added yet.',
-                style: AppTheme.headingSmall.copyWith(color: secondaryColor),
-              ),
-            ],
-          ),
-        ),
+      return AppEmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: 'No Budget Limits Set',
+        description: 'Define limits for categories to track and optimize your spending.',
+        actionLabel: 'Set Budget Limit',
+        onActionPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddBudgetScreen()),
+          );
+        },
       );
     }
 
@@ -181,11 +179,16 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const VGapSm(),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          bottom: bottomPadding + 100 + viewInsetsBottom,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const VGapSm(),
           Row(
             children: [
               SizedBox(
@@ -211,7 +214,8 @@ class _BudgetScreenState extends State<BudgetScreen> {
           ],
         ],
       ),
-    );
+    ),
+  );
   }
 
   void _showAddTransactionSheet(BuildContext context, Budget budget) {

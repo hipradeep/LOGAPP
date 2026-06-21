@@ -43,7 +43,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           final controller = AppProvider.watch<TrackActivitiesController>(context);
           return FullScreenPage(
             showScaffold: true,
-            isScrollable: true,
+            isScrollable: false,
             title: 'Track Activities',
             showBackButton: true,
             padding: EdgeInsets.zero,
@@ -66,26 +66,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             ],
 
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Select activities to show on homepage'.toUpperCase(),
-                        style: AppTheme.bodySmall.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const VGapSm(), // Compact: reduced spacer
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+              Expanded(
                 child: controller.isLoading
                     ? Center(
                         child: CircularProgressIndicator(color: AppTheme.primaryColor),
@@ -97,7 +78,44 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                               style: TextStyle(color: AppTheme.errorColor),
                             ),
                           )
-                        : _buildList(controller.activities, controller.checkIns, controller.tasks)),
+                        : (controller.activities.isEmpty
+                            ? _buildEmptyState()
+                            : SingleChildScrollView(
+                                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: MediaQuery.paddingOf(context).bottom + 32,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const VGapMd(),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                'Select activities to show on homepage'.toUpperCase(),
+                                                style: AppTheme.bodySmall.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 1.0,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const VGapSm(),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                                        child: _buildList(controller.activities, controller.checkIns, controller.tasks),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ))),
               ),
             ],
           );

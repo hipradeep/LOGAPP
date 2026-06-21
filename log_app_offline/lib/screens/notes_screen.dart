@@ -65,8 +65,8 @@ class _NotesScreenState extends State<NotesScreen> {
             child: FullScreenPage(
               showScaffold: false,
               isScrollable: false,
-              //headerSpacing: 48.0,
               title: 'Notes',
+              padding: EdgeInsets.zero,
               actions: [
                 GridToggleButton(
                   isGridView: _isGridView,
@@ -166,7 +166,7 @@ class _NotesScreenState extends State<NotesScreen> {
         return false;
       },
       child: ListView(
-        padding: const EdgeInsets.only(top: 0, bottom: 100),
+        padding: const EdgeInsets.only(left: 24, right: 24, top: 0, bottom: 100),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         children: [
           // ── PINNED SECTION ──────────────────────────────────────────

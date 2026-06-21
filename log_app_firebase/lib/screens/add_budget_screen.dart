@@ -9,6 +9,7 @@ import '../services/budget_service.dart';
 import '../widgets/app_title_input.dart';
 import '../widgets/app_text_action_button.dart';
 import '../widgets/app_popup_menu_button.dart';
+import '../services/cache_service.dart';
 
 class AddBudgetScreen extends StatefulWidget {
   final Budget? existingBudget;
@@ -27,21 +28,11 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   final _formKey = GlobalKey<FormState>();
   final BudgetService _budgetService = BudgetService();
 
-  static const List<String> _predefinedCategories = [
-    'Grocery',
-    'Fast Food',
-    'Supplements',
-    'Meals',
-    'Drinks',
+  List<String> _predefinedCategories = [
+    'Expenses',
+    'Salary',
     'Travel',
-    'Care',
-    'Home',
-    'Bills',
-    'Timepass',
-    'Transfer',
-    'QuickMart',
-    'Shopping',
-    'Other',
+    'Earning',
   ];
 
   late TextEditingController _nameController;
@@ -57,9 +48,19 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   late TimeOfDay? _scheduledTime;
   late double _alertThreshold;
 
+  Future<void> _loadBudgetCategories() async {
+    final categories = await CacheService().getBudgetCategories();
+    if (mounted) {
+      setState(() {
+        _predefinedCategories = categories;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadBudgetCategories();
 
     final budget = widget.existingBudget;
     _nameController = TextEditingController(text: budget?.name ?? '');
@@ -174,6 +175,11 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   void _saveBudget() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final categoryName = _categoryNameController.text.trim();
+    if (categoryName.isNotEmpty) {
+      await CacheService().addBudgetCategory(categoryName);
+    }
+
     final limit = double.tryParse(_limitController.text) ?? 0.0;
     if (limit <= 0) return;
 
@@ -285,9 +291,6 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
       onTap: () {
         setState(() {
           _categoryNameController.text = label;
-          if (_nameController.text.trim().isEmpty) {
-            _nameController.text = '$label Budget';
-          }
         });
       },
       child: AnimatedContainer(
@@ -529,7 +532,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'e.g., Budget PRO 🎯, Travel Budget',
+                    hintText: 'e.g., Monthly Budget',
                     hintStyle: GoogleFonts.outfit(
                       color: AppTheme.textSecondary.withValues(alpha: 0.5),
                       fontSize: 20,
@@ -606,24 +609,15 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     ),
                   )
                 else
-                  DropdownButtonFormField<String>(
-                    key: ValueKey(_categoryNameController.text),
-                    initialValue: _predefinedCategories.contains(_categoryNameController.text)
-                        ? _categoryNameController.text
-                        : null,
-                    dropdownColor: AppTheme.surface(context),
-                    icon: Icon(
-                      Icons.arrow_drop_down_rounded,
-                      color: AppTheme.primaryLight,
-                      size: 28,
-                    ),
+                  TextFormField(
+                    controller: _categoryNameController,
                     style: GoogleFonts.outfit(
                       color: AppTheme.categoryTextColor(context, isEditing: false),
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Select category',
+                      hintText: 'Enter or select category',
                       hintStyle: GoogleFonts.outfit(
                         color: AppTheme.textSecondary.withValues(alpha: 0.5),
                         fontSize: 20,
@@ -653,32 +647,9 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                         minHeight: 40,
                       ),
                     ),
-                    items: _predefinedCategories.map((String category) {
-                      return DropdownMenuItem<String>(
-                        value: category,
-                        child: Text(
-                          category,
-                          style: GoogleFonts.outfit(
-                            color: AppTheme.textPrimaryColor(context),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _categoryNameController.text = newValue;
-                          if (_nameController.text.isEmpty) {
-                            _nameController.text = '$newValue Budget';
-                          }
-                        });
-                      }
-                    },
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
-                        return 'Please select a category';
+                        return 'Please enter a category';
                       }
                       return null;
                     },

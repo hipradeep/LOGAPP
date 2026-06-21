@@ -131,7 +131,7 @@ class _MyAppState extends State<MyApp> {
     // Resolve isDark dynamically based on the current theme type
     final resolvedBrightness = _themeController.themeType == AppThemeType.system
         ? MediaQuery.platformBrightnessOf(context)
-        : ((_themeController.themeType == AppThemeType.dark || _themeController.themeType == AppThemeType.orix) ? Brightness.dark : Brightness.light);
+        : ((_themeController.themeType == AppThemeType.dark || _themeController.themeType == AppThemeType.orix || _themeController.themeType == AppThemeType.logo) ? Brightness.dark : Brightness.light);
 
     // Update activeThemeType dynamically
     if (_themeController.themeType == AppThemeType.system) {

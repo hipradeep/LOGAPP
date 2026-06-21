@@ -9,6 +9,7 @@ import '../models/check_in.dart';
 import '../models/task.dart';
 import '../controllers/track_activities_controller.dart';
 import '../widgets/app_provider.dart';
+import '../widgets/app_empty_state.dart';
 
 class TrackActivitiesScreen extends StatefulWidget {
   const TrackActivitiesScreen({super.key});
@@ -42,7 +43,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
           final controller = AppProvider.watch<TrackActivitiesController>(context);
           return FullScreenPage(
             showScaffold: true,
-            isScrollable: true,
+            isScrollable: false,
             title: 'Track Activities',
             showBackButton: true,
             padding: EdgeInsets.zero,
@@ -65,26 +66,7 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             ],
 
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Select activities to show on homepage'.toUpperCase(),
-                        style: AppTheme.bodySmall.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const VGapSm(), // Compact: reduced spacer
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+              Expanded(
                 child: controller.isLoading
                     ? Center(
                         child: CircularProgressIndicator(color: AppTheme.primaryColor),
@@ -96,7 +78,44 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
                               style: TextStyle(color: AppTheme.errorColor),
                             ),
                           )
-                        : _buildList(controller.activities, controller.checkIns, controller.tasks)),
+                        : (controller.activities.isEmpty
+                            ? _buildEmptyState()
+                            : SingleChildScrollView(
+                                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: MediaQuery.paddingOf(context).bottom + 32,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const VGapMd(),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                'Select activities to show on homepage'.toUpperCase(),
+                                                style: AppTheme.bodySmall.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 1.0,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const VGapSm(),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                                        child: _buildList(controller.activities, controller.checkIns, controller.tasks),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ))),
               ),
             ],
           );
@@ -278,28 +297,12 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.playlist_add,
-            size: 64,
-            color: AppTheme.primaryColor.withValues(alpha: 0.3),
-          ),
-          const VGapMd(),
-          Text(
-            'No Activities Tracked',
-            style: AppTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const VGapSm(),
-          Text(
-            'Tap the (+) button to create an activity checklist item.',
-            textAlign: TextAlign.center,
-            style: AppTheme.bodyMedium,
-          ),
-        ],
-      ),
+    return AppEmptyState(
+      icon: Icons.playlist_add_rounded,
+      title: 'No Activities Tracked',
+      description: 'Create daily check-in habits, recurring tasks, or milestone activities.',
+      actionLabel: 'Add Activity',
+      onActionPressed: _navigateToAddActivity,
     );
   }
 

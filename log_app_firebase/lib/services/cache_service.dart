@@ -339,6 +339,35 @@ class CacheService {
     return false;
   }
 
+  Future<void> saveBudgetCategories(List<String> categories) async {
+    final cache = await _readCache();
+    cache['budget_categories'] = categories;
+    await _writeCache(cache);
+  }
+
+  Future<List<String>> getBudgetCategories() async {
+    final cache = await _readCache();
+    final list = cache['budget_categories'] as List<dynamic>?;
+    if (list != null) {
+      return list.map((e) => e.toString()).toList();
+    }
+    final defaults = ['Expenses', 'Salary', 'Travel', 'Earning'];
+    await saveBudgetCategories(defaults);
+    return defaults;
+  }
+
+  Future<void> addBudgetCategory(String category) async {
+    final categories = await getBudgetCategories();
+    final normalized = category.trim();
+    if (normalized.isEmpty) return;
+    
+    final exists = categories.any((c) => c.toLowerCase() == normalized.toLowerCase());
+    if (!exists) {
+      categories.add(normalized);
+      await saveBudgetCategories(categories);
+    }
+  }
+
   Future<void> saveNotificationScannerEnabled(bool enabled) async {
     final cache = await _readCache();
     cache['notification_scanner_enabled'] = enabled;

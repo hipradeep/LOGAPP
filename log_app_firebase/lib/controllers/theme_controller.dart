@@ -18,14 +18,16 @@ class ThemeController extends ChangeNotifier {
         return ThemeMode.light;
       case AppThemeType.dark:
       case AppThemeType.orix:
+      case AppThemeType.logo:
+      case AppThemeType.earth:
         return ThemeMode.dark;
       case AppThemeType.system:
         return ThemeMode.system;
     }
   }
 
-  /// True when the current mode is dark (Classic Dark or Orix Dark).
-  bool get isDark => _themeType == AppThemeType.dark || _themeType == AppThemeType.orix;
+  /// True when the current mode is dark (Classic Dark, Orix Dark, Logo Dark, or Earth Dark).
+  bool get isDark => _themeType == AppThemeType.dark || _themeType == AppThemeType.orix || _themeType == AppThemeType.logo || _themeType == AppThemeType.earth;
 
   ThemeController() {
     _load();
@@ -68,6 +70,10 @@ class ThemeController extends ChangeNotifier {
         return AppThemeType.light;
       case 'orix':
         return AppThemeType.orix;
+      case 'logo':
+        return AppThemeType.logo;
+      case 'earth':
+        return AppThemeType.earth;
       case 'system':
         return AppThemeType.system;
       default:
@@ -81,6 +87,10 @@ class ThemeController extends ChangeNotifier {
         return 'light';
       case AppThemeType.orix:
         return 'orix';
+      case AppThemeType.logo:
+        return 'logo';
+      case AppThemeType.earth:
+        return 'earth';
       case AppThemeType.system:
         return 'system';
       case AppThemeType.dark:

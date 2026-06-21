@@ -12,6 +12,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/grid_toggle_button.dart';
 import '../widgets/note_options_sheet.dart';
+import '../widgets/app_empty_state.dart';
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
@@ -66,6 +67,7 @@ class _NotesScreenState extends State<NotesScreen> {
               isScrollable: false,
               //headerSpacing: 48.0,
               title: 'Notes',
+              padding: EdgeInsets.zero,
               actions: [
                 GridToggleButton(
                   isGridView: _isGridView,
@@ -146,22 +148,12 @@ class _NotesScreenState extends State<NotesScreen> {
     }
 
     if (_controller.notes.isEmpty) {
-      final secondaryColor = AppTheme.textSecondaryColor(context);
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.menu_book, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
-              const VGapMd(),
-              Text(
-                'No notes Yet',
-                style: AppTheme.headingSmall.copyWith(color: secondaryColor),
-              ),
-            ],
-          ),
-        ),
+      return AppEmptyState(
+        icon: Icons.menu_book_rounded,
+        title: 'No Notes Recorded',
+        description: 'Capture thoughts, log journals, or document your progress.',
+        actionLabel: 'Write a Note',
+        onActionPressed: _onFabPressed,
       );
     }
 
@@ -176,7 +168,7 @@ class _NotesScreenState extends State<NotesScreen> {
         return false;
       },
       child: ListView(
-        padding: const EdgeInsets.only(top: 0, bottom: 100),
+        padding: const EdgeInsets.only(left: 24, right: 24, top: 0, bottom: 100),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         children: [
           // ── PINNED SECTION ──────────────────────────────────────────

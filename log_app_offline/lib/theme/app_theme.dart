@@ -5,6 +5,8 @@ enum AppThemeType {
   light,
   dark,
   orix,
+  logo,
+  earth,
   system,
 }
 
@@ -15,67 +17,91 @@ class AppTheme {
 
   // === App Colors ===
   
-  // Brand Primary (Violet 500)
+  // Brand Primary
   // Use for: Main buttons, primary active states, and dominant branding elements.
   static Color get primaryColor {
     switch (activeThemeType) {
       case AppThemeType.orix:
         return const Color(0xFFF0C38E);
+      case AppThemeType.logo:
+        return const Color(0xFF206070);
+      case AppThemeType.earth:
+        return const Color(0xFF6D9773);
       default:
         return const Color(0xFF8B5CF6);
     }
   }
   
-  // Brand Light (Violet 300)
+  // Brand Light
   // Use for: Active text labels, glowing indicators, highlights on dark backgrounds.
   static Color get primaryLight {
     switch (activeThemeType) {
       case AppThemeType.orix:
         return const Color(0xFFF1AA9B);
+      case AppThemeType.logo:
+        return const Color(0xFF389EB5);
+      case AppThemeType.earth:
+        return const Color(0xFF8FBA95);
       default:
         return const Color(0xFFC4B5FD);
     }
   }
   
-  // Brand Dark (Violet 700)
+  // Brand Dark
   // Use for: Gradients, deep shadows, and pressed button states.
   static Color get primaryDark {
     switch (activeThemeType) {
       case AppThemeType.orix:
         return const Color(0xFF312C51);
+      case AppThemeType.logo:
+        return const Color(0xFF0F3E48);
+      case AppThemeType.earth:
+        return const Color(0xFF4E7053);
       default:
         return const Color(0xFF6D28D9);
     }
   }
   
-  // Secondary Accent (Blue 500)
+  // Secondary Accent
   // Use for: Secondary actions, links, or contrasting gradient blends.
   static Color get secondaryColor {
     switch (activeThemeType) {
       case AppThemeType.orix:
         return const Color(0xFFF1AA9B);
+      case AppThemeType.logo:
+        return const Color(0xFF3090D0);
+      case AppThemeType.earth:
+        return const Color(0xFFB46617);
       default:
         return const Color(0xFF3B82F6);
     }
   }
   
-  // Background Deep (Slate 900)
+  // Background Deep
   // Use for: The absolute bottom layer of the app, main screen backgrounds.
   static Color get backgroundColor {
     switch (activeThemeType) {
       case AppThemeType.orix:
         return const Color(0xFF312C51);
+      case AppThemeType.logo:
+        return const Color(0xFF0A1518);
+      case AppThemeType.earth:
+        return const Color(0xFF071F1A);
       default:
         return const Color(0xFF0F172A);
     }
   }
   
-  // Surface Elevated (Slate 800)
+  // Surface Elevated
   // Use for: Cards, bottom navigation bars, dialogs, and text fields.
   static Color get surfaceColor {
     switch (activeThemeType) {
       case AppThemeType.orix:
         return const Color(0xFF48426D);
+      case AppThemeType.logo:
+        return const Color(0xFF122327);
+      case AppThemeType.earth:
+        return const Color(0xFF0E322A);
       default:
         return const Color(0xFF1E293B);
     }

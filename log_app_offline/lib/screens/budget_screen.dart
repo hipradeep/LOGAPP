@@ -77,6 +77,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
               showScaffold: false,
               isScrollable: false,
               title: 'Budget',
+              padding: EdgeInsets.zero,
               //headerSpacing: 48.0,
               backgroundWidgets: [
                 GlowBlob(
@@ -174,33 +175,39 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-      padding: EdgeInsets.only(bottom: bottomPadding + 100 + viewInsetsBottom),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const VGapSm(),
-          Row(
-            children: [
-              SizedBox(
-                width: 180,
-                child: _buildBudgetDropdown(budgets, _controller),
-              ),
-              const HGapSm(),
-              _buildCalendarButton(context, selectedBudget),
-              const HGapSm(),
-              _buildProgressButton(context, selectedBudget),
-              const Spacer(),
-            ],
-          ),
-          const VGapMd(),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          bottom: bottomPadding + 100 + viewInsetsBottom,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const VGapSm(),
+            Row(
+              children: [
+                SizedBox(
+                  width: 180,
+                  child: _buildBudgetDropdown(budgets, _controller),
+                ),
+                const HGapSm(),
+                _buildCalendarButton(context, selectedBudget),
+                const HGapSm(),
+                _buildProgressButton(context, selectedBudget),
+                const Spacer(),
+              ],
+            ),
+            const VGapMd(),
 
-          // Render selected budget details
-          if (selectedBudget == null)
-            _buildEmptyState('Select a budget category above.')
-          else ...[
-            _buildSelectedBudgetDetails(selectedBudget, _controller),
+            // Render selected budget details
+            if (selectedBudget == null)
+              _buildEmptyState('Select a budget above.')
+            else ...[
+              _buildSelectedBudgetDetails(selectedBudget, _controller),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

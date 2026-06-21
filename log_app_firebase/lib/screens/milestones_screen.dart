@@ -11,6 +11,10 @@ import '../widgets/glow_blob.dart';
 import '../widgets/app_premium_fab.dart';
 import '../widgets/app_provider.dart';
 import 'add_milestone_task_screen.dart';
+import '../widgets/app_empty_state.dart';
+import 'add_activity_screen.dart';
+import '../services/activity_service.dart';
+import '../services/service_locator.dart';
 
 class MilestonesScreen extends StatefulWidget {
   const MilestonesScreen({super.key});
@@ -85,11 +89,16 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
           ListenableBuilder(
             listenable: _controller,
             builder: (context, _) {
-              final hasMilestones = _controller.milestoneActivities.isNotEmpty;
-              if (hasMilestones && !_controller.isLoading && _controller.errorMessage == null) {
+              if (!_controller.isLoading && _controller.errorMessage == null) {
                 return AppPremiumFab(
                   right: 24,
-                  onPressed: () => _navigateToNewTaskScreen(context),
+                  onPressed: () {
+                    if (_controller.milestoneActivities.isEmpty) {
+                      _navigateToAddMilestoneActivity(context);
+                    } else {
+                      _navigateToNewTaskScreen(context);
+                    }
+                  },
                 );
               }
               return const SizedBox.shrink();
@@ -118,24 +127,12 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
     }
 
     if (_controller.milestoneActivities.isEmpty) {
-      final secondaryColor = AppTheme.textSecondaryColor(context);
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.flag_outlined, size: 64, color: secondaryColor.withValues(alpha: 0.5)),
-            const VGapMd(),
-            Text(
-              'No milestone activities active.',
-              style: AppTheme.headingSmall.copyWith(color: secondaryColor),
-            ),
-            const VGapSm(),
-            Text(
-              'Tap the + button to create your first entry.',
-              style: TextStyle(color: secondaryColor),
-            ),
-          ],
-        ),
+      return AppEmptyState(
+        icon: Icons.flag_outlined,
+        title: 'No Milestone Activities',
+        description: 'Create a milestone activity to start tracking your goals and subtasks.',
+        actionLabel: 'Create Milestone',
+        onActionPressed: () => _navigateToAddMilestoneActivity(context),
       );
     }
 
@@ -362,6 +359,41 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
               taskName,
               timestamp,
               subTasks: subTasks,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _navigateToAddMilestoneActivity(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddActivityScreen(
+          initialTrackingType: 'milestone',
+          onAdd: (name, trackingType, targetCount, {
+            List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
+            String? scheduledTime,
+            DateTime? startDate,
+            DateTime? endDate,
+            List<String> subTaskTemplates = const [],
+            String? description,
+            bool skippable = false,
+            bool reminderEnabled = true,
+          }) async {
+            await getIt<ActivityService>().createActivity(
+              name,
+              trackingType: trackingType,
+              targetCount: targetCount,
+              repeatDays: repeatDays,
+              scheduledTime: scheduledTime,
+              startDate: startDate,
+              endDate: endDate,
+              subTaskTemplates: subTaskTemplates,
+              description: description ?? '',
+              skippable: skippable,
+              reminderEnabled: reminderEnabled,
             );
           },
         ),

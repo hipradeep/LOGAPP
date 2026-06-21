@@ -17,6 +17,7 @@ import 'track_activities_screen.dart';
 import 'log_screen.dart';
 import 'crash_log_screen.dart';
 import 'water_log_screen.dart';
+import 'theme_selection_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -283,7 +284,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             title: 'Theme',
                             trailingText: _getThemeTypeName(themeController.themeType),
                             onTap: () {
-                              _showThemeSelectionDialog(context, themeController);
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const ThemeSelectionScreen(),
+                                ),
+                              );
                             },
                           ),
                           _buildDrawerDivider(context),
@@ -524,58 +531,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  void _showThemeSelectionDialog(BuildContext context, ThemeController themeController) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Select App Theme',
-          style: TextStyle(
-            color: AppTheme.textPrimaryColor(context),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildThemeOptionTile(context, themeController, AppThemeType.light, 'Light Mode', Icons.light_mode_rounded),
-            _buildThemeOptionTile(context, themeController, AppThemeType.dark, 'Classic Dark', Icons.dark_mode_rounded),
-            _buildThemeOptionTile(context, themeController, AppThemeType.orix, 'Orix Theme', Icons.palette_rounded),
-            _buildThemeOptionTile(context, themeController, AppThemeType.system, 'System Default', Icons.settings_suggest_rounded),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildThemeOptionTile(
-    BuildContext context,
-    ThemeController themeController,
-    AppThemeType type,
-    String title,
-    IconData icon,
-  ) {
-    final isSelected = themeController.themeType == type;
-    final primaryAccent = AppTheme.primaryAccentColor(context);
-    return ListTile(
-      leading: Icon(icon, color: isSelected ? primaryAccent : AppTheme.textSecondaryColor(context)),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? primaryAccent : AppTheme.textPrimaryColor(context),
-        ),
-      ),
-      trailing: isSelected ? Icon(Icons.check_circle_rounded, color: primaryAccent, size: 20) : null,
-      onTap: () {
-        themeController.setThemeType(type);
-        Navigator.pop(context);
-      },
-    );
-  }
-
   String _getThemeTypeName(AppThemeType type) {
     switch (type) {
       case AppThemeType.light:
@@ -584,6 +539,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         return 'Classic Dark';
       case AppThemeType.orix:
         return 'Orix Theme';
+      case AppThemeType.logo:
+        return 'Teal Logo';
+      case AppThemeType.earth:
+        return 'Forest Earth';
       case AppThemeType.system:
         return 'System';
     }
