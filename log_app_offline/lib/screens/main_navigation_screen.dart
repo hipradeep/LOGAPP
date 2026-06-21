@@ -15,7 +15,6 @@ import 'manage_budget_screen.dart';
 import 'manage_quick_actions_screen.dart';
 import 'track_activities_screen.dart';
 import 'log_screen.dart';
-import 'crash_log_screen.dart';
 import 'water_log_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -260,16 +259,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                               );
                             },
                           ),
-                          _buildDrawerDivider(context),
-                          _buildDrawerItem(
-                            context,
-                            icon: Icons.language_rounded,
-                            title: 'Language',
-                            trailingText: 'English',
-                            onTap: () {
-                              _showComingSoonSnackBar(context, 'Language');
-                            },
-                          ),
+
                         ],
                       ),
                       const VGapMd(),
@@ -370,35 +360,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         children: [
                           _buildDrawerItem(
                             context,
-                            icon: Icons.cloud_sync_outlined,
-                            title: 'Cloud Backup',
-                            isSoon: true,
-                            onTap: () {
-                              _showProUpgradeDialog(context);
-                            },
-                          ),
-                          _buildDrawerDivider(context),
-                          _buildDrawerItem(
-                            context,
                             icon: Icons.delete_outline_rounded,
                             title: 'Clear Cache & Reset',
                             onTap: () {
                               _resetCache(context, controller);
-                            },
-                          ),
-                          _buildDrawerDivider(context),
-                          _buildDrawerItem(
-                            context,
-                            icon: Icons.bug_report_outlined,
-                            title: 'Local Crash Logs',
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const CrashLogScreen(),
-                                ),
-                              );
                             },
                           ),
                           _buildDrawerDivider(context),
@@ -416,15 +381,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                                   Text('A premium daily note and activity tracker for Android.'),
                                 ],
                               );
-                            },
-                          ),
-                          _buildDrawerDivider(context),
-                          _buildDrawerItem(
-                            context,
-                            icon: Icons.star_outline_rounded,
-                            title: 'Review LOG App',
-                            onTap: () {
-                              _showReviewSnackBar(context);
                             },
                           ),
                         ],
@@ -633,68 +589,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  void _showProUpgradeDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 28),
-            const SizedBox(width: 8),
-            Text(
-              'LOG Pro Beta',
-              style: TextStyle(
-                color: AppTheme.textPrimaryColor(context),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'LOG Pro will unlock features like custom color themes, biometric app locks, automated cloud backups, and export options.\n\nAll premium features will be unlocked for early beta testers in the next build! Thank you for testing LOG.',
-          style: TextStyle(
-            color: AppTheme.textSecondaryColor(context),
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Got It',
-              style: TextStyle(
-                color: AppTheme.primaryAccentColor(context),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  void _showComingSoonSnackBar(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature option is coming soon in LOG Pro!'),
-        backgroundColor: AppTheme.primaryColor,
-      ),
-    );
-  }
-
-  void _showReviewSnackBar(BuildContext context) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Thank you for testing LOG! Custom review link coming soon.'),
-        backgroundColor: AppTheme.successColor,
-      ),
-    );
-  }
 
   Widget _buildDrawerSectionTitle(BuildContext context, String title) {
     return Padding(

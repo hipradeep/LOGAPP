@@ -1,4 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import '../utils/db_utils.dart';
+import '../utils/id_utils.dart';
 
 class SubTask {
   final String id;
@@ -15,7 +17,7 @@ class SubTask {
     this.scheduledTime,
   });
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
       'id': id,
       'title': title,
@@ -25,11 +27,11 @@ class SubTask {
     };
   }
 
-  factory SubTask.fromFirestore(Map<String, dynamic> data) {
+  factory SubTask.fromMap(Map<String, dynamic> data) {
     return SubTask(
-      id: data['id'] as String? ?? '',
+      id: data['id'] as String? ?? IdUtils.generateId(),
       title: data['title'] as String? ?? '',
-      checked: data['checked'] as bool? ?? false,
+      checked: data['checked'] == true || data['checked'] == 1,
       durationMinutes: data['durationMinutes'] as int?,
       scheduledTime: data['scheduledTime'] as String?,
     );
@@ -77,88 +79,90 @@ class Task {
     this.subTasks = const [],
   });
 
-  Map<String, dynamic> toFirestore() {
+  // ─── SQLite serialization ─────────────────────────────────────────────────
+
+  Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'activityId': activityId,
       'taskName': taskName,
-      'timestamp': Timestamp.fromDate(timestamp),
-      'checked': checked,
+      'timestamp': DbUtils.dateToMs(timestamp),
+      'checked': checked ? 1 : 0,
       'symbolType': symbolType,
       'symbolValue': symbolValue,
       'scheduledTime': scheduledTime,
-      'completionTime': completionTime != null ? Timestamp.fromDate(completionTime!) : null,
-      'subTasks': subTasks.map((st) => st.toFirestore()).toList(),
+      'completionTime': completionTime != null ? DbUtils.dateToMs(completionTime!) : null,
+      'subTasks': jsonEncode(subTasks.map((st) => st.toMap()).toList()),
     };
   }
 
-  factory Task.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
-    final DateTime dateTime = firestoreTimestamp != null
-        ? firestoreTimestamp.toDate()
-        : DateTime.now();
-
-    final Timestamp? firestoreCompletionTime = data['completionTime'] as Timestamp?;
-
-    final List<dynamic>? rawSubTasks = data['subTasks'] as List<dynamic>?;
+  factory Task.fromMap(String id, Map<String, dynamic> map) {
+    // Parse subTasks — may be stored as JSON string or raw List
     List<SubTask> parsedSubTasks = [];
-    
-    // Support either taskName or the legacy subTaskName
-    final String name = data['taskName'] as String? ?? data['subTaskName'] as String? ?? '';
+    final rawSubTasks = map['subTasks'];
+    if (rawSubTasks is String && rawSubTasks.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawSubTasks) as List;
+        parsedSubTasks = decoded
+            .map((item) => SubTask.fromMap(Map<String, dynamic>.from(item as Map)))
+            .toList();
+      } catch (_) {}
+    } else if (rawSubTasks is List) {
+      parsedSubTasks = rawSubTasks
+          .map((item) => SubTask.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    }
 
-    // Extract time suffix from the name if it has one (legacy format e.g., "Title|10:30")
+    // Support both taskName and legacy subTaskName
+    final String name = map['taskName'] as String? ?? map['subTaskName'] as String? ?? '';
+
+    // Extract time suffix from legacy format "Title|10:30"
     final hasTime = name.contains('|');
     final nameWithoutTime = hasTime ? name.split('|').first : name;
     final parsedScheduledTime = hasTime ? name.split('|').last : null;
+    final String? scheduledTime = map['scheduledTime'] as String? ?? parsedScheduledTime;
 
-    final String? scheduledTime = data['scheduledTime'] as String? ?? parsedScheduledTime;
-
-    if (rawSubTasks != null) {
-      parsedSubTasks = rawSubTasks
-          .map((item) => SubTask.fromFirestore(Map<String, dynamic>.from(item as Map)))
-          .toList();
-    } else if (nameWithoutTime.contains('::')) {
-      // Legacy nested checklist parsing fallback
-      final parts = nameWithoutTime.split('::');
-      final itemsPart = parts.length > 1 ? parts[1].trim() : '';
-      if (itemsPart.isNotEmpty) {
-        final itemsList = itemsPart.split(',');
-        for (int i = 0; i < itemsList.length; i++) {
-          final trimmed = itemsList[i].trim();
-          if (trimmed.isEmpty) continue;
-          final bool isChecked = trimmed.startsWith('[x]');
-          final String itemTitle = isChecked
-              ? trimmed.substring(3).trim()
-              : (trimmed.startsWith('[ ]') ? trimmed.substring(3).trim() : trimmed);
-          parsedSubTasks.add(SubTask(
-            id: 'legacy-$i',
-            title: itemTitle,
-            checked: isChecked,
-          ));
+    // Clean legacy "::" format
+    String cleanName = nameWithoutTime;
+    if (nameWithoutTime.contains('::')) {
+      cleanName = nameWithoutTime.split('::').first.trim();
+      if (parsedSubTasks.isEmpty) {
+        final parts = nameWithoutTime.split('::');
+        final itemsPart = parts.length > 1 ? parts[1].trim() : '';
+        if (itemsPart.isNotEmpty) {
+          final itemsList = itemsPart.split(',');
+          for (int i = 0; i < itemsList.length; i++) {
+            final trimmed = itemsList[i].trim();
+            if (trimmed.isEmpty) continue;
+            final bool isChecked = trimmed.startsWith('[x]');
+            final String itemTitle = isChecked
+                ? trimmed.substring(3).trim()
+                : (trimmed.startsWith('[ ]') ? trimmed.substring(3).trim() : trimmed);
+            parsedSubTasks.add(SubTask(
+              id: 'legacy-$i',
+              title: itemTitle,
+              checked: isChecked,
+            ));
+          }
         }
       }
     }
 
-    // Clean name (without '::' and without '|10:30')
-    String cleanName = nameWithoutTime;
-    if (nameWithoutTime.contains('::')) {
-      cleanName = nameWithoutTime.split('::').first.trim();
-    }
-
     return Task(
-      id: doc.id,
-      activityId: data['activityId'] as String? ?? '',
+      id: id,
+      activityId: map['activityId'] as String? ?? '',
       taskName: cleanName,
-      timestamp: dateTime,
-      checked: data['checked'] as bool? ?? false,
-      symbolType: data['symbolType'] as String?,
-      symbolValue: data['symbolValue'] as String?,
+      timestamp: DbUtils.msToDate(map['timestamp'] as int?),
+      checked: map['checked'] == 1 || map['checked'] == true,
+      symbolType: map['symbolType'] as String?,
+      symbolValue: map['symbolValue'] as String?,
       scheduledTime: scheduledTime,
-      completionTime: firestoreCompletionTime?.toDate(),
+      completionTime: DbUtils.msToDateNullable(map['completionTime'] as int?),
       subTasks: parsedSubTasks,
     );
   }
+
+  // ─── copyWith ─────────────────────────────────────────────────────────────
 
   Task copyWith({
     String? id,

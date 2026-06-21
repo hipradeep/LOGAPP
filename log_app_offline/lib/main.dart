@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
@@ -9,7 +9,8 @@ import 'controllers/theme_controller.dart';
 
 import 'services/notification_service.dart';
 import 'services/activity_notification_sync.dart';
-import 'services/notification_transaction_service.dart';
+import 'services/hive_service.dart';
+import 'services/database_service.dart';
 import 'services/service_locator.dart';
 import 'services/activity_service.dart';
 
@@ -30,12 +31,9 @@ void main() async {
 
   setupLocator();
 
-  // Initialize Firebase (fails gracefully if google-services.json is a dummy)
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint("Firebase initialization failed/bypassed: $e");
-  }
+  // Initialize offline storage before any widget builds
+  await HiveService.init();
+  await DatabaseService.instance.database;
 
   runApp(const MyApp());
 
@@ -66,15 +64,7 @@ void _initBackgroundServices() {
       debugPrint("Failed to init ActivityNotificationSync: $e");
     }
 
-    // Start notification transaction scanner if permission is granted
-    try {
-      final hasScannerPermission = await NotificationTransactionService.isPermissionGranted();
-      if (hasScannerPermission) {
-        await NotificationTransactionService.startService();
-      }
-    } catch (e) {
-      debugPrint("Failed to auto-start Notification Transaction Service: $e");
-    }
+
   });
 }
 

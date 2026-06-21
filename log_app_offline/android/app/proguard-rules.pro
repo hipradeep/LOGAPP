@@ -15,8 +15,6 @@
   @com.google.gson.annotations.SerializedName <fields>;
 }
 
-# Flutter notification listener rules
--keep class im.zoe.labs.flutter_notification_listener.** { *; }
 
 # Keep Flutter core classes (essential for all plugins)
 -keep class io.flutter.plugin.** { *; }

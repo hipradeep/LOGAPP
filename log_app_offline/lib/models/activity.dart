@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/db_utils.dart';
 
 class Activity {
   final String id;
@@ -27,7 +27,6 @@ class Activity {
   final bool? _skippable;
 
   /// Whether this activity type supports sub-tasks.
-  /// Derived from trackingType: routine & goal have sub-tasks, habit does not.
   bool get hasSubTasks => trackingType == 'multiple' || trackingType == 'milestone';
 
   bool get skippable => _skippable ?? false;
@@ -52,78 +51,82 @@ class Activity {
     bool? skippable = false,
   }) : _skippable = skippable;
 
-  // Convert to Firestore Map
-  Map<String, dynamic> toFirestore() {
+  // ─── SQLite serialization ─────────────────────────────────────────────────
+
+  Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
-      'isActive': isActive,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'isActive': isActive ? 1 : 0,
+      'timestamp': DbUtils.dateToMs(timestamp),
       'trackingType': trackingType,
       'targetCount': targetCount,
-      'reminderEnabled': reminderEnabled,
-      'repeatDays': repeatDays,
+      'reminderEnabled': reminderEnabled ? 1 : 0,
+      'repeatDays': DbUtils.encodeIntList(repeatDays),
       'scheduledTime': scheduledTime,
-      'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
-      'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
-      'subTaskTemplates': subTaskTemplates,
+      'startDate': startDate != null ? DbUtils.dateToMs(startDate!) : null,
+      'endDate': endDate != null ? DbUtils.dateToMs(endDate!) : null,
+      'subTaskTemplates': DbUtils.encodeStringList(subTaskTemplates),
       'description': description,
       'category': category,
       'symbolType': symbolType,
       'symbolValue': symbolValue,
-      'skippable': skippable,
+      'skippable': skippable ? 1 : 0,
     };
   }
 
-  // Create from Firestore Document Snapshot
-  factory Activity.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
-    final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
-    final DateTime dateTime = firestoreTimestamp != null 
-        ? firestoreTimestamp.toDate() 
-        : DateTime.now();
-
-    final Timestamp? firestoreStartDate = data['startDate'] as Timestamp?;
-    final Timestamp? firestoreEndDate = data['endDate'] as Timestamp?;
-
-    final rawRepeatDays = data['repeatDays'];
-    final List<int> parsedRepeatDays = rawRepeatDays is List
-        ? rawRepeatDays.map((e) => (e as num).toInt()).toList()
-        : const [1, 2, 3, 4, 5, 6, 7];
-
-    final rawSubTaskTemplates = data['subTaskTemplates'];
-    final List<String> parsedSubTaskTemplates = rawSubTaskTemplates is List
-        ? List<String>.from(rawSubTaskTemplates)
-        : const [];
-
-    // Migrate old values: 'daily'/'habit' → 'single', 'routine' → 'multiple', 'goal' → 'milestone'
-    String rawType = data['trackingType'] as String? ?? 'single';
+  factory Activity.fromMap(String id, Map<String, dynamic> map) {
+    // Migrate legacy trackingType values
+    String rawType = map['trackingType'] as String? ?? 'single';
     if (rawType == 'daily' || rawType == 'habit') rawType = 'single';
     if (rawType == 'routine') rawType = 'multiple';
     if (rawType == 'goal') rawType = 'milestone';
 
+    // repeatDays — may be stored as JSON string or raw List
+    List<int> parsedRepeatDays;
+    final rawDays = map['repeatDays'];
+    if (rawDays is String) {
+      parsedRepeatDays = DbUtils.decodeIntList(rawDays);
+    } else if (rawDays is List) {
+      parsedRepeatDays = rawDays.map((e) => (e as num).toInt()).toList();
+    } else {
+      parsedRepeatDays = const [1, 2, 3, 4, 5, 6, 7];
+    }
+
+    // subTaskTemplates — may be stored as JSON string or raw List
+    List<String> parsedTemplates;
+    final rawTemplates = map['subTaskTemplates'];
+    if (rawTemplates is String) {
+      parsedTemplates = DbUtils.decodeStringList(rawTemplates);
+    } else if (rawTemplates is List) {
+      parsedTemplates = List<String>.from(rawTemplates);
+    } else {
+      parsedTemplates = const [];
+    }
+
     return Activity(
-      id: doc.id,
-      name: data['name'] as String? ?? '',
-      isActive: data['isActive'] as bool? ?? false,
-      timestamp: dateTime,
+      id: id,
+      name: map['name'] as String? ?? '',
+      isActive: (map['isActive'] == 1 || map['isActive'] == true),
+      timestamp: DbUtils.msToDate(map['timestamp'] as int?),
       trackingType: rawType,
-      targetCount: data['targetCount'] as int? ?? 1,
-      reminderEnabled: data['reminderEnabled'] as bool? ?? true,
+      targetCount: map['targetCount'] as int? ?? 1,
+      reminderEnabled: (map['reminderEnabled'] == 1 || map['reminderEnabled'] == true),
       repeatDays: parsedRepeatDays,
-      scheduledTime: data['scheduledTime'] as String?,
-      startDate: firestoreStartDate?.toDate(),
-      endDate: firestoreEndDate?.toDate(),
-      subTaskTemplates: parsedSubTaskTemplates,
-      description: data['description'] as String?,
-      category: data['category'] as String?,
-      symbolType: data['symbolType'] as String?,
-      symbolValue: data['symbolValue'] as String?,
-      skippable: data['skippable'] as bool? ?? false,
+      scheduledTime: map['scheduledTime'] as String?,
+      startDate: DbUtils.msToDateNullable(map['startDate'] as int?),
+      endDate: DbUtils.msToDateNullable(map['endDate'] as int?),
+      subTaskTemplates: parsedTemplates,
+      description: map['description'] as String?,
+      category: map['category'] as String?,
+      symbolType: map['symbolType'] as String?,
+      symbolValue: map['symbolValue'] as String?,
+      skippable: (map['skippable'] == 1 || map['skippable'] == true),
     );
   }
 
-  // Helper method for updating state locally
+  // ─── copyWith ─────────────────────────────────────────────────────────────
+
   Activity copyWith({
     String? id,
     String? name,

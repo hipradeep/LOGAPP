@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/db_utils.dart';
+import '../utils/date_utils.dart';
 
 class Transaction {
   final String id;
@@ -25,45 +26,33 @@ class Transaction {
     this.paymentMethod = 'PNB',
   });
 
+  // ─── SQLite serialization ─────────────────────────────────────────────────
+
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'budgetId': budgetId,
       'tag': tag,
       'description': description,
       'amount': amount,
-      'entryDate': Timestamp.fromDate(entryDate),
-      'expenseDate': Timestamp.fromDate(expenseDate),
-      'isValidated': isValidated,
+      'entryDate': DbUtils.dateToMs(entryDate),
+      'expenseDate': DbUtils.dateToMs(expenseDate),
+      'isValidated': isValidated ? 1 : 0,
       'rawBody': rawBody,
       'paymentMethod': paymentMethod,
     };
   }
 
-  factory Transaction.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return Transaction.fromMap(doc.id, data);
-  }
-
   factory Transaction.fromMap(String id, Map<String, dynamic> map) {
     final rawEntryDate = map['entryDate'];
-    final DateTime parsedEntryDate;
-    if (rawEntryDate is Timestamp) {
-      parsedEntryDate = rawEntryDate.toDate();
-    } else if (rawEntryDate is String) {
-      parsedEntryDate = DateTime.tryParse(rawEntryDate) ?? DateTime.now();
-    } else {
-      parsedEntryDate = DateTime.now();
-    }
+    final DateTime parsedEntryDate = rawEntryDate is int
+        ? DbUtils.msToDate(rawEntryDate)
+        : (rawEntryDate is String ? DateTime.tryParse(rawEntryDate) ?? DateTime.now() : DateTime.now());
 
     final rawExpenseDate = map['expenseDate'];
-    final DateTime parsedExpenseDate;
-    if (rawExpenseDate is Timestamp) {
-      parsedExpenseDate = rawExpenseDate.toDate();
-    } else if (rawExpenseDate is String) {
-      parsedExpenseDate = DateTime.tryParse(rawExpenseDate) ?? parsedEntryDate;
-    } else {
-      parsedExpenseDate = parsedEntryDate;
-    }
+    final DateTime parsedExpenseDate = rawExpenseDate is int
+        ? DbUtils.msToDate(rawExpenseDate)
+        : (rawExpenseDate is String ? DateTime.tryParse(rawExpenseDate) ?? parsedEntryDate : parsedEntryDate);
 
     return Transaction(
       id: id,
@@ -73,7 +62,7 @@ class Transaction {
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
       entryDate: parsedEntryDate,
       expenseDate: parsedExpenseDate,
-      isValidated: map['isValidated'] as bool? ?? true,
+      isValidated: map['isValidated'] == 1 || map['isValidated'] == true,
       rawBody: map['rawBody'] as String?,
       paymentMethod: map['paymentMethod'] as String? ?? 'PNB',
     );
@@ -87,13 +76,13 @@ class Budget {
   final double limit;
   final String period; // 'daily', 'weekly', 'monthly', 'custom'
   final String description;
-  final List<int> repeatDays; // Weekdays (1=Mon…7=Sun) for notification scheduling only — NOT used to filter transactions
-  final String? scheduledTime; // e.g. "09:00"
+  final List<int> repeatDays;
+  final String? scheduledTime;
   final DateTime? startDate;
   final DateTime? endDate;
   final bool repeat;
   final bool isActive;
-  final double alertThreshold; // 0.0–1.0, e.g. 0.7 = alert at 70% of limit
+  final double alertThreshold; // 0.0–1.0
 
   Budget({
     required this.id,
@@ -111,41 +100,28 @@ class Budget {
     this.alertThreshold = 0.7,
   });
 
+  // ─── Business logic ───────────────────────────────────────────────────────
+
   double spentForCurrentPeriod(List<Transaction> allTransactions) {
     final now = DateTime.now();
     double sum = 0.0;
-    
-    // Filter transactions belonging to this budget
     final budgetTransactions = allTransactions.where((t) => t.budgetId == id);
 
     for (final exp in budgetTransactions) {
       if (period == 'daily') {
-        if (exp.expenseDate.year == now.year &&
-            exp.expenseDate.month == now.month &&
-            exp.expenseDate.day == now.day) {
-          sum += exp.amount;
-        }
+        if (AppDateUtils.isSameDay(exp.expenseDate, now)) sum += exp.amount;
       } else if (period == 'weekly') {
-        // Start of week (Monday)
-        final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
-        final expDate = DateTime(exp.expenseDate.year, exp.expenseDate.month, exp.expenseDate.day);
-        if (expDate.isAfter(startOfWeek.subtract(const Duration(days: 1))) &&
-            expDate.isBefore(now.add(const Duration(days: 1)))) {
+        final startOfWeek = AppDateUtils.startOfWeek(now);
+        final expDate = AppDateUtils.startOfDay(exp.expenseDate);
+        if (!expDate.isBefore(startOfWeek) && expDate.isBefore(now.add(const Duration(days: 1)))) {
           sum += exp.amount;
         }
       } else if (period == 'monthly') {
-        if (exp.expenseDate.year == now.year &&
-            exp.expenseDate.month == now.month) {
+        if (exp.expenseDate.year == now.year && exp.expenseDate.month == now.month) {
           sum += exp.amount;
         }
       } else if (period == 'custom' || (startDate != null && endDate != null)) {
-        final expDate = DateTime(exp.expenseDate.year, exp.expenseDate.month, exp.expenseDate.day);
-        final start = startDate != null ? DateTime(startDate!.year, startDate!.month, startDate!.day) : null;
-        final end = endDate != null ? DateTime(endDate!.year, endDate!.month, endDate!.day) : null;
-        bool inRange = true;
-        if (start != null && expDate.isBefore(start)) inRange = false;
-        if (end != null && expDate.isAfter(end)) inRange = false;
-        if (inRange) {
+        if (AppDateUtils.isDateInRange(exp.expenseDate, startDate, endDate)) {
           sum += exp.amount;
         }
       } else {
@@ -158,89 +134,56 @@ class Budget {
   bool isOverBudget(List<Transaction> allTransactions) =>
       spentForCurrentPeriod(allTransactions) > limit;
 
-  Map<String, dynamic> toFirestore() {
+  // ─── SQLite serialization ─────────────────────────────────────────────────
+
+  Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'categoryName': categoryName,
-      'limit': limit,
+      'limit_amount': limit,
       'period': period,
       'description': description,
-      'repeatDays': repeatDays,
+      'repeatDays': DbUtils.encodeIntList(repeatDays),
       'scheduledTime': scheduledTime,
-      'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
-      'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
-      'repeat': repeat,
-      'isActive': isActive,
+      'startDate': startDate != null ? DbUtils.dateToMs(startDate!) : null,
+      'endDate': endDate != null ? DbUtils.dateToMs(endDate!) : null,
+      'repeat': repeat ? 1 : 0,
+      'isActive': isActive ? 1 : 0,
       'alertThreshold': alertThreshold,
     };
   }
 
-  factory Budget.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    final Timestamp? firestoreStartDate = data['startDate'] as Timestamp?;
-    final Timestamp? firestoreEndDate = data['endDate'] as Timestamp?;
-
-    final rawRepeatDays = data['repeatDays'];
-    final List<int> parsedRepeatDays = rawRepeatDays is List
-        ? rawRepeatDays.map<int>((e) => (e as num).toInt()).toList()
-        : const [1, 2, 3, 4, 5, 6, 7];
-
-    return Budget(
-      id: doc.id,
-      name: data['name'] as String? ?? data['category'] as String? ?? '',
-      categoryName: data['categoryName'] as String? ?? data['category'] as String? ?? '',
-      limit: (data['limit'] as num?)?.toDouble() ?? 0.0,
-      period: data['period'] as String? ?? 'monthly',
-      description: data['description'] as String? ?? '',
-      repeatDays: parsedRepeatDays,
-      scheduledTime: data['scheduledTime'] as String?,
-      startDate: firestoreStartDate?.toDate(),
-      endDate: firestoreEndDate?.toDate(),
-      repeat: data['repeat'] as bool? ?? true,
-      isActive: data['isActive'] as bool? ?? data['checked'] as bool? ?? true,
-      alertThreshold: (data['alertThreshold'] as num?)?.toDouble() ?? 0.7,
-    );
-  }
-
-  factory Budget.fromMap(String id, Map<String, dynamic> data) {
-    DateTime? parsedStartDate;
-    final rawStartDate = data['startDate'];
-    if (rawStartDate is Timestamp) {
-      parsedStartDate = rawStartDate.toDate();
-    } else if (rawStartDate is String) {
-      parsedStartDate = DateTime.tryParse(rawStartDate);
+  factory Budget.fromMap(String id, Map<String, dynamic> map) {
+    final rawRepeatDays = map['repeatDays'];
+    List<int> parsedRepeatDays;
+    if (rawRepeatDays is String) {
+      parsedRepeatDays = DbUtils.decodeIntList(rawRepeatDays);
+    } else if (rawRepeatDays is List) {
+      parsedRepeatDays = rawRepeatDays.map<int>((e) => (e as num).toInt()).toList();
+    } else {
+      parsedRepeatDays = const [1, 2, 3, 4, 5, 6, 7];
     }
-
-    DateTime? parsedEndDate;
-    final rawEndDate = data['endDate'];
-    if (rawEndDate is Timestamp) {
-      parsedEndDate = rawEndDate.toDate();
-    } else if (rawEndDate is String) {
-      parsedEndDate = DateTime.tryParse(rawEndDate);
-    }
-
-    final rawRepeatDays = data['repeatDays'];
-    final List<int> parsedRepeatDays = rawRepeatDays is List
-        ? rawRepeatDays.map<int>((e) => (e as num).toInt()).toList()
-        : const [1, 2, 3, 4, 5, 6, 7];
 
     return Budget(
       id: id,
-      name: data['name'] as String? ?? data['category'] as String? ?? '',
-      categoryName: data['categoryName'] as String? ?? data['category'] as String? ?? '',
-      limit: (data['limit'] as num?)?.toDouble() ?? 0.0,
-      period: data['period'] as String? ?? 'monthly',
-      description: data['description'] as String? ?? '',
+      name: map['name'] as String? ?? map['category'] as String? ?? '',
+      categoryName: map['categoryName'] as String? ?? map['category'] as String? ?? '',
+      // SQLite column is limit_amount to avoid reserved word conflict
+      limit: (map['limit_amount'] as num? ?? map['limit'] as num?)?.toDouble() ?? 0.0,
+      period: map['period'] as String? ?? 'monthly',
+      description: map['description'] as String? ?? '',
       repeatDays: parsedRepeatDays,
-      scheduledTime: data['scheduledTime'] as String?,
-      startDate: parsedStartDate,
-      endDate: parsedEndDate,
-      repeat: data['repeat'] as bool? ?? true,
-      isActive: data['isActive'] as bool? ?? data['checked'] as bool? ?? true,
-      alertThreshold: (data['alertThreshold'] as num?)?.toDouble() ?? 0.7,
+      scheduledTime: map['scheduledTime'] as String?,
+      startDate: DbUtils.msToDateNullable(map['startDate'] as int?),
+      endDate: DbUtils.msToDateNullable(map['endDate'] as int?),
+      repeat: map['repeat'] == 1 || map['repeat'] == true,
+      isActive: map['isActive'] == 1 || map['isActive'] == true,
+      alertThreshold: (map['alertThreshold'] as num?)?.toDouble() ?? 0.7,
     );
   }
+
+  // ─── copyWith ─────────────────────────────────────────────────────────────
 
   Budget copyWith({
     String? id,

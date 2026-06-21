@@ -2,6 +2,7 @@ import 'dart:async';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
+import '../utils/date_utils.dart';
 import 'activity_service.dart';
 import 'check_in_service.dart';
 import 'cache_service.dart';
@@ -273,14 +274,10 @@ class ActivityNotificationSync {
 
   // ==================== HELPERS ====================
 
-  static bool _isToday(DateTime date, DateTime today) {
-    return date.year == today.year && date.month == today.month && date.day == today.day;
-  }
-
   static bool _isActivityCompletedToday(Activity activity, DateTime today) {
     // Check-in skip status
     final bool isSkipped = _latestCheckIns.any((c) =>
-        _isToday(c.timestamp, today) &&
+        AppDateUtils.isSameDay(c.timestamp, today) &&
         c.activityId == activity.id &&
         c.skipped == true);
     if (isSkipped) return true;
@@ -291,7 +288,7 @@ class ActivityNotificationSync {
 
   static bool _isSubTaskCompletedToday(Activity activity, String subTaskTitle, DateTime today) {
     final isSkipped = _latestCheckIns.any((c) =>
-        _isToday(c.timestamp, today) &&
+        AppDateUtils.isSameDay(c.timestamp, today) &&
         c.activityId == activity.id &&
         c.subTaskName == subTaskTitle &&
         c.skipped == true);

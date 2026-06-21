@@ -3,7 +3,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
-import '../services/notification_transaction_service.dart';
 import 'main_navigation_screen.dart';
 
 class PermissionScreen extends StatefulWidget {
@@ -15,7 +14,6 @@ class PermissionScreen extends StatefulWidget {
 
 class _PermissionScreenState extends State<PermissionScreen> with WidgetsBindingObserver {
   bool _isNotificationGranted = false;
-  bool _isScannerGranted = false;
   bool _isChecking = false;
 
   @override
@@ -40,11 +38,9 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
 
   Future<void> _checkPermissions() async {
     final notificationStatus = await Permission.notification.status;
-    final scannerStatus = await NotificationTransactionService.isPermissionGranted();
     if (mounted) {
       setState(() {
         _isNotificationGranted = notificationStatus.isGranted;
-        _isScannerGranted = scannerStatus;
       });
     }
   }
@@ -65,21 +61,7 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
     }
   }
 
-  Future<void> _requestScannerPermission() async {
-    setState(() => _isChecking = true);
-    try {
-      await NotificationTransactionService.requestPermission();
-    } catch (_) {
-      // Fail silently
-    } finally {
-      if (mounted) setState(() => _isChecking = false);
-    }
-  }
-
-  void _navigateToMain() async {
-    if (_isScannerGranted) {
-      await NotificationTransactionService.startService();
-    }
+  void _navigateToMain() {
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -91,45 +73,25 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
   void _handlePrimaryAction() {
     if (!_isNotificationGranted) {
       _requestPushNotificationPermission();
-    } else if (!_isScannerGranted) {
-      _requestScannerPermission();
     } else {
       _navigateToMain();
     }
   }
 
   Widget _buildPermissionCards() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _PermissionCard(
-          title: 'Push Notifications',
-          description: 'LOG triggers system banner notifications exactly when your scheduled reminders are due, keeping you on track throughout the day.',
-          icon: Icons.notifications_active_rounded,
-          isGranted: _isNotificationGranted,
-          onTap: _requestPushNotificationPermission,
-        ),
-        const VGapMd(),
-        _PermissionCard(
-          title: 'Transaction Scanner',
-          description: 'LOG reads incoming transaction alerts locally on your device to automatically import expenses into your active budgets.',
-          icon: Icons.receipt_long_rounded,
-          isGranted: _isScannerGranted,
-          onTap: _requestScannerPermission,
-        ),
-      ],
+    return _PermissionCard(
+      title: 'Push Notifications',
+      description: 'LOG triggers system banner notifications exactly when your scheduled reminders are due, keeping you on track throughout the day.',
+      icon: Icons.notifications_active_rounded,
+      isGranted: _isNotificationGranted,
+      onTap: _requestPushNotificationPermission,
     );
   }
 
-  Widget _buildActionButtons(bool allConfigured) {
-    final String buttonText;
-    if (allConfigured) {
-      buttonText = 'Continue to LOG';
-    } else if (!_isNotificationGranted) {
-      buttonText = 'Enable Push Notifications';
-    } else {
-      buttonText = 'Enable Transaction Scanner';
-    }
+  Widget _buildActionButtons() {
+    final String buttonText = _isNotificationGranted
+        ? 'Continue to LOG'
+        : 'Enable Push Notifications';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -168,23 +130,18 @@ class _PermissionScreenState extends State<PermissionScreen> with WidgetsBinding
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
-    final allConfigured = _isNotificationGranted && _isScannerGranted;
-
     return FullScreenPage(
       showScaffold: true,
       isScrollable: true,
       alignment: PageAlignment.center,
-
       children: [
         const _PermissionHeader(),
         const VGapXl(),
         _buildPermissionCards(),
         const VGapXl(),
-        _buildActionButtons(allConfigured),
+        _buildActionButtons(),
       ],
     );
   }
@@ -220,7 +177,7 @@ class _PermissionHeader extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            'LOG requires the following permissions to automate your workflows and keep you updated.',
+            'LOG requires notification permission to keep you on track with scheduled reminders.',
             style: AppTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),

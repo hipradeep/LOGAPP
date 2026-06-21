@@ -1,47 +1,49 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/note_entity.dart';
+import '../services/hive_service.dart';
+import '../utils/id_utils.dart';
+import '../utils/hive_utils.dart';
 
 class NoteService {
-  final CollectionReference _logsCollection =
-      FirebaseFirestore.instance.collection('notes');
+  // ─── Reactive stream ──────────────────────────────────────────────────────
 
-  // ==================== LOGS OPERATIONS ====================
-
+  /// Emits sorted list of all notes whenever Hive box changes.
   Stream<List<NoteEntity>> getNotesStream({DateTime? oldestDate}) {
-    var query = _logsCollection.orderBy('timestamp', descending: true);
-    if (oldestDate != null) {
-      query = query.where('timestamp', isGreaterThanOrEqualTo: oldestDate);
-    }
-    return query
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => NoteEntity.fromFirestore(doc)).toList();
+    return HiveUtils.boxToStream<NoteEntity>(
+      HiveService.notesBox,
+      (id, map) => NoteEntity.fromJson(id, map),
+    ).map((notes) {
+      var result = notes;
+      if (oldestDate != null) {
+        result = result.where((n) => !n.timestamp.isBefore(oldestDate)).toList();
+      }
+      result.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return result;
     });
   }
 
+  // ─── Queries ──────────────────────────────────────────────────────────────
+
   Future<int> getNextDayNumber() async {
-    final snapshot = await _logsCollection.get();
+    final notes = HiveUtils.readAll<NoteEntity>(
+      HiveService.notesBox,
+      (id, map) => NoteEntity.fromJson(id, map),
+    );
     final uniqueDates = <String>{};
     final now = DateTime.now();
     final todayStr = '${now.year}-${now.month}-${now.day}';
-    
-    for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>? ?? {};
-      final Timestamp? ts = data['timestamp'] as Timestamp?;
-      if (ts != null) {
-        final date = ts.toDate();
-        final dateStr = '${date.year}-${date.month}-${date.day}';
-        uniqueDates.add(dateStr);
-      }
+
+    for (final note in notes) {
+      final d = note.timestamp;
+      uniqueDates.add('${d.year}-${d.month}-${d.day}');
     }
-    
-    if (uniqueDates.contains(todayStr)) {
-      return uniqueDates.length;
-    } else {
-      return uniqueDates.length + 1;
-    }
+
+    return uniqueDates.contains(todayStr)
+        ? uniqueDates.length
+        : uniqueDates.length + 1;
   }
+
+  // ─── Write operations ─────────────────────────────────────────────────────
 
   Future<String> createEntry(
     String title,
@@ -50,8 +52,9 @@ class NoteService {
     List<String> tags, {
     bool isPinned = false,
   }) async {
-    final newEntry = NoteEntity(
-      id: '',
+    final id = IdUtils.generateId();
+    final entry = NoteEntity(
+      id: id,
       title: title,
       content: content,
       timestamp: DateTime.now(),
@@ -59,8 +62,8 @@ class NoteService {
       tags: tags,
       isPinned: isPinned,
     );
-    final docRef = await _logsCollection.add(newEntry.toFirestore());
-    return docRef.id;
+    await HiveService.notesBox.put(id, entry.toJson());
+    return id;
   }
 
   Future<void> updateEntry(
@@ -71,20 +74,27 @@ class NoteService {
     List<String> tags, {
     bool isPinned = false,
   }) async {
-    await _logsCollection.doc(id).update({
-      'title': title,
-      'content': content,
-      'mood': mood,
-      'tags': tags,
-      'isPinned': isPinned,
-    });
+    final existing = HiveUtils.safeGet(HiveService.notesBox, id);
+    if (existing == null) return;
+
+    final updated = NoteEntity.fromJson(id, existing).copyWith(
+      title: title,
+      content: content,
+      mood: mood,
+      tags: tags,
+      isPinned: isPinned,
+    );
+    await HiveService.notesBox.put(id, updated.toJson());
   }
 
   Future<void> togglePin(String id, bool isPinned) async {
-    await _logsCollection.doc(id).update({'isPinned': isPinned});
+    final existing = HiveUtils.safeGet(HiveService.notesBox, id);
+    if (existing == null) return;
+    final updated = NoteEntity.fromJson(id, existing).copyWith(isPinned: isPinned);
+    await HiveService.notesBox.put(id, updated.toJson());
   }
 
   Future<void> deleteEntry(String id) async {
-    await _logsCollection.doc(id).delete();
+    await HiveService.notesBox.delete(id);
   }
 }

@@ -1,83 +1,93 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/activity.dart';
 import '../models/task.dart';
 import '../models/check_in.dart';
+import '../services/database_service.dart';
+import '../utils/id_utils.dart';
+import '../utils/date_utils.dart';
 
 class ActivityService {
-  final CollectionReference _activitiesCollection =
-      FirebaseFirestore.instance.collection('activities');
+  Future<DatabaseService> get _db async => DatabaseService.instance;
 
-  final CollectionReference _tasksCollection =
-      FirebaseFirestore.instance.collection('tasks');
+  // ─── Stream helper (periodic polling) ────────────────────────────────────
 
-  final CollectionReference _checkinsCollection =
-      FirebaseFirestore.instance.collection('checkins');
+  Stream<T> _pollStream<T>(Future<T> Function() query, {Duration interval = const Duration(seconds: 3)}) {
+    final controller = StreamController<T>.broadcast();
+    Timer? timer;
 
-  // ==================== ACTIVITIES OPERATIONS ====================
+    Future<void> emit() async {
+      try {
+        if (!controller.isClosed) controller.add(await query());
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      }
+    }
 
-  Stream<List<Activity>> getActivitiesStream() {
-    return _activitiesCollection
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => Activity.fromFirestore(doc)).toList();
-    });
+    controller.onListen = () async {
+      await emit();
+      timer = Timer.periodic(interval, (_) => emit());
+    };
+    controller.onCancel = () => timer?.cancel();
+
+    return controller.stream;
   }
+
+  // ─── Activities — streams ─────────────────────────────────────────────────
+
+  Stream<List<Activity>> getActivitiesStream() =>
+      _pollStream(() => getAllActivities());
+
+  Stream<Activity?> getActivityStream(String id) =>
+      _pollStream(() => _getActivity(id));
+
+  Stream<List<Activity>> getActiveActivitiesStream() =>
+      _pollStream(() => _getActiveActivities());
+
+  // ─── Activities — queries ─────────────────────────────────────────────────
 
   Future<List<Activity>> getAllActivities() async {
-    final snapshot = await _activitiesCollection.get();
-    return snapshot.docs.map((doc) => Activity.fromFirestore(doc)).toList();
+    final db = await (await _db).database;
+    final rows = await db.query('activities', orderBy: 'createdAt DESC');
+    return rows.map((r) => Activity.fromMap(r['id'] as String, r)).toList();
   }
 
-  Stream<Activity?> getActivityStream(String id) {
-    return _activitiesCollection.doc(id).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return Activity.fromFirestore(doc);
-    });
+  Future<Activity?> _getActivity(String id) async {
+    final db = await (await _db).database;
+    final rows = await db.query('activities', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return Activity.fromMap(rows.first['id'] as String, rows.first);
   }
 
-  Stream<List<Activity>> getActiveActivitiesStream() {
-    return _activitiesCollection
-        .where('isActive', isEqualTo: true)
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) => Activity.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
+  Future<List<Activity>> _getActiveActivities() async {
+    final db = await (await _db).database;
+    final rows = await db.query('activities', where: 'isActive = 1', orderBy: 'createdAt DESC');
+    return rows.map((r) => Activity.fromMap(r['id'] as String, r)).toList();
   }
+
+  // ─── Activities — writes ──────────────────────────────────────────────────
 
   Future<void> deactivateFinishedActivities() async {
     try {
-      final today = DateTime.now();
-      final todayMidnight = DateTime(today.year, today.month, today.day);
+      final db = await (await _db).database;
+      final today = AppDateUtils.startOfDay(DateTime.now());
+      final rows = await db.query('activities', where: 'isActive = 1');
 
-      final snapshot = await _activitiesCollection
-          .where('isActive', isEqualTo: true)
-          .get();
-
-      final writeBatch = FirebaseFirestore.instance.batch();
+      final batch = db.batch();
       int count = 0;
-
-      for (var doc in snapshot.docs) {
-        final activity = Activity.fromFirestore(doc);
+      for (final row in rows) {
+        final activity = Activity.fromMap(row['id'] as String, row);
         if (activity.endDate != null) {
-          final endMidnight = DateTime(
-            activity.endDate!.year,
-            activity.endDate!.month,
-            activity.endDate!.day,
-          );
-          if (todayMidnight.isAfter(endMidnight)) {
-            writeBatch.update(doc.reference, {'isActive': false});
+          final endMidnight = AppDateUtils.startOfDay(activity.endDate!);
+          if (today.isAfter(endMidnight)) {
+            batch.update('activities', {'isActive': 0}, where: 'id = ?', whereArgs: [activity.id]);
             count++;
           }
         }
       }
-
       if (count > 0) {
-        await writeBatch.commit();
+        await batch.commit(noResult: true);
         debugPrint("Background task: Deactivated $count finished activities.");
       }
     } catch (e) {
@@ -101,11 +111,15 @@ class ActivityService {
     bool skippable = false,
     bool reminderEnabled = true,
   }) async {
+    final db = await (await _db).database;
+    final id = IdUtils.generateId();
+    final now = DateTime.now();
+
     final newActivity = Activity(
-      id: '',
+      id: id,
       name: name,
       isActive: true,
-      timestamp: DateTime.now(),
+      timestamp: now,
       trackingType: trackingType,
       targetCount: targetCount,
       reminderEnabled: reminderEnabled,
@@ -120,46 +134,27 @@ class ActivityService {
       symbolValue: symbolValue,
       skippable: skippable,
     );
-    final docRef = await _activitiesCollection.add(newActivity.toFirestore());
 
+    final map = newActivity.toMap();
+    map['createdAt'] = now.millisecondsSinceEpoch;
+    await db.insert('activities', map);
+
+    // Seed today's task for multi-subtask activities
     if (trackingType == 'multiple' && subTaskTemplates.isNotEmpty) {
-      final List<SubTask> initialSubTasks = subTaskTemplates.map((template) {
-        final parts = template.split('|');
-        final title = parts.first;
-        final timeStr = parts.length > 1 ? parts.last : null;
-        return SubTask(
-          id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${subTaskTemplates.indexOf(template)}',
-          title: title,
-          checked: false,
-          scheduledTime: timeStr,
-        );
-      }).toList();
-
-      final newTask = Task(
-        id: '',
-        activityId: docRef.id,
-        taskName: name,
-        timestamp: DateTime.now(),
-        checked: false,
-        scheduledTime: null,
-        subTasks: initialSubTasks,
-      );
-      await _tasksCollection.add(newTask.toFirestore());
+      await _seedTodayTask(db, id, name, subTaskTemplates, now);
     }
 
-    return docRef.id;
+    return id;
   }
 
   Future<void> toggleActivity(String id, bool isActive) async {
-    await _activitiesCollection.doc(id).update({
-      'isActive': isActive,
-    });
+    final db = await (await _db).database;
+    await db.update('activities', {'isActive': isActive ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> toggleReminderEnabled(String id, bool enabled) async {
-    await _activitiesCollection.doc(id).update({
-      'reminderEnabled': enabled,
-    });
+    final db = await (await _db).database;
+    await db.update('activities', {'reminderEnabled': enabled ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> updateActivity(
@@ -176,107 +171,64 @@ class ActivityService {
     bool? skippable,
     bool? reminderEnabled,
   }) async {
-    final Map<String, dynamic> updates = {
+    final db = await (await _db).database;
+    final updates = <String, dynamic>{
       'name': name,
       'trackingType': trackingType,
       'targetCount': targetCount,
-      'repeatDays': repeatDays,
+      'repeatDays': _encodeIntList(repeatDays),
       'scheduledTime': scheduledTime,
-      'startDate': startDate != null ? Timestamp.fromDate(startDate) : null,
-      'endDate': endDate != null ? Timestamp.fromDate(endDate) : null,
-      'subTaskTemplates': subTaskTemplates,
+      'startDate': startDate?.millisecondsSinceEpoch,
+      'endDate': endDate?.millisecondsSinceEpoch,
+      'subTaskTemplates': _encodeStringList(subTaskTemplates),
     };
-    if (skippable != null) {
-      updates['skippable'] = skippable;
-    }
-    if (reminderEnabled != null) {
-      updates['reminderEnabled'] = reminderEnabled;
-    }
-    if (description != null) {
-      updates['description'] = description;
-    }
-    await _activitiesCollection.doc(id).update(updates);
+    if (skippable != null) updates['skippable'] = skippable ? 1 : 0;
+    if (reminderEnabled != null) updates['reminderEnabled'] = reminderEnabled ? 1 : 0;
+    if (description != null) updates['description'] = description;
+
+    await db.update('activities', updates, where: 'id = ?', whereArgs: [id]);
 
     if (trackingType == 'multiple' && subTaskTemplates.isNotEmpty) {
-      final todayQuery = await _tasksCollection
-          .where('activityId', isEqualTo: id)
-          .get();
-      
       final now = DateTime.now();
-      bool isToday(DateTime date) =>
-          date.day == now.day && date.month == now.month && date.year == now.year;
-      
-      DocumentSnapshot? todayDoc;
-      for (var doc in todayQuery.docs) {
-        final task = Task.fromFirestore(doc);
-        if (isToday(task.timestamp) && task.subTasks.isNotEmpty) {
-          todayDoc = doc;
-          break;
-        }
-      }
+      final todayStart = AppDateUtils.startOfDay(now);
+      final tomorrowStart = todayStart.add(const Duration(days: 1));
 
-      if (todayDoc == null) {
-        final List<SubTask> initialSubTasks = subTaskTemplates.map((template) {
-          final parts = template.split('|');
-          final title = parts.first;
-          final timeStr = parts.length > 1 ? parts.last : null;
-          return SubTask(
-            id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${subTaskTemplates.indexOf(template)}',
-            title: title,
-            checked: false,
-            scheduledTime: timeStr,
-          );
-        }).toList();
+      final rows = await db.query(
+        'tasks',
+        where: 'activityId = ? AND timestamp >= ? AND timestamp < ?',
+        whereArgs: [id, todayStart.millisecondsSinceEpoch, tomorrowStart.millisecondsSinceEpoch],
+        limit: 1,
+      );
 
-        final newTask = Task(
-          id: '',
-          activityId: id,
-          taskName: name,
-          timestamp: DateTime.now(),
-          checked: false,
-          scheduledTime: null,
-          subTasks: initialSubTasks,
-        );
-        await _tasksCollection.add(newTask.toFirestore());
+      if (rows.isEmpty) {
+        await _seedTodayTask(db, id, name, subTaskTemplates, now);
       } else {
-        final existingTask = Task.fromFirestore(todayDoc);
-        final List<SubTask> updatedSubTasks = [];
-        
-        for (var template in subTaskTemplates) {
+        // Merge existing subtask check states with updated templates
+        final existingTask = Task.fromMap(rows.first['id'] as String, rows.first);
+        final updatedSubTasks = subTaskTemplates.map((template) {
           final parts = template.split('|');
           final title = parts.first;
           final timeStr = parts.length > 1 ? parts.last : null;
-          
           final existing = existingTask.subTasks.firstWhere(
             (st) => st.title == title,
             orElse: () => SubTask(id: '', title: '', checked: false),
           );
-          
-          if (existing.id.isNotEmpty) {
-            updatedSubTasks.add(existing.copyWith(scheduledTime: timeStr));
-          } else {
-            updatedSubTasks.add(SubTask(
-              id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${subTaskTemplates.indexOf(template)}',
-              title: title,
-              checked: false,
-              scheduledTime: timeStr,
-            ));
-          }
-        }
-        
+          return existing.id.isNotEmpty
+              ? existing.copyWith(scheduledTime: timeStr)
+              : SubTask(id: IdUtils.generateId(), title: title, checked: false, scheduledTime: timeStr);
+        }).toList();
+
         final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
-        final updatedTask = existingTask.copyWith(
-          taskName: name,
-          subTasks: updatedSubTasks,
-          checked: allChecked,
-        );
-        await _tasksCollection.doc(todayDoc.id).set(updatedTask.toFirestore(), SetOptions(merge: true));
+        final updatedTask = existingTask.copyWith(taskName: name, subTasks: updatedSubTasks, checked: allChecked);
+        await db.update('tasks', updatedTask.toMap(), where: 'id = ?', whereArgs: [updatedTask.id]);
       }
     }
   }
 
   Future<void> deleteActivity(String id) async {
-    await _activitiesCollection.doc(id).delete();
+    final db = await (await _db).database;
+    // Cascade handled by FK constraint in schema
+    await db.delete('activities', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> updateActivitySymbols(
@@ -285,103 +237,90 @@ class ActivityService {
     String? symbolValue,
     String? category,
   }) async {
-    final Map<String, dynamic> updates = {};
+    final db = await (await _db).database;
+    final updates = <String, dynamic>{};
     if (symbolType != null) updates['symbolType'] = symbolType;
     if (symbolValue != null) updates['symbolValue'] = symbolValue;
     if (category != null) updates['category'] = category;
-
-    await _activitiesCollection.doc(id).update(updates);
+    if (updates.isEmpty) return;
+    await db.update('activities', updates, where: 'id = ?', whereArgs: [id]);
   }
 
-  // ==================== TASKS OPERATIONS ====================
+  // ─── Tasks — streams ──────────────────────────────────────────────────────
 
   Stream<List<Task>> getTasksStreamForCurrentWeek() {
-    final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
-    final cutoff = monday.subtract(const Duration(days: 1));
-
-    return _tasksCollection
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
-    });
+    final cutoff = AppDateUtils.startOfWeek(DateTime.now()).subtract(const Duration(days: 1));
+    return _pollStream(() => _queryTasks(since: cutoff));
   }
 
-  Stream<List<Task>> getTasksStream() {
-    return _tasksCollection
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
-    });
-  }
+  Stream<List<Task>> getTasksStream() =>
+      _pollStream(() => _queryTasks());
 
-  Stream<List<Task>> getTasksForActivityStream(String activityId) {
-    return _tasksCollection
-        .where('activityId', isEqualTo: activityId)
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
-  }
+  Stream<List<Task>> getTasksForActivityStream(String activityId) =>
+      _pollStream(() => _queryTasksForActivity(activityId));
 
   Stream<List<Task>> getTasksForActivitiesStream(List<String> activityIds) {
-    if (activityIds.isEmpty) {
-      return Stream.value(const <Task>[]);
-    }
-    // Unique list to avoid duplicate query entries
-    final uniqueIds = activityIds.toSet().toList();
-    return _tasksCollection
-        .where('activityId', whereIn: uniqueIds)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
-    });
+    if (activityIds.isEmpty) return Stream.value(const <Task>[]);
+    return _pollStream(() => _queryTasksForActivities(activityIds));
   }
 
-  Stream<List<Task>> getCurrentAndRecentMilestoneTasksStream(
-    Activity activity,
-  ) {
+  Stream<List<Task>> getCurrentAndRecentMilestoneTasksStream(Activity activity) {
     if (activity.trackingType != 'milestone' || !activity.isActive) {
       return Stream.value(const <Task>[]);
     }
-
     final cutoff = DateTime.now().subtract(const Duration(days: 3));
-
-    List<Task> filterAndSort(Iterable<Task> source) {
-      final sorted = source
-          .where((s) => s.activityId == activity.id)
-          .toList()
+    return _pollStream(() => _queryTasksForActivity(activity.id)).map((tasks) {
+      final sorted = tasks.where((t) => t.activityId == activity.id).toList()
         ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      final currentTaskId = sorted.isNotEmpty ? sorted.first.id : null;
-      final list = sorted
-          .where((s) =>
-              s.id == currentTaskId ||
-              !s.checked ||
-              !s.timestamp.isBefore(cutoff))
+      final currentId = sorted.isNotEmpty ? sorted.first.id : null;
+      return sorted
+          .where((t) => t.id == currentId || !t.checked || !t.timestamp.isBefore(cutoff))
           .toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    }
-
-    return getTasksForActivityStream(activity.id).map(filterAndSort);
+    });
   }
 
+  // ─── Tasks — queries ──────────────────────────────────────────────────────
+
+  Future<List<Task>> _queryTasks({DateTime? since}) async {
+    final db = await (await _db).database;
+    final rows = since != null
+        ? await db.query('tasks', where: 'timestamp >= ?', whereArgs: [since.millisecondsSinceEpoch])
+        : await db.query('tasks');
+    return rows.map((r) => Task.fromMap(r['id'] as String, r)).toList();
+  }
+
+  Future<List<Task>> _queryTasksForActivity(String activityId) async {
+    final db = await (await _db).database;
+    final rows = await db.query('tasks', where: 'activityId = ?', whereArgs: [activityId], orderBy: 'timestamp DESC');
+    return rows.map((r) => Task.fromMap(r['id'] as String, r)).toList();
+  }
+
+  Future<List<Task>> _queryTasksForActivities(List<String> activityIds) async {
+    final db = await (await _db).database;
+    final unique = activityIds.toSet().toList();
+    final placeholders = List.filled(unique.length, '?').join(',');
+    final rows = await db.rawQuery('SELECT * FROM tasks WHERE activityId IN ($placeholders)', unique);
+    return rows.map((r) => Task.fromMap(r['id'] as String, r)).toList();
+  }
+
+  // ─── Tasks — writes ───────────────────────────────────────────────────────
+
   Future<void> createTask(
-    String activityId, 
-    String taskName, 
-    DateTime timestamp, 
+    String activityId,
+    String taskName,
+    DateTime timestamp,
     bool checked, {
     List<SubTask> subTasks = const [],
   }) async {
+    final db = await (await _db).database;
+
     final hasTime = taskName.contains('|');
     final cleanName = hasTime ? taskName.split('|').first : taskName;
     final timeStr = hasTime ? taskName.split('|').last : null;
 
+    final id = IdUtils.generateId();
     final newTask = Task(
-      id: '',
+      id: id,
       activityId: activityId,
       taskName: cleanName,
       timestamp: timestamp,
@@ -389,112 +328,132 @@ class ActivityService {
       scheduledTime: timeStr,
       subTasks: subTasks,
     );
-    await _tasksCollection.add(newTask.toFirestore());
-    
-    // Auto-reactivate parent activity when adding a task to it
-    await _activitiesCollection.doc(activityId).update({'isActive': true});
+
+    final map = newTask.toMap();
+    map['createdAt'] = timestamp.millisecondsSinceEpoch;
+    await db.insert('tasks', map);
+
+    // Auto-reactivate parent activity
+    await db.update('activities', {'isActive': 1}, where: 'id = ?', whereArgs: [activityId]);
+
     if (checked) {
-      final checkIn = CheckIn(
-        id: '',
-        activityId: activityId,
-        timestamp: DateTime.now(),
-        checked: true,
-        subTaskName: cleanName,
-      );
-      await _checkinsCollection.add(checkIn.toFirestore());
+      await _upsertCheckIn(db, activityId, cleanName, timestamp);
     }
   }
 
   Future<void> updateTask(Task task) async {
-    await _tasksCollection.doc(task.id).set(task.toFirestore(), SetOptions(merge: true));
+    final db = await (await _db).database;
+    await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
 
     if (task.checked) {
-      final existingQuery = await _checkinsCollection
-          .where('activityId', isEqualTo: task.activityId)
-          .where('subTaskName', isEqualTo: task.taskName)
-          .get();
-      if (existingQuery.docs.isEmpty) {
-        final checkIn = CheckIn(
-          id: '',
-          activityId: task.activityId,
-          timestamp: DateTime.now(),
-          checked: true,
-          subTaskName: task.taskName,
-        );
-        await _checkinsCollection.add(checkIn.toFirestore());
-      }
+      await _upsertCheckIn(db, task.activityId, task.taskName, DateTime.now());
     } else {
-      final existingQuery = await _checkinsCollection
-          .where('activityId', isEqualTo: task.activityId)
-          .where('subTaskName', isEqualTo: task.taskName)
-          .get();
-      for (var doc in existingQuery.docs) {
-        await doc.reference.delete();
-      }
+      await _deleteCheckInsForSubTask(db, task.activityId, task.taskName);
     }
   }
 
   Future<void> toggleTask(String id, bool checked) async {
-    final doc = await _tasksCollection.doc(id).get();
-    if (doc.exists) {
-      final task = Task.fromFirestore(doc);
-      await _tasksCollection.doc(id).update({
-        'checked': checked,
-        'completionTime': checked ? Timestamp.fromDate(DateTime.now()) : null,
-      });
+    final db = await (await _db).database;
+    final rows = await db.query('tasks', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return;
 
-      if (checked) {
-        final existingQuery = await _checkinsCollection
-            .where('activityId', isEqualTo: task.activityId)
-            .where('subTaskName', isEqualTo: task.taskName)
-            .get();
-        if (existingQuery.docs.isEmpty) {
-          final checkIn = CheckIn(
-            id: '',
-            activityId: task.activityId,
-            timestamp: DateTime.now(),
-            checked: true,
-            subTaskName: task.taskName,
-          );
-          await _checkinsCollection.add(checkIn.toFirestore());
-        }
-      } else {
-        final existingQuery = await _checkinsCollection
-            .where('activityId', isEqualTo: task.activityId)
-            .where('subTaskName', isEqualTo: task.taskName)
-            .get();
-        for (var doc in existingQuery.docs) {
-          await doc.reference.delete();
-        }
-      }
+    final task = Task.fromMap(rows.first['id'] as String, rows.first);
+    await db.update(
+      'tasks',
+      {'checked': checked ? 1 : 0, 'completionTime': checked ? DateTime.now().millisecondsSinceEpoch : null},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (checked) {
+      await _upsertCheckIn(db, task.activityId, task.taskName, DateTime.now());
+    } else {
+      await _deleteCheckInsForSubTask(db, task.activityId, task.taskName);
     }
   }
 
   Future<void> deleteTask(String id) async {
-    final doc = await _tasksCollection.doc(id).get();
-    if (doc.exists) {
-      final task = Task.fromFirestore(doc);
-      await _tasksCollection.doc(id).delete();
+    final db = await (await _db).database;
+    final rows = await db.query('tasks', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return;
 
-      final existingQuery = await _checkinsCollection
-          .where('activityId', isEqualTo: task.activityId)
-          .where('subTaskName', isEqualTo: task.taskName)
-          .get();
-      for (var doc in existingQuery.docs) {
-        await doc.reference.delete();
-      }
+    final task = Task.fromMap(rows.first['id'] as String, rows.first);
+    await db.delete('tasks', where: 'id = ?', whereArgs: [id]);
+    await _deleteCheckInsForSubTask(db, task.activityId, task.taskName);
+  }
+
+  Future<void> updateTaskSymbols(String id, {String? symbolType, String? symbolValue}) async {
+    final db = await (await _db).database;
+    final updates = <String, dynamic>{};
+    if (symbolType != null) updates['symbolType'] = symbolType;
+    if (symbolValue != null) updates['symbolValue'] = symbolValue;
+    if (updates.isEmpty) return;
+    await db.update('tasks', updates, where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
+
+  Future<void> _seedTodayTask(
+    dynamic db,
+    String activityId,
+    String name,
+    List<String> templates,
+    DateTime now,
+  ) async {
+    final subTasks = templates.map((template) {
+      final parts = template.split('|');
+      return SubTask(
+        id: IdUtils.generateId(),
+        title: parts.first,
+        checked: false,
+        scheduledTime: parts.length > 1 ? parts.last : null,
+      );
+    }).toList();
+
+    final id = IdUtils.generateId();
+    final task = Task(
+      id: id,
+      activityId: activityId,
+      taskName: name,
+      timestamp: now,
+      checked: false,
+      subTasks: subTasks,
+    );
+    final map = task.toMap();
+    map['createdAt'] = now.millisecondsSinceEpoch;
+    await db.insert('tasks', map);
+  }
+
+  Future<void> _upsertCheckIn(dynamic db, String activityId, String subTaskName, DateTime ts) async {
+    final existing = await db.query(
+      'check_ins',
+      where: 'activityId = ? AND subTaskName = ?',
+      whereArgs: [activityId, subTaskName],
+      limit: 1,
+    );
+    if (existing.isEmpty) {
+      final checkIn = CheckIn(
+        id: IdUtils.generateId(),
+        activityId: activityId,
+        timestamp: ts,
+        checked: true,
+        subTaskName: subTaskName,
+      );
+      await db.insert('check_ins', checkIn.toMap());
     }
   }
 
-  Future<void> updateTaskSymbols(
-    String id, {
-    String? symbolType,
-    String? symbolValue,
-  }) async {
-    final Map<String, dynamic> updates = {};
-    if (symbolType != null) updates['symbolType'] = symbolType;
-    if (symbolValue != null) updates['symbolValue'] = symbolValue;
-
-    await _tasksCollection.doc(id).update(updates);
+  Future<void> _deleteCheckInsForSubTask(dynamic db, String activityId, String subTaskName) async {
+    await db.delete(
+      'check_ins',
+      where: 'activityId = ? AND subTaskName = ?',
+      whereArgs: [activityId, subTaskName],
+    );
   }
+
+  // ─── Encoding helpers ─────────────────────────────────────────────────────
+
+  String _encodeIntList(List<int> list) => jsonEncode(list);
+
+  String _encodeStringList(List<String> list) => jsonEncode(list);
 }

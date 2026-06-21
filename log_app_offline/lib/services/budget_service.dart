@@ -1,52 +1,71 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:sqflite/sqflite.dart' hide Transaction;
 import '../models/budget.dart';
+import '../services/database_service.dart';
+import '../utils/id_utils.dart';
+import '../utils/db_utils.dart';
 
 class BudgetService {
-  final CollectionReference _budgetsCollection =
-      FirebaseFirestore.instance.collection('budgets');
+  Future<DatabaseService> get _db async => DatabaseService.instance;
 
-  final CollectionReference _transactionsCollection =
-      FirebaseFirestore.instance.collection('transactions');
+  // ─── Stream helper (periodic polling) ────────────────────────────────────
 
-  final DocumentReference _budgetSettingsDoc =
-      FirebaseFirestore.instance.collection('metadata').doc('budget_settings');
+  Stream<T> _pollStream<T>(Future<T> Function() query) {
+    final controller = StreamController<T>.broadcast();
+    Timer? timer;
 
-  // ==================== BUDGET OPERATIONS ====================
-
-  Stream<double> getSalaryStream() {
-    return _budgetSettingsDoc.snapshots().map((snapshot) {
-      if (snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>? ?? {};
-        return (data['monthlySalary'] as num?)?.toDouble() ?? 3000.0;
+    Future<void> emit() async {
+      try {
+        if (!controller.isClosed) controller.add(await query());
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
       }
-      return 3000.0;
-    });
+    }
+
+    controller.onListen = () async {
+      await emit();
+      timer = Timer.periodic(const Duration(seconds: 3), (_) => emit());
+    };
+    controller.onCancel = () => timer?.cancel();
+
+    return controller.stream;
+  }
+
+  // ─── Salary (budget_settings table) ──────────────────────────────────────
+
+  Stream<double> getSalaryStream() =>
+      _pollStream(() => _getSalary());
+
+  Future<double> _getSalary() async {
+    final db = await (await _db).database;
+    final rows = await db.query(
+      'budget_settings',
+      where: 'key = ?',
+      whereArgs: ['monthlySalary'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return 3000.0;
+    return double.tryParse(rows.first['value'] as String? ?? '') ?? 3000.0;
   }
 
   Future<void> updateSalary(double salary) async {
-    await _budgetSettingsDoc.set({'monthlySalary': salary}, SetOptions(merge: true));
+    final db = await (await _db).database;
+    await db.insert(
+      'budget_settings',
+      {'key': 'monthlySalary', 'value': salary.toString()},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  Stream<List<Budget>> getBudgetsStream() {
-    return _budgetsCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Budget.fromFirestore(doc)).toList();
-    });
-  }
+  // ─── Budgets ──────────────────────────────────────────────────────────────
 
-  Stream<List<Transaction>> getTransactionsStream() {
-    return _transactionsCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Transaction.fromFirestore(doc)).toList();
-    });
-  }
+  Stream<List<Budget>> getBudgetsStream() =>
+      _pollStream(() => _getAllBudgets());
 
-  Future<void> _deactivateOtherFirestoreBudgets(String activeBudgetId) async {
-    final query = await _budgetsCollection.where('isActive', isEqualTo: true).get();
-    for (var doc in query.docs) {
-      if (doc.id != activeBudgetId) {
-        await doc.reference.update({'isActive': false});
-      }
-    }
+  Future<List<Budget>> _getAllBudgets() async {
+    final db = await (await _db).database;
+    final rows = await db.query('budgets');
+    return rows.map((r) => Budget.fromMap(r['id'] as String, r)).toList();
   }
 
   Future<void> createBudget(
@@ -63,8 +82,12 @@ class BudgetService {
     bool isActive = true,
     double alertThreshold = 0.7,
   }) async {
-    final newItem = Budget(
-      id: '',
+    final db = await (await _db).database;
+    final id = IdUtils.generateId();
+    final now = DateTime.now();
+
+    final budget = Budget(
+      id: id,
       name: name,
       categoryName: categoryName,
       limit: limit,
@@ -78,9 +101,12 @@ class BudgetService {
       isActive: isActive,
       alertThreshold: alertThreshold,
     );
-    final docRef = await _budgetsCollection.add(newItem.toFirestore());
+    final map = budget.toMap();
+    map['createdAt'] = now.millisecondsSinceEpoch;
+    await db.insert('budgets', map);
+
     if (isActive) {
-      await _deactivateOtherFirestoreBudgets(docRef.id);
+      await _deactivateOtherBudgets(db, id);
     }
   }
 
@@ -99,73 +125,114 @@ class BudgetService {
     bool? isActive,
     double? alertThreshold,
   }) async {
-    final Map<String, dynamic> updates = {};
-    if (name != null) {
-      updates['name'] = name;
-    }
-    if (categoryName != null) {
-      updates['categoryName'] = categoryName;
-    }
-    if (limit != null) updates['limit'] = limit;
+    final db = await (await _db).database;
+    final updates = <String, dynamic>{};
+    if (name != null) updates['name'] = name;
+    if (categoryName != null) updates['categoryName'] = categoryName;
+    if (limit != null) updates['limit_amount'] = limit;
     if (period != null) updates['period'] = period;
     if (description != null) updates['description'] = description;
-    if (startDate != null) updates['startDate'] = Timestamp.fromDate(startDate);
-    if (endDate != null) updates['endDate'] = Timestamp.fromDate(endDate);
-    if (repeatDays != null) updates['repeatDays'] = repeatDays;
+    if (startDate != null) updates['startDate'] = DbUtils.dateToMs(startDate);
+    if (endDate != null) updates['endDate'] = DbUtils.dateToMs(endDate);
+    if (repeatDays != null) updates['repeatDays'] = DbUtils.encodeIntList(repeatDays);
     if (scheduledTime != null) updates['scheduledTime'] = scheduledTime;
-    if (repeat != null) updates['repeat'] = repeat;
-    if (isActive != null) {
-      updates['isActive'] = isActive;
-    }
+    if (repeat != null) updates['repeat'] = repeat ? 1 : 0;
+    if (isActive != null) updates['isActive'] = isActive ? 1 : 0;
     if (alertThreshold != null) updates['alertThreshold'] = alertThreshold;
-    await _budgetsCollection.doc(budgetId).update(updates);
+
+    if (updates.isEmpty) return;
+    await db.update('budgets', updates, where: 'id = ?', whereArgs: [budgetId]);
+
     if (isActive == true) {
-      await _deactivateOtherFirestoreBudgets(budgetId);
+      await _deactivateOtherBudgets(db, budgetId);
     }
   }
 
   Future<void> toggleBudget(String budgetId, bool isActive) async {
-    await _budgetsCollection.doc(budgetId).update({'isActive': isActive});
+    final db = await (await _db).database;
+    await db.update('budgets', {'isActive': isActive ? 1 : 0}, where: 'id = ?', whereArgs: [budgetId]);
     if (isActive) {
-      await _deactivateOtherFirestoreBudgets(budgetId);
+      await _deactivateOtherBudgets(db, budgetId);
     }
   }
 
   Future<void> deleteBudget(String budgetId) async {
-    await _budgetsCollection.doc(budgetId).delete();
+    final db = await (await _db).database;
+    // Cascade deletes transactions via FK constraint
+    await db.delete('budgets', where: 'id = ?', whereArgs: [budgetId]);
   }
 
-  // ==================== TRANSACTION OPERATIONS ====================
+  // ─── Transactions ─────────────────────────────────────────────────────────
 
-  Future<void> addTransaction(String budgetId, String tag, String description, double amount, {DateTime? timestamp, String paymentMethod = 'Cash'}) async {
-    final expenseTime = timestamp ?? DateTime.now();
-    await _transactionsCollection.add({
-      'budgetId': budgetId,
-      'tag': tag,
-      'description': description,
-      'amount': amount,
-      'entryDate': Timestamp.fromDate(DateTime.now()),
-      'expenseDate': Timestamp.fromDate(expenseTime),
-      'isValidated': true,
-      'rawBody': null,
-      'paymentMethod': paymentMethod,
-    });
+  Stream<List<Transaction>> getTransactionsStream() =>
+      _pollStream(() => _getAllTransactions());
+
+  Future<List<Transaction>> _getAllTransactions() async {
+    final db = await (await _db).database;
+    final rows = await db.query('transactions', orderBy: 'expenseDate DESC');
+    return rows.map((r) => Transaction.fromMap(r['id'] as String, r)).toList();
+  }
+
+  Future<void> addTransaction(
+    String budgetId,
+    String tag,
+    String description,
+    double amount, {
+    DateTime? timestamp,
+    String paymentMethod = 'Cash',
+  }) async {
+    final db = await (await _db).database;
+    final id = IdUtils.generateId();
+    final now = DateTime.now();
+    final expenseTime = timestamp ?? now;
+
+    final tx = Transaction(
+      id: id,
+      budgetId: budgetId,
+      tag: tag,
+      description: description,
+      amount: amount,
+      entryDate: now,
+      expenseDate: expenseTime,
+      isValidated: true,
+      paymentMethod: paymentMethod,
+    );
+    final map = tx.toMap();
+    map['createdAt'] = now.millisecondsSinceEpoch;
+    await db.insert('transactions', map);
   }
 
   Future<void> deleteTransaction(String transactionId) async {
-    await _transactionsCollection.doc(transactionId).delete();
+    final db = await (await _db).database;
+    await db.delete('transactions', where: 'id = ?', whereArgs: [transactionId]);
   }
 
-  Future<void> updateTransaction(Transaction updatedTransaction) async {
-    await _transactionsCollection.doc(updatedTransaction.id).update(updatedTransaction.toMap());
+  Future<void> updateTransaction(Transaction updated) async {
+    final db = await (await _db).database;
+    await db.update('transactions', updated.toMap(), where: 'id = ?', whereArgs: [updated.id]);
   }
 
   Future<void> moveTransaction({
     required String destBudgetId,
     required Transaction transaction,
   }) async {
-    final Map<String, dynamic> data = transaction.toMap();
-    data['budgetId'] = destBudgetId;
-    await _transactionsCollection.doc(transaction.id).update(data);
+    final db = await (await _db).database;
+    await db.update(
+      'transactions',
+      {'budgetId': destBudgetId},
+      where: 'id = ?',
+      whereArgs: [transaction.id],
+    );
+  }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
+
+  Future<void> _deactivateOtherBudgets(dynamic db, String activeBudgetId) async {
+    await db.update(
+      'budgets',
+      {'isActive': 0},
+      where: 'id != ? AND isActive = 1',
+      whereArgs: [activeBudgetId],
+    );
   }
 }

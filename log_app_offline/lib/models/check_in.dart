@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/db_utils.dart';
 
 class CheckIn {
   final String id;
@@ -19,38 +19,31 @@ class CheckIn {
 
   bool get skipped => _skipped ?? false;
 
-  // Convert to Firestore Map
-  Map<String, dynamic> toFirestore() {
-    final Map<String, dynamic> data = {
+  // ─── SQLite serialization ─────────────────────────────────────────────────
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
       'activityId': activityId,
-      'timestamp': Timestamp.fromDate(timestamp),
-      'checked': checked,
-      'skipped': skipped,
+      'timestamp': DbUtils.dateToMs(timestamp),
+      'checked': checked ? 1 : 0,
+      'skipped': skipped ? 1 : 0,
+      'subTaskName': subTaskName,
     };
-    if (subTaskName != null) {
-      data['subTaskName'] = subTaskName;
-    }
-    return data;
   }
 
-  // Create from Firestore Document Snapshot
-  factory CheckIn.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
-    final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
-    final DateTime dateTime = firestoreTimestamp != null 
-        ? firestoreTimestamp.toDate() 
-        : DateTime.now();
-
+  factory CheckIn.fromMap(String id, Map<String, dynamic> map) {
     return CheckIn(
-      id: doc.id,
-      activityId: data['activityId'] as String? ?? '',
-      timestamp: dateTime,
-      checked: data['checked'] as bool? ?? false,
-      subTaskName: data['subTaskName'] as String?,
-      skipped: data['skipped'] as bool? ?? false,
+      id: id,
+      activityId: map['activityId'] as String? ?? '',
+      timestamp: DbUtils.msToDate(map['timestamp'] as int?),
+      checked: map['checked'] == 1 || map['checked'] == true,
+      skipped: map['skipped'] == 1 || map['skipped'] == true,
+      subTaskName: map['subTaskName'] as String?,
     );
   }
+
+  // ─── copyWith ─────────────────────────────────────────────────────────────
 
   CheckIn copyWith({
     String? id,

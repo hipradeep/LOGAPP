@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../services/budget_service.dart';
-import '../services/notification_transaction_service.dart';
+
 import '../theme/app_theme.dart';
 import '../widgets/app_premium_fab.dart';
 import '../controllers/budget_controller.dart';
@@ -46,15 +46,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
     );
     _filterStartDate = DateTime.now().subtract(const Duration(days: 30));
     _filterEndDate = DateTime.now();
-
-    _initNotificationScannerService();
-  }
-
-  void _initNotificationScannerService() async {
-    final granted = await NotificationTransactionService.isPermissionGranted();
-    if (granted) {
-      await NotificationTransactionService.startService();
-    }
   }
 
   @override
@@ -196,8 +187,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
               _buildCalendarButton(context, selectedBudget),
               const HGapSm(),
               _buildProgressButton(context, selectedBudget),
-              const HGapSm(),
-              _buildScannerStatusButton(context, selectedBudget),
               const Spacer(),
             ],
           ),
@@ -865,101 +854,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildScannerStatusButton(BuildContext context, Budget? budget) {
-    return Tooltip(
-      message: 'Notification Scanner Settings',
-      child: GestureDetector(
-        onTap: _handleNotificationScannerSetup,
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppTheme.primaryColor.withValues(alpha: 0.25),
-              width: 1,
-            ),
-          ),
-          child: Icon(
-            Icons.notifications_active_rounded,
-            color: AppTheme.primaryAccentColor(context),
-            size: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _handleNotificationScannerSetup() async {
-    final hasPermission = await NotificationTransactionService.isPermissionGranted();
-    if (!mounted) return;
-
-    if (!hasPermission) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: AppTheme.surface(context),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            'Notification Scanner Access',
-            style: TextStyle(
-              color: AppTheme.textPrimaryColor(context),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            'LOG requires Notification Access to automatically scan and import transaction alerts from banking and UPI apps in real time. Your messages are parsed locally on your device.',
-            style: TextStyle(
-              color: AppTheme.textSecondaryColor(context),
-              fontSize: 13,
-              height: 1.4,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: _handleDismissSetupDialog,
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                  color: AppTheme.textSecondaryColor(context),
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: _handleEnableScannerAccess,
-              child: Text(
-                'Enable Access',
-                style: TextStyle(
-                  color: AppTheme.primaryAccentColor(context),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    } else {
-      await NotificationTransactionService.startService();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Notification transaction scanner is running in the background.'),
-          backgroundColor: AppTheme.successColor,
-        ),
-      );
-    }
-  }
-
-  void _handleDismissSetupDialog() {
-    Navigator.pop(context);
-  }
-
-  void _handleEnableScannerAccess() async {
-    Navigator.pop(context);
-    await NotificationTransactionService.requestPermission();
   }
 
   void _showCategoryBreakdownSheet(Budget budget, List<Transaction> transactions) {

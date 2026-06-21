@@ -4,7 +4,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../controllers/settings_controller.dart';
 import '../services/notification_service.dart';
-import '../services/notification_transaction_service.dart';
+
 import 'activity_reminder_screen.dart';
 
 class ManageNotificationScreen extends StatelessWidget {
@@ -86,84 +86,6 @@ class ManageNotificationScreen extends StatelessWidget {
                 value: controller.dailyReminder,
                 onChanged: controller.toggleReminder,
               ),
-              const _Divider(),
-              _SwitchItem(
-                icon: Icons.receipt_long_outlined,
-                iconBgColor: AppTheme.successColor,
-                title: 'Notification Scanner',
-                subtitle: 'Auto-track payments from active screen notifications (requires persistent banner)',
-                value: controller.notificationScannerEnabled,
-                onChanged: (val) => _handleNotificationScannerToggle(context, val),
-              ),
-              const _Divider(),
-              _MenuItem(
-                icon: Icons.notifications_active_rounded,
-                iconBgColor: AppTheme.secondaryColor,
-                title: 'Trigger Test Notification',
-                subtitle: 'Test banner notifications immediately (instant trigger)',
-                onTap: () async {
-                  await NotificationService.showInstantNotification(
-                    id: 9999,
-                    title: 'Test Notification 🔔',
-                    body: 'If you see this, your reminders are working perfectly!',
-                  );
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Test notification triggered instantly!'),
-                      backgroundColor: AppTheme.successColor,
-                    ),
-                  );
-                },
-              ),
-              const _Divider(),
-              _MenuItem(
-                icon: Icons.receipt_long_rounded,
-                iconBgColor: AppTheme.successColor,
-                title: 'Trigger Dummy Transaction',
-                subtitle: 'Simulate a ₹1,250 spent SMS notification to test budget capture',
-                onTap: () async {
-                  final hasScannerPermission = await NotificationTransactionService.isPermissionGranted();
-                  if (hasScannerPermission) {
-                    await NotificationTransactionService.startService();
-                  }
-                  await NotificationService.showInstantNotification(
-                    id: 9991,
-                    title: 'HDFC Bank',
-                    body: 'Alert: Rs. 1,250.00 spent on HDFC Credit Card XX1234 at Swiggy. Info: ₹1250',
-                  );
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Dummy transaction SMS notification triggered!'),
-                      backgroundColor: AppTheme.successColor,
-                    ),
-                  );
-                },
-              ),
-              const _Divider(),
-              _MenuItem(
-                icon: Icons.timer_rounded,
-                iconBgColor: AppTheme.primaryColor,
-                title: 'Test Scheduled Notification (10s)',
-                subtitle: 'Schedule a test notification to trigger in 10 seconds',
-                onTap: () async {
-                  final triggerTime = DateTime.now().add(const Duration(seconds: 10));
-                  await NotificationService.scheduleOneShotNotification(
-                    id: 889,
-                    title: 'Scheduled Test ⏰',
-                    body: 'If you see this, scheduled alarms are working!',
-                    dateTime: triggerTime,
-                  );
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Test notification scheduled for 10 seconds from now!'),
-                      backgroundColor: AppTheme.successColor,
-                    ),
-                  );
-                },
-              ),
             ],
           ),
         ),
@@ -171,68 +93,6 @@ class ManageNotificationScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _handleNotificationScannerToggle(BuildContext context, bool val) async {
-    if (val) {
-      final hasPermission = await NotificationTransactionService.isPermissionGranted();
-      if (!context.mounted) return;
-      if (!hasPermission) {
-        final confirmed = await _showNotificationScannerSetupDialog(context);
-        if (!confirmed) return;
-        await NotificationTransactionService.requestPermission();
-        final statusAfter = await NotificationTransactionService.isPermissionGranted();
-        if (!statusAfter) return;
-      }
-    }
-    await controller.toggleNotificationScanner(val);
-  }
-
-
-  Future<bool> _showNotificationScannerSetupDialog(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Notification Scanner Access',
-          style: TextStyle(
-            color: AppTheme.textPrimaryColor(context),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          'LOG requires Notification Access to automatically scan and import transaction alerts from active notifications in real time. Your messages are parsed completely offline and locally on your device.',
-          style: TextStyle(
-            color: AppTheme.textSecondaryColor(context),
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: AppTheme.textSecondaryColor(context),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Enable Access',
-              style: TextStyle(
-                color: AppTheme.primaryAccentColor(context),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
 }
 
 class _MenuItem extends StatelessWidget {

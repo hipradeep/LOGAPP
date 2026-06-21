@@ -1,155 +1,173 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/check_in.dart';
+import '../services/database_service.dart';
+import '../utils/id_utils.dart';
+import '../utils/date_utils.dart';
 
 class CheckInService {
-  final CollectionReference _checkinsCollection =
-      FirebaseFirestore.instance.collection('checkins');
+  Future<DatabaseService> get _db async => DatabaseService.instance;
 
-  // ==================== CHECK-INS OPERATIONS ====================
+  // ─── Reactive stream helpers ──────────────────────────────────────────────
+  // SQLite is not inherently reactive. We poll via a periodic stream.
+  // Controllers (CalendarScheduler etc.) that need live updates
+  // call the stream methods which re-query every 3 seconds.
+
+  Stream<List<CheckIn>> _queryStream(Future<List<CheckIn>> Function() query) {
+    final controller = StreamController<List<CheckIn>>.broadcast();
+    Timer? timer;
+
+    Future<void> emit() async {
+      try {
+        if (!controller.isClosed) controller.add(await query());
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      }
+    }
+
+    controller.onListen = () async {
+      await emit();
+      timer = Timer.periodic(const Duration(seconds: 3), (_) => emit());
+    };
+    controller.onCancel = () {
+      timer?.cancel();
+    };
+
+    return controller.stream;
+  }
+
+  // ─── Streams ──────────────────────────────────────────────────────────────
 
   Stream<List<CheckIn>> getCheckInsStream(String activityId) {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final cutoff = todayStart.subtract(const Duration(days: 2));
-
-    return _checkinsCollection
-        .where('activityId', isEqualTo: activityId)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
+    return _queryStream(() => _getCheckInsForActivitySince(
+          activityId,
+          DateTime.now().subtract(const Duration(days: 2)),
+        ));
   }
 
   Stream<List<CheckIn>> getCheckInsStreamForLast7Days(String activityId) {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final cutoff = todayStart.subtract(const Duration(days: 6)); // last 7 calendar days including today
-
-    return _checkinsCollection
-        .where('activityId', isEqualTo: activityId)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
+    return _queryStream(() => _getCheckInsForActivitySince(
+          activityId,
+          AppDateUtils.startOfDay(DateTime.now()).subtract(const Duration(days: 6)),
+        ));
   }
 
   Stream<List<CheckIn>> getCheckInsStreamForActivity(String activityId) {
-    return _checkinsCollection
-        .where('activityId', isEqualTo: activityId)
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return list;
-    });
+    return _queryStream(() => _getCheckInsForActivitySince(activityId, null));
   }
 
-
   Stream<List<CheckIn>> getCheckInsStreamForCurrentWeek() {
-    final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
-    final cutoff = monday.subtract(const Duration(days: 1));
-
-    return _checkinsCollection
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+    return _queryStream(() async {
+      final cutoff = AppDateUtils.startOfWeek(DateTime.now()).subtract(const Duration(days: 1));
+      final db = await (await _db).database;
+      final rows = await db.query(
+        'check_ins',
+        where: 'timestamp >= ?',
+        whereArgs: [cutoff.millisecondsSinceEpoch],
+      );
+      return rows.map((r) => CheckIn.fromMap(r['id'] as String, r)).toList();
     });
   }
 
   Stream<List<CheckIn>> getActiveActivitiesCheckInsStream() {
-    return _checkinsCollection
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+    return _queryStream(() async {
+      final db = await (await _db).database;
+      final rows = await db.query('check_ins', orderBy: 'timestamp DESC');
+      return rows.map((r) => CheckIn.fromMap(r['id'] as String, r)).toList();
     });
   }
 
+  // ─── Queries ──────────────────────────────────────────────────────────────
+
   Future<List<CheckIn>> getCheckInsForActivity(String activityId) async {
-    final snapshot = await _checkinsCollection
-        .where('activityId', isEqualTo: activityId)
-        .get();
-    return snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+    return _getCheckInsForActivitySince(activityId, null);
   }
 
-  Future<void> createCheckIn(String activityId, DateTime timestamp, bool checked, {bool skipped = false, String? subTaskName}) async {
+  Future<List<CheckIn>> _getCheckInsForActivitySince(
+    String activityId,
+    DateTime? since,
+  ) async {
+    final db = await (await _db).database;
+    final where = since != null
+        ? 'activityId = ? AND timestamp >= ?'
+        : 'activityId = ?';
+    final whereArgs = since != null
+        ? [activityId, since.millisecondsSinceEpoch]
+        : [activityId];
+    final rows = await db.query(
+      'check_ins',
+      where: where,
+      whereArgs: whereArgs,
+      orderBy: 'timestamp DESC',
+    );
+    return rows.map((r) => CheckIn.fromMap(r['id'] as String, r)).toList();
+  }
+
+  // ─── Write operations ─────────────────────────────────────────────────────
+
+  Future<void> createCheckIn(
+    String activityId,
+    DateTime timestamp,
+    bool checked, {
+    bool skipped = false,
+    String? subTaskName,
+  }) async {
+    final db = await (await _db).database;
+
+    // If checking in, remove any existing skipped entry for today
     if (checked) {
       try {
-        final query = await _checkinsCollection
-            .where('activityId', isEqualTo: activityId)
-            .get(const GetOptions(source: Source.cache));
-        for (var doc in query.docs) {
-          final data = doc.data() as Map<String, dynamic>? ?? {};
-          final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
-          if (firestoreTimestamp != null) {
-            final dateTime = firestoreTimestamp.toDate();
-            final isToday = dateTime.year == timestamp.year &&
-                dateTime.month == timestamp.month &&
-                dateTime.day == timestamp.day;
-            final isSkippedDoc = data['skipped'] as bool? ?? false;
-            if (isToday && isSkippedDoc) {
-              await doc.reference.delete();
-            }
-          }
-        }
+        final today = AppDateUtils.startOfDay(timestamp);
+        final tomorrow = today.add(const Duration(days: 1));
+        await db.delete(
+          'check_ins',
+          where: 'activityId = ? AND skipped = 1 AND timestamp >= ? AND timestamp < ?',
+          whereArgs: [activityId, today.millisecondsSinceEpoch, tomorrow.millisecondsSinceEpoch],
+        );
       } catch (e) {
-        debugPrint("Error deleting skipped checkin: $e");
+        debugPrint("Error deleting skipped check-in: $e");
       }
     }
 
-    final newCheckIn = CheckIn(
-      id: '',
+    final id = IdUtils.generateId();
+    final checkIn = CheckIn(
+      id: id,
       activityId: activityId,
       timestamp: timestamp,
       checked: checked,
       skipped: skipped,
       subTaskName: subTaskName,
     );
-    await _checkinsCollection.add(newCheckIn.toFirestore());
+    await db.insert('check_ins', checkIn.toMap());
   }
 
   Future<void> toggleCheckIn(String id, bool checked) async {
-    await _checkinsCollection.doc(id).update({
-      'checked': checked,
-    });
+    final db = await (await _db).database;
+    await db.update(
+      'check_ins',
+      {'checked': checked ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<void> deleteCheckIn(String id) async {
-    await _checkinsCollection.doc(id).delete();
+    final db = await (await _db).database;
+    await db.delete('check_ins', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteSkippedCheckInForToday(String activityId) async {
-    final now = DateTime.now();
+    final db = await (await _db).database;
+    final today = AppDateUtils.startOfDay(DateTime.now());
+    final tomorrow = today.add(const Duration(days: 1));
     try {
-      final query = await _checkinsCollection
-          .where('activityId', isEqualTo: activityId)
-          .get(const GetOptions(source: Source.cache));
-      for (var doc in query.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
-        if (firestoreTimestamp != null) {
-          final dateTime = firestoreTimestamp.toDate();
-          final isToday = dateTime.year == now.year &&
-              dateTime.month == now.month &&
-              dateTime.day == now.day;
-          final isSkippedDoc = data['skipped'] as bool? ?? false;
-          if (isToday && isSkippedDoc) {
-            await doc.reference.delete();
-          }
-        }
-      }
+      await db.delete(
+        'check_ins',
+        where: 'activityId = ? AND skipped = 1 AND timestamp >= ? AND timestamp < ?',
+        whereArgs: [activityId, today.millisecondsSinceEpoch, tomorrow.millisecondsSinceEpoch],
+      );
     } catch (e) {
-      debugPrint("Error deleting skipped checkin for today: $e");
+      debugPrint("Error deleting skipped check-in for today: $e");
     }
   }
 }

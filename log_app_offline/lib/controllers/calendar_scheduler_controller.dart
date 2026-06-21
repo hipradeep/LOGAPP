@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
@@ -7,6 +6,8 @@ import '../models/task.dart';
 import '../services/activity_service.dart';
 import '../services/check_in_service.dart';
 import '../services/service_locator.dart';
+import '../utils/date_utils.dart';
+import '../utils/id_utils.dart';
 
 class TimelineEvent {
   final String id;
@@ -50,8 +51,8 @@ class CalendarSchedulerController extends ChangeNotifier {
   DateTime? _currentSubscribedMonth;
 
   StreamSubscription<List<Activity>>? _activitiesSub;
-  StreamSubscription<QuerySnapshot>? _tasksSub;
-  StreamSubscription<QuerySnapshot>? _checkInsSub;
+  StreamSubscription<List<Task>>? _tasksSub;
+  StreamSubscription<List<CheckIn>>? _checkInsSub;
 
   List<Activity> _activities = [];
   List<Task> _tasks = [];
@@ -108,7 +109,6 @@ class CalendarSchedulerController extends ChangeNotifier {
     );
   }
 
-
   void _updateSubscriptions(DateTime date) {
     final startOfCurrentMonth = DateTime(date.year, date.month, 1);
     if (_currentSubscribedMonth != null &&
@@ -121,29 +121,22 @@ class CalendarSchedulerController extends ChangeNotifier {
     _tasksSub?.cancel();
     _checkInsSub?.cancel();
 
-    // Start 7 days before the beginning of the month to cover the trailing week of the previous month in grid views.
+    // Start 7 days before the beginning of the month to cover trailing week
     final cutoff = startOfCurrentMonth.subtract(const Duration(days: 7));
 
-    _tasksSub = FirebaseFirestore.instance
-        .collection('tasks')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-        .snapshots()
-        .listen(
-      (snapshot) {
-        _tasks = snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
+    _tasksSub = _activityService.getTasksStreamForCurrentWeek().listen(
+      (tasks) {
+        // Filter to cutoff locally (stream returns current-week tasks)
+        _tasks = tasks.where((t) => !t.timestamp.isBefore(cutoff)).toList();
         _tasksLoaded = true;
         _recomputeEvents();
       },
       onError: _handleStreamError,
     );
 
-    _checkInsSub = FirebaseFirestore.instance
-        .collection('checkins')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-        .snapshots()
-        .listen(
-      (snapshot) {
-        _checkIns = snapshot.docs.map((doc) => CheckIn.fromFirestore(doc)).toList();
+    _checkInsSub = _checkInService.getCheckInsStreamForCurrentWeek().listen(
+      (checkIns) {
+        _checkIns = checkIns.where((c) => !c.timestamp.isBefore(cutoff)).toList();
         _checkInsLoaded = true;
         _recomputeEvents();
       },
@@ -151,44 +144,26 @@ class CalendarSchedulerController extends ChangeNotifier {
     );
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  bool _isDateInRange(DateTime date, DateTime? start, DateTime? end) {
-    final d = DateTime(date.year, date.month, date.day);
-    if (start != null) {
-      final s = DateTime(start.year, start.month, start.day);
-      if (d.isBefore(s)) return false;
-    }
-    if (end != null) {
-      final e = DateTime(end.year, end.month, end.day);
-      if (d.isAfter(e)) return false;
-    }
-    return true;
-  }
-
   List<TimelineEvent> _computeEventsForDate(DateTime date) {
     final dayOfWeek = date.weekday;
     final List<TimelineEvent> computedEvents = [];
 
     final activeOnDay = _activities.where((activity) {
-      // Verify active, schedules, and start/end date bounds
       final repeatMatch = activity.repeatDays.contains(dayOfWeek);
-      final rangeMatch = _isDateInRange(date, activity.startDate, activity.endDate);
+      final rangeMatch = AppDateUtils.isDateInRange(date, activity.startDate, activity.endDate);
       return repeatMatch && rangeMatch;
     }).toList();
 
     for (var activity in activeOnDay) {
-      // Find Firestore Task document for this activity on date
-      final Task? todayTaskDoc = _tasks.where((t) => t.activityId == activity.id && _isSameDay(t.timestamp, date)).firstOrNull;
+      final Task? todayTaskDoc = _tasks
+          .where((t) => t.activityId == activity.id && AppDateUtils.isSameDay(t.timestamp, date))
+          .firstOrNull;
 
       if (activity.trackingType == 'single') {
-        // Habits: single daily check-ins
         if (activity.scheduledTime != null) {
           final isCompleted = _checkIns.any((c) =>
               c.activityId == activity.id &&
-              _isSameDay(c.timestamp, date) &&
+              AppDateUtils.isSameDay(c.timestamp, date) &&
               c.checked &&
               c.skipped != true);
 
@@ -206,23 +181,18 @@ class CalendarSchedulerController extends ChangeNotifier {
           ));
         }
       } else if (activity.trackingType == 'multiple') {
-        // Routines: list of subtasks
-        // If today's Task document exists, use its subtasks. Otherwise, fallback to the template subtasks.
         final List<SubTask> subTasksToProcess = [];
         if (todayTaskDoc != null && todayTaskDoc.subTasks.isNotEmpty) {
           subTasksToProcess.addAll(todayTaskDoc.subTasks);
         } else {
-          // Pre-populate from templates for display
           for (int i = 0; i < activity.subTaskTemplates.length; i++) {
             final template = activity.subTaskTemplates[i];
             final parts = template.split('|');
-            final title = parts.first;
-            final timeStr = parts.length > 1 ? parts.last : null;
             subTasksToProcess.add(SubTask(
               id: 'temp-$i-${template.hashCode}',
-              title: title,
+              title: parts.first,
               checked: false,
-              scheduledTime: timeStr,
+              scheduledTime: parts.length > 1 ? parts.last : null,
             ));
           }
         }
@@ -247,8 +217,8 @@ class CalendarSchedulerController extends ChangeNotifier {
           }
         }
       } else if (activity.trackingType == 'milestone') {
-        // Milestones: separate Task documents linked to the milestone activity
-        final milestoneTasks = _tasks.where((t) => t.activityId == activity.id && _isSameDay(t.timestamp, date));
+        final milestoneTasks = _tasks.where(
+            (t) => t.activityId == activity.id && AppDateUtils.isSameDay(t.timestamp, date));
         for (var task in milestoneTasks) {
           if (task.scheduledTime != null) {
             final parsed = TimeParser.parseTimeRange(task.scheduledTime!);
@@ -269,7 +239,6 @@ class CalendarSchedulerController extends ChangeNotifier {
       }
     }
 
-    // Sort events by start time
     computedEvents.sort((a, b) => a.startTime.compareTo(b.startTime));
     return computedEvents;
   }
@@ -284,8 +253,7 @@ class CalendarSchedulerController extends ChangeNotifier {
   double? getCompletionFractionForDate(DateTime date) {
     final dateEvents = _computeEventsForDate(date);
     if (dateEvents.isEmpty) return null;
-    final completedCount = dateEvents.where((e) => e.isCompleted).length;
-    return completedCount / dateEvents.length;
+    return dateEvents.where((e) => e.isCompleted).length / dateEvents.length;
   }
 
   DateTime _addMonths(DateTime date, int months) {
@@ -299,11 +267,8 @@ class CalendarSchedulerController extends ChangeNotifier {
       newMonth += 12;
       newYear -= 1;
     }
-
     final daysInNewMonth = DateTime(newYear, newMonth + 1, 0).day;
-    final newDay = date.day.clamp(1, daysInNewMonth);
-
-    return DateTime(newYear, newMonth, newDay, date.hour, date.minute, date.second);
+    return DateTime(newYear, newMonth, date.day.clamp(1, daysInNewMonth), date.hour, date.minute, date.second);
   }
 
   void addMonths(int months, {bool enforceLimit = false}) {
@@ -313,9 +278,7 @@ class CalendarSchedulerController extends ChangeNotifier {
       final earliestMonth = DateTime(now.year, now.month - 3, 1);
       final latestMonth = DateTime(now.year, now.month + 1, 1);
       final targetMonthStart = DateTime(targetDate.year, targetDate.month, 1);
-      if (targetMonthStart.isBefore(earliestMonth) || targetMonthStart.isAfter(latestMonth)) {
-        return;
-      }
+      if (targetMonthStart.isBefore(earliestMonth) || targetMonthStart.isAfter(latestMonth)) return;
     }
     setSelectedDate(targetDate);
   }
@@ -324,68 +287,63 @@ class CalendarSchedulerController extends ChangeNotifier {
     try {
       if (event.trackingType == 'single') {
         if (event.isCompleted) {
-          // Find the check-in and delete it
           final checkInToDelete = _checkIns.firstWhere(
-            (c) => c.activityId == event.activityId && _isSameDay(c.timestamp, _selectedDate) && c.checked && c.skipped != true,
+            (c) => c.activityId == event.activityId &&
+                AppDateUtils.isSameDay(c.timestamp, _selectedDate) &&
+                c.checked &&
+                c.skipped != true,
           );
           await _checkInService.deleteCheckIn(checkInToDelete.id);
         } else {
-          // Log a check-in
           await _checkInService.createCheckIn(event.activityId, _selectedDate, true);
         }
       } else if (event.trackingType == 'multiple') {
-        // Find parent activity to reconstruct checklist templates
         final activity = _activities.firstWhere((a) => a.id == event.activityId);
 
-        // If today's Task document doesn't exist yet, we create it first
         Task taskDoc;
         if (event.taskId == null || event.taskId!.isEmpty) {
-          final List<SubTask> initialSubTasks = activity.subTaskTemplates.map((template) {
+          // Create task locally then persist via ActivityService
+          final initialSubTasks = activity.subTaskTemplates.map((template) {
             final parts = template.split('|');
-            final title = parts.first;
-            final timeStr = parts.length > 1 ? parts.last : null;
             return SubTask(
-              id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${activity.subTaskTemplates.indexOf(template)}',
-              title: title,
+              id: IdUtils.generateId(),
+              title: parts.first,
               checked: false,
-              scheduledTime: timeStr,
+              scheduledTime: parts.length > 1 ? parts.last : null,
             );
           }).toList();
 
+          final newTaskId = IdUtils.generateId();
           final newTask = Task(
-            id: '',
+            id: newTaskId,
             activityId: activity.id,
             taskName: activity.name,
             timestamp: _selectedDate,
             checked: false,
-            scheduledTime: null,
             subTasks: initialSubTasks,
           );
-
-          // Add to firestore and get doc
-          final docRef = await FirebaseFirestore.instance.collection('tasks').add(newTask.toFirestore());
-          taskDoc = newTask.copyWith(id: docRef.id);
+          await _activityService.createTask(
+            activity.id,
+            activity.name,
+            _selectedDate,
+            false,
+            subTasks: initialSubTasks,
+          );
+          taskDoc = newTask;
         } else {
           taskDoc = _tasks.firstWhere((t) => t.id == event.taskId);
         }
 
-        // Toggle the subtask's checked status
         final updatedSubTasks = taskDoc.subTasks.map((st) {
-          // Match by title/ID
-          final match = (event.subTaskId != null && !event.subTaskId!.startsWith('temp') && st.id == event.subTaskId) ||
+          final match = (event.subTaskId != null &&
+                  !event.subTaskId!.startsWith('temp') &&
+                  st.id == event.subTaskId) ||
               (st.title == event.title);
-          if (match) {
-            return st.copyWith(checked: !event.isCompleted);
-          }
-          return st;
+          return match ? st.copyWith(checked: !event.isCompleted) : st;
         }).toList();
 
         final allChecked = updatedSubTasks.isNotEmpty && updatedSubTasks.every((st) => st.checked);
-        final updatedTask = taskDoc.copyWith(
-          subTasks: updatedSubTasks,
-          checked: allChecked,
-        );
-
+        final updatedTask = taskDoc.copyWith(subTasks: updatedSubTasks, checked: allChecked);
         await _activityService.updateTask(updatedTask);
       } else if (event.trackingType == 'milestone') {
         if (event.taskId != null && event.taskId!.isNotEmpty) {
@@ -419,17 +377,10 @@ class TimeParser {
 
     if (cleaned.contains('-') || cleaned.contains('to')) {
       final parts = cleaned.split(RegExp(r'[-–]|to'));
-      final startPart = parts[0].trim();
-      final endPart = parts[1].trim();
-
-      final start = parseSingleTime(startPart);
-      final end = parseSingleTime(endPart);
-      result = (start: start, end: end);
+      result = (start: parseSingleTime(parts[0].trim()), end: parseSingleTime(parts[1].trim()));
     } else {
       final start = parseSingleTime(cleaned);
-      int endHour = (start.hour + 1) % 24;
-      final end = TimeOfDay(hour: endHour, minute: start.minute);
-      result = (start: start, end: end);
+      result = (start: start, end: TimeOfDay(hour: (start.hour + 1) % 24, minute: start.minute));
     }
 
     _cache[timeStr] = result;
@@ -438,15 +389,11 @@ class TimeParser {
 
   static TimeOfDay parseSingleTime(String timeStr) {
     final cleaned = timeStr.trim().toLowerCase();
-
-    bool isPm = cleaned.contains('pm');
-    bool isAm = cleaned.contains('am');
-
+    final bool isPm = cleaned.contains('pm');
+    final bool isAm = cleaned.contains('am');
     final numberPart = cleaned.replaceAll(RegExp(r'[ap]m'), '').trim();
 
-    int hour = 9;
-    int minute = 0;
-
+    int hour = 9, minute = 0;
     if (numberPart.contains(':')) {
       final parts = numberPart.split(':');
       hour = int.tryParse(parts[0]) ?? 9;
@@ -457,9 +404,7 @@ class TimeParser {
 
     if (isPm && hour < 12) {
       hour += 12;
-    } else if (isAm && hour == 12) {
-      hour = 0;
-    }
+    } else if (isAm && hour == 12) hour = 0;
 
     return TimeOfDay(hour: hour, minute: minute);
   }

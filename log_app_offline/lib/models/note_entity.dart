@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/db_utils.dart';
 
 class NoteEntity {
   final String id;
@@ -19,46 +19,38 @@ class NoteEntity {
     this.isPinned = false,
   });
 
-  // Convert to Firestore Map
-  Map<String, dynamic> toFirestore() {
+  // ─── Hive serialization ───────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() {
     return {
       'title': title,
       'content': content,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': DbUtils.dateToMs(timestamp),
       'mood': mood,
       'tags': tags,
       'isPinned': isPinned,
     };
   }
 
-  // Create from Firestore Document Snapshot
-  factory NoteEntity.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
-    // Handle Timestamp parsing
-    final Timestamp? firestoreTimestamp = data['timestamp'] as Timestamp?;
-    final DateTime dateTime = firestoreTimestamp != null 
-        ? firestoreTimestamp.toDate() 
-        : DateTime.now();
-
-    // Handle Tags parsing
-    final List<dynamic>? rawTags = data['tags'] as List<dynamic>?;
-    final List<String> tagsList = rawTags != null 
-        ? List<String>.from(rawTags) 
-        : [];
+  factory NoteEntity.fromJson(String id, Map<String, dynamic> map) {
+    final rawTags = map['tags'];
+    final List<String> tagsList = rawTags is List
+        ? List<String>.from(rawTags)
+        : DbUtils.decodeStringList(rawTags as String?);
 
     return NoteEntity(
-      id: doc.id,
-      title: data['title'] as String? ?? '',
-      content: data['content'] as String? ?? '',
-      timestamp: dateTime,
-      mood: data['mood'] as String? ?? '😊',
+      id: id,
+      title: map['title'] as String? ?? '',
+      content: map['content'] as String? ?? '',
+      timestamp: DbUtils.msToDate(map['timestamp'] as int?),
+      mood: map['mood'] as String? ?? '😊',
       tags: tagsList,
-      isPinned: data['isPinned'] as bool? ?? false,
+      isPinned: map['isPinned'] as bool? ?? false,
     );
   }
 
-  // Copy with helper for modifications
+  // ─── copyWith ─────────────────────────────────────────────────────────────
+
   NoteEntity copyWith({
     String? id,
     String? title,

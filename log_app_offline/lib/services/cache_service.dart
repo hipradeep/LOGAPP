@@ -338,15 +338,4 @@ class CacheService {
     await _writeCache(cleanCache);
     return false;
   }
-
-  Future<void> saveNotificationScannerEnabled(bool enabled) async {
-    final cache = await _readCache();
-    cache['notification_scanner_enabled'] = enabled;
-    await _writeCache(cache);
-  }
-
-  Future<bool> getNotificationScannerEnabled() async {
-    final cache = await _readCache();
-    return cache['notification_scanner_enabled'] as bool? ?? true;
-  }
 }

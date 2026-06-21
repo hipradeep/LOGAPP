@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../services/cache_service.dart';
 import '../services/notification_service.dart';
-import '../services/notification_transaction_service.dart';
+
 
 class SettingsController extends ChangeNotifier {
   final CacheService _cacheService = CacheService();
@@ -9,14 +9,12 @@ class SettingsController extends ChangeNotifier {
   String _userName = 'Log User';
   String _userAvatar = '🦁';
   bool _dailyReminder = false;
-  bool _notificationScannerEnabled = true;
 
   bool _isLoading = true;
 
   String get userName => _userName;
   String get userAvatar => _userAvatar;
   bool get dailyReminder => _dailyReminder;
-  bool get notificationScannerEnabled => _notificationScannerEnabled;
 
   bool get isLoading => _isLoading;
 
@@ -31,7 +29,6 @@ class SettingsController extends ChangeNotifier {
       _userName = await _cacheService.getUserName();
       _userAvatar = await _cacheService.getUserAvatar();
       _dailyReminder = await _cacheService.getDailyReminder();
-      _notificationScannerEnabled = await _cacheService.getNotificationScannerEnabled();
 
     } catch (e) {
       // Quietly catch errors to avoid UI crashes
@@ -64,18 +61,6 @@ class SettingsController extends ChangeNotifier {
     _dailyReminder = enabled;
     notifyListeners();
   }
-
-  Future<void> toggleNotificationScanner(bool enabled) async {
-    await _cacheService.saveNotificationScannerEnabled(enabled);
-    _notificationScannerEnabled = enabled;
-    if (enabled) {
-      await NotificationTransactionService.startService();
-    } else {
-      await NotificationTransactionService.stopService();
-    }
-    notifyListeners();
-  }
-
 
 
   Future<void> resetCache() async {
