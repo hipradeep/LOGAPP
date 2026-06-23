@@ -99,13 +99,21 @@ class CacheService {
     final list = cache['quick_actions'] as List<dynamic>?;
     if (list != null) {
       final actions = list.map((e) => e.toString()).toList();
+      bool updated = false;
       if (!actions.contains('Add transaction')) {
         actions.add('Add transaction');
+        updated = true;
+      }
+      if (!actions.contains('Day planner')) {
+        actions.add('Day planner');
+        updated = true;
+      }
+      if (updated) {
         await saveQuickActions(actions);
       }
       return actions;
     }
-    return ['Focus 25m', 'Water 250ml', 'New note', 'Add transaction'];
+    return ['Focus 25m', 'Water 250ml', 'New note', 'Add transaction', 'Day planner'];
   }
 
   Future<void> clearAllCache() async {
@@ -377,5 +385,55 @@ class CacheService {
   Future<bool> getNotificationScannerEnabled() async {
     final cache = await _readCache();
     return cache['notification_scanner_enabled'] as bool? ?? true;
+  }
+
+  Future<void> savePresetDuration(String presetName, int durationMinutes) async {
+    final cache = await _readCache();
+    final Map<String, dynamic> presetDurations = Map<String, dynamic>.from(cache['preset_durations'] as Map? ?? {});
+    presetDurations[presetName.toLowerCase()] = durationMinutes;
+    cache['preset_durations'] = presetDurations;
+    await _writeCache(cache);
+  }
+
+  Future<int> getPresetDuration(String presetName, int defaultMinutes) async {
+    final cache = await _readCache();
+    final Map<String, dynamic> presetDurations = Map<String, dynamic>.from(cache['preset_durations'] as Map? ?? {});
+    return presetDurations[presetName.toLowerCase()] as int? ?? defaultMinutes;
+  }
+
+  Future<void> saveCustomPresets(List<Map<String, dynamic>> presets) async {
+    final cache = await _readCache();
+    cache['pomodoro_custom_presets'] = presets;
+    await _writeCache(cache);
+  }
+
+  Future<List<Map<String, dynamic>>> getCustomPresets() async {
+    final cache = await _readCache();
+    final list = cache['pomodoro_custom_presets'] as List<dynamic>?;
+    if (list != null) {
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return [];
+  }
+
+  Future<void> saveActivePomodoroSession(Map<String, dynamic> session) async {
+    final cache = await _readCache();
+    cache['active_pomodoro_session'] = session;
+    await _writeCache(cache);
+  }
+
+  Future<Map<String, dynamic>?> getActivePomodoroSession() async {
+    final cache = await _readCache();
+    final session = cache['active_pomodoro_session'];
+    if (session != null) {
+      return Map<String, dynamic>.from(session as Map);
+    }
+    return null;
+  }
+
+  Future<void> clearActivePomodoroSession() async {
+    final cache = await _readCache();
+    cache.remove('active_pomodoro_session');
+    await _writeCache(cache);
   }
 }

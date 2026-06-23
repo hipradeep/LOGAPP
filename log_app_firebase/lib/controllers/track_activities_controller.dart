@@ -130,6 +130,10 @@ class TrackActivitiesController extends ChangeNotifier {
     String? description,
     bool skippable = false,
     bool reminderEnabled = true,
+    double weight = 1.0,
+    int points = 10,
+    int focusDuration = 25,
+    bool isPomodoroFocusEnabled = false,
   }) async {
     try {
       await _activityService.createActivity(
@@ -144,6 +148,10 @@ class TrackActivitiesController extends ChangeNotifier {
         description: description ?? '',
         skippable: skippable,
         reminderEnabled: reminderEnabled,
+        weight: weight,
+        points: points,
+        focusDuration: focusDuration,
+        isPomodoroFocusEnabled: isPomodoroFocusEnabled,
       );
     } catch (e) {
       _errorMessage = e.toString();

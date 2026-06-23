@@ -12,6 +12,7 @@ import 'services/activity_notification_sync.dart';
 import 'services/notification_transaction_service.dart';
 import 'services/service_locator.dart';
 import 'services/activity_service.dart';
+import 'services/navigation_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -146,6 +147,7 @@ class _MyAppState extends State<MyApp> {
     return AppProvider<ThemeController>(
       notifier: _themeController,
       child: MaterialApp(
+        navigatorKey: NavigationService.navigatorKey,
         title: 'LOG',
         debugShowCheckedModeBanner: false,
         themeMode: _themeController.themeMode,

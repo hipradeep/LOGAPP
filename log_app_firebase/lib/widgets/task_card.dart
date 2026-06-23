@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../models/activity.dart';
 import '../models/task.dart';
 import 'symbol_indicator.dart';
+import 'app_toast.dart';
 
 class TaskCard extends StatefulWidget {
   final Task task;
@@ -53,6 +54,23 @@ class _TaskCardState extends State<TaskCard> {
     final newList = List<SubTask>.from(widget.task.subTasks);
     newList[index] = newList[index].copyWith(checked: val);
     widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
+
+    if (val) {
+      final parent = widget.milestoneActivities.firstWhere(
+        (a) => a.id == widget.task.activityId,
+        orElse: () => Activity(
+          id: '',
+          name: '',
+          isActive: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      AppToast.show(
+        context: context,
+        message: "Rewarded ${parent.points} Stars! ⭐",
+        backgroundColor: Colors.amber[800],
+      );
+    }
   }
 
   void _deleteNestedItem(int index) {
@@ -114,7 +132,15 @@ class _TaskCardState extends State<TaskCard> {
                     padding: const EdgeInsets.only(top: 2),
                     child: GestureDetector(
                       onTap: () {
-                        widget.onToggleTask(widget.task, !widget.task.checked);
+                        final newChecked = !widget.task.checked;
+                        widget.onToggleTask(widget.task, newChecked);
+                        if (newChecked) {
+                          AppToast.show(
+                            context: context,
+                            message: "Rewarded ${parent.points} Stars! ⭐",
+                            backgroundColor: Colors.amber[800],
+                          );
+                        }
                       },
                       child: Container(
                         width: AppTheme.taskCheckboxSize,
@@ -253,6 +279,37 @@ class _TaskCardState extends State<TaskCard> {
                                 size: 12,
                                 color: AppTheme.textSecondary.withValues(alpha: 0.5),
                               ),
+                            if (widget.task.checked)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: Colors.amber.withValues(alpha: 0.25),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.star_rounded,
+                                      size: 9,
+                                      color: Colors.amber,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '${parent.points} Stars',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.amber,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -273,12 +330,12 @@ class _TaskCardState extends State<TaskCard> {
                         onTap: widget.onTap,
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
-                          padding: const EdgeInsets.all(4.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Icon(
                             widget.isExpanded
                                 ? Icons.keyboard_arrow_up_rounded
                                 : Icons.keyboard_arrow_down_rounded,
-                            size: 20,
+                            size: 24,
                             color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
                           ),
                         ),
@@ -332,7 +389,7 @@ class _TaskCardState extends State<TaskCard> {
                       },
                       behavior: HitTestBehavior.opaque,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
                             Container(
@@ -351,7 +408,7 @@ class _TaskCardState extends State<TaskCard> {
                                 ),
                               ),
                               child: item.checked
-                                  ? Icon(Icons.check, size: 11, color: Theme.of(context).colorScheme.onPrimary)
+                                  ? Icon(Icons.check, size: 13, color: Theme.of(context).colorScheme.onPrimary)
                                   : null,
                             ),
                             const SizedBox(width: 10),
@@ -360,7 +417,7 @@ class _TaskCardState extends State<TaskCard> {
                                 item.title,
                                 style: TextStyle(
                                   color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Theme.of(context).textTheme.bodyMedium!.color,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   decoration: item.checked ? TextDecoration.lineThrough : null,
                                   decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
                                 ),

@@ -116,6 +116,52 @@ class CheckInService {
       subTaskName: subTaskName,
     );
     await _checkinsCollection.add(newCheckIn.toFirestore());
+    if (checked && !skipped) {
+      unawaited(_awardXPAndCoins(activityId));
+    }
+  }
+
+  Future<void> _awardXPAndCoins(String activityId, {double scale = 1.0}) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('activities').doc(activityId).get();
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0;
+        final basePoints = (data['points'] as num?)?.toInt() ?? 10;
+
+        final coins = weight * 5.0 * scale;
+        final xp = (basePoints * scale).toInt();
+
+        final profileDoc = FirebaseFirestore.instance.collection('profile').doc('default_user');
+        await FirebaseFirestore.instance.runTransaction((transaction) async {
+          final snapshot = await transaction.get(profileDoc);
+          if (!snapshot.exists) {
+            transaction.set(profileDoc, {
+              'coins': coins,
+              'xp': xp,
+              'level': 1,
+            });
+          } else {
+            final pData = snapshot.data() ?? {};
+            final currentCoins = pData['coins'] as num? ?? 0.0;
+            final currentXp = pData['xp'] as num? ?? 0;
+
+            final newCoins = currentCoins + coins;
+            final newXp = (currentXp + xp).toInt();
+            final newLevel = (newXp / 100).floor() + 1;
+
+            transaction.update(profileDoc, {
+              'coins': newCoins,
+              'xp': newXp,
+              'level': newLevel,
+            });
+          }
+        });
+        debugPrint("Awarded $coins coins and $xp XP (scale: $scale) to profile.");
+      }
+    } catch (e) {
+      debugPrint("Error awarding XP and coins: $e");
+    }
   }
 
   Future<void> toggleCheckIn(String id, bool checked) async {

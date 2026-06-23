@@ -153,6 +153,15 @@ class _DashboardQuickActionsState extends State<DashboardQuickActions> {
         accentColor: AppTheme.successColor,
         onTap: widget.onAddTransaction,
       );
+    } else if (action == 'Day planner') {
+      return _buildActionButton(
+        context: context,
+        title: 'Day planner',
+        emoji: '📅',
+        label: 'Planner',
+        accentColor: Colors.orange,
+        onTap: () {},
+      );
     }
     return null;
   }

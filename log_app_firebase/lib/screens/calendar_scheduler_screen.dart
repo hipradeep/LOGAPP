@@ -501,10 +501,68 @@ class _CalendarSchedulerScreenState extends State<CalendarSchedulerScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   color: AppTheme.surface(context).withValues(alpha: 0.05),
-                  child: Icon(
-                    _isMonthViewExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    size: 20,
-                    color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned(
+                        left: 16,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              DateFormat('d MMMM').format(controller.selectedDate),
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.textPrimaryColor(context),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                            const HGapXs(),
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Colors.amber,
+                              size: 13,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${controller.getStarsForDate(controller.selectedDate).toInt()}/${controller.getMaxStarsForDate(controller.selectedDate).toInt()}',
+                              style: GoogleFonts.outfit(
+                                color: Colors.amber[300],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        _isMonthViewExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
+                      ),
+                      Positioned(
+                        right: 16,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.diamond_rounded,
+                              color: AppTheme.isDarkMode(context) ? const Color(0xFF22D3EE) : const Color(0xFF0891B2),
+                              size: 13,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${controller.getTotalDiamondsForHistory()}',
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.isDarkMode(context) ? const Color(0xFF22D3EE) : const Color(0xFF0891B2),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -758,6 +816,7 @@ class WeeklyHeader extends StatelessWidget {
             now: now,
             isExpanded: false,
             completionFraction: controller.getCompletionFractionForDate(date),
+            stars: controller.getStarsForDate(date),
             onDateSelected: onDateSelected,
           );
         }),
@@ -809,6 +868,7 @@ class WeeklyHeader extends StatelessWidget {
               isExpanded: true,
               isCurrentMonth: isCurrentMonth,
               completionFraction: controller.getCompletionFractionForDate(date),
+              stars: controller.getStarsForDate(date),
               onDateSelected: onDateSelected,
             );
           }).toList(),
@@ -862,6 +922,7 @@ class DateCell extends StatelessWidget {
   final bool isExpanded;
   final bool isCurrentMonth;
   final double? completionFraction;
+  final double stars;
   final ValueChanged<DateTime> onDateSelected;
 
   const DateCell({
@@ -872,6 +933,7 @@ class DateCell extends StatelessWidget {
     required this.isExpanded,
     this.isCurrentMonth = true,
     this.completionFraction,
+    required this.stars,
     required this.onDateSelected,
   });
 
@@ -897,7 +959,7 @@ class DateCell extends StatelessWidget {
       height: 32,
       decoration: BoxDecoration(
         color: isSelected
-            ? const Color(0xFFF43F5E) // Premium coral color
+            ? AppTheme.primaryColor
             : Colors.transparent,
         shape: BoxShape.circle,
         border: isToday && !isSelected
@@ -908,21 +970,60 @@ class DateCell extends StatelessWidget {
             : null,
       ),
       alignment: Alignment.center,
-      child: Text(
-        date.day.toString(),
-        style: GoogleFonts.outfit(
-          color: isSelected
-              ? Colors.white
-              : (isToday ? AppTheme.primaryAccentColor(context) : AppTheme.textPrimaryColor(context)),
-          fontSize: 13,
-          fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
-        ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          (completionFraction != null && completionFraction! >= 1.0)
+              ? Icon(
+                  Icons.diamond_rounded,
+                  color: isSelected
+                      ? Colors.white
+                      : (AppTheme.isDarkMode(context) ? const Color(0xFF22D3EE) : const Color(0xFF0891B2)),
+                  size: 14,
+                )
+              : Text(
+                  date.day.toString(),
+                  style: GoogleFonts.outfit(
+                    color: isSelected
+                        ? Colors.white
+                        : (isToday ? AppTheme.primaryAccentColor(context) : AppTheme.textPrimaryColor(context)),
+                    fontSize: 12,
+                    fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
+                    height: 1.0,
+                  ),
+                ),
+          if (stars > 0) ...[
+            const SizedBox(height: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.star_rounded,
+                  color: isSelected ? Colors.white.withValues(alpha: 0.9) : Colors.amber,
+                  size: 8,
+                ),
+                const SizedBox(width: 1),
+                Text(
+                  stars.toInt().toString(),
+                  style: GoogleFonts.outfit(
+                    color: isSelected ? Colors.white.withValues(alpha: 0.9) : Colors.amber[300],
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
 
     Widget cellContent;
     if (completionFraction != null) {
-      final Color progressColor = const Color(0xFFF43F5E); // Brand coral
+      final Color progressColor = completionFraction! >= 1.0
+          ? AppTheme.successColor
+          : AppTheme.primaryAccentColor(context);
       final Color trackColor = isSelected
           ? Colors.white.withValues(alpha: 0.3)
           : AppTheme.textSecondaryColor(context).withValues(alpha: 0.1);

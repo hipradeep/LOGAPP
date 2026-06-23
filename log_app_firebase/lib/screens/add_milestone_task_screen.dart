@@ -106,6 +106,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       initialDate = lastDate;
     }
 
+    final theme = Theme.of(context);
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -113,10 +114,15 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       lastDate: lastDate,
       builder: (context, child) {
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: ColorScheme.dark(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
               primary: AppTheme.primaryColor,
+              onPrimary: AppTheme.selectedChipTextColor(context),
               surface: AppTheme.surface(context),
+              onSurface: AppTheme.textPrimaryColor(context),
+            ),
+            dialogTheme: theme.dialogTheme.copyWith(
+              backgroundColor: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -137,15 +143,21 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
   }
 
   Future<void> _pickCustomTime() async {
+    final theme = Theme.of(context);
     final picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
       builder: (context, child) {
         return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: ColorScheme.dark(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
               primary: AppTheme.primaryColor,
+              onPrimary: AppTheme.selectedChipTextColor(context),
               surface: AppTheme.surface(context),
+              onSurface: AppTheme.textPrimaryColor(context),
+            ),
+            dialogTheme: theme.dialogTheme.copyWith(
+              backgroundColor: AppTheme.surface(context),
             ),
           ),
           child: child!,
@@ -346,6 +358,8 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
     return TextField(
       controller: _titleController,
       focusNode: _titleFocusNode,
+      keyboardType: TextInputType.multiline,
+      maxLines: null,
       style: GoogleFonts.outfit(
         fontSize: 28, 
         fontWeight: FontWeight.bold,
@@ -432,7 +446,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
     
     return Container(
       key: ValueKey(item.id),
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onLongPress: () {
@@ -473,7 +487,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                   ),
                 ),
                 child: item.checked
-                    ? Icon(Icons.check, size: 11, color: Theme.of(context).colorScheme.onPrimary)
+                    ? Icon(Icons.check, size: 13, color: Theme.of(context).colorScheme.onPrimary)
                     : null,
               ),
             ),
@@ -667,12 +681,12 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: isSelected 
-              ? AppTheme.primaryColor.withValues(alpha: 0.15) 
+              ? AppTheme.primaryColor 
               : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected 
-                ? AppTheme.primaryColor.withValues(alpha: 0.3) 
+                ? AppTheme.primaryColor 
                 : AppTheme.borderColor(context),
           ),
         ),
@@ -701,12 +715,12 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: isCustom 
-              ? AppTheme.primaryColor.withValues(alpha: 0.15) 
+              ? AppTheme.primaryColor 
               : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isCustom 
-                ? AppTheme.primaryColor.withValues(alpha: 0.3) 
+                ? AppTheme.primaryColor 
                 : AppTheme.borderColor(context),
           ),
         ),
@@ -717,7 +731,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
             Icon(
               Icons.calendar_month_rounded, 
               size: 13, 
-              color: isCustom ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+              color: isCustom ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
             ),
             if (isCustom) ...[
               const SizedBox(width: 4),
@@ -749,12 +763,12 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: hasTime 
-              ? AppTheme.primaryColor.withValues(alpha: 0.15) 
+              ? AppTheme.primaryColor 
               : AppTheme.subtleFillColor(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: hasTime 
-                ? AppTheme.primaryColor.withValues(alpha: 0.3) 
+                ? AppTheme.primaryColor 
                 : AppTheme.borderColor(context),
           ),
         ),
@@ -765,7 +779,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
             Icon(
               Icons.access_time_rounded, 
               size: 13, 
-              color: hasTime ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+              color: hasTime ? AppTheme.selectedChipTextColor(context) : AppTheme.textSecondaryColor(context),
             ),
             if (hasTime) ...[
               const SizedBox(width: 4),
@@ -787,7 +801,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                 child: Icon(
                   Icons.close_rounded,
                   size: 12,
-                  color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
+                  color: AppTheme.selectedChipTextColor(context).withValues(alpha: 0.8),
                 ),
               ),
             ],

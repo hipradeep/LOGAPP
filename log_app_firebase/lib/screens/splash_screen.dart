@@ -5,6 +5,9 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import 'main_navigation_screen.dart';
 import 'permission_screen.dart';
+import 'pomodoro_timer_screen.dart';
+import '../services/cache_service.dart';
+import '../models/activity.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -43,6 +46,47 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     await Future.delayed(const Duration(seconds: 3));
     
     if (!mounted) return;
+
+    // Check if there is an active running Pomodoro session
+    final activeSession = await CacheService().getActivePomodoroSession();
+    if (activeSession != null) {
+      final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
+      final isRunning = activeSession['isRunning'] as bool? ?? false;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (isRunning && now < endTimestamp) {
+        final activityJson = activeSession['activity'] as Map<String, dynamic>;
+        final remainingQueueJson = activeSession['remainingQueue'] as List<dynamic>? ?? [];
+        final initialDurationMinutes = activeSession['initialDurationMinutes'] as int?;
+
+        final activity = Activity.fromJson(activityJson);
+        final remainingQueue = remainingQueueJson
+            .map((a) => Activity.fromJson(Map<String, dynamic>.from(a as Map)))
+            .toList();
+
+        final secondsRemaining = ((endTimestamp - now) / 1000).round();
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PomodoroTimerScreen(
+                activity: activity,
+                remainingQueue: remainingQueue,
+                initialDurationMinutes: initialDurationMinutes,
+                initialSecondsRemaining: secondsRemaining,
+              ),
+            ),
+          );
+          return;
+        }
+      } else {
+        await CacheService().clearActivePomodoroSession();
+      }
+    }
 
     // Check if notification permission is already granted
     final isNotificationGranted = await Permission.notification.isGranted;

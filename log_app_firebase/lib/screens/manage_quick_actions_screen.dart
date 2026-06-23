@@ -13,7 +13,7 @@ class ManageQuickActionsScreen extends StatefulWidget {
 
 class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
   final CacheService _cacheService = CacheService();
-  final List<String> _allActions = ['Focus 25m', 'Water 250ml', 'New note', 'Add transaction'];
+  final List<String> _allActions = ['Focus 25m', 'Water 250ml', 'New note', 'Add transaction', 'Day planner'];
   List<String> _enabledActions = [];
   bool _isLoading = true;
 
@@ -116,6 +116,10 @@ class _ManageQuickActionsScreenState extends State<ManageQuickActionsScreen> {
                         emoji = '💵';
                         description = 'Log budget transaction';
                         accentColor = AppTheme.successColor;
+                      } else if (action == 'Day planner') {
+                        emoji = '📅';
+                        description = 'Organize daily schedule';
+                        accentColor = Colors.orange;
                       } else {
                         emoji = '📝';
                         description = 'note entry text log';

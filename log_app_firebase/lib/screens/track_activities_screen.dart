@@ -320,6 +320,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
             String? description,
             bool skippable = false,
             bool reminderEnabled = true,
+            double weight = 1.0,
+            int points = 10,
+            int focusDuration = 25,
+            bool isPomodoroFocusEnabled = false,
           }) {
             _addActivity(
               name, trackingType, targetCount,
@@ -331,6 +335,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
               description: description,
               skippable: skippable,
               reminderEnabled: reminderEnabled,
+              weight: weight,
+              points: points,
+              focusDuration: focusDuration,
+              isPomodoroFocusEnabled: isPomodoroFocusEnabled,
             );
           },
         ),
@@ -359,6 +367,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
     String? description,
     bool skippable = false,
     bool reminderEnabled = true,
+    double weight = 1.0,
+    int points = 10,
+    int focusDuration = 25,
+    bool isPomodoroFocusEnabled = false,
   }) async {
     try {
       await _controller.createActivity(
@@ -371,6 +383,10 @@ class _TrackActivitiesScreenState extends State<TrackActivitiesScreen> {
         description: description,
         skippable: skippable,
         reminderEnabled: reminderEnabled,
+        weight: weight,
+        points: points,
+        focusDuration: focusDuration,
+        isPomodoroFocusEnabled: isPomodoroFocusEnabled,
       );
     } catch (e) {
       if (mounted) {

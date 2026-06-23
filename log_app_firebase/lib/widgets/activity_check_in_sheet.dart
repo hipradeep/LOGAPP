@@ -12,6 +12,7 @@ import '../services/check_in_service.dart';
 import 'activity_heatmap.dart';
 import 'activity_bar_graph.dart';
 import 'activity_burnup_chart.dart';
+import 'app_toast.dart';
 
 class ActivityCheckInSheet extends StatefulWidget {
   final Activity activity;
@@ -815,8 +816,10 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
     try {
       await _checkInService.createCheckIn(widget.activity.id, checkInNow, true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logged check-in to Firestore.'), duration: Duration(seconds: 1)),
+      AppToast.show(
+        context: context,
+        message: "Rewarded ${widget.activity.points} Stars! ⭐",
+        backgroundColor: Colors.amber[800],
       );
     } catch (e) {
       if (!mounted) return;
@@ -894,6 +897,8 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
         ? uiItems.where((i) => !i.checked).toList()
         : uiItems;
 
+    final checkedCount = uiItems.where((i) => i.checked).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -930,127 +935,147 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: Column(
-              children: displayItems.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                final isLast = index == displayItems.length - 1;
-                final isMilestoneCustom = widget.activity.trackingType == 'milestone' && !item.isTemplate && item.subTaskId != null;
+              children: [
+                ...displayItems.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final isLast = index == displayItems.length - 1;
+                  final isMilestoneCustom = widget.activity.trackingType == 'milestone' && !item.isTemplate && item.subTaskId != null;
 
-                final Widget itemContainer = Container(
-                  margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: item.checked 
-                        ? AppTheme.primaryColor.withValues(alpha: 0.08) 
-                        : AppTheme.surface(context).withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
+                  final Widget itemContainer = Container(
+                    margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
                       color: item.checked 
-                          ? AppTheme.primaryColor.withValues(alpha: 0.25) 
-                          : AppTheme.borderColor(context),
-                      width: 1,
+                          ? AppTheme.primaryColor.withValues(alpha: 0.08) 
+                          : AppTheme.surface(context).withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: item.checked 
+                            ? AppTheme.primaryColor.withValues(alpha: 0.25) 
+                            : AppTheme.borderColor(context),
+                        width: 1,
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                item.name,
-                                style: TextStyle(
-                                  color: item.checked ? AppTheme.textSecondaryColor(context) : AppTheme.textPrimaryColor(context),
-                                  decoration: item.checked ? TextDecoration.lineThrough : null,
-                                  fontSize: 13,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  item.name,
+                                  style: TextStyle(
+                                    color: item.checked ? AppTheme.textSecondaryColor(context) : AppTheme.textPrimaryColor(context),
+                                    decoration: item.checked ? TextDecoration.lineThrough : null,
+                                    fontSize: 14,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            if (widget.activity.trackingType == 'multiple' && item.scheduledTime != null && item.scheduledTime!.isNotEmpty) ...[
-                              const HGapSm(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: item.checked
-                                      ? AppTheme.subtleFillColor(context)
-                                      : AppTheme.primaryColor.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.access_time_rounded,
-                                      size: 10,
-                                      color: item.checked
-                                          ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
-                                          : AppTheme.primaryAccentColor(context),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _formatTimeString(item.scheduledTime!),
-                                      style: TextStyle(
+                              if (widget.activity.trackingType == 'multiple' && item.scheduledTime != null && item.scheduledTime!.isNotEmpty) ...[
+                                const HGapSm(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: item.checked
+                                        ? AppTheme.subtleFillColor(context)
+                                        : AppTheme.primaryColor.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.access_time_rounded,
+                                        size: 10,
                                         color: item.checked
                                             ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
                                             : AppTheme.primaryAccentColor(context),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _formatTimeString(item.scheduledTime!),
+                                        style: TextStyle(
+                                          color: item.checked
+                                              ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.4)
+                                              : AppTheme.primaryAccentColor(context),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                      const HGapMd(),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: !_isLogAllowed() ? null : () {
-                          _toggleSubTask(item, tasks);
-                        },
-                        child: Opacity(
-                          opacity: !_isLogAllowed() ? 0.5 : 1.0,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 20,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(5),
-                                color: item.checked ? AppTheme.primaryColor : Colors.transparent,
-                                border: Border.all(
-                                  color: item.checked 
-                                      ? AppTheme.primaryColor 
-                                      : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
-                                  width: 2,
+                        const HGapMd(),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: !_isLogAllowed() ? null : () {
+                            _toggleSubTask(item, tasks);
+                          },
+                          child: Opacity(
+                            opacity: !_isLogAllowed() ? 0.5 : 1.0,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(5),
+                                  color: item.checked ? AppTheme.primaryColor : Colors.transparent,
+                                  border: Border.all(
+                                    color: item.checked 
+                                        ? AppTheme.primaryColor 
+                                        : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
+                                    width: 2,
+                                  ),
                                 ),
+                                child: item.checked
+                                    ? Icon(Icons.check, size: 13, color: AppTheme.selectedChipTextColor(context))
+                                    : null,
                               ),
-                              child: item.checked
-                                  ? Icon(Icons.check, size: 12, color: AppTheme.selectedChipTextColor(context))
-                                  : null,
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                  );
+
+                  if (isMilestoneCustom) {
+                    return GestureDetector(
+                      onLongPress: () {
+                        // Custom milestone details are managed on Milestones Tab, here we just show/check it.
+                      },
+                      child: itemContainer,
+                    );
+                  }
+                  return itemContainer;
+                }),
+                if (checkedCount > 0) ...[
+                  const VGapSm(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Rewarded ${widget.activity.points * checkedCount} Stars',
+                        style: TextStyle(
+                          color: Colors.amber[400],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
                     ],
                   ),
-                );
-
-                if (isMilestoneCustom) {
-                  return GestureDetector(
-                    onLongPress: () {
-                      // Custom milestone details are managed on Milestones Tab, here we just show/check it.
-                    },
-                    child: itemContainer,
-                  );
-                }
-                return itemContainer;
-              }).toList(),
+                ],
+              ],
             ),
           ),
       ],
@@ -1131,6 +1156,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               true,
               subTaskName: item.name,
             );
+            if (!mounted) return;
+            AppToast.show(
+              context: context,
+              message: "Rewarded ${widget.activity.points} Stars! ⭐",
+              backgroundColor: Colors.amber[800],
+            );
           }
         } else {
           // Toggle the subtask inside the existing container
@@ -1158,6 +1189,12 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
                 true,
                 subTaskName: item.name,
               );
+              if (!mounted) return;
+              AppToast.show(
+                context: context,
+                message: "Rewarded ${widget.activity.points} Stars! ⭐",
+                backgroundColor: Colors.amber[800],
+              );
             } else {
               final existing = await _checkInService.getCheckInsForActivity(widget.activity.id);
               final todayCheckIn = existing.firstWhere(
@@ -1180,6 +1217,14 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
       // Milestone standard toggle
       if (item.subTaskId != null) {
         await _activityService.toggleTask(item.subTaskId!, newChecked);
+        if (newChecked) {
+          if (!mounted) return;
+          AppToast.show(
+            context: context,
+            message: "Rewarded ${widget.activity.points} Stars! ⭐",
+            backgroundColor: Colors.amber[800],
+          );
+        }
       }
     }
   }

@@ -18,6 +18,10 @@ class AddActivityScreen extends StatefulWidget {
     String? description,
     bool skippable,
     bool reminderEnabled,
+    double weight,
+    int points,
+    int focusDuration,
+    bool isPomodoroFocusEnabled,
   }) onAdd;
   final Activity? initialActivity;
   final String? initialTrackingType;
@@ -30,6 +34,10 @@ class AddActivityScreen extends StatefulWidget {
     String? description,
     bool skippable,
     bool reminderEnabled,
+    double weight,
+    int points,
+    int focusDuration,
+    bool isPomodoroFocusEnabled,
   })? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleActive;
@@ -60,6 +68,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
   bool _dragSelectMode = true;
   bool _skippable = false;
   bool _reminderEnabled = true;
+  double _weight = 1.0;
+  int _points = 10;
+  int _focusDuration = 25;
+  bool _isPomodoroFocusEnabled = false;
 
   // Schedule fields
   List<int> _repeatDays = [1, 2, 3, 4, 5, 6, 7];
@@ -95,6 +107,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
       }
       _skippable = a.skippable;
       _reminderEnabled = a.reminderEnabled;
+      _weight = a.weight;
+      _points = a.points;
+      _focusDuration = a.focusDuration;
+      _isPomodoroFocusEnabled = a.isPomodoroFocusEnabled;
     } else if (widget.initialTrackingType != null) {
       _trackingType = widget.initialTrackingType!;
     }
@@ -178,6 +194,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         description: descriptionStr,
         skippable: _skippable,
         reminderEnabled: _reminderEnabled,
+        weight: _weight,
+        points: _points,
+        focusDuration: _focusDuration,
+        isPomodoroFocusEnabled: _isPomodoroFocusEnabled,
       );
     } else {
       widget.onAdd(
@@ -192,6 +212,10 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
         description: descriptionStr,
         skippable: _skippable,
         reminderEnabled: _reminderEnabled,
+        weight: _weight,
+        points: _points,
+        focusDuration: _focusDuration,
+        isPomodoroFocusEnabled: _isPomodoroFocusEnabled,
       );
     }
     Navigator.pop(context);
@@ -353,6 +377,14 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             const VGapLg(),
           ],
 
+          // Focus Time (Only for Single and Milestone activities)
+          if (_trackingType != 'multiple') ...[
+            _buildSectionLabel('FOCUS TIME'),
+            const VGapSm(),
+            _buildFocusDurationSelector(),
+            const VGapLg(),
+          ],
+
           // Start & End Date
           _buildSectionLabel('DATE RANGE'),
           const VGapSm(),
@@ -369,6 +401,18 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           _buildSkippableToggle(),
           const VGapMd(),
           _buildReminderEnabledToggle(),
+          const VGapLg(),
+
+          // Weight / Priority
+          _buildSectionLabel('WEIGHT / PRIORITY'),
+          const VGapSm(),
+          _buildWeightSelector(),
+          const VGapLg(),
+
+          // Base Points / XP
+          _buildSectionLabel('BASE REWARD (XP / COINS)'),
+          const VGapSm(),
+          _buildPointsSelector(),
           const VGapLg(),
 
           // Description
@@ -483,6 +527,152 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           ),
         ],
       ),
+    );
+  }
+
+  static const List<int> _focusPresets = [15, 20, 25, 30, 45, 60, 90];
+
+  Widget _buildFocusDurationSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Enable Pomodoro Focus toggle
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context).withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _isPomodoroFocusEnabled
+                  ? AppTheme.primaryColor.withValues(alpha: 0.5)
+                  : AppTheme.borderColor(context),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.center_focus_strong_rounded,
+                      color: _isPomodoroFocusEnabled
+                          ? AppTheme.primaryAccentColor(context)
+                          : AppTheme.textSecondaryColor(context),
+                      size: 20,
+                    ),
+                    const HGapMd(),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Enable Pomodoro Focus',
+                            style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const VGapXs(),
+                          Text(
+                            'Start a focus timer when this activity runs',
+                            style: AppTheme.bodySmall.copyWith(
+                              color: AppTheme.textSecondaryColor(context),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _isPomodoroFocusEnabled,
+                onChanged: (val) => setState(() => _isPomodoroFocusEnabled = val),
+                activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.5),
+                activeThumbColor: AppTheme.primaryColor,
+                inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+                inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
+              ),
+            ],
+          ),
+        ),
+        // Duration picker (dimmed when disabled)
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: _isPomodoroFocusEnabled ? 1.0 : 0.35,
+          child: IgnorePointer(
+            ignoring: !_isPomodoroFocusEnabled,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const VGapMd(),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _focusPresets.map((mins) {
+                    final selected = _focusDuration == mins;
+                    return GestureDetector(
+                      onTap: () => setState(() => _focusDuration = mins),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                              : AppTheme.surface(context).withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: selected
+                                ? AppTheme.primaryColor
+                                : AppTheme.borderColor(context),
+                            width: selected ? 2 : 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          '${mins}m',
+                          style: AppTheme.bodySmall.copyWith(
+                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            color: selected
+                                ? AppTheme.primaryAccentColor(context)
+                                : AppTheme.textSecondaryColor(context),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const VGapMd(),
+                Row(
+                  children: [
+                    Icon(Icons.timer_rounded, size: 18, color: AppTheme.primaryAccentColor(context)),
+                    const HGapSm(),
+                    Expanded(
+                      child: Slider(
+                        value: _focusDuration.toDouble(),
+                        min: 5,
+                        max: 120,
+                        divisions: 23,
+                        activeColor: AppTheme.primaryColor,
+                        inactiveColor: AppTheme.subtleFillColor(context),
+                        label: '${_focusDuration}m',
+                        onChanged: (val) => setState(() => _focusDuration = val.round()),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: Text(
+                        '${_focusDuration}m',
+                        style: AppTheme.bodySmall.copyWith(fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1298,6 +1488,96 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildWeightSelector() {
+    return Row(
+      children: [
+        _buildWeightChip('Low (1.0)', 1.0, AppTheme.successColor),
+        const HGapSm(),
+        _buildWeightChip('Medium (2.0)', 2.0, AppTheme.secondaryColor),
+        const HGapSm(),
+        _buildWeightChip('High (3.0)', 3.0, AppTheme.warningColor),
+      ],
+    );
+  }
+
+  Widget _buildWeightChip(String label, double value, Color activeColor) {
+    final isSelected = _weight == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _weight = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? activeColor.withValues(alpha: 0.12)
+                : AppTheme.surface(context).withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? activeColor.withValues(alpha: 0.6)
+                  : AppTheme.borderColor(context),
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPointsSelector() {
+    final pointOptions = [5, 10, 20, 50];
+    return Row(
+      children: pointOptions.map((pts) {
+        final isSelected = _points == pts;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: GestureDetector(
+              onTap: () => setState(() => _points = pts),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppTheme.primaryColor.withValues(alpha: 0.12)
+                      : AppTheme.surface(context).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppTheme.primaryColor.withValues(alpha: 0.6)
+                        : AppTheme.borderColor(context),
+                    width: 1.5,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    '+$pts XP',
+                    style: TextStyle(
+                      color: isSelected ? AppTheme.textPrimaryColor(context) : AppTheme.textSecondaryColor(context),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

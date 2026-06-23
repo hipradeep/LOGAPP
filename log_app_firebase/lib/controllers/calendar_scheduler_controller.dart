@@ -110,23 +110,16 @@ class CalendarSchedulerController extends ChangeNotifier {
 
 
   void _updateSubscriptions(DateTime date) {
-    final startOfCurrentMonth = DateTime(date.year, date.month, 1);
-    if (_currentSubscribedMonth != null &&
-        _currentSubscribedMonth!.year == startOfCurrentMonth.year &&
-        _currentSubscribedMonth!.month == startOfCurrentMonth.month) {
+    if (_currentSubscribedMonth != null) {
       return;
     }
-    _currentSubscribedMonth = startOfCurrentMonth;
+    _currentSubscribedMonth = date;
 
     _tasksSub?.cancel();
     _checkInsSub?.cancel();
 
-    // Start 7 days before the beginning of the month to cover the trailing week of the previous month in grid views.
-    final cutoff = startOfCurrentMonth.subtract(const Duration(days: 7));
-
     _tasksSub = FirebaseFirestore.instance
         .collection('tasks')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
         .snapshots()
         .listen(
       (snapshot) {
@@ -139,7 +132,6 @@ class CalendarSchedulerController extends ChangeNotifier {
 
     _checkInsSub = FirebaseFirestore.instance
         .collection('checkins')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
         .snapshots()
         .listen(
       (snapshot) {
@@ -286,6 +278,99 @@ class CalendarSchedulerController extends ChangeNotifier {
     if (dateEvents.isEmpty) return null;
     final completedCount = dateEvents.where((e) => e.isCompleted).length;
     return completedCount / dateEvents.length;
+  }
+
+  double getStarsForDate(DateTime date) {
+    final dateEvents = _computeEventsForDate(date);
+    if (dateEvents.isEmpty) return 0.0;
+
+    double dayStars = 0.0;
+
+    final Map<String, List<TimelineEvent>> eventsByActivity = {};
+    for (var event in dateEvents) {
+      eventsByActivity.putIfAbsent(event.activityId, () => []).add(event);
+    }
+
+    for (var entry in eventsByActivity.entries) {
+      final activityId = entry.key;
+      final activityEvents = entry.value;
+
+      final activity = _activities.firstWhere(
+        (a) => a.id == activityId,
+        orElse: () => Activity(
+          id: '',
+          name: '',
+          isActive: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      if (activity.id.isEmpty) continue;
+
+      final completedEvents = activityEvents.where((e) => e.isCompleted).length;
+      final double activityProgress = activityEvents.isNotEmpty ? completedEvents / activityEvents.length : 0.0;
+
+      dayStars += (activityProgress * activity.points);
+    }
+
+    return dayStars;
+  }
+
+  double getMaxStarsForDate(DateTime date) {
+    final dateEvents = _computeEventsForDate(date);
+    if (dateEvents.isEmpty) return 0.0;
+
+    double dayMaxStars = 0.0;
+
+    final Map<String, List<TimelineEvent>> eventsByActivity = {};
+    for (var event in dateEvents) {
+      eventsByActivity.putIfAbsent(event.activityId, () => []).add(event);
+    }
+
+    for (var entry in eventsByActivity.entries) {
+      final activityId = entry.key;
+
+      final activity = _activities.firstWhere(
+        (a) => a.id == activityId,
+        orElse: () => Activity(
+          id: '',
+          name: '',
+          isActive: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      if (activity.id.isEmpty) continue;
+
+      dayMaxStars += activity.points;
+    }
+
+    return dayMaxStars;
+  }
+
+  int getTotalDiamondsForHistory() {
+    final Set<String> uniqueDateStrings = {};
+
+    for (var task in _tasks) {
+      final date = task.timestamp;
+      final dateStr = "${date.year}-${date.month}-${date.day}";
+      uniqueDateStrings.add(dateStr);
+    }
+
+    for (var checkIn in _checkIns) {
+      final date = checkIn.timestamp;
+      final dateStr = "${date.year}-${date.month}-${date.day}";
+      uniqueDateStrings.add(dateStr);
+    }
+
+    int count = 0;
+    for (var dateStr in uniqueDateStrings) {
+      final parts = dateStr.split('-');
+      final day = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      final fraction = getCompletionFractionForDate(day);
+      if (fraction != null && fraction >= 1.0) {
+        count++;
+      }
+    }
+    return count;
   }
 
   DateTime _addMonths(DateTime date, int months) {

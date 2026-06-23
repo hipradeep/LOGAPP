@@ -100,6 +100,10 @@ class ActivityService {
     String? symbolValue,
     bool skippable = false,
     bool reminderEnabled = true,
+    double weight = 1.0,
+    int points = 10,
+    int focusDuration = 25,
+    bool isPomodoroFocusEnabled = false,
   }) async {
     final newActivity = Activity(
       id: '',
@@ -119,6 +123,10 @@ class ActivityService {
       symbolType: symbolType,
       symbolValue: symbolValue,
       skippable: skippable,
+      weight: weight,
+      points: points,
+      focusDuration: focusDuration,
+      isPomodoroFocusEnabled: isPomodoroFocusEnabled,
     );
     final docRef = await _activitiesCollection.add(newActivity.toFirestore());
 
@@ -175,6 +183,10 @@ class ActivityService {
     String? description,
     bool? skippable,
     bool? reminderEnabled,
+    double? weight,
+    int? points,
+    int? focusDuration,
+    bool? isPomodoroFocusEnabled,
   }) async {
     final Map<String, dynamic> updates = {
       'name': name,
@@ -194,6 +206,18 @@ class ActivityService {
     }
     if (description != null) {
       updates['description'] = description;
+    }
+    if (weight != null) {
+      updates['weight'] = weight;
+    }
+    if (points != null) {
+      updates['points'] = points;
+    }
+    if (focusDuration != null) {
+      updates['focusDuration'] = focusDuration;
+    }
+    if (isPomodoroFocusEnabled != null) {
+      updates['isPomodoroFocusEnabled'] = isPomodoroFocusEnabled;
     }
     await _activitiesCollection.doc(id).update(updates);
 
@@ -402,6 +426,7 @@ class ActivityService {
         subTaskName: cleanName,
       );
       await _checkinsCollection.add(checkIn.toFirestore());
+      unawaited(_awardXPAndCoins(activityId));
     }
   }
 
@@ -422,6 +447,7 @@ class ActivityService {
           subTaskName: task.taskName,
         );
         await _checkinsCollection.add(checkIn.toFirestore());
+        unawaited(_awardXPAndCoins(task.activityId));
       }
     } else {
       final existingQuery = await _checkinsCollection
@@ -457,6 +483,7 @@ class ActivityService {
             subTaskName: task.taskName,
           );
           await _checkinsCollection.add(checkIn.toFirestore());
+          unawaited(_awardXPAndCoins(task.activityId));
         }
       } else {
         final existingQuery = await _checkinsCollection
@@ -483,6 +510,49 @@ class ActivityService {
       for (var doc in existingQuery.docs) {
         await doc.reference.delete();
       }
+    }
+  }
+
+  Future<void> _awardXPAndCoins(String activityId, {double scale = 1.0}) async {
+    try {
+      final doc = await _activitiesCollection.doc(activityId).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final weight = (data['weight'] as num?)?.toDouble() ?? 1.0;
+        final basePoints = (data['points'] as num?)?.toInt() ?? 10;
+
+        final coins = weight * 5.0 * scale;
+        final xp = (basePoints * scale).toInt();
+
+        final profileDoc = FirebaseFirestore.instance.collection('profile').doc('default_user');
+        await FirebaseFirestore.instance.runTransaction((transaction) async {
+          final snapshot = await transaction.get(profileDoc);
+          if (!snapshot.exists) {
+            transaction.set(profileDoc, {
+              'coins': coins,
+              'xp': xp,
+              'level': 1,
+            });
+          } else {
+            final pData = snapshot.data() ?? {};
+            final currentCoins = pData['coins'] as num? ?? 0.0;
+            final currentXp = pData['xp'] as num? ?? 0;
+
+            final newCoins = currentCoins + coins;
+            final newXp = (currentXp + xp).toInt();
+            final newLevel = (newXp / 100).floor() + 1;
+
+            transaction.update(profileDoc, {
+              'coins': newCoins,
+              'xp': newXp,
+              'level': newLevel,
+            });
+          }
+        });
+        debugPrint("Awarded $coins coins and $xp XP (scale: $scale) to profile.");
+      }
+    } catch (e) {
+      debugPrint("Error awarding XP and coins: $e");
     }
   }
 

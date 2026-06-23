@@ -301,7 +301,7 @@ class AppTheme {
 
   // Checkbox Sizes
   static const double taskCheckboxSize = 24.0;
-  static const double subtaskCheckboxSize = 18.0;
+  static const double subtaskCheckboxSize = 20.0;
 
   // Common Gradients
   static LinearGradient get backgroundGradient => LinearGradient(

@@ -85,34 +85,48 @@ class DashboardWeeklyCalendar extends StatelessWidget {
                 final isFuture = day.isAfter(DateTime(now.year, now.month, now.day));
 
                 // Calculate completion for this day
-                int completed = 0;
+                double totalWeight = 0.0;
+                double weightedCompletionSum = 0.0;
+
                 for (var activity in activities) {
-                  final bool isDone;
+                  double completionRateOfActivity = 0.0;
+
                   if (activity.trackingType == 'milestone') {
-                    isDone = milestoneService.isMilestoneCompletedOnDay(activity, subTasks, day);
+                    final milestoneProgress = milestoneService.getMilestoneDailyCompletion(activity, subTasks, day);
+                    if (milestoneProgress == -1.0) {
+                      continue; // Exclude from score today as no tasks are scheduled
+                    }
+                    completionRateOfActivity = milestoneProgress;
                   } else {
-                    final int todayCount;
+                    final double activityProgress;
                     if (activity.trackingType == 'multiple') {
                       final dayTask = subTasks.firstWhere(
                         (s) => s.activityId == activity.id && _isSameDay(s.timestamp, day),
                         orElse: () => Task(id: '', activityId: '', taskName: '', timestamp: day, checked: false),
                       );
-                      todayCount = dayTask.subTasks.where((st) => st.checked).length;
+                      final totalSub = dayTask.subTasks.length;
+                      final checkedSub = dayTask.subTasks.where((st) => st.checked).length;
+                      activityProgress = totalSub > 0 ? checkedSub / totalSub : 0.0;
                     } else {
-                      todayCount = checkIns
+                      final todayCount = checkIns
                           .where((c) =>
                               c.activityId == activity.id &&
                               _isSameDay(c.timestamp, day) &&
                               c.checked)
                           .length;
+                      activityProgress = activity.targetCount > 0
+                          ? (todayCount / activity.targetCount).clamp(0.0, 1.0)
+                          : 0.0;
                     }
-                    isDone = todayCount >= activity.targetCount;
+                    completionRateOfActivity = activityProgress;
                   }
-                  if (isDone) completed++;
+
+                  weightedCompletionSum += (completionRateOfActivity * activity.weight);
+                  totalWeight += activity.weight;
                 }
 
                 final double completionRate =
-                    activities.isNotEmpty ? completed / activities.length : 0.0;
+                    totalWeight > 0 ? weightedCompletionSum / totalWeight : 0.0;
 
                 return _DashboardDayCircle(
                   label: dayLabels[index],

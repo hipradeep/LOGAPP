@@ -381,6 +381,10 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
             String? description,
             bool skippable = false,
             bool reminderEnabled = true,
+            double weight = 1.0,
+            int points = 10,
+            int focusDuration = 25,
+            bool isPomodoroFocusEnabled = false,
           }) async {
             await getIt<ActivityService>().createActivity(
               name,
@@ -394,6 +398,10 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
               description: description ?? '',
               skippable: skippable,
               reminderEnabled: reminderEnabled,
+              weight: weight,
+              points: points,
+              focusDuration: focusDuration,
+              isPomodoroFocusEnabled: isPomodoroFocusEnabled,
             );
           },
         ),

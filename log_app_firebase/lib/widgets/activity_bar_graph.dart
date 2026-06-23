@@ -67,7 +67,9 @@ class _ActivityBarGraphState extends State<ActivityBarGraph> {
 
     if (widget.activity.trackingType == 'single') {
       final dayCheckIns = widget.checkIns.where((c) => _isSameDay(c.timestamp, day) && c.checked && !c.skipped).toList();
-      return dayCheckIns.isNotEmpty ? 1.0 : 0.0;
+      return widget.activity.targetCount > 0
+          ? (dayCheckIns.length / widget.activity.targetCount).clamp(0.0, 1.0)
+          : 0.0;
     } else if (widget.activity.trackingType == 'multiple') {
       final task = widget.tasks.firstWhere(
         (t) => _isSameDay(t.timestamp, day),
