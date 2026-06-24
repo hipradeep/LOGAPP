@@ -7,12 +7,14 @@ import '../models/task.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_popup_menu_button.dart';
+import '../widgets/symbol_indicator.dart';
+import 'pomodoro_ready_screen.dart';
 
 class AddMilestoneTaskScreen extends StatefulWidget {
   final List<Activity> milestones;
   final String? initialActivityId;
   final Task? editTask;
-  final Future<void> Function(Activity activity, String taskName, DateTime timestamp, List<SubTask> subTasks)? onAddTask;
+  final Future<Task?> Function(Activity activity, String taskName, DateTime timestamp, List<SubTask> subTasks, String? symbolType, String? symbolValue, String? notes)? onAddTask;
   final Future<void> Function(Task task)? onEditTask;
   final Future<void> Function(Task task)? onDeleteTask;
 
@@ -33,6 +35,8 @@ class AddMilestoneTaskScreen extends StatefulWidget {
 class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
   final TextEditingController _titleController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode();
+  final TextEditingController _notesController = TextEditingController();
+  final FocusNode _notesFocusNode = FocusNode();
 
   late String _selectedMilestoneId;
   final List<SubTask> _subTasks = [];
@@ -45,6 +49,8 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
   int? _deletingSubTaskIndex;
   bool _isSaving = false;
   bool _taskChecked = false;
+  String? _symbolType;
+  String? _symbolValue;
 
   @override
   void initState() {
@@ -59,6 +65,9 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       _taskChecked = task.checked;
       _titleController.text = task.taskName;
       _selectedDate = task.timestamp;
+      _symbolType = task.symbolType;
+      _symbolValue = task.symbolValue;
+      _notesController.text = task.notes ?? '';
       if (widget.milestones.any((m) => m.id == task.activityId)) {
         _selectedMilestoneId = task.activityId;
       }
@@ -84,6 +93,8 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
   void dispose() {
     _titleController.dispose();
     _titleFocusNode.dispose();
+    _notesController.dispose();
+    _notesFocusNode.dispose();
     for (var c in _subTaskControllers) {
       c.dispose();
     }
@@ -204,6 +215,8 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
           .where((st) => st.title.trim().isNotEmpty)
           .toList();
 
+      final notes = _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null;
+
       if (widget.editTask != null) {
         final updatedTask = widget.editTask!.copyWith(
           activityId: _selectedMilestoneId,
@@ -215,13 +228,16 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
               : null,
           scheduledTime: _selectedTime != null ? _formatTimeOfDay(_selectedTime!) : null,
           subTasks: nonBlankSubTasks,
+          symbolType: _symbolType,
+          symbolValue: _symbolValue,
+          notes: notes,
         );
         if (widget.onEditTask != null) {
           await widget.onEditTask!(updatedTask);
         }
       } else {
         if (widget.onAddTask != null) {
-          await widget.onAddTask!(activity, taskName, taskDateTime, nonBlankSubTasks);
+          await widget.onAddTask!(activity, taskName, taskDateTime, nonBlankSubTasks, _symbolType, _symbolValue, notes);
         }
       }
       
@@ -276,7 +292,10 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
       title: widget.editTask != null ? 'Edit Task' : 'Add Task & Subtasks',
       showBackButton: true,
       isScrollable: true,
-      actions: widget.editTask != null ? [ _buildTaskActionsMenu() ] : null,
+      actions: [
+        _buildSaveTextButton(),
+        if (widget.editTask != null) _buildTaskActionsMenu(),
+      ],
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -289,9 +308,9 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
         const VGapMd(),
         _buildTitleField(),
         const Divider(height: 1),
-        const VGapLg(),
+        const VGapMd(),
         _buildSubTasksSection(),
-        const VGapLg(),
+        const VGapMd(),
         const Divider(height: 1),
         const VGapLg(),
         Text(
@@ -303,14 +322,17 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
           scrollDirection: Axis.horizontal,
           child: _buildDateSelectorRow(),
         ),
-        const VGapXxl(),
-        _buildSaveButton(),
+        const VGapLg(),
+        _buildNotesSection(),
         const VGapXxl(),
       ],
     );
   }
 
   Widget _buildDropdownRow() {
+    final nonBlankSubTasks = _subTasks.where((st) => st.title.trim().isNotEmpty).toList();
+    final int totalDuration = nonBlankSubTasks.fold<int>(0, (sum, item) => sum + (item.durationMinutes ?? 0));
+
     return Row(
       children: [
         Container(
@@ -350,7 +372,467 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
             ),
           ),
         ),
+        const Spacer(),
+        _buildSymbolIndicatorButton(),
+        const HGapSm(),
+        _buildTotalDurationCircle(totalDuration),
+        const HGapSm(),
+        _buildPlayFocusModeButton(totalDuration),
       ],
+    );
+  }
+
+  Widget _buildSymbolIndicatorButton() {
+    final nonBlankSubTasks = _subTasks.where((st) => st.title.trim().isNotEmpty).toList();
+    final tempTask = Task(
+      id: '',
+      activityId: _selectedMilestoneId,
+      taskName: _titleController.text,
+      timestamp: _selectedDate,
+      checked: _taskChecked,
+      subTasks: nonBlankSubTasks,
+      symbolType: _symbolType,
+      symbolValue: _symbolValue,
+    );
+
+    final hasSymbol = _symbolType != null && _symbolType!.isNotEmpty;
+    final progressKeyString = '${_symbolType}_${_symbolValue}_${nonBlankSubTasks.map((st) => st.checked ? "1" : "0").join()}';
+
+    return Tooltip(
+      message: 'Set Symbol Indicator',
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: hasSymbol
+              ? AppTheme.primaryColor.withValues(alpha: 0.15)
+              : AppTheme.surface(context).withValues(alpha: 0.4),
+          border: Border.all(
+            color: hasSymbol
+                ? AppTheme.primaryColor.withValues(alpha: 0.4)
+                : AppTheme.borderColor(context),
+            width: 1.5,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _showSymbolSelectionDialog(tempTask),
+              splashColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+              highlightColor: AppTheme.primaryColor.withValues(alpha: 0.08),
+              child: Center(
+                child: SymbolIndicator(
+                  key: ValueKey(progressKeyString),
+                  task: tempTask,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _updateLocalSymbols(String? type, String? value) {
+    setState(() {
+      _symbolType = type;
+      _symbolValue = value;
+    });
+  }
+
+  void _showSymbolSelectionDialog(Task st) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: AppTheme.surface(context),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Mark with symbol',
+                      style: TextStyle(
+                        color: AppTheme.textPrimaryColor(context),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        _updateLocalSymbols(null, null);
+                        Navigator.pop(context);
+                      },
+                      child: Text('Clear', style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 13)),
+                    ),
+                  ],
+                ),
+                const VGapSm(),
+                _buildDialogLabel('Flag'),
+                const VGapXs(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildFlagOption(st, 'red', Colors.redAccent),
+                    _buildFlagOption(st, 'yellow', Colors.amber),
+                    _buildFlagOption(st, 'purple', Colors.purpleAccent),
+                    _buildFlagOption(st, 'blue', Colors.blueAccent),
+                    _buildFlagOption(st, 'green', Colors.greenAccent),
+                  ],
+                ),
+                const VGapMd(),
+                _buildDialogLabel('Number'),
+                const VGapXs(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(5, (index) {
+                    final numStr = '${index + 1}';
+                    return _buildNumberOption(st, numStr);
+                  }),
+                ),
+                const VGapMd(),
+                _buildDialogLabel('Progress'),
+                const VGapXs(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildProgressOption(st, '0.0', 0.0),
+                    _buildProgressOption(st, '0.25', 0.25),
+                    _buildProgressOption(st, '0.5', 0.5),
+                    _buildProgressOption(st, '0.75', 0.75),
+                    _buildProgressOption(st, '1.0', 1.0),
+                  ],
+                ),
+                const VGapMd(),
+                _buildDialogLabel('Mood'),
+                const VGapXs(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildMoodOption(st, '😄'),
+                    _buildMoodOption(st, '🙂'),
+                    _buildMoodOption(st, '😐'),
+                    _buildMoodOption(st, '😔'),
+                    _buildMoodOption(st, '😫'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _buildFlagOption(Task st, String value, Color color) {
+    final isSelected = _symbolType == 'flag' && _symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        _updateLocalSymbols('flag', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.15) : AppTheme.surface(context).withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? color : AppTheme.borderColor(context),
+            width: 1.5,
+          ),
+        ),
+        child: Icon(Icons.flag_rounded, color: color, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildNumberOption(Task st, String value) {
+    final isSelected = _symbolType == 'number' && _symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        _updateLocalSymbols('number', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.2) : AppTheme.surface(context).withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textPrimaryColor(context),
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressOption(Task st, String value, double progress) {
+    final isSelected = _symbolType == 'progress' && _symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        _updateLocalSymbols('progress', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.secondaryColor.withValues(alpha: 0.15) : AppTheme.surface(context).withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppTheme.secondaryColor : AppTheme.borderColor(context),
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CustomPaint(
+              painter: PieChartPainter(
+                progress: progress,
+                color: AppTheme.secondaryColor,
+                backgroundColor: AppTheme.borderColor(context),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoodOption(Task st, String value) {
+    final isSelected = _symbolType == 'mood' && _symbolValue == value;
+    return GestureDetector(
+      onTap: () {
+        _updateLocalSymbols('mood', value);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.borderColor(context).withValues(alpha: 0.2) : AppTheme.surface(context).withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppTheme.borderColor(context) : AppTheme.borderColor(context),
+            width: 1.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          value,
+          style: const TextStyle(fontSize: 18),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayFocusModeButton(int totalDuration) {
+    final activity = widget.milestones.firstWhere((m) => m.id == _selectedMilestoneId);
+    return Tooltip(
+      message: 'Start Focus Session',
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppTheme.successColor.withValues(alpha: 0.15),
+          border: Border.all(
+            color: AppTheme.successColor.withValues(alpha: 0.4),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.successColor.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () async {
+                final title = _titleController.text.trim();
+                if (title.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a task title to start focus')),
+                  );
+                  return;
+                }
+
+                setState(() => _isSaving = true);
+                try {
+                  var taskDateTime = _selectedDate;
+                  if (_selectedTime != null) {
+                    taskDateTime = DateTime(
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
+                      _selectedTime!.hour,
+                      _selectedTime!.minute,
+                    );
+                  }
+
+                  final taskName = _selectedTime == null
+                      ? title
+                      : '$title|${_formatTimeOfDay(_selectedTime!)}';
+
+                  final nonBlankSubTasks = _subTasks
+                      .where((st) => st.title.trim().isNotEmpty)
+                      .toList();
+
+                  final notes = _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null;
+
+                  Task? savedTask;
+                  if (widget.editTask != null) {
+                    savedTask = widget.editTask!.copyWith(
+                      activityId: _selectedMilestoneId,
+                      taskName: title,
+                      timestamp: taskDateTime,
+                      checked: _taskChecked,
+                      completionTime: _taskChecked
+                          ? (widget.editTask!.completionTime ?? DateTime.now())
+                          : null,
+                      scheduledTime: _selectedTime != null ? _formatTimeOfDay(_selectedTime!) : null,
+                      subTasks: nonBlankSubTasks,
+                      symbolType: _symbolType,
+                      symbolValue: _symbolValue,
+                      notes: notes,
+                    );
+                    if (widget.onEditTask != null) {
+                      await widget.onEditTask!(savedTask);
+                    }
+                  } else {
+                    if (widget.onAddTask != null) {
+                      savedTask = await widget.onAddTask!(activity, taskName, taskDateTime, nonBlankSubTasks, _symbolType, _symbolValue, notes);
+                    }
+                  }
+
+                  if (mounted && savedTask != null) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PomodoroReadyScreen(
+                          activity: activity,
+                          remainingQueue: const [],
+                          initialMilestoneTask: savedTask,
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to start focus session: $e')),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() => _isSaving = false);
+                  }
+                }
+              },
+              splashColor: AppTheme.successColor.withValues(alpha: 0.2),
+              highlightColor: AppTheme.successColor.withValues(alpha: 0.08),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                size: 26,
+                color: AppTheme.successColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTotalDurationCircle(int totalDuration) {
+    final displayDuration = totalDuration > 0 ? totalDuration : 25;
+    
+    String durationText;
+    if (displayDuration >= 60) {
+      final hours = displayDuration ~/ 60;
+      final mins = displayDuration % 60;
+      durationText = mins > 0 ? '${hours}h ${mins}m' : '${hours}h';
+    } else {
+      durationText = '${displayDuration}m';
+    }
+
+    return Tooltip(
+      message: 'Total Task Duration',
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppTheme.primaryColor.withValues(alpha: 0.15),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.4),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              durationText,
+              style: TextStyle(
+                color: AppTheme.primaryAccentColor(context),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -467,7 +949,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                   setState(() => _deletingSubTaskIndex = null);
                 } else {
                   setState(() {
-                    _subTasks[idx] = item.copyWith(checked: !item.checked);
+                    _subTasks[idx] = _subTasks[idx].copyWith(checked: !_subTasks[idx].checked);
                   });
                 }
               },
@@ -476,17 +958,17 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                 height: AppTheme.subtaskCheckboxSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: item.checked
+                  color: _subTasks[idx].checked
                       ? AppTheme.primaryColor
                       : Colors.transparent,
                   border: Border.all(
-                    color: item.checked
+                    color: _subTasks[idx].checked
                         ? AppTheme.primaryColor
                         : AppTheme.borderColor(context),
                     width: 1.5,
                   ),
                 ),
-                child: item.checked
+                child: _subTasks[idx].checked
                     ? Icon(Icons.check, size: 13, color: Theme.of(context).colorScheme.onPrimary)
                     : null,
               ),
@@ -513,11 +995,11 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                   maxLines: null,
                   minLines: 1,
                   style: GoogleFonts.inter(
-                    color: item.checked 
+                    color: _subTasks[idx].checked 
                         ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.5) 
                         : AppTheme.textPrimaryColor(context),
-                    fontSize: 14,
-                    decoration: item.checked ? TextDecoration.lineThrough : null,
+                    fontSize: 16,
+                    decoration: _subTasks[idx].checked ? TextDecoration.lineThrough : null,
                     decorationColor: AppTheme.textSecondaryColor(context).withValues(alpha: 0.4),
                   ),
                   decoration: InputDecoration(
@@ -525,7 +1007,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                     filled: false,
                     hintStyle: GoogleFonts.inter(
                       color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.3),
-                      fontSize: 14,
+                      fontSize: 16,
                     ),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -534,7 +1016,12 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                     isDense: true,
                   ),
                   onChanged: (val) {
-                    _subTasks[idx] = item.copyWith(title: val);
+                    final wasEmpty = _subTasks[idx].title.trim().isEmpty;
+                    final isEmpty = val.trim().isEmpty;
+                    _subTasks[idx] = _subTasks[idx].copyWith(title: val);
+                    if (wasEmpty != isEmpty) {
+                      setState(() {});
+                    }
                   },
                 ),
               ),
@@ -555,7 +1042,7 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildSubTaskDurationMenu(idx, item),
+                  _buildSubTaskDurationMenu(idx),
                   const HGapSm(),
                   ReorderableDragStartListener(
                     index: idx,
@@ -573,13 +1060,14 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
     );
   }
 
-  Widget _buildSubTaskDurationMenu(int index, SubTask item) {
+  Widget _buildSubTaskDurationMenu(int index) {
+    final item = _subTasks[index];
     return PopupMenuButton<String>(
       tooltip: 'Change duration',
       onSelected: (val) {
         final int? duration = val == 'none' ? null : int.tryParse(val);
         setState(() {
-          _subTasks[index] = item.copyWith(durationMinutes: duration);
+          _subTasks[index] = _subTasks[index].copyWith(durationMinutes: duration);
         });
       },
       itemBuilder: (context) => [
@@ -811,31 +1299,26 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
     );
   }
 
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.primaryColor,
-          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 0,
-        ),
-        onPressed: _isSaving ? null : _saveTask,
-        child: _isSaving
-            ? SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(color: Theme.of(context).colorScheme.onPrimary, strokeWidth: 2),
-              )
-            : Text(
-                widget.editTask != null ? 'Save Changes' : 'Save Task',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  Widget _buildSaveTextButton() {
+    return TextButton(
+      onPressed: _isSaving ? null : _saveTask,
+      child: _isSaving
+          ? SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(
+                color: AppTheme.primaryAccentColor(context),
+                strokeWidth: 2,
               ),
-      ),
+            )
+          : Text(
+              'Save',
+              style: TextStyle(
+                color: AppTheme.primaryAccentColor(context),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
     );
   }
 
@@ -920,6 +1403,50 @@ class _AddMilestoneTaskScreenState extends State<AddMilestoneTaskScreen> {
                 style: TextStyle(color: AppTheme.errorColor, fontSize: 13),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Notes',
+          style: AppTheme.headingSmall.copyWith(fontSize: 13, color: AppTheme.textSecondaryColor(context)),
+        ),
+        const VGapMd(),
+        Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context).withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderColor(context)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: TextField(
+            controller: _notesController,
+            focusNode: _notesFocusNode,
+            keyboardType: TextInputType.multiline,
+            maxLines: null,
+            minLines: 3,
+            style: GoogleFonts.inter(
+              color: AppTheme.textPrimaryColor(context),
+              fontSize: 14,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Add notes about this task...',
+              hintStyle: GoogleFonts.inter(
+                color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.3),
+                fontSize: 14,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              isDense: true,
+            ),
           ),
         ),
       ],

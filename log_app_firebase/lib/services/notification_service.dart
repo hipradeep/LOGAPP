@@ -467,19 +467,27 @@ class NotificationService {
 
     final activityName = (activeSession['activity'] as Map)['name'] as String? ?? 'Session';
     
+    final startTimestamp = activeSession['startTimestamp'] as int?;
+    String startTimeFormatted = '';
+    if (startTimestamp != null) {
+      final startTime = DateTime.fromMillisecondsSinceEpoch(startTimestamp);
+      startTimeFormatted = ' (${DateFormat.jm().format(startTime)})';
+    }
+
     final androidDetails = AndroidNotificationDetails(
       'pomodoro_timer_channel_v3',
       'Pomodoro Active Timer',
       channelDescription: 'Real-time countdown for running Pomodoro sessions',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.low,
+      priority: Priority.low,
       ongoing: true,
       onlyAlertOnce: true,
       showWhen: false,
       usesChronometer: false,
       visibility: NotificationVisibility.public,
       icon: 'ic_timer',
-      styleInformation: const MediaStyleInformation(),
+      playSound: false,
+      enableVibration: false,
       actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(
           'resume_pomodoro',
@@ -503,7 +511,7 @@ class NotificationService {
 
     await _notificationsPlugin.show(
       8888,
-      'Paused: $activityName',
+      'Paused: $activityName$startTimeFormatted',
       '$minutes:$seconds remaining',
       notificationDetails,
       payload: 'open_pomodoro',
@@ -533,12 +541,19 @@ class NotificationService {
 
     final activityName = (activeSession['activity'] as Map)['name'] as String? ?? 'Session';
 
+    final startTimestamp = activeSession['startTimestamp'] as int?;
+    String startTimeFormatted = '';
+    if (startTimestamp != null) {
+      final startTime = DateTime.fromMillisecondsSinceEpoch(startTimestamp);
+      startTimeFormatted = ' (${DateFormat.jm().format(startTime)})';
+    }
+
     final androidDetails = AndroidNotificationDetails(
       'pomodoro_timer_channel_v3',
       'Pomodoro Active Timer',
       channelDescription: 'Real-time countdown for running Pomodoro sessions',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.low,
+      priority: Priority.low,
       ongoing: true,
       onlyAlertOnce: true,
       showWhen: true,
@@ -547,7 +562,8 @@ class NotificationService {
       chronometerCountDown: true,
       visibility: NotificationVisibility.public,
       icon: 'ic_timer',
-      styleInformation: const MediaStyleInformation(),
+      playSound: false,
+      enableVibration: false,
       actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(
           'pause_pomodoro',
@@ -568,8 +584,8 @@ class NotificationService {
 
     await _notificationsPlugin.show(
       8888,
-      null,
-      activityName,
+      'Focusing: $activityName$startTimeFormatted',
+      'Session is running in the background.',
       notificationDetails,
       payload: 'open_pomodoro',
     );
@@ -583,7 +599,7 @@ class NotificationService {
   }
 
   static Future<void> _handleOpenPomodoroAction() async {
-    if (PomodoroTimerScreen.isTimerScreenActive) {
+    if (PomodoroTimerScreen.isTimerScreenActive.value) {
       debugPrint('open_pomodoro payload received, but PomodoroTimerScreen is already active/visible.');
       return;
     }
@@ -597,6 +613,7 @@ class NotificationService {
 
     final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
     final isRunning = activeSession['isRunning'] as bool? ?? false;
+    final isRestrictMode = activeSession['isRestrictMode'] as bool? ?? true;
     final now = DateTime.now().millisecondsSinceEpoch;
     
     final isPaused = !isRunning;
@@ -626,6 +643,7 @@ class NotificationService {
               initialDurationMinutes: initialDurationMinutes,
               initialSecondsRemaining: secondsRemaining,
               initialIsRunning: isRunning,
+              isRestrictMode: isRestrictMode,
             ),
           ),
         );

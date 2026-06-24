@@ -25,7 +25,6 @@ class MilestonesScreen extends StatefulWidget {
 
 class _MilestonesScreenState extends State<MilestonesScreen> {
   late final MilestonesController _controller;
-  String? _expandedTaskId;
   final Map<String, GlobalKey> _chipKeys = {};
 
   // Accordion open/close state
@@ -185,9 +184,7 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
           tasks: _controller.todayTasks,
           isExpanded: _todayExpanded,
           onToggle: () => setState(() => _todayExpanded = !_todayExpanded),
-          expandedTaskId: _expandedTaskId,
           milestoneActivities: _controller.milestoneActivities,
-          onTaskExpansionChanged: (id) => setState(() => _expandedTaskId = id),
           onEditTask: (task) => _showEditTaskSheet(context, task),
         ),
       );
@@ -204,9 +201,7 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
           tasks: _controller.futureTasks,
           isExpanded: _futureExpanded,
           onToggle: () => setState(() => _futureExpanded = !_futureExpanded),
-          expandedTaskId: _expandedTaskId,
           milestoneActivities: _controller.milestoneActivities,
-          onTaskExpansionChanged: (id) => setState(() => _expandedTaskId = id),
           onEditTask: (task) => _showEditTaskSheet(context, task),
         ),
       );
@@ -224,9 +219,7 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
           tasks: _controller.completedTasks,
           isExpanded: _completedExpanded,
           onToggle: () => setState(() => _completedExpanded = !_completedExpanded),
-          expandedTaskId: _expandedTaskId,
           milestoneActivities: _controller.milestoneActivities,
-          onTaskExpansionChanged: (id) => setState(() => _expandedTaskId = id),
           onEditTask: (task) => _showEditTaskSheet(context, task),
         ),
       );
@@ -353,12 +346,15 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
         builder: (context) => AddMilestoneTaskScreen(
           milestones: _controller.milestoneActivities,
           initialActivityId: initialId,
-          onAddTask: (activity, taskName, timestamp, subTasks) async {
-            await _controller.createTask(
+          onAddTask: (activity, taskName, timestamp, subTasks, symbolType, symbolValue, notes) async {
+            return await _controller.createTask(
               activity,
               taskName,
               timestamp,
               subTasks: subTasks,
+              symbolType: symbolType,
+              symbolValue: symbolValue,
+              notes: notes,
             );
           },
         ),

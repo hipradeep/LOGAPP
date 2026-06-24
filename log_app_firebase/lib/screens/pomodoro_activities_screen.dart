@@ -4,12 +4,16 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_toast.dart';
 import '../models/activity.dart';
+import '../models/task.dart';
+import '../services/service_locator.dart';
+import '../services/activity_service.dart';
 import '../controllers/pomodoro_activities_controller.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/app_empty_state.dart';
 import '../services/cache_service.dart';
 import '../widgets/emoji_picker.dart';
 import 'pomodoro_timer_screen.dart';
+import 'pomodoro_ready_screen.dart';
 
 class PomodoroActivitiesScreen extends StatefulWidget {
   const PomodoroActivitiesScreen({super.key});
@@ -84,6 +88,7 @@ class _PomodoroActivitiesScreenState extends State<PomodoroActivitiesScreen> {
 
   void _startPomodoro(Activity activity, List<Activity> fullList, int currentIndex) async {
     final activeSession = await _cacheService.getActivePomodoroSession();
+    if (!mounted) return;
     if (activeSession != null) {
       final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
       final isRunning = activeSession['isRunning'] as bool? ?? false;
@@ -105,103 +110,57 @@ class _PomodoroActivitiesScreenState extends State<PomodoroActivitiesScreen> {
             ? ((endTimestamp - now) / 1000).round()
             : savedSeconds;
             
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PomodoroTimerScreen(
-                activity: activeActivity,
-                remainingQueue: remainingQueue,
-                initialDurationMinutes: initialDurationMinutes,
-                initialSecondsRemaining: secondsRemaining,
-                initialIsRunning: isRunning,
-              ),
-            ),
+        Task? milestoneTask;
+        if (activeActivity.trackingType == 'milestone') {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(child: CircularProgressIndicator()),
           );
-          return;
+          try {
+            milestoneTask = await getIt<ActivityService>().getTaskById(activeActivity.id);
+            if (!mounted) return;
+          } finally {
+            if (mounted) {
+              Navigator.pop(context);
+            }
+          }
         }
-      }
-    }
 
-    final List<Activity> queue = fullList.sublist(currentIndex + 1);
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PomodoroTimerScreen(
-            activity: activity,
-            remainingQueue: queue,
-            initialDurationMinutes: activity.focusDuration,
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PomodoroTimerScreen(
+              activity: activeActivity,
+              remainingQueue: remainingQueue,
+              initialDurationMinutes: initialDurationMinutes,
+              initialSecondsRemaining: secondsRemaining,
+              initialIsRunning: isRunning,
+              initialMilestoneTask: milestoneTask,
+            ),
           ),
-        ),
-      );
-    }
-  }
-
-  void _startPredefinedPomodoro(String name, String symbol, String key) async {
-    final activeSession = await _cacheService.getActivePomodoroSession();
-    if (activeSession != null) {
-      final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
-      final isRunning = activeSession['isRunning'] as bool? ?? false;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      
-      final isPaused = !isRunning;
-      final savedSeconds = activeSession['secondsRemaining'] as int? ?? 0;
-      
-      if ((isRunning && now < endTimestamp) || (isPaused && savedSeconds > 0)) {
-        final activeActivityJson = activeSession['activity'] as Map<String, dynamic>;
-        final activeActivity = Activity.fromJson(activeActivityJson);
-        final remainingQueueJson = activeSession['remainingQueue'] as List<dynamic>? ?? [];
-        final initialDurationMinutes = activeSession['initialDurationMinutes'] as int?;
-        final remainingQueue = remainingQueueJson
-            .map((a) => Activity.fromJson(Map<String, dynamic>.from(a as Map)))
-            .toList();
-            
-        final secondsRemaining = isRunning 
-            ? ((endTimestamp - now) / 1000).round()
-            : savedSeconds;
-            
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PomodoroTimerScreen(
-                activity: activeActivity,
-                remainingQueue: remainingQueue,
-                initialDurationMinutes: initialDurationMinutes,
-                initialSecondsRemaining: secondsRemaining,
-                initialIsRunning: isRunning,
-              ),
-            ),
-          );
-          return;
-        }
+        );
+        return;
       }
     }
 
-    final durationMins = _presetDurations[key.toLowerCase()] ?? 30;
-    final activity = Activity(
-      id: 'predefined_${key.toLowerCase()}',
-      name: name,
-      isActive: true,
-      timestamp: DateTime.now(),
-      trackingType: 'single',
-      symbolValue: symbol,
-      focusDuration: durationMins,
+    final List<Activity> queue = fullList.isEmpty ? const <Activity>[] : fullList.sublist(currentIndex + 1);
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PomodoroReadyScreen(
+          activity: activity,
+          remainingQueue: queue,
+        ),
+      ),
     );
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PomodoroTimerScreen(
-            activity: activity,
-            remainingQueue: const [],
-            initialDurationMinutes: durationMins,
-          ),
-        ),
-      );
-    }
   }
+
+
 
   void _editPresetDuration(String key, String displayName, {VoidCallback? onDelete}) async {
     final current = _presetDurations[key.toLowerCase()] ?? 30;
@@ -311,55 +270,6 @@ class _PomodoroActivitiesScreenState extends State<PomodoroActivitiesScreen> {
     }
   }
 
-  List<Widget> _buildPresetCards() {
-    final List<Widget> cards = [];
-
-    // Default presets — no delete option
-    for (final preset in _defaultPresets) {
-      final name = preset['name'] as String;
-      final symbol = preset['symbol'] as String;
-      final colorVal = preset['colorValue'] as int;
-      final key = preset['key'] as String;
-      final duration = _presetDurations[key.toLowerCase()] ?? preset['duration'] as int? ?? 30;
-
-      cards.add(_PredefinedActivityCard(
-        name: name,
-        symbol: symbol,
-        color: Color(colorVal),
-        duration: duration,
-        onTap: () => _startPredefinedPomodoro(name, symbol, key),
-        onEdit: () => _editPresetDuration(key, name),
-      ));
-    }
-
-    // Custom presets — include delete option
-    for (final preset in _customPresets) {
-      final name = preset['name'] as String;
-      final symbol = preset['symbol'] as String;
-      final colorVal = preset['colorValue'] as int;
-      final key = preset['key'] as String;
-      final duration = _presetDurations[key.toLowerCase()] ?? preset['duration'] as int? ?? 30;
-
-      cards.add(_PredefinedActivityCard(
-        name: name,
-        symbol: symbol,
-        color: Color(colorVal),
-        duration: duration,
-        onTap: () => _startPredefinedPomodoro(name, symbol, key),
-        onEdit: () => _editPresetDuration(
-          key,
-          name,
-          onDelete: () => _removeCustomPreset(key, name),
-        ),
-        onDelete: () => _removeCustomPreset(key, name),
-      ));
-    }
-
-    cards.add(_AddNewPresetCard(onTap: _addNewPreset));
-
-    return cards;
-  }
-
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Rebuilds on theme switch
@@ -368,27 +278,6 @@ class _PomodoroActivitiesScreenState extends State<PomodoroActivitiesScreen> {
       child: Builder(
         builder: (context) {
           final controller = AppProvider.watch<PomodoroActivitiesController>(context);
-          final presetCards = _buildPresetCards();
-          final int limit = _showAllPresets ? presetCards.length : 3;
-
-          final List<Widget> gridRows = [];
-          for (int i = 0; i < limit; i += 3) {
-            final List<Widget> rowItems = [];
-            for (int j = 0; j < 3; j++) {
-              if (i + j < limit) {
-                rowItems.add(Expanded(child: presetCards[i + j]));
-              } else {
-                rowItems.add(const Expanded(child: SizedBox.shrink()));
-              }
-              if (j < 2) {
-                rowItems.add(const HGapSm());
-              }
-            }
-            gridRows.add(Row(children: rowItems));
-            if (i + 3 < limit) {
-              gridRows.add(const VGapSm());
-            }
-          }
 
           return FullScreenPage(
             showScaffold: true,
@@ -438,8 +327,15 @@ class _PomodoroActivitiesScreenState extends State<PomodoroActivitiesScreen> {
               const VGapSm(),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: gridRows,
+                child: _PresetGrid(
+                  defaultPresets: _defaultPresets,
+                  customPresets: _customPresets,
+                  presetDurations: _presetDurations,
+                  showAllPresets: _showAllPresets,
+                  onStartPredefined: _startPomodoro,
+                  onEditPreset: _editPresetDuration,
+                  onRemoveCustom: _removeCustomPreset,
+                  onAddNew: _addNewPreset,
                 ),
               ),
               const VGapLg(),
@@ -489,25 +385,29 @@ class _PomodoroActivitiesScreenState extends State<PomodoroActivitiesScreen> {
 }
 
 class _PredefinedActivityCard extends StatelessWidget {
-  final String name;
-  final String symbol;
+  final Activity activity;
   final Color color;
-  final int duration;
-  final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback? onDelete;
+  final String presetKey;
+  final void Function(Activity activity) onTap;
+  final void Function(String key, String name, bool isCustom) onEdit;
+  final bool isCustom;
 
   const _PredefinedActivityCard({
-    required this.name,
-    required this.symbol,
+    required this.activity,
     required this.color,
-    required this.duration,
+    required this.presetKey,
     required this.onTap,
     required this.onEdit,
-    this.onDelete,
+    required this.isCustom,
   });
 
-  void _handleLongPress() => onEdit();
+  void _handleTap() {
+    onTap(activity);
+  }
+
+  void _handleLongPress() {
+    onEdit(presetKey, activity.name, isCustom);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -526,7 +426,7 @@ class _PredefinedActivityCard extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap,
+            onTap: _handleTap,
             onLongPress: _handleLongPress,
             splashColor: color.withValues(alpha: 0.2),
             highlightColor: color.withValues(alpha: 0.08),
@@ -537,12 +437,12 @@ class _PredefinedActivityCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      symbol,
+                      activity.symbolValue ?? '🎯',
                       style: const TextStyle(fontSize: 24),
                     ),
                     const VGapXs(),
                     Text(
-                      name,
+                      activity.name,
                       style: AppTheme.bodySmall.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimaryColor(context),
@@ -552,7 +452,7 @@ class _PredefinedActivityCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      '$duration min',
+                      '${activity.focusDuration} min',
                       style: AppTheme.bodyMicro.copyWith(
                         color: color.withValues(alpha: 0.8),
                         fontWeight: FontWeight.bold,
@@ -657,6 +557,18 @@ class _PresetDurationBottomSheetState extends State<_PresetDurationBottomSheet> 
     _duration = widget.initialDuration.toDouble();
   }
 
+  void _handleTickTap(double val) {
+    setState(() {
+      _duration = val;
+    });
+  }
+
+  void _handleSliderChanged(double val) {
+    setState(() {
+      _duration = val;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -700,22 +612,18 @@ class _PresetDurationBottomSheetState extends State<_PresetDurationBottomSheet> 
             divisions: 119,
             activeColor: AppTheme.primaryColor,
             inactiveColor: AppTheme.subtleFillColor(context),
-            onChanged: (val) {
-              setState(() {
-                _duration = val;
-              });
-            },
+            onChanged: _handleSliderChanged,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildRulerTick(context, '1m', 1),
-                _buildRulerTick(context, '30m', 30),
-                _buildRulerTick(context, '60m', 60),
-                _buildRulerTick(context, '90m', 90),
-                _buildRulerTick(context, '120m', 120),
+                _RulerTick(label: '1m', value: 1, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '30m', value: 30, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '60m', value: 60, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '90m', value: 90, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '120m', value: 120, currentDuration: _duration, onTap: _handleTickTap),
               ],
             ),
           ),
@@ -766,44 +674,6 @@ class _PresetDurationBottomSheetState extends State<_PresetDurationBottomSheet> 
       ),
     );
   }
-
-  Widget _buildRulerTick(BuildContext context, String label, int value) {
-    final isSelected = _duration.round() == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _duration = value.toDouble();
-        });
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 2,
-            height: 6,
-            decoration: BoxDecoration(
-              color: isSelected 
-                  ? AppTheme.primaryColor 
-                  : AppTheme.textSecondaryColor(context).withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(1),
-            ),
-          ),
-          const VGapXs(),
-          Text(
-            label,
-            style: AppTheme.bodyMicro.copyWith(
-              color: isSelected 
-                  ? AppTheme.primaryColor 
-                  : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _CreatePresetBottomSheet extends StatefulWidget {
@@ -832,42 +702,16 @@ class _CreatePresetBottomSheetState extends State<_CreatePresetBottomSheet> {
     if (result != null) setState(() => _selectedSymbol = result);
   }
 
-  Widget _buildRulerTick(BuildContext context, String label, int value) {
-    final isSelected = _duration.round() == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _duration = value.toDouble();
-        });
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 2,
-            height: 6,
-            decoration: BoxDecoration(
-              color: isSelected 
-                  ? AppTheme.primaryColor 
-                  : AppTheme.textSecondaryColor(context).withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(1),
-            ),
-          ),
-          const VGapXs(),
-          Text(
-            label,
-            style: AppTheme.bodyMicro.copyWith(
-              color: isSelected 
-                  ? AppTheme.primaryColor 
-                  : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _handleTickTap(double val) {
+    setState(() {
+      _duration = val;
+    });
+  }
+
+  void _handleSliderChanged(double val) {
+    setState(() {
+      _duration = val;
+    });
   }
 
   @override
@@ -964,18 +808,18 @@ class _CreatePresetBottomSheetState extends State<_CreatePresetBottomSheet> {
             divisions: 119,
             activeColor: AppTheme.primaryColor,
             inactiveColor: AppTheme.subtleFillColor(context),
-            onChanged: (val) => setState(() => _duration = val),
+            onChanged: _handleSliderChanged,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildRulerTick(context, '1m', 1),
-                _buildRulerTick(context, '30m', 30),
-                _buildRulerTick(context, '60m', 60),
-                _buildRulerTick(context, '90m', 90),
-                _buildRulerTick(context, '120m', 120),
+                _RulerTick(label: '1m', value: 1, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '30m', value: 30, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '60m', value: 60, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '90m', value: 90, currentDuration: _duration, onTap: _handleTickTap),
+                _RulerTick(label: '120m', value: 120, currentDuration: _duration, onTap: _handleTickTap),
               ],
             ),
           ),
@@ -1034,10 +878,11 @@ class _ActivitiesList extends StatelessWidget {
       ),
       itemCount: activities.length,
       itemBuilder: (context, index) {
-        final activity = activities[index];
         return _PomodoroActivityCard(
-          activity: activity,
-          onPlay: () => onPlay(activity, activities, index),
+          activity: activities[index],
+          activities: activities,
+          index: index,
+          onPlay: onPlay,
         );
       },
     );
@@ -1046,22 +891,30 @@ class _ActivitiesList extends StatelessWidget {
 
 class _PomodoroActivityCard extends StatelessWidget {
   final Activity activity;
-  final VoidCallback onPlay;
+  final List<Activity> activities;
+  final int index;
+  final void Function(Activity activity, List<Activity> fullList, int index) onPlay;
 
   const _PomodoroActivityCard({
     required this.activity,
+    required this.activities,
+    required this.index,
     required this.onPlay,
   });
+
+  void _handlePlay() {
+    onPlay(activity, activities, index);
+  }
 
   String _getTrackingTypeLabel(String trackingType) {
     switch (trackingType) {
       case 'multiple':
         return 'Routine';
       case 'milestone':
-        return 'Goal';
+        return 'Milestone';
       case 'single':
       default:
-        return 'Habit';
+        return 'Single';
     }
   }
 
@@ -1151,6 +1004,21 @@ class _PomodoroActivityCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (activity.trackingType == 'milestone' && activity.category != null && activity.category!.isNotEmpty) ...[
+                        const HGapSm(),
+                        Flexible(
+                          child: Text(
+                            activity.category!,
+                            style: TextStyle(
+                              color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                       if (!activity.isActive) ...[
                         const HGapSm(),
                         Container(
@@ -1192,7 +1060,7 @@ class _PomodoroActivityCard extends StatelessWidget {
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: onPlay,
+                    onTap: _handlePlay,
                     splashColor: AppTheme.successColor.withValues(alpha: 0.25),
                     highlightColor: AppTheme.successColor.withValues(alpha: 0.1),
                     child: const Icon(
@@ -1206,6 +1074,181 @@ class _PomodoroActivityCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PresetGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> defaultPresets;
+  final List<Map<String, dynamic>> customPresets;
+  final Map<String, int> presetDurations;
+  final bool showAllPresets;
+  final void Function(Activity activity, List<Activity> fullList, int currentIndex) onStartPredefined;
+  final void Function(String key, String displayName, {VoidCallback? onDelete}) onEditPreset;
+  final void Function(String key, String name) onRemoveCustom;
+  final VoidCallback onAddNew;
+
+  const _PresetGrid({
+    required this.defaultPresets,
+    required this.customPresets,
+    required this.presetDurations,
+    required this.showAllPresets,
+    required this.onStartPredefined,
+    required this.onEditPreset,
+    required this.onRemoveCustom,
+    required this.onAddNew,
+  });
+
+  void _handleTap(Activity activity) {
+    onStartPredefined(activity, const [], 0);
+  }
+
+  void _handleEdit(String key, String name, bool isCustom) {
+    if (isCustom) {
+      onEditPreset(
+        key,
+        name,
+        onDelete: () => onRemoveCustom(key, name),
+      );
+    } else {
+      onEditPreset(key, name);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> cards = [];
+
+    // Default presets
+    for (final preset in defaultPresets) {
+      final name = preset['name'] as String;
+      final symbol = preset['symbol'] as String;
+      final colorVal = preset['colorValue'] as int;
+      final key = preset['key'] as String;
+      final duration = presetDurations[key.toLowerCase()] ?? 30;
+
+      final activity = Activity(
+        id: 'predefined_${key.toLowerCase()}',
+        name: name,
+        isActive: true,
+        timestamp: DateTime.now(),
+        trackingType: 'single',
+        symbolValue: symbol,
+        focusDuration: duration,
+      );
+
+      cards.add(_PredefinedActivityCard(
+        activity: activity,
+        color: Color(colorVal),
+        presetKey: key,
+        onTap: _handleTap,
+        onEdit: _handleEdit,
+        isCustom: false,
+      ));
+    }
+
+    // Custom presets
+    for (final preset in customPresets) {
+      final name = preset['name'] as String;
+      final symbol = preset['symbol'] as String;
+      final colorVal = preset['colorValue'] as int;
+      final key = preset['key'] as String;
+      final duration = presetDurations[key.toLowerCase()] ?? 30;
+
+      final activity = Activity(
+        id: 'predefined_${key.toLowerCase()}',
+        name: name,
+        isActive: true,
+        timestamp: DateTime.now(),
+        trackingType: 'single',
+        symbolValue: symbol,
+        focusDuration: duration,
+      );
+
+      cards.add(_PredefinedActivityCard(
+        activity: activity,
+        color: Color(colorVal),
+        presetKey: key,
+        onTap: _handleTap,
+        onEdit: _handleEdit,
+        isCustom: true,
+      ));
+    }
+
+    cards.add(_AddNewPresetCard(onTap: onAddNew));
+
+    final int limit = showAllPresets ? cards.length : 3;
+    final List<Widget> gridRows = [];
+
+    for (int i = 0; i < limit; i += 3) {
+      final List<Widget> rowItems = [];
+      for (int j = 0; j < 3; j++) {
+        if (i + j < limit) {
+          rowItems.add(Expanded(child: cards[i + j]));
+        } else {
+          rowItems.add(const Expanded(child: SizedBox.shrink()));
+        }
+        if (j < 2) {
+          rowItems.add(const HGapSm());
+        }
+      }
+      gridRows.add(Row(children: rowItems));
+      if (i + 3 < limit) {
+        gridRows.add(const VGapSm());
+      }
+    }
+
+    return Column(
+      children: gridRows,
+    );
+  }
+}
+
+class _RulerTick extends StatelessWidget {
+  final String label;
+  final int value;
+  final double currentDuration;
+  final ValueChanged<double> onTap;
+
+  const _RulerTick({
+    required this.label,
+    required this.value,
+    required this.currentDuration,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = currentDuration.round() == value;
+    return GestureDetector(
+      onTap: () => onTap(value.toDouble()),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 2,
+            height: 6,
+            decoration: BoxDecoration(
+              color: isSelected 
+                  ? AppTheme.primaryColor 
+                  : AppTheme.textSecondaryColor(context).withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+          const VGapXs(),
+          Text(
+            label,
+            style: AppTheme.bodyMicro.copyWith(
+              color: isSelected 
+                  ? AppTheme.primaryColor 
+                  : AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 10,
+            ),
+          ),
+        ],
       ),
     );
   }

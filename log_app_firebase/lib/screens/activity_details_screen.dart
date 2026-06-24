@@ -13,6 +13,7 @@ import '../widgets/app_provider.dart';
 import '../services/activity_service.dart';
 import '../services/service_locator.dart';
 import '../widgets/activity_graph.dart';
+import '../widgets/expandable_description.dart';
 import 'add_activity_screen.dart';
 
 class ActivityDetailsScreen extends StatefulWidget {
@@ -261,8 +262,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   ),
                 ),
                 const VGapXs(),
-                Text(
-                  activity.description!,
+                ExpandableDescription(
+                  text: activity.description!,
                   style: AppTheme.bodyMedium.copyWith(
                     color: AppTheme.textSecondaryColor(context),
                     fontSize: 13, // Compact: slightly smaller body font size
@@ -276,6 +277,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
         // 2. Schedule Card Details
         _buildScheduleDetailsCard(activity),
+        if (activity.startDate != null && activity.endDate != null) ...[
+          const VGapSm(),
+          _buildDateRangeProgressCard(activity),
+        ],
         const VGapSm(), // Compact: reduced space between cards
 
         // 3. Tasks Checklist Section
@@ -362,6 +367,107 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             icon: Icons.double_arrow_rounded,
             label: 'Skippable',
             value: activity.skippable ? 'Yes' : 'No',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateRangeProgressCard(Activity activity) {
+    final start = activity.startDate;
+    final end = activity.endDate;
+    if (start == null || end == null) return const SizedBox.shrink();
+
+    final today = DateTime.now();
+    final startMidnight = DateTime(start.year, start.month, start.day);
+    final endMidnight = DateTime(end.year, end.month, end.day);
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+
+    final totalDays = endMidnight.difference(startMidnight).inDays + 1;
+    if (totalDays <= 0) return const SizedBox.shrink();
+
+    int elapsedDays = todayMidnight.difference(startMidnight).inDays + 1;
+    if (todayMidnight.isBefore(startMidnight)) {
+      elapsedDays = 0;
+    } else if (todayMidnight.isAfter(endMidnight)) {
+      elapsedDays = totalDays;
+    }
+
+    final progressPercent = (elapsedDays / totalDays).clamp(0.0, 1.0);
+    final percent = (progressPercent * 100).toInt();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.borderColor(context),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.date_range_rounded,
+                color: AppTheme.primaryAccentColor(context),
+                size: 16,
+              ),
+              const HGapSm(),
+              Text(
+                'DATE RANGE PROGRESS'.toUpperCase(),
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.primaryAccentColor(context),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const VGapSm(),
+          Container(
+            height: 6,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppTheme.borderColor(context),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: progressPercent,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppTheme.primaryColor, AppTheme.primaryLight],
+                  ),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+          const VGapSm(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Day $elapsedDays of $totalDays elapsed',
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.textSecondaryColor(context),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                '$percent%',
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.primaryAccentColor(context),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 import 'app_icons.dart';
+import 'expandable_description.dart';
 import '../models/activity.dart';
 import '../models/check_in.dart';
 import '../models/task.dart';
@@ -716,9 +717,11 @@ class _ActivityCheckInSheetState extends State<ActivityCheckInSheet> {
               width: 1,
             ),
           ),
-          child: Text(
-            description,
-            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textPrimaryColor(context).withValues(alpha: 0.7)),
+          child: ExpandableDescription(
+            text: description,
+            style: AppTheme.bodyMedium.copyWith(
+              color: AppTheme.textPrimaryColor(context).withValues(alpha: 0.7),
+            ),
           ),
         ),
       ],

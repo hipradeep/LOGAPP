@@ -1,3 +1,4 @@
+// Updated Task model with notes field
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SubTask {
@@ -63,6 +64,7 @@ class Task {
   final String? scheduledTime;
   final DateTime? completionTime;
   final List<SubTask> subTasks;
+  final String? notes;
 
   Task({
     required this.id,
@@ -75,6 +77,7 @@ class Task {
     this.scheduledTime,
     this.completionTime,
     this.subTasks = const [],
+    this.notes,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -88,6 +91,7 @@ class Task {
       'scheduledTime': scheduledTime,
       'completionTime': completionTime != null ? Timestamp.fromDate(completionTime!) : null,
       'subTasks': subTasks.map((st) => st.toFirestore()).toList(),
+      'notes': notes,
     };
   }
 
@@ -157,6 +161,7 @@ class Task {
       scheduledTime: scheduledTime,
       completionTime: firestoreCompletionTime?.toDate(),
       subTasks: parsedSubTasks,
+      notes: data['notes'] as String?,
     );
   }
 
@@ -171,6 +176,7 @@ class Task {
     String? scheduledTime,
     DateTime? completionTime,
     List<SubTask>? subTasks,
+    String? notes,
   }) {
     return Task(
       id: id ?? this.id,
@@ -183,6 +189,7 @@ class Task {
       scheduledTime: scheduledTime ?? this.scheduledTime,
       completionTime: completionTime ?? this.completionTime,
       subTasks: subTasks ?? this.subTasks,
+      notes: notes ?? this.notes,
     );
   }
 }

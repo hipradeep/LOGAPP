@@ -9,8 +9,6 @@ import 'app_toast.dart';
 class TaskCard extends StatefulWidget {
   final Task task;
   final List<Activity> milestoneActivities;
-  final bool isExpanded;
-  final VoidCallback onTap;
   final Function(Activity?) onActivitySelected;
   final Function(Task, bool) onToggleTask;
   final Function(Task) onEditTask;
@@ -20,8 +18,6 @@ class TaskCard extends StatefulWidget {
     super.key,
     required this.task,
     required this.milestoneActivities,
-    required this.isExpanded,
-    required this.onTap,
     required this.onActivitySelected,
     required this.onToggleTask,
     required this.onEditTask,
@@ -33,57 +29,6 @@ class TaskCard extends StatefulWidget {
 }
 
 class _TaskCardState extends State<TaskCard> {
-  late TextEditingController _nestedController;
-  final FocusNode _nestedFocusNode = FocusNode();
-  String? _deletingNestedItemId;
-
-  @override
-  void initState() {
-    super.initState();
-    _nestedController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _nestedController.dispose();
-    _nestedFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _toggleNestedItem(int index, bool val) {
-    final newList = List<SubTask>.from(widget.task.subTasks);
-    newList[index] = newList[index].copyWith(checked: val);
-    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
-
-    if (val) {
-      final parent = widget.milestoneActivities.firstWhere(
-        (a) => a.id == widget.task.activityId,
-        orElse: () => Activity(
-          id: '',
-          name: '',
-          isActive: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-      AppToast.show(
-        context: context,
-        message: "Rewarded ${parent.points} Stars! ⭐",
-        backgroundColor: Colors.amber[800],
-      );
-    }
-  }
-
-  void _deleteNestedItem(int index) {
-    final newList = List<SubTask>.from(widget.task.subTasks);
-    newList.removeAt(index);
-    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
-  }
-
-  void _updateNestedItemDuration(int index, int? duration) {
-    final newList = List<SubTask>.from(widget.task.subTasks);
-    newList[index] = newList[index].copyWith(durationMinutes: duration);
-    widget.onToggleTask(widget.task.copyWith(subTasks: newList), widget.task.checked);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,9 +56,7 @@ class _TaskCardState extends State<TaskCard> {
             : AppTheme.surface(context).withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: widget.isExpanded
-              ? AppTheme.primaryColor.withValues(alpha: 0.3)
-              : AppTheme.borderColor(context),
+          color: AppTheme.borderColor(context),
           width: 1,
         ),
       ),
@@ -317,28 +260,13 @@ class _TaskCardState extends State<TaskCard> {
                   ),
                   const SizedBox(width: 14),
                   
-                  // 3. Right Column (Symbol Indicator & Expand Arrow)
+                  // 3. Right Column (Symbol Indicator only)
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SymbolIndicator(
                         task: widget.task,
                         onTap: () => _showSymbolSelectionDialog(widget.task),
-                      ),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: widget.onTap,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Icon(
-                            widget.isExpanded
-                                ? Icons.keyboard_arrow_up_rounded
-                                : Icons.keyboard_arrow_down_rounded,
-                            size: 24,
-                            color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -347,200 +275,7 @@ class _TaskCardState extends State<TaskCard> {
             ),
           ),
           
-          // Expanded panel showing nested items
-          if (widget.isExpanded && widget.task.subTasks.isNotEmpty) ...[
-            Divider(color: AppTheme.borderColor(context), height: 1, indent: 16, endIndent: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Checklist Items:',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...List.generate(widget.task.subTasks.length, (idx) {
-                    final item = widget.task.subTasks[idx];
-                    final isDeleting = _deletingNestedItemId == item.id;
-
-                    return GestureDetector(
-                      onLongPress: () {
-                        setState(() {
-                          if (isDeleting) {
-                            _deletingNestedItemId = null;
-                          } else {
-                            _deletingNestedItemId = item.id;
-                          }
-                        });
-                      },
-                      onTap: () {
-                        if (isDeleting) {
-                          setState(() {
-                            _deletingNestedItemId = null;
-                          });
-                        } else {
-                          _toggleNestedItem(idx, !item.checked);
-                        }
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: AppTheme.subtaskCheckboxSize,
-                              height: AppTheme.subtaskCheckboxSize,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: item.checked
-                                    ? AppTheme.primaryColor
-                                    : Colors.transparent,
-                                border: Border.all(
-                                  color: item.checked
-                                      ? AppTheme.primaryColor
-                                      : AppTheme.borderColor(context),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: item.checked
-                                  ? Icon(Icons.check, size: 13, color: Theme.of(context).colorScheme.onPrimary)
-                                  : null,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                item.title,
-                                style: TextStyle(
-                                  color: item.checked ? AppTheme.textSecondary.withValues(alpha: 0.5) : Theme.of(context).textTheme.bodyMedium!.color,
-                                  fontSize: 14,
-                                  decoration: item.checked ? TextDecoration.lineThrough : null,
-                                  decorationColor: AppTheme.textSecondary.withValues(alpha: 0.4),
-                                ),
-                              ),
-                            ),
-                            if (isDeleting)
-                              GestureDetector(
-                                onTap: () {
-                                  _deleteNestedItem(idx);
-                                  setState(() {
-                                    _deletingNestedItemId = null;
-                                  });
-                                },
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  child: Icon(
-                                    Icons.delete_outline,
-                                    size: 16,
-                                    color: AppTheme.errorColor,
-                                  ),
-                                ),
-                              )
-                            else
-                              _buildChecklistItemDurationMenu(idx, item),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildChecklistItemDurationMenu(int index, SubTask item) {
-    return PopupMenuButton<String>(
-      tooltip: 'Change duration or delete',
-      onSelected: (val) {
-        if (val == 'delete') {
-          _deleteNestedItem(index);
-        } else {
-          final int? duration = val == 'none' ? null : int.tryParse(val);
-          _updateNestedItemDuration(index, duration);
-        }
-      },
-      itemBuilder: (context) => [
-        PopupMenuItem<String>(
-          value: 'none',
-          child: Text('No limit', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
-        ),
-        PopupMenuItem<String>(
-          value: '10',
-          child: Text('10 minutes', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
-        ),
-        PopupMenuItem<String>(
-          value: '30',
-          child: Text('30 minutes', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
-        ),
-        PopupMenuItem<String>(
-          value: '60',
-          child: Text('1 hour', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13)),
-        ),
-        const PopupMenuDivider(height: 1),
-        const PopupMenuItem<String>(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(Icons.delete_outline, size: 16, color: AppTheme.errorColor),
-              SizedBox(width: 8),
-              Text('Delete Item', style: TextStyle(color: AppTheme.errorColor, fontSize: 13)),
-            ],
-          ),
-        ),
-      ],
-      offset: const Offset(0, 30),
-      color: AppTheme.surface(context),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: item.durationMinutes != null
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: item.checked
-                      ? AppTheme.surface(context).withValues(alpha: 0.2)
-                      : AppTheme.primaryColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.timer_outlined,
-                      size: 10,
-                      color: item.checked
-                          ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                          : AppTheme.primaryLight,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${item.durationMinutes}m',
-                      style: TextStyle(
-                        color: item.checked
-                            ? AppTheme.textSecondary.withValues(alpha: 0.4)
-                            : AppTheme.primaryLight,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : Icon(
-                Icons.timer_outlined,
-                size: 16,
-                color: item.checked
-                    ? AppTheme.textSecondary.withValues(alpha: 0.2)
-                    : AppTheme.borderColor(context),
-              ),
       ),
     );
   }

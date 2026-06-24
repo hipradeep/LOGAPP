@@ -393,12 +393,15 @@ class ActivityService {
     return getTasksForActivityStream(activity.id).map(filterAndSort);
   }
 
-  Future<void> createTask(
+  Future<Task> createTask(
     String activityId, 
     String taskName, 
     DateTime timestamp, 
     bool checked, {
     List<SubTask> subTasks = const [],
+    String? symbolType,
+    String? symbolValue,
+    String? notes,
   }) async {
     final hasTime = taskName.contains('|');
     final cleanName = hasTime ? taskName.split('|').first : taskName;
@@ -412,8 +415,12 @@ class ActivityService {
       checked: checked,
       scheduledTime: timeStr,
       subTasks: subTasks,
+      symbolType: symbolType,
+      symbolValue: symbolValue,
+      notes: notes,
     );
-    await _tasksCollection.add(newTask.toFirestore());
+    final docRef = await _tasksCollection.add(newTask.toFirestore());
+    final savedTask = newTask.copyWith(id: docRef.id);
     
     // Auto-reactivate parent activity when adding a task to it
     await _activitiesCollection.doc(activityId).update({'isActive': true});
@@ -428,7 +435,72 @@ class ActivityService {
       await _checkinsCollection.add(checkIn.toFirestore());
       unawaited(_awardXPAndCoins(activityId));
     }
+    return savedTask;
   }
+
+  Future<Task?> getTaskById(String taskId) async {
+    final doc = await _tasksCollection.doc(taskId).get();
+    if (!doc.exists) return null;
+    return Task.fromFirestore(doc);
+  }
+
+  Future<Task?> getActiveTaskForActivity(String activityId) async {
+    final snapshot = await _tasksCollection
+        .where('activityId', isEqualTo: activityId)
+        .get();
+    if (snapshot.docs.isEmpty) return null;
+    final tasks = snapshot.docs.map((doc) => Task.fromFirestore(doc)).toList();
+    // Sort descending by timestamp
+    tasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    // Find first unchecked task
+    final unchecked = tasks.where((t) => !t.checked);
+    if (unchecked.isNotEmpty) {
+      return unchecked.first;
+    }
+    return tasks.first;
+  }
+
+  Future<Task?> getOrCreateTodayTaskForRoutine(Activity activity) async {
+    final snapshot = await _tasksCollection
+        .where('activityId', isEqualTo: activity.id)
+        .get();
+    
+    final now = DateTime.now();
+    bool isToday(DateTime date) =>
+        date.day == now.day && date.month == now.month && date.year == now.year;
+    
+    for (var doc in snapshot.docs) {
+      final task = Task.fromFirestore(doc);
+      if (isToday(task.timestamp)) {
+        return task;
+      }
+    }
+    
+    if (activity.subTaskTemplates.isNotEmpty) {
+      final List<SubTask> initialSubTasks = activity.subTaskTemplates.map((template) {
+        final parts = template.split('|');
+        final title = parts.first;
+        final timeStr = parts.length > 1 ? parts.last : null;
+        return SubTask(
+          id: 'subtask-${DateTime.now().millisecondsSinceEpoch}-${template.hashCode}-${activity.subTaskTemplates.indexOf(template)}',
+          title: title,
+          checked: false,
+          scheduledTime: timeStr,
+        );
+      }).toList();
+
+      return await createTask(
+        activity.id,
+        activity.name,
+        now,
+        false,
+        subTasks: initialSubTasks,
+      );
+    }
+    
+    return null;
+  }
+
 
   Future<void> updateTask(Task task) async {
     await _tasksCollection.doc(task.id).set(task.toFirestore(), SetOptions(merge: true));

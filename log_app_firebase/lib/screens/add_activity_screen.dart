@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/full_screen_page.dart';
+import '../widgets/expandable_description.dart';
 import '../models/activity.dart';
 import '../widgets/app_popup_menu_button.dart';
 import '../widgets/app_text_action_button.dart';
@@ -377,21 +378,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
             const VGapLg(),
           ],
 
-          // Focus Time (Only for Single and Milestone activities)
-          if (_trackingType != 'multiple') ...[
-            _buildSectionLabel('FOCUS TIME'),
-            const VGapSm(),
-            _buildFocusDurationSelector(),
-            const VGapLg(),
-          ],
-
           // Start & End Date
           _buildSectionLabel('DATE RANGE'),
           const VGapSm(),
           _buildDateRangeRow(),
           if (_startDate != null && _endDate != null) ...[
             const VGapMd(),
-            _buildDateRangeProgress(),
           ],
           const VGapLg(),
 
@@ -401,7 +393,19 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           _buildSkippableToggle(),
           const VGapMd(),
           _buildReminderEnabledToggle(),
+          if (_trackingType != 'multiple') ...[
+            const VGapMd(),
+            _buildPomodoroFocusToggle(),
+          ],
           const VGapLg(),
+
+          // Focus Time (Only for Single activities and if enabled)
+          if (_trackingType == 'single' && _isPomodoroFocusEnabled) ...[
+            _buildSectionLabel('FOCUS TIME'),
+            const VGapSm(),
+            _buildFocusDurationSelector(),
+            const VGapLg(),
+          ],
 
           // Weight / Priority
           _buildSectionLabel('WEIGHT / PRIORITY'),
@@ -536,143 +540,126 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Enable Pomodoro Focus toggle
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context).withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _isPomodoroFocusEnabled
-                  ? AppTheme.primaryColor.withValues(alpha: 0.5)
-                  : AppTheme.borderColor(context),
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.center_focus_strong_rounded,
-                      color: _isPomodoroFocusEnabled
-                          ? AppTheme.primaryAccentColor(context)
-                          : AppTheme.textSecondaryColor(context),
-                      size: 20,
-                    ),
-                    const HGapMd(),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Enable Pomodoro Focus',
-                            style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const VGapXs(),
-                          Text(
-                            'Start a focus timer when this activity runs',
-                            style: AppTheme.bodySmall.copyWith(
-                              color: AppTheme.textSecondaryColor(context),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _focusPresets.map((mins) {
+            final selected = _focusDuration == mins;
+            return GestureDetector(
+              onTap: () => setState(() => _focusDuration = mins),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                      : AppTheme.surface(context).withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: selected
+                        ? AppTheme.primaryColor
+                        : AppTheme.borderColor(context),
+                    width: selected ? 2 : 1.5,
+                  ),
+                ),
+                child: Text(
+                  '${mins}m',
+                  style: AppTheme.bodySmall.copyWith(
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    color: selected
+                        ? AppTheme.primaryAccentColor(context)
+                        : AppTheme.textSecondaryColor(context),
+                  ),
                 ),
               ),
-              Switch(
-                value: _isPomodoroFocusEnabled,
-                onChanged: (val) => setState(() => _isPomodoroFocusEnabled = val),
-                activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.5),
-                activeThumbColor: AppTheme.primaryColor,
-                inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
-                inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
-              ),
-            ],
-          ),
+            );
+          }).toList(),
         ),
-        // Duration picker (dimmed when disabled)
-        AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          opacity: _isPomodoroFocusEnabled ? 1.0 : 0.35,
-          child: IgnorePointer(
-            ignoring: !_isPomodoroFocusEnabled,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        const VGapMd(),
+        Row(
+          children: [
+            Icon(Icons.timer_rounded, size: 18, color: AppTheme.primaryAccentColor(context)),
+            const HGapSm(),
+            Expanded(
+              child: Slider(
+                value: _focusDuration.toDouble(),
+                min: 5,
+                max: 120,
+                divisions: 23,
+                activeColor: AppTheme.primaryColor,
+                inactiveColor: AppTheme.subtleFillColor(context),
+                label: '${_focusDuration}m',
+                onChanged: (val) => setState(() => _focusDuration = val.round()),
+              ),
+            ),
+            SizedBox(
+              width: 44,
+              child: Text(
+                '${_focusDuration}m',
+                style: AppTheme.bodySmall.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPomodoroFocusToggle() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context).withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.borderColor(context),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
               children: [
-                const VGapMd(),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _focusPresets.map((mins) {
-                    final selected = _focusDuration == mins;
-                    return GestureDetector(
-                      onTap: () => setState(() => _focusDuration = mins),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppTheme.primaryColor.withValues(alpha: 0.15)
-                              : AppTheme.surface(context).withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: selected
-                                ? AppTheme.primaryColor
-                                : AppTheme.borderColor(context),
-                            width: selected ? 2 : 1.5,
-                          ),
-                        ),
-                        child: Text(
-                          '${mins}m',
-                          style: AppTheme.bodySmall.copyWith(
-                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                            color: selected
-                                ? AppTheme.primaryAccentColor(context)
-                                : AppTheme.textSecondaryColor(context),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                Icon(
+                  Icons.center_focus_strong_rounded,
+                  color: _isPomodoroFocusEnabled
+                      ? AppTheme.primaryAccentColor(context)
+                      : AppTheme.textSecondaryColor(context),
+                  size: 20,
                 ),
-                const VGapMd(),
-                Row(
-                  children: [
-                    Icon(Icons.timer_rounded, size: 18, color: AppTheme.primaryAccentColor(context)),
-                    const HGapSm(),
-                    Expanded(
-                      child: Slider(
-                        value: _focusDuration.toDouble(),
-                        min: 5,
-                        max: 120,
-                        divisions: 23,
-                        activeColor: AppTheme.primaryColor,
-                        inactiveColor: AppTheme.subtleFillColor(context),
-                        label: '${_focusDuration}m',
-                        onChanged: (val) => setState(() => _focusDuration = val.round()),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      child: Text(
-                        '${_focusDuration}m',
-                        style: AppTheme.bodySmall.copyWith(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.end,
-                      ),
-                    ),
-                  ],
+                const HGapMd(),
+                Expanded(
+                  child: Column(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Text(
+                         'Enable Pomodoro Focus',
+                         style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                       ),
+                       const VGapXs(),
+                       Text(
+                         'Start a focus timer when this activity runs',
+                         style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondaryColor(context), fontSize: 11),
+                       ),
+                     ],
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+          Switch(
+            value: _isPomodoroFocusEnabled,
+            onChanged: (val) => setState(() => _isPomodoroFocusEnabled = val),
+            activeTrackColor: AppTheme.primaryColor.withValues(alpha: 0.5),
+            activeThumbColor: AppTheme.primaryColor,
+            inactiveThumbColor: AppTheme.switchInactiveThumbColor(context),
+            inactiveTrackColor: AppTheme.switchInactiveTrackColor(context),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1088,77 +1075,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildDateRangeProgress() {
-    final start = _startDate;
-    final end = _endDate;
-    if (start == null || end == null) return const SizedBox.shrink();
 
-    final today = DateTime.now();
-    final startMidnight = DateTime(start.year, start.month, start.day);
-    final endMidnight = DateTime(end.year, end.month, end.day);
-    final todayMidnight = DateTime(today.year, today.month, today.day);
-
-    final totalDays = endMidnight.difference(startMidnight).inDays + 1;
-    if (totalDays <= 0) return const SizedBox.shrink();
-
-    int elapsedDays = todayMidnight.difference(startMidnight).inDays + 1;
-    if (todayMidnight.isBefore(startMidnight)) {
-      elapsedDays = 0;
-    } else if (todayMidnight.isAfter(endMidnight)) {
-      elapsedDays = totalDays;
-    }
-
-    final progressPercent = (elapsedDays / totalDays).clamp(0.0, 1.0);
-    final percent = (progressPercent * 100).toInt();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel('PROGRESS'),
-        const VGapSm(),
-        Container(
-          height: 6,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppTheme.borderColor(context),
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: progressPercent,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppTheme.primaryColor, AppTheme.primaryLight],
-                ),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Day $elapsedDays of $totalDays elapsed',
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.textSecondaryColor(context),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              '$percent%',
-              style: AppTheme.bodySmall.copyWith(
-                color: AppTheme.primaryAccentColor(context),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 
 
 
@@ -1257,12 +1174,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> with WidgetsBindi
           ),
           const HGapMd(),
           Expanded(
-            child: Text(
-              description,
+            child: ExpandableDescription(
+              text: description,
               style: TextStyle(
                 color: AppTheme.textSecondaryColor(context),
                 fontSize: 13,
-                height: 1.35,
+                height: 1.3,
               ),
             ),
           ),

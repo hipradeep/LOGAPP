@@ -12,9 +12,7 @@ class MilestoneSection extends StatelessWidget {
   final List<Task> tasks;
   final bool isExpanded;
   final VoidCallback onToggle;
-  final String? expandedTaskId;
   final List<Activity> milestoneActivities;
-  final Function(String?) onTaskExpansionChanged;
   final Function(Task) onEditTask;
 
   const MilestoneSection({
@@ -23,9 +21,7 @@ class MilestoneSection extends StatelessWidget {
     required this.tasks,
     required this.isExpanded,
     required this.onToggle,
-    required this.expandedTaskId,
     required this.milestoneActivities,
-    required this.onTaskExpansionChanged,
     required this.onEditTask,
   });
 
@@ -49,31 +45,11 @@ class MilestoneSection extends StatelessWidget {
             itemCount: tasks.length,
             itemBuilder: (context, idx) {
               final st = tasks[idx];
-              final parent = milestoneActivities.firstWhere(
-                (a) => a.id == st.activityId,
-                orElse: () => Activity(
-                  id: '',
-                  name: '',
-                  isActive: false,
-                  timestamp: DateTime.now(),
-                ),
-              );
 
               return TaskCard(
                 key: ValueKey(st.id),
                 task: st,
                 milestoneActivities: milestoneActivities,
-                isExpanded: expandedTaskId == st.id,
-                onTap: () {
-                  if (expandedTaskId == st.id) {
-                    onTaskExpansionChanged(null);
-                  } else {
-                    onTaskExpansionChanged(st.id);
-                    if (parent.id.isNotEmpty) {
-                      controller.selectActivity(parent);
-                    }
-                  }
-                },
                 onActivitySelected: (activity) {
                   controller.selectActivity(activity);
                 },

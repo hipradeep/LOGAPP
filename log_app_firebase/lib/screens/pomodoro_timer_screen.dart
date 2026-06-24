@@ -1,28 +1,35 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../theme/app_theme.dart';
 
 import '../widgets/app_spacers.dart';
 import '../widgets/app_toast.dart';
 import '../models/activity.dart';
-import '../services/note_service.dart';
+import '../models/task.dart';
+
 import '../services/service_locator.dart';
+import '../services/activity_service.dart';
 import '../services/notification_service.dart';
-import '../services/cache_service.dart';
+import '../services/pomodoro_manager.dart';
 
 
-// ─── Phase enum ───────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Phase enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 enum _Phase { countdown, focus }
 
 class PomodoroTimerScreen extends StatefulWidget {
-  static bool isTimerScreenActive = false;
+  static final ValueNotifier<bool> isTimerScreenActive = ValueNotifier<bool>(false);
 
   final Activity activity;
   final List<Activity> remainingQueue;
   final int? initialDurationMinutes;
   final int? initialSecondsRemaining;
   final bool? initialIsRunning;
+  final Task? initialMilestoneTask;
+  final bool trackSession;
+  final bool followUpNext;
+  final bool allowPause;
+  final List<String>? focusedSubTaskIds;
+  final bool isRestrictMode;
 
   const PomodoroTimerScreen({
     super.key,
@@ -31,56 +38,113 @@ class PomodoroTimerScreen extends StatefulWidget {
     this.initialDurationMinutes,
     this.initialSecondsRemaining,
     this.initialIsRunning,
+    this.initialMilestoneTask,
+    this.trackSession = true,
+    this.followUpNext = true,
+    this.allowPause = true,
+    this.focusedSubTaskIds,
+    this.isRestrictMode = true,
   });
 
   @override
   State<PomodoroTimerScreen> createState() => _PomodoroTimerScreenState();
 }
 
-class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsBindingObserver {
-  final NoteService _noteService = getIt<NoteService>();
+class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> {
 
-  // ── Phase state ──────────────────────────────────────────────────────────
+
+  // ── Phase state ─────────────────────────────────────────────────────────────
   _Phase _phase = _Phase.countdown;
 
-  // ── Setup options ─────────────────────────────────────────────────────────
+  // ── Setup options ───────────────────────────────────────────────────────────
   bool _trackSession = true;
   bool _followUpNext = true;
 
-  // ── Countdown ────────────────────────────────────────────────────────────
-  int _countdown = 6;
+  // ── Milestone Tasks for Countdown ───────────────────────────────────────────
+  Task? _milestoneTask;
+  List<String>? _focusedSubTaskIds;
+
+  // ── Countdown ───────────────────────────────────────────────────────────────
+  late final ValueNotifier<int> _countdownNotifier;
   Timer? _countdownTimer;
 
-  // ── Focus timer ──────────────────────────────────────────────────────────
-  Timer? _sessionTimer;
   late final int _totalSeconds;
-  int _secondsRemaining = 0;
-  bool _isRunning = false;
-  bool _isCompleted = false;
 
   @override
   void initState() {
     super.initState();
-    PomodoroTimerScreen.isTimerScreenActive = true;
-    WidgetsBinding.instance.addObserver(this);
-    final durationMins =
-        widget.initialDurationMinutes ?? widget.activity.focusDuration;
-    _totalSeconds = durationMins * 60;
-    _secondsRemaining = widget.initialSecondsRemaining ?? _totalSeconds;
+    PomodoroTimerScreen.isTimerScreenActive.value = true;
     
-    if (widget.initialSecondsRemaining != null) {
+    final manager = PomodoroManager.instance;
+    final bool hasActiveSession = manager.activity != null;
+
+    if (hasActiveSession) {
       _phase = _Phase.focus;
-      final startRunning = widget.initialIsRunning ?? true;
-      if (startRunning) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _startFocusTimer();
+      _trackSession = manager.trackSession;
+      _followUpNext = manager.followUpNext;
+      _focusedSubTaskIds = manager.focusedSubTaskIds;
+      _milestoneTask = manager.milestoneTask;
+      _totalSeconds = manager.totalSeconds;
+    } else {
+      final durationMins = widget.initialDurationMinutes ?? widget.activity.focusDuration;
+      _totalSeconds = durationMins * 60;
+      _trackSession = widget.trackSession;
+      _followUpNext = widget.followUpNext;
+      _focusedSubTaskIds = widget.focusedSubTaskIds;
+      _milestoneTask = widget.initialMilestoneTask;
+      
+      manager.init(
+        activity: widget.activity,
+        remainingQueue: widget.remainingQueue,
+        totalSeconds: _totalSeconds,
+        trackSession: _trackSession,
+        followUpNext: _followUpNext,
+        allowPause: widget.allowPause,
+        isRestrictMode: widget.isRestrictMode,
+        focusedSubTaskIds: _focusedSubTaskIds,
+        milestoneTask: _milestoneTask,
+        initialSecondsRemaining: widget.initialSecondsRemaining,
+        initialIsRunning: widget.initialIsRunning ?? false,
+      );
+    }
+
+    _countdownNotifier = ValueNotifier<int>(6);
+
+    if (_milestoneTask == null) {
+      if (widget.activity.trackingType == 'milestone') {
+        getIt<ActivityService>().getActiveTaskForActivity(widget.activity.id).then((task) {
+          if (mounted) {
+            setState(() {
+              _milestoneTask = task;
+              if (!hasActiveSession) {
+                manager.milestoneTask = task;
+              }
+            });
+          }
+        }).catchError((e) {
+          debugPrint('Error fetching milestone task details in PomodoroTimerScreen: $e');
         });
-      } else {
-        _isRunning = false;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _saveSessionToCache();
+      } else if (widget.activity.trackingType == 'multiple') {
+        getIt<ActivityService>().getOrCreateTodayTaskForRoutine(widget.activity).then((task) {
+          if (mounted) {
+            setState(() {
+              _milestoneTask = task;
+              if (!hasActiveSession) {
+                manager.milestoneTask = task;
+              }
+            });
+          }
+        }).catchError((e) {
+          debugPrint('Error fetching/creating routine task details in PomodoroTimerScreen: $e');
         });
       }
+    }
+
+    manager.isRunningNotifier.addListener(_onManagerStatusChanged);
+    manager.isCompletedNotifier.addListener(_onManagerStatusChanged);
+
+    if (hasActiveSession) {
+      // Already running globally
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await NotificationService.requestPermissions();
@@ -91,24 +155,33 @@ class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsB
 
   @override
   void dispose() {
-    PomodoroTimerScreen.isTimerScreenActive = false;
-    WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
-    _sessionTimer?.cancel();
-    _cancelBackgroundNotifications();
+    _countdownNotifier.dispose();
+    final manager = PomodoroManager.instance;
+    manager.isRunningNotifier.removeListener(_onManagerStatusChanged);
+    manager.isCompletedNotifier.removeListener(_onManagerStatusChanged);
+    PomodoroTimerScreen.isTimerScreenActive.value = false;
     super.dispose();
   }
 
-  // ── Countdown → Focus ────────────────────────────────────────────────────
-  void _startCountdown() {
+  void _onManagerStatusChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _startCountdown({bool reset = true}) {
     setState(() {
       _phase = _Phase.countdown;
-      _countdown = 6;
     });
+    if (reset) {
+      _countdownNotifier.value = 6;
+    }
+    _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
-      if (_countdown > 1) {
-        setState(() => _countdown--);
+      if (_countdownNotifier.value > 1) {
+        _countdownNotifier.value--;
       } else {
         t.cancel();
         _beginFocus();
@@ -118,90 +191,16 @@ class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsB
 
   void _beginFocus() {
     setState(() => _phase = _Phase.focus);
-    _startFocusTimer();
+    PomodoroManager.instance.startFocusTimer();
   }
 
-  // ── Focus timer ──────────────────────────────────────────────────────────
-  void _saveSessionToCache() async {
-    final endTimestamp = DateTime.now().millisecondsSinceEpoch + _secondsRemaining * 1000;
-    final sessionData = {
-      'activity': widget.activity.toJson(),
-      'remainingQueue': widget.remainingQueue.map((a) => a.toJson()).toList(),
-      'endTimestamp': endTimestamp,
-      'initialDurationMinutes': widget.initialDurationMinutes,
-      'trackSession': _trackSession,
-      'followUpNext': _followUpNext,
-      'isRunning': _isRunning,
-      'secondsRemaining': _secondsRemaining,
-    };
-    await CacheService().saveActivePomodoroSession(sessionData);
-  }
-
-  // ── Focus timer ──────────────────────────────────────────────────────────
-  void _startFocusTimer() {
-    if (_isRunning) return;
-    setState(() => _isRunning = true);
-    _saveSessionToCache();
-    _sessionTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_secondsRemaining > 0) {
-        setState(() => _secondsRemaining--);
-      } else {
-        t.cancel();
-        _handleSessionComplete();
-      }
-    });
-  }
-
-  void _pauseTimer() {
-    if (!_isRunning) return;
-    _sessionTimer?.cancel();
-    _cancelBackgroundNotifications();
-    setState(() => _isRunning = false);
-    _saveSessionToCache();
-  }
-
-  void _resetTimer() {
-    _sessionTimer?.cancel();
-    _cancelBackgroundNotifications();
-    setState(() {
-      _secondsRemaining = _totalSeconds;
-      _isRunning = false;
-      _isCompleted = false;
-    });
-    CacheService().clearActivePomodoroSession();
-  }
-
-  void _handleSessionComplete() {
-    _cancelBackgroundNotifications();
-    setState(() {
-      _isRunning = false;
-      _isCompleted = true;
-    });
-    CacheService().clearActivePomodoroSession();
-    if (!_trackSession) return;
-    final minutes = _totalSeconds ~/ 60;
-    _noteService
-        .createEntry(
-          'Completed Pomodoro Session',
-          'Successfully completed a $minutes-minute Pomodoro focus session on "${widget.activity.name}".',
-          widget.activity.symbolValue ?? '🎯',
-          ['FocusSession', 'Pomodoro', widget.activity.name],
-        )
-        .then((_) {
-      if (mounted) {
-        AppToast.show(
-          context: context,
-          message: 'Session on "${widget.activity.name}" logged! 🎯',
-          backgroundColor: AppTheme.successColor,
-        );
-      }
-    });
+  void _handleReset() {
+    PomodoroManager.instance.resetTimer();
   }
 
   void _handleNextActivity() {
-    _sessionTimer?.cancel();
-    _cancelBackgroundNotifications();
-    CacheService().clearActivePomodoroSession();
+    _countdownTimer?.cancel();
+    PomodoroManager.instance.cancelTimer();
     if (_followUpNext && widget.remainingQueue.isNotEmpty) {
       final next = widget.remainingQueue.first;
       final nextQueue = widget.remainingQueue.sublist(1);
@@ -211,6 +210,7 @@ class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsB
           builder: (_) => PomodoroTimerScreen(
             activity: next,
             remainingQueue: nextQueue,
+            isRestrictMode: widget.isRestrictMode,
           ),
         ),
       );
@@ -226,140 +226,23 @@ class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsB
 
   void _handleCancelSession() {
     _countdownTimer?.cancel();
-    _sessionTimer?.cancel();
-    _cancelBackgroundNotifications();
-    CacheService().clearActivePomodoroSession();
+    PomodoroManager.instance.cancelTimer();
     Navigator.pop(context);
   }
 
-  void _showBackgroundNotifications() async {
-    if (!_isRunning || _secondsRemaining <= 0) return;
-
-    final endTimestamp = DateTime.now().millisecondsSinceEpoch + _secondsRemaining * 1000;
-
-    final androidDetails = AndroidNotificationDetails(
-      'pomodoro_timer_channel_v3',
-      'Pomodoro Active Timer',
-      channelDescription: 'Real-time countdown for running Pomodoro sessions',
-      importance: Importance.high,
-      priority: Priority.high,
-      ongoing: true,
-      onlyAlertOnce: true,
-      showWhen: true,
-      when: endTimestamp,
-      usesChronometer: true,
-      chronometerCountDown: true,
-      visibility: NotificationVisibility.public,
-      icon: 'ic_timer',
-      styleInformation: const MediaStyleInformation(),
-      actions: const <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          'pause_pomodoro',
-          'Pause',
-          icon: DrawableResourceAndroidBitmap('ic_pause'),
-          cancelNotification: false,
-        ),
-        AndroidNotificationAction(
-          'cancel_pomodoro',
-          'Cancel',
-          icon: DrawableResourceAndroidBitmap('ic_cancel'),
-          cancelNotification: true,
-        ),
-      ],
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    try {
-      final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-      await flutterLocalNotificationsPlugin.show(
-        8888,
-        null,
-        widget.activity.name,
-        notificationDetails,
-        payload: 'open_pomodoro',
-      );
-
-      // Schedule the one-shot completion notification at the exact completion time
-      await NotificationService.scheduleOneShotNotification(
-        id: 8889,
-        title: 'Session Completed! 🎉',
-        body: 'Successfully completed focus session on "${widget.activity.name}".',
-        dateTime: DateTime.now().add(Duration(seconds: _secondsRemaining)),
-        skipPermissionCheck: true,
-      );
-    } catch (e) {
-      debugPrint('Error showing background notifications: $e');
-    }
-  }
-
-  void _cancelBackgroundNotifications() async {
-    try {
-      final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-      await flutterLocalNotificationsPlugin.cancel(8888);
-      await flutterLocalNotificationsPlugin.cancel(8889);
-    } catch (e) {
-      debugPrint('Error cancelling background notifications: $e');
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (_phase == _Phase.focus) {
-      if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-        _showBackgroundNotifications();
-      } else if (state == AppLifecycleState.resumed) {
-        _cancelBackgroundNotifications();
-        
-        final activeSession = await CacheService().getActivePomodoroSession();
-        if (activeSession != null) {
-          final isRunning = activeSession['isRunning'] as bool? ?? false;
-          final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
-          final savedSeconds = activeSession['secondsRemaining'] as int? ?? 0;
-          final now = DateTime.now().millisecondsSinceEpoch;
-
-          setState(() {
-            _isRunning = isRunning;
-            if (_isRunning) {
-              final remaining = ((endTimestamp - now) / 1000).round();
-              _secondsRemaining = remaining;
-              if (_secondsRemaining <= 0) {
-                _secondsRemaining = 0;
-                _isRunning = false;
-                _sessionTimer?.cancel();
-                _handleSessionComplete();
-              } else {
-                _sessionTimer?.cancel();
-                _startFocusTimer();
-              }
-            } else {
-              _secondsRemaining = savedSeconds;
-              _sessionTimer?.cancel();
-            }
-          });
-        } else {
-          setState(() {
-            _isRunning = false;
-            _secondsRemaining = 0;
-            _sessionTimer?.cancel();
-          });
-          if (mounted) {
-            Navigator.pop(context);
-          }
-        }
-      }
-    }
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
+    final manager = PomodoroManager.instance;
+
     return PopScope(
-      canPop: false,
+      canPop: !widget.isRestrictMode,
       onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          // If backed out, active session keeps running in background
+          return;
+        }
         _countdownTimer?.cancel();
-        _sessionTimer?.cancel();
       },
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 600),
@@ -382,29 +265,28 @@ class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsB
         child: switch (_phase) {
           _Phase.countdown => _CountdownScreen(
               key: const ValueKey('countdown'),
-              count: _countdown,
+              countdownNotifier: _countdownNotifier,
               activityName: widget.activity.name,
               durationMinutes: _totalSeconds ~/ 60,
-              hasQueue: widget.remainingQueue.isNotEmpty,
-              trackSession: _trackSession,
-              followUpNext: _followUpNext,
-              onTrackSessionChanged: (v) => setState(() => _trackSession = v),
-              onFollowUpNextChanged: (v) => setState(() => _followUpNext = v),
               onCancel: _handleCancelSession,
             ),
           _Phase.focus => _FocusScreen(
               key: const ValueKey('focus'),
               activity: widget.activity,
               totalSeconds: _totalSeconds,
-              secondsRemaining: _secondsRemaining,
-              isRunning: _isRunning,
-              isCompleted: _isCompleted,
+              secondsRemainingNotifier: manager.secondsNotifier,
+              isRunning: manager.isRunningNotifier.value,
+              isCompleted: manager.isCompletedNotifier.value,
               hasMore: widget.remainingQueue.isNotEmpty,
-              onStart: _startFocusTimer,
-              onPause: _pauseTimer,
-              onReset: _resetTimer,
+              onStart: manager.startFocusTimer,
+              onPause: manager.pauseTimer,
+              onReset: _handleReset,
               onNext: _handleNextActivity,
               onCancel: _handleCancelSession,
+              allowPause: widget.allowPause,
+              focusedSubTaskIds: _focusedSubTaskIds,
+              milestoneTask: _milestoneTask,
+              isRestrictMode: widget.isRestrictMode,
               nextActivity: widget.remainingQueue.isNotEmpty
                   ? widget.remainingQueue.first
                   : null,
@@ -415,34 +297,24 @@ class _PomodoroTimerScreenState extends State<PomodoroTimerScreen> with WidgetsB
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _CountdownScreen extends StatelessWidget {
-  final int count;
+  final ValueNotifier<int> countdownNotifier;
   final String activityName;
   final int durationMinutes;
-  final bool hasQueue;
-  final bool trackSession;
-  final bool followUpNext;
-  final ValueChanged<bool> onTrackSessionChanged;
-  final ValueChanged<bool> onFollowUpNextChanged;
   final VoidCallback onCancel;
 
   const _CountdownScreen({
     super.key,
-    required this.count,
+    required this.countdownNotifier,
     required this.activityName,
     required this.durationMinutes,
-    required this.hasQueue,
-    required this.trackSession,
-    required this.followUpNext,
-    required this.onTrackSessionChanged,
-    required this.onFollowUpNextChanged,
     required this.onCancel,
   });
 
   @override
   Widget build(BuildContext context) {
-    final double progress = count / 6.0;
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -455,39 +327,8 @@ class _CountdownScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Column(
               children: [
-                // ── Top Bar (Back/Cancel button) ──────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: onCancel,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.borderColor(context),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: AppTheme.textPrimaryColor(context),
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const VGapMd(),
-                // ── Ready? label ───────────────────────────────────────────
-                Text(
-                  'Ready?',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: AppTheme.textSecondaryColor(context),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const VGapSm(),
-                // ── Activity Name ──────────────────────────────────────────
+                _CountdownHeader(onCancel: onCancel),
+                const Spacer(),
                 Text(
                   activityName,
                   style: TextStyle(
@@ -500,7 +341,6 @@ class _CountdownScreen extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const VGapXs(),
-                // ── Duration ───────────────────────────────────────────────
                 Text(
                   '$durationMinutes min',
                   style: TextStyle(
@@ -510,147 +350,9 @@ class _CountdownScreen extends StatelessWidget {
                   ),
                 ),
                 const VGapLg(),
-
-                // ── Checkboxes (above countdown circle) ─────────────────────
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Checkbox(
-                              value: trackSession,
-                              onChanged: (v) => onTrackSessionChanged(v ?? false),
-                              activeColor: AppTheme.primaryColor,
-                              checkColor: AppTheme.isDarkMode(context) ? Colors.black : Colors.white,
-                              side: BorderSide(color: AppTheme.textSecondaryColor(context), width: 1.5),
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            const HGapSm(),
-                            GestureDetector(
-                              onTap: () => onTrackSessionChanged(!trackSession),
-                              child: Text(
-                                'Track Session',
-                                style: TextStyle(
-                                  color: AppTheme.textPrimaryColor(context),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const VGapXs(),
-                        Opacity(
-                          opacity: hasQueue ? 1.0 : 0.5,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Checkbox(
-                                value: followUpNext,
-                                onChanged: hasQueue
-                                    ? (v) => onFollowUpNextChanged(v ?? false)
-                                    : null,
-                                activeColor: AppTheme.primaryColor,
-                                checkColor: AppTheme.isDarkMode(context) ? Colors.black : Colors.white,
-                                side: BorderSide(color: AppTheme.textSecondaryColor(context), width: 1.5),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              const HGapSm(),
-                              GestureDetector(
-                                onTap: hasQueue
-                                    ? () => onFollowUpNextChanged(!followUpNext)
-                                    : null,
-                                child: Text(
-                                  'Follow up next',
-                                  style: TextStyle(
-                                    color: AppTheme.textPrimaryColor(context),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _CountdownIndicator(countdownNotifier: countdownNotifier),
                 const Spacer(),
-
-                // ── Circular countdown progress ────────────────────────────
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 220,
-                      height: 220,
-                      child: CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 3,
-                        backgroundColor: AppTheme.borderColor(context),
-                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccentColor(context)),
-                      ),
-                    ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, anim) => ScaleTransition(
-                        scale: anim,
-                        child: FadeTransition(opacity: anim, child: child),
-                      ),
-                      child: Text(
-                        count > 1 ? '$count' : 'Go!',
-                        key: ValueKey(count),
-                        style: TextStyle(
-                          fontSize: count > 1 ? 84 : 64,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimaryColor(context),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
                 const Spacer(),
-                // ── Cancel button ──────────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: onCancel,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.surface(context).withValues(alpha: AppTheme.isDarkMode(context) ? 0.12 : 0.8),
-                      foregroundColor: AppTheme.textPrimaryColor(context),
-                      elevation: 0,
-                      shape: const StadiumBorder(),
-                      side: BorderSide(
-                        color: AppTheme.borderColor(context),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ),
-                const VGapMd(),
               ],
             ),
           ),
@@ -660,13 +362,100 @@ class _CountdownScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Focus Screen (existing timer UI)
-// ─────────────────────────────────────────────────────────────────────────────
+class _CountdownHeader extends StatelessWidget {
+  final VoidCallback onCancel;
+  const _CountdownHeader({required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: onCancel,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.borderColor(context),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppTheme.textPrimaryColor(context),
+                  size: 16,
+                ),
+              ),
+            ),
+          ),
+          Text(
+            'Ready?',
+            style: TextStyle(
+              fontSize: 18,
+              color: AppTheme.textSecondaryColor(context),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountdownIndicator extends StatelessWidget {
+  final ValueNotifier<int> countdownNotifier;
+  const _CountdownIndicator({required this.countdownNotifier});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: countdownNotifier,
+      builder: (context, count, _) {
+        final double progress = count / 6.0;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 220,
+              height: 220,
+              child: CircularProgressIndicator(
+                value: progress,
+                strokeWidth: 3,
+                backgroundColor: AppTheme.borderColor(context),
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccentColor(context)),
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, anim) => ScaleTransition(
+                scale: anim,
+                child: FadeTransition(opacity: anim, child: child),
+              ),
+              child: Text(
+                count > 1 ? '$count' : 'Go!',
+                key: ValueKey(count),
+                style: TextStyle(
+                  fontSize: count > 1 ? 84 : 64,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimaryColor(context),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// Focus Screen (existing timer UI0
 class _FocusScreen extends StatefulWidget {
   final Activity activity;
   final int totalSeconds;
-  final int secondsRemaining;
+  final ValueNotifier<int> secondsRemainingNotifier;
   final bool isRunning;
   final bool isCompleted;
   final bool hasMore;
@@ -676,12 +465,16 @@ class _FocusScreen extends StatefulWidget {
   final VoidCallback onReset;
   final VoidCallback onNext;
   final VoidCallback onCancel;
+  final bool allowPause;
+  final List<String>? focusedSubTaskIds;
+  final Task? milestoneTask;
+  final bool isRestrictMode;
 
   const _FocusScreen({
     super.key,
     required this.activity,
     required this.totalSeconds,
-    required this.secondsRemaining,
+    required this.secondsRemainingNotifier,
     required this.isRunning,
     required this.isCompleted,
     required this.hasMore,
@@ -691,6 +484,10 @@ class _FocusScreen extends StatefulWidget {
     required this.onReset,
     required this.onNext,
     required this.onCancel,
+    required this.allowPause,
+    this.focusedSubTaskIds,
+    this.milestoneTask,
+    required this.isRestrictMode,
   });
 
   @override
@@ -724,6 +521,215 @@ class _FocusScreenState extends State<_FocusScreen> {
     }
   }
 
+  void _handleCircleTapped() {
+    if (widget.isCompleted) return;
+    if (widget.isRunning) {
+      if (widget.allowPause) {
+        widget.onPause();
+      } else {
+        AppToast.show(
+          context: context,
+          message: 'Pausing is disabled for this session',
+        );
+      }
+    } else {
+      widget.onStart();
+    }
+  }
+
+  void _handleReset() {
+    _cancelHideTimer?.cancel();
+    setState(() {
+      _showCancel = false;
+    });
+    widget.onReset();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedSubTasks = widget.milestoneTask?.subTasks
+            .where((st) => widget.focusedSubTaskIds?.contains(st.id) ?? false)
+            .toList() ?? [];
+
+    SubTask? currentSubTask;
+    List<SubTask> remainingSubTasks = [];
+
+    if (selectedSubTasks.isNotEmpty) {
+      int currentIndex = selectedSubTasks.indexWhere((st) => !st.checked);
+      if (currentIndex == -1) {
+        currentIndex = 0;
+      }
+      currentSubTask = selectedSubTasks[currentIndex];
+      remainingSubTasks = List<SubTask>.from(selectedSubTasks)..removeAt(currentIndex);
+    }
+
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: AppTheme.resolvedBackgroundGradient(context),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              children: [
+                if (!widget.isCompleted)
+                  _FocusHeader(
+                    onBackTapped: widget.isRestrictMode
+                        ? _onExitTapped
+                        : () => Navigator.pop(context),
+                    onCancelTapped: widget.isRestrictMode
+                        ? null
+                        : _onExitTapped,
+                    showCancelButton: !widget.isRestrictMode,
+                  )
+                else
+                  const SizedBox(height: 32),
+                
+                const VGapMd(),
+                
+                Text(
+                  widget.activity.name,
+                  style: TextStyle(
+                    fontSize: 32,
+                    color: AppTheme.textPrimaryColor(context),
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (currentSubTask != null) ...[
+                  const VGapSm(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.hourglass_top_rounded,
+                        size: 16,
+                        color: AppTheme.primaryColor,
+                      ),
+                      const HGapXs(),
+                      Text(
+                        currentSubTask.title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                
+                const Spacer(),
+
+                _FocusTimerIndicator(
+                  totalSeconds: widget.totalSeconds,
+                  secondsRemainingNotifier: widget.secondsRemainingNotifier,
+                  isRunning: widget.isRunning,
+                  isCompleted: widget.isCompleted,
+                  allowPause: widget.allowPause,
+                  onTap: _handleCircleTapped,
+                ),
+                if (remainingSubTasks.isNotEmpty) ...[
+                  const VGapMd(),
+                  _RemainingTasksDropdown(remainingTasks: remainingSubTasks),
+                ],
+
+                const Spacer(),
+
+                _FocusControls(
+                  isCompleted: widget.isCompleted,
+                  hasMore: widget.hasMore,
+                  showCancel: _showCancel,
+                  onNext: widget.onNext,
+                  onCancel: widget.onCancel,
+                  onReset: _handleReset,
+                ),
+
+                const VGapMd(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FocusHeader extends StatelessWidget {
+  final VoidCallback onBackTapped;
+  final VoidCallback? onCancelTapped;
+  final bool showCancelButton;
+
+  const _FocusHeader({
+    required this.onBackTapped,
+    this.onCancelTapped,
+    this.showCancelButton = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        GestureDetector(
+          onTap: onBackTapped,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.borderColor(context),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: AppTheme.textPrimaryColor(context),
+              size: 16,
+            ),
+          ),
+        ),
+        if (showCancelButton)
+          GestureDetector(
+            onTap: onCancelTapped,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.borderColor(context),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.close_rounded,
+                color: AppTheme.textPrimaryColor(context),
+                size: 16,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FocusTimerIndicator extends StatelessWidget {
+  final int totalSeconds;
+  final ValueNotifier<int> secondsRemainingNotifier;
+  final bool isRunning;
+  final bool isCompleted;
+  final bool allowPause;
+  final VoidCallback onTap;
+
+  const _FocusTimerIndicator({
+    required this.totalSeconds,
+    required this.secondsRemainingNotifier,
+    required this.isRunning,
+    required this.isCompleted,
+    required this.allowPause,
+    required this.onTap,
+  });
+
   String _formatTime(int secs) {
     final h = (secs / 3600).floor();
     final m = ((secs % 3600) / 60).floor();
@@ -737,170 +743,272 @@ class _FocusScreenState extends State<_FocusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final double progress = (widget.totalSeconds - widget.secondsRemaining) / widget.totalSeconds;
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: AppTheme.resolvedBackgroundGradient(context),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              children: [
-                // ── Top Bar (Back/Cancel button) ──────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    if (!widget.isCompleted)
-                      GestureDetector(
-                        onTap: _onExitTapped,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.borderColor(context),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: AppTheme.textPrimaryColor(context),
-                            size: 16,
-                          ),
-                        ),
-                      )
-                    else
-                      const SizedBox(height: 32),
-                  ],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ValueListenableBuilder<int>(
+            valueListenable: secondsRemainingNotifier,
+            builder: (context, seconds, _) {
+              final double progress = (totalSeconds - seconds) / totalSeconds;
+              return SizedBox(
+                width: 250,
+                height: 250,
+                child: CircularProgressIndicator(
+                  value: isCompleted ? 1.0 : progress,
+                  strokeWidth: 3,
+                  backgroundColor: AppTheme.borderColor(context),
+                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccentColor(context)),
                 ),
-                const VGapMd(),
-                
-                // ── Activity Title ───────────────────────────────────────────
-                Text(
-                  widget.activity.name,
-                  style: TextStyle(
-                    fontSize: 32,
-                    color: AppTheme.textPrimaryColor(context),
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                
-                const Spacer(),
-
-                // ── Timer Circle ─────────────────────────────────────────────
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 250,
-                      height: 250,
-                      child: CircularProgressIndicator(
-                        value: widget.isCompleted ? 1.0 : progress,
-                        strokeWidth: 3,
-                        backgroundColor: AppTheme.borderColor(context),
-                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryAccentColor(context)),
-                      ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.isCompleted ? 'Finished' : 'Time remaining',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.textSecondaryColor(context),
-                          ),
-                        ),
-                        const VGapSm(),
-                        Text(
-                          _formatTime(widget.secondsRemaining),
-                          style: TextStyle(
-                            fontSize: 44,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimaryColor(context),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                const Spacer(),
-
-                // ── Controls & Actions ────────────────────────────────────────
-                if (widget.isCompleted) ...[
-                  Text(
-                    'Session Completed! 🎉',
-                    style: TextStyle(
-                      color: AppTheme.textPrimaryColor(context),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                  const VGapMd(),
-                  SizedBox(
-                    width: 200,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: widget.onNext,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        foregroundColor: Colors.white,
-                        shape: const StadiumBorder(),
-                        elevation: 2,
-                      ),
-                      child: Text(
-                        widget.hasMore ? 'Next Activity' : 'Finish Flow',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  AnimatedOpacity(
-                    opacity: _showCancel ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    child: IgnorePointer(
-                      ignoring: !_showCancel,
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: widget.onCancel,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.surface(context).withValues(alpha: AppTheme.isDarkMode(context) ? 0.12 : 0.8),
-                            foregroundColor: AppTheme.textPrimaryColor(context),
-                            elevation: 0,
-                            shape: const StadiumBorder(),
-                            side: BorderSide(
-                              color: AppTheme.borderColor(context),
-                              width: 1,
-                            ),
-                          ),
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-
-                const VGapMd(),
-              ],
-            ),
+              );
+            },
           ),
-        ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isCompleted ? 'Finished' : 'Time remaining',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textSecondaryColor(context),
+                ),
+              ),
+              const VGapSm(),
+              ValueListenableBuilder<int>(
+                valueListenable: secondsRemainingNotifier,
+                builder: (context, seconds, _) {
+                  return Text(
+                    _formatTime(seconds),
+                    style: TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor(context),
+                      letterSpacing: 0.5,
+                    ),
+                  );
+                },
+              ),
+              if (!isCompleted) ...[
+                const VGapXs(),
+                Icon(
+                  isRunning
+                      ? (allowPause ? Icons.pause_rounded : Icons.lock_outline_rounded)
+                      : Icons.play_arrow_rounded,
+                  color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
+                  size: 20,
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
 }
+
+class _FocusControls extends StatelessWidget {
+  final bool isCompleted;
+  final bool hasMore;
+  final bool showCancel;
+  final VoidCallback onNext;
+  final VoidCallback onCancel;
+  final VoidCallback onReset;
+
+  const _FocusControls({
+    required this.isCompleted,
+    required this.hasMore,
+    required this.showCancel,
+    required this.onNext,
+    required this.onCancel,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isCompleted) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Session Completed! Ã°Å¸Å½â€°',
+            style: TextStyle(
+              color: AppTheme.textPrimaryColor(context),
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          const VGapMd(),
+          SizedBox(
+            width: 200,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: onNext,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                elevation: 2,
+              ),
+              child: Text(
+                hasMore ? 'Next Activity' : 'Finish Flow',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      return AnimatedOpacity(
+        opacity: showCancel ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 250),
+        child: IgnorePointer(
+          ignoring: !showCancel,
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: onCancel,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.errorColor.withValues(alpha: 0.12),
+                      foregroundColor: AppTheme.errorColor,
+                      elevation: 0,
+                      shape: const StadiumBorder(),
+                      side: const BorderSide(
+                        color: AppTheme.errorColor,
+                        width: 1,
+                      ),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const HGapSm(),
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: onReset,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.surface(context).withValues(alpha: AppTheme.isDarkMode(context) ? 0.12 : 0.8),
+                      foregroundColor: AppTheme.textPrimaryColor(context),
+                      elevation: 0,
+                      shape: const StadiumBorder(),
+                      side: BorderSide(
+                        color: AppTheme.borderColor(context),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Text(
+                      'Reset',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _RemainingTasksDropdown extends StatelessWidget {
+  final List<SubTask> remainingTasks;
+  const _RemainingTasksDropdown({required this.remainingTasks});
+
+  @override
+  Widget build(BuildContext context) {
+    if (remainingTasks.isEmpty) return const SizedBox.shrink();
+
+    final nextTask = remainingTasks.first;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'Upcoming Task',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+            color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.6),
+          ),
+        ),
+        const VGapXs(),
+        PopupMenuButton<String>(
+          tooltip: 'Remaining Tasks',
+          offset: const Offset(0, 40),
+          color: AppTheme.surface(context),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: AppTheme.borderColor(context), width: 1),
+          ),
+          onSelected: (_) {}, // read-only
+          itemBuilder: (context) {
+            return remainingTasks.map((st) {
+              return PopupMenuItem<String>(
+                value: st.id,
+                child: Text(
+                  st.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.surface(context).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.borderColor(context).withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  nextTask.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondaryColor(context),
+                  ),
+                ),
+                const HGapXs(),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.textSecondaryColor(context),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
