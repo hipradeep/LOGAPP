@@ -17,17 +17,31 @@ dependencies:
   intl: ^0.20.2
   google_fonts: ^8.0.2
   flutter_notification_listener: ^1.4.0
-  flutter_local_notifications: ^17.2.1
+  flutter_local_notifications: ^18.0.0
   timezone: ^0.9.4
   permission_handler: ^11.3.1
   path_provider: ^2.1.0
   get_it: ^8.0.0
+
+  core_ui:
+    path: packages/core_ui
+  core_services:
+    path: packages/core_services
+  notes_module:
+    path: packages/notes_module
+  expenses_module:
+    path: packages/expenses_module
+  pomodoro_module:
+    path: packages/pomodoro_module
+  activities_module:
+    path: packages/activities_module
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  melos: ^6.0.0
 
 flutter:
   uses-material-design: true

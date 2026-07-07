@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../models/activity.dart';
 import '../models/task.dart';
 import '../models/check_in.dart';
@@ -110,6 +110,10 @@ class ActivityService {
     String? symbolValue,
     bool skippable = false,
     bool reminderEnabled = true,
+    int points = 10,
+    double weight = 1.0,
+    int focusDuration = 25,
+    bool isPomodoroFocusEnabled = false,
   }) async {
     final db = await (await _db).database;
     final id = IdUtils.generateId();
@@ -133,6 +137,10 @@ class ActivityService {
       symbolType: symbolType,
       symbolValue: symbolValue,
       skippable: skippable,
+      points: points,
+      weight: weight,
+      focusDuration: focusDuration,
+      isPomodoroFocusEnabled: isPomodoroFocusEnabled,
     );
 
     final map = newActivity.toMap();
@@ -170,6 +178,10 @@ class ActivityService {
     String? description,
     bool? skippable,
     bool? reminderEnabled,
+    int? points,
+    double? weight,
+    int? focusDuration,
+    bool? isPomodoroFocusEnabled,
   }) async {
     final db = await (await _db).database;
     final updates = <String, dynamic>{
@@ -185,6 +197,10 @@ class ActivityService {
     if (skippable != null) updates['skippable'] = skippable ? 1 : 0;
     if (reminderEnabled != null) updates['reminderEnabled'] = reminderEnabled ? 1 : 0;
     if (description != null) updates['description'] = description;
+    if (points != null) updates['points'] = points;
+    if (weight != null) updates['weight'] = weight;
+    if (focusDuration != null) updates['focusDuration'] = focusDuration;
+    if (isPomodoroFocusEnabled != null) updates['isPomodoroFocusEnabled'] = isPomodoroFocusEnabled ? 1 : 0;
 
     await db.update('activities', updates, where: 'id = ?', whereArgs: [id]);
 
@@ -223,6 +239,65 @@ class ActivityService {
         await db.update('tasks', updatedTask.toMap(), where: 'id = ?', whereArgs: [updatedTask.id]);
       }
     }
+  }
+
+  Future<Task?> getTaskById(String id) async {
+    final db = await (await _db).database;
+    final rows = await db.query('tasks', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return Task.fromMap(rows.first['id'] as String, rows.first);
+  }
+
+  Future<Task?> getOrCreateTodayTaskForRoutine(Activity activity) async {
+    final db = await (await _db).database;
+    final now = DateTime.now();
+    final todayStart = AppDateUtils.startOfDay(now);
+    final tomorrowStart = todayStart.add(const Duration(days: 1));
+
+    // Query tasks for this activity today
+    final rows = await db.query(
+      'tasks',
+      where: 'activityId = ? AND timestamp >= ? AND timestamp < ?',
+      whereArgs: [activity.id, todayStart.millisecondsSinceEpoch, tomorrowStart.millisecondsSinceEpoch],
+      limit: 1,
+    );
+
+    if (rows.isNotEmpty) {
+      return Task.fromMap(rows.first['id'] as String, rows.first);
+    }
+
+    if (activity.subTaskTemplates.isNotEmpty) {
+      final subTasks = activity.subTaskTemplates.map((template) {
+        final parts = template.split('|');
+        return SubTask(
+          id: IdUtils.generateId(),
+          title: parts.first,
+          checked: false,
+          scheduledTime: parts.length > 1 ? parts.last : null,
+        );
+      }).toList();
+
+      final id = IdUtils.generateId();
+      final task = Task(
+        id: id,
+        activityId: activity.id,
+        taskName: activity.name,
+        timestamp: now,
+        checked: false,
+        subTasks: subTasks,
+      );
+
+      final map = task.toMap();
+      map['createdAt'] = now.millisecondsSinceEpoch;
+      await db.insert('tasks', map);
+
+      // Auto-reactivate parent activity
+      await db.update('activities', {'isActive': 1}, where: 'id = ?', whereArgs: [activity.id]);
+
+      return task;
+    }
+
+    return null;
   }
 
   Future<void> deleteActivity(String id) async {
@@ -305,12 +380,15 @@ class ActivityService {
 
   // ─── Tasks — writes ───────────────────────────────────────────────────────
 
-  Future<void> createTask(
+  Future<Task> createTask(
     String activityId,
     String taskName,
     DateTime timestamp,
     bool checked, {
     List<SubTask> subTasks = const [],
+    String? symbolType,
+    String? symbolValue,
+    String? notes,
   }) async {
     final db = await (await _db).database;
 
@@ -327,6 +405,9 @@ class ActivityService {
       checked: checked,
       scheduledTime: timeStr,
       subTasks: subTasks,
+      symbolType: symbolType,
+      symbolValue: symbolValue,
+      notes: notes,
     );
 
     final map = newTask.toMap();
@@ -339,6 +420,7 @@ class ActivityService {
     if (checked) {
       await _upsertCheckIn(db, activityId, cleanName, timestamp);
     }
+    return newTask;
   }
 
   Future<void> updateTask(Task task) async {
@@ -456,4 +538,25 @@ class ActivityService {
   String _encodeIntList(List<int> list) => jsonEncode(list);
 
   String _encodeStringList(List<String> list) => jsonEncode(list);
+
+  Future<Task?> getActiveTaskForActivity(String activityId) async {
+    final db = await (await _db).database;
+    // Check if it's a task ID first
+    final taskRows = await db.query('tasks', where: 'id = ?', whereArgs: [activityId], limit: 1);
+    if (taskRows.isNotEmpty) {
+      return Task.fromMap(taskRows.first['id'] as String, taskRows.first);
+    }
+
+    final rows = await db.query('tasks', where: 'activityId = ?', whereArgs: [activityId]);
+    if (rows.isEmpty) return null;
+    final tasks = rows.map((r) => Task.fromMap(r['id'] as String, r)).toList();
+    // Sort descending by timestamp
+    tasks.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    // Find first unchecked task
+    final unchecked = tasks.where((t) => !t.checked);
+    if (unchecked.isNotEmpty) {
+      return unchecked.first;
+    }
+    return tasks.first;
+  }
 }

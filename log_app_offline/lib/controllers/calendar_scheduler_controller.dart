@@ -256,6 +256,105 @@ class CalendarSchedulerController extends ChangeNotifier {
     return dateEvents.where((e) => e.isCompleted).length / dateEvents.length;
   }
 
+  /// Returns the earned star score for [date] based on each activity's
+  /// completion ratio × its [Activity.points] value.
+  double getStarsForDate(DateTime date) {
+    final dateEvents = _computeEventsForDate(date);
+    if (dateEvents.isEmpty) return 0.0;
+
+    double dayStars = 0.0;
+
+    final Map<String, List<TimelineEvent>> eventsByActivity = {};
+    for (var event in dateEvents) {
+      eventsByActivity.putIfAbsent(event.activityId, () => []).add(event);
+    }
+
+    for (var entry in eventsByActivity.entries) {
+      final activityId = entry.key;
+      final activityEvents = entry.value;
+
+      final activity = _activities.firstWhere(
+        (a) => a.id == activityId,
+        orElse: () => Activity(
+          id: '',
+          name: '',
+          isActive: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      if (activity.id.isEmpty) continue;
+
+      final completedEvents = activityEvents.where((e) => e.isCompleted).length;
+      final double activityProgress =
+          activityEvents.isNotEmpty ? completedEvents / activityEvents.length : 0.0;
+
+      dayStars += (activityProgress * activity.points);
+    }
+
+    return dayStars;
+  }
+
+  /// Returns the maximum possible star score for [date] (all activities fully
+  /// completed).
+  double getMaxStarsForDate(DateTime date) {
+    final dateEvents = _computeEventsForDate(date);
+    if (dateEvents.isEmpty) return 0.0;
+
+    double dayMaxStars = 0.0;
+
+    final Map<String, List<TimelineEvent>> eventsByActivity = {};
+    for (var event in dateEvents) {
+      eventsByActivity.putIfAbsent(event.activityId, () => []).add(event);
+    }
+
+    for (var entry in eventsByActivity.entries) {
+      final activityId = entry.key;
+
+      final activity = _activities.firstWhere(
+        (a) => a.id == activityId,
+        orElse: () => Activity(
+          id: '',
+          name: '',
+          isActive: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      if (activity.id.isEmpty) continue;
+
+      dayMaxStars += activity.points;
+    }
+
+    return dayMaxStars;
+  }
+
+  /// Returns the total count of "perfect days" across all recorded history —
+  /// days where every scheduled event was 100 % completed (💎).
+  int getTotalDiamondsForHistory() {
+    final Set<String> uniqueDateStrings = {};
+
+    for (var task in _tasks) {
+      final date = task.timestamp;
+      uniqueDateStrings.add('${date.year}-${date.month}-${date.day}');
+    }
+
+    for (var checkIn in _checkIns) {
+      final date = checkIn.timestamp;
+      uniqueDateStrings.add('${date.year}-${date.month}-${date.day}');
+    }
+
+    int count = 0;
+    for (var dateStr in uniqueDateStrings) {
+      final parts = dateStr.split('-');
+      final day = DateTime(
+          int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      final fraction = getCompletionFractionForDate(day);
+      if (fraction != null && fraction >= 1.0) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   DateTime _addMonths(DateTime date, int months) {
     int newYear = date.year;
     int newMonth = date.month + months;

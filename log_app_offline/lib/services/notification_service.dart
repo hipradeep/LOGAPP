@@ -4,8 +4,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
+import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:permission_handler/permission_handler.dart';
 import 'cache_service.dart';
+import '../models/activity.dart';
+import '../screens/pomodoro_timer_screen.dart';
+import 'navigation_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> onNotificationActionCallback(NotificationResponse details) async {
@@ -114,6 +118,22 @@ class NotificationService {
     
     // Log the incoming action details for easier debugging
     debugPrint('Notification Action Triggered: actionId=$actionId, payload=$payload, id=${details.id}');
+
+    if (payload == 'open_pomodoro') {
+      await _handleOpenPomodoroAction();
+      return;
+    }
+
+    if (actionId == 'pause_pomodoro') {
+      await _handlePauseAction();
+      return;
+    } else if (actionId == 'resume_pomodoro') {
+      await _handleResumeAction();
+      return;
+    } else if (actionId == 'cancel_pomodoro') {
+      await _handleCancelAction();
+      return;
+    }
 
     if (actionId == null || payload == null || payload.isEmpty) {
       debugPrint('Action aborted: actionId or payload is null/empty.');
@@ -421,6 +441,211 @@ class NotificationService {
       await _notificationsPlugin.cancelAll();
     } catch (e, s) {
       debugPrint('NotificationService cancelAllNotifications error: $e\n$s');
+    }
+  }
+
+  static Future<void> _handlePauseAction() async {
+    final cache = CacheService();
+    final activeSession = await cache.getActivePomodoroSession();
+    if (activeSession == null) return;
+
+    final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var secondsRemaining = ((endTimestamp - now) / 1000).round();
+    if (secondsRemaining < 0) secondsRemaining = 0;
+
+    activeSession['isRunning'] = false;
+    activeSession['secondsRemaining'] = secondsRemaining;
+    await cache.saveActivePomodoroSession(activeSession);
+
+    // Cancel completion alarm
+    await cancelNotification(8889);
+
+    final activityName = (activeSession['activity'] as Map)['name'] as String? ?? 'Session';
+    
+    final startTimestamp = activeSession['startTimestamp'] as int?;
+    String startTimeFormatted = '';
+    if (startTimestamp != null) {
+      final startTime = DateTime.fromMillisecondsSinceEpoch(startTimestamp);
+      startTimeFormatted = ' (${DateFormat.jm().format(startTime)})';
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      'pomodoro_timer_channel_v3',
+      'Pomodoro Active Timer',
+      channelDescription: 'Real-time countdown for running Pomodoro sessions',
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      onlyAlertOnce: true,
+      showWhen: false,
+      usesChronometer: false,
+      visibility: NotificationVisibility.public,
+      icon: 'ic_timer',
+      playSound: false,
+      enableVibration: false,
+      actions: const <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'resume_pomodoro',
+          'Resume',
+          icon: DrawableResourceAndroidBitmap('ic_play'),
+          cancelNotification: false,
+        ),
+        AndroidNotificationAction(
+          'cancel_pomodoro',
+          'Cancel',
+          icon: DrawableResourceAndroidBitmap('ic_cancel'),
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    final notificationDetails = NotificationDetails(android: androidDetails);
+    
+    final minutes = (secondsRemaining ~/ 60).toString().padLeft(2, '0');
+    final seconds = (secondsRemaining % 60).toString().padLeft(2, '0');
+
+    await _notificationsPlugin.show(
+      8888,
+      'Paused: $activityName$startTimeFormatted',
+      '$minutes:$seconds remaining',
+      notificationDetails,
+      payload: 'open_pomodoro',
+    );
+  }
+
+  static Future<void> _handleResumeAction() async {
+    final cache = CacheService();
+    final activeSession = await cache.getActivePomodoroSession();
+    if (activeSession == null) return;
+
+    final secondsRemaining = activeSession['secondsRemaining'] as int? ?? 0;
+    final endTimestamp = DateTime.now().millisecondsSinceEpoch + secondsRemaining * 1000;
+
+    activeSession['isRunning'] = true;
+    activeSession['endTimestamp'] = endTimestamp;
+    await cache.saveActivePomodoroSession(activeSession);
+
+    // Reschedule completion alarm
+    await scheduleOneShotNotification(
+      id: 8889,
+      title: 'Focus Completed! 🎉',
+      body: 'Successfully completed focus session on "${(activeSession['activity'] as Map)['name']}".',
+      dateTime: DateTime.now().add(Duration(seconds: secondsRemaining)),
+      skipPermissionCheck: true,
+    );
+
+    final activityName = (activeSession['activity'] as Map)['name'] as String? ?? 'Session';
+
+    final startTimestamp = activeSession['startTimestamp'] as int?;
+    String startTimeFormatted = '';
+    if (startTimestamp != null) {
+      final startTime = DateTime.fromMillisecondsSinceEpoch(startTimestamp);
+      startTimeFormatted = ' (${DateFormat.jm().format(startTime)})';
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      'pomodoro_timer_channel_v3',
+      'Pomodoro Active Timer',
+      channelDescription: 'Real-time countdown for running Pomodoro sessions',
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      onlyAlertOnce: true,
+      showWhen: true,
+      when: endTimestamp,
+      usesChronometer: true,
+      chronometerCountDown: true,
+      visibility: NotificationVisibility.public,
+      icon: 'ic_timer',
+      playSound: false,
+      enableVibration: false,
+      actions: const <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'pause_pomodoro',
+          'Pause',
+          icon: DrawableResourceAndroidBitmap('ic_pause'),
+          cancelNotification: false,
+        ),
+        AndroidNotificationAction(
+          'cancel_pomodoro',
+          'Cancel',
+          icon: DrawableResourceAndroidBitmap('ic_cancel'),
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    final notificationDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.show(
+      8888,
+      'Focusing: $activityName$startTimeFormatted',
+      'Session is running in the background.',
+      notificationDetails,
+      payload: 'open_pomodoro',
+    );
+  }
+
+  static Future<void> _handleCancelAction() async {
+    final cache = CacheService();
+    await cache.clearActivePomodoroSession();
+    await cancelNotification(8888);
+    await cancelNotification(8889);
+  }
+
+  static Future<void> _handleOpenPomodoroAction() async {
+    if (PomodoroTimerScreen.isTimerScreenActive.value) {
+      debugPrint('open_pomodoro payload received, but PomodoroTimerScreen is already active/visible.');
+      return;
+    }
+
+    final cache = CacheService();
+    final activeSession = await cache.getActivePomodoroSession();
+    if (activeSession == null) {
+      debugPrint('open_pomodoro payload received, but no active session in cache.');
+      return;
+    }
+
+    final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
+    final isRunning = activeSession['isRunning'] as bool? ?? false;
+    final isRestrictMode = activeSession['isRestrictMode'] as bool? ?? true;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    final isPaused = !isRunning;
+    final savedSeconds = activeSession['secondsRemaining'] as int? ?? 0;
+
+    if ((isRunning && now < endTimestamp) || (isPaused && savedSeconds > 0)) {
+      final activityJson = activeSession['activity'] as Map<String, dynamic>;
+      final remainingQueueJson = activeSession['remainingQueue'] as List<dynamic>? ?? [];
+      final initialDurationMinutes = activeSession['initialDurationMinutes'] as int?;
+
+      final activity = Activity.fromJson(activityJson);
+      final remainingQueue = remainingQueueJson
+          .map((a) => Activity.fromJson(Map<String, dynamic>.from(a as Map)))
+          .toList();
+
+      final secondsRemaining = isRunning 
+          ? ((endTimestamp - now) / 1000).round()
+          : savedSeconds;
+
+      final navState = NavigationService.navigatorKey.currentState;
+      if (navState != null) {
+        navState.push(
+          MaterialPageRoute(
+            builder: (context) => PomodoroTimerScreen(
+              activity: activity,
+              remainingQueue: remainingQueue,
+              initialDurationMinutes: initialDurationMinutes,
+              initialSecondsRemaining: secondsRemaining,
+              initialIsRunning: isRunning,
+              isRestrictMode: isRestrictMode,
+            ),
+          ),
+        );
+      } else {
+        debugPrint('open_pomodoro payload received, but NavigationService navigatorKey has no current state.');
+      }
     }
   }
 }

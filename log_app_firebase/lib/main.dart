@@ -2,16 +2,18 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
-import 'theme/app_theme.dart';
+import 'package:core_ui/core_ui.dart';
+import 'package:core_services/core_services.dart';
+import 'package:notes_module/notes_module.dart';
+import 'package:expenses_module/expenses_module.dart';
+import 'package:pomodoro_module/pomodoro_module.dart';
+import 'package:activities_module/activities_module.dart';
 import 'screens/splash_screen.dart';
-import 'widgets/app_provider.dart';
 import 'controllers/theme_controller.dart';
 
 import 'services/notification_service.dart';
 import 'services/activity_notification_sync.dart';
-import 'services/notification_transaction_service.dart';
 import 'services/service_locator.dart';
-import 'services/activity_service.dart';
 import 'services/navigation_service.dart';
 
 void main() async {
@@ -30,6 +32,12 @@ void main() async {
   };
 
   setupLocator();
+
+  // Initialize and register modules
+  await ModuleRegistry.register(NotesModule());
+  await ModuleRegistry.register(ExpensesModule());
+  await ModuleRegistry.register(PomodoroModule());
+  await ModuleRegistry.register(ActivitiesModule());
 
   // Initialize Firebase (fails gracefully if google-services.json is a dummy)
   try {

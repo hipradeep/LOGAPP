@@ -34,7 +34,7 @@ class DatabaseService {
 
     return openDatabase(
       path,
-      version: 3,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       // Enable WAL mode for better concurrent read performance
@@ -69,10 +69,14 @@ class DatabaseService {
         symbolType       TEXT,
         symbolValue      TEXT,
         skippable        INTEGER NOT NULL DEFAULT 0,
+        points           INTEGER NOT NULL DEFAULT 10,
+        weight           REAL NOT NULL DEFAULT 1.0,
+        focusDuration    INTEGER NOT NULL DEFAULT 25,
+        isPomodoroFocusEnabled INTEGER NOT NULL DEFAULT 0,
         createdAt        INTEGER NOT NULL
       )
     ''');
-
+    
     // Tasks (belong to an activity, per-day)
     batch.execute('''
       CREATE TABLE tasks (
@@ -86,6 +90,7 @@ class DatabaseService {
         scheduledTime  TEXT,
         completionTime INTEGER,
         subTasks       TEXT NOT NULL DEFAULT '[]',
+        notes          TEXT,
         createdAt      INTEGER NOT NULL,
         FOREIGN KEY (activityId) REFERENCES activities(id) ON DELETE CASCADE
       )
@@ -162,6 +167,30 @@ class DatabaseService {
       await db.execute('DROP TABLE IF EXISTS transactions');
       await db.execute('DROP TABLE IF EXISTS budget_settings');
       await _onCreate(db, newVersion);
+      return;
+    }
+    if (oldVersion < 4) {
+      // Add points column to existing activities table
+      await db.execute(
+        'ALTER TABLE activities ADD COLUMN points INTEGER NOT NULL DEFAULT 10',
+      );
+    }
+    if (oldVersion < 5) {
+      // Add weight, focusDuration, and isPomodoroFocusEnabled columns
+      await db.execute(
+        'ALTER TABLE activities ADD COLUMN weight REAL NOT NULL DEFAULT 1.0',
+      );
+      await db.execute(
+        'ALTER TABLE activities ADD COLUMN focusDuration INTEGER NOT NULL DEFAULT 25',
+      );
+      await db.execute(
+        'ALTER TABLE activities ADD COLUMN isPomodoroFocusEnabled INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (oldVersion < 6) {
+      await db.execute(
+        'ALTER TABLE tasks ADD COLUMN notes TEXT',
+      );
     }
   }
 }

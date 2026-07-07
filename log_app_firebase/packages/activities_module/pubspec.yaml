@@ -1,0 +1,23 @@
+name: activities_module
+description: Activity tracking, milestones, calendar scheduler, and check-in module.
+publish_to: 'none'
+version: 0.0.1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cloud_firestore: ^5.0.0
+  get_it: ^8.0.0
+  intl: ^0.20.2
+  google_fonts: ^8.0.2
+
+  core_ui:
+    path: ../core_ui
+  core_services:
+    path: ../core_services
+  pomodoro_module:
+    path: ../pomodoro_module

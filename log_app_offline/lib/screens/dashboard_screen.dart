@@ -21,14 +21,15 @@ import 'note_write_screen.dart';
 import 'calendar_scheduler_screen.dart';
 import '../controllers/dashboard_controller.dart';
 import '../widgets/app_provider.dart';
-import '../widgets/focus_timer_sheet.dart';
 import '../widgets/dashboard_quick_actions.dart';
 import '../widgets/add_transaction_sheet.dart';
 import '../widgets/water_log_sheet.dart';
 import '../widgets/app_empty_state.dart';
-import 'track_activities_screen.dart';
-
 import '../widgets/dashboard_summary_card.dart';
+import 'track_activities_screen.dart';
+import 'pomodoro_activities_screen.dart';
+import 'pomodoro_timer_screen.dart';
+import '../services/cache_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   final CheckInService checkInService;
@@ -540,13 +541,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
   // QUICK ACTIONS NAMED HANDLERS
-  void _handleFocusAction() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const FocusTimerSheet(),
-    );
+  void _handleFocusAction() async {
+    final activeSession = await CacheService().getActivePomodoroSession();
+    if (activeSession != null) {
+      final endTimestamp = activeSession['endTimestamp'] as int? ?? 0;
+      final isRunning = activeSession['isRunning'] as bool? ?? false;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      
+      final isPaused = !isRunning;
+      final savedSeconds = activeSession['secondsRemaining'] as int? ?? 0;
+      
+      if ((isRunning && now < endTimestamp) || (isPaused && savedSeconds > 0)) {
+        final activityJson = activeSession['activity'] as Map<String, dynamic>;
+        final remainingQueueJson = activeSession['remainingQueue'] as List<dynamic>? ?? [];
+        final initialDurationMinutes = activeSession['initialDurationMinutes'] as int?;
+        
+        final activity = Activity.fromJson(activityJson);
+        final remainingQueue = remainingQueueJson
+            .map((a) => Activity.fromJson(Map<String, dynamic>.from(a as Map)))
+            .toList();
+            
+        final secondsRemaining = isRunning 
+            ? ((endTimestamp - now) / 1000).round()
+            : savedSeconds;
+            
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PomodoroTimerScreen(
+                activity: activity,
+                remainingQueue: remainingQueue,
+                initialDurationMinutes: initialDurationMinutes,
+                initialSecondsRemaining: secondsRemaining,
+                initialIsRunning: isRunning,
+              ),
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const PomodoroActivitiesScreen(),
+        ),
+      );
+    }
   }
 
 

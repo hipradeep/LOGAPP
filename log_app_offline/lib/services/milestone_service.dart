@@ -2,6 +2,25 @@ import '../models/activity.dart';
 import '../models/task.dart';
 
 class MilestoneService {
+  // Returns -1.0 if there are no tasks scheduled for that day.
+  double getMilestoneDailyCompletion(Activity activity, List<Task> tasks, DateTime day) {
+    if (activity.trackingType != 'milestone') return -1.0;
+
+    final dayTasks = tasks.where((t) =>
+        t.activityId == activity.id &&
+        t.timestamp.year == day.year &&
+        t.timestamp.month == day.month &&
+        t.timestamp.day == day.day
+    ).toList();
+
+    if (dayTasks.isEmpty) {
+      return -1.0;
+    }
+
+    final completedCount = dayTasks.where((t) => t.checked).length;
+    return completedCount / dayTasks.length;
+  }
+
   // Check if a milestone is completed on a specific day
   bool isMilestoneCompletedOnDay(Activity activity, List<Task> tasks, DateTime day) {
     if (activity.trackingType != 'milestone') return false;

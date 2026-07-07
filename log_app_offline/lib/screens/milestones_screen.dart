@@ -353,12 +353,15 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
         builder: (context) => AddMilestoneTaskScreen(
           milestones: _controller.milestoneActivities,
           initialActivityId: initialId,
-          onAddTask: (activity, taskName, timestamp, subTasks) async {
-            await _controller.createTask(
+          onAddTask: (activity, taskName, timestamp, subTasks, symbolType, symbolValue, notes) async {
+            return await _controller.createTask(
               activity,
               taskName,
               timestamp,
               subTasks: subTasks,
+              symbolType: symbolType,
+              symbolValue: symbolValue,
+              notes: notes,
             );
           },
         ),
@@ -381,6 +384,10 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
             String? description,
             bool skippable = false,
             bool reminderEnabled = true,
+            int points = 10,
+            double weight = 1.0,
+            int focusDuration = 25,
+            bool isPomodoroFocusEnabled = false,
           }) async {
             await getIt<ActivityService>().createActivity(
               name,
@@ -394,6 +401,10 @@ class _MilestonesScreenState extends State<MilestonesScreen> {
               description: description ?? '',
               skippable: skippable,
               reminderEnabled: reminderEnabled,
+              points: points,
+              weight: weight,
+              focusDuration: focusDuration,
+              isPomodoroFocusEnabled: isPomodoroFocusEnabled,
             );
           },
         ),

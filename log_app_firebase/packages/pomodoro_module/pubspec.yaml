@@ -1,0 +1,20 @@
+name: pomodoro_module
+description: Pomodoro focus timer feature module
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  intl: ^0.20.2
+  get_it: ^8.0.0
+  cloud_firestore: ^5.0.0
+  google_fonts: ^8.0.2
+  flutter_local_notifications: ^18.0.0
+  core_ui:
+    path: ../core_ui
+  core_services:
+    path: ../core_services

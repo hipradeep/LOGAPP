@@ -65,6 +65,7 @@ class Task {
   final String? scheduledTime;
   final DateTime? completionTime;
   final List<SubTask> subTasks;
+  final String? notes;
 
   Task({
     required this.id,
@@ -77,6 +78,7 @@ class Task {
     this.scheduledTime,
     this.completionTime,
     this.subTasks = const [],
+    this.notes,
   });
 
   // ─── SQLite serialization ─────────────────────────────────────────────────
@@ -93,6 +95,7 @@ class Task {
       'scheduledTime': scheduledTime,
       'completionTime': completionTime != null ? DbUtils.dateToMs(completionTime!) : null,
       'subTasks': jsonEncode(subTasks.map((st) => st.toMap()).toList()),
+      'notes': notes,
     };
   }
 
@@ -159,6 +162,7 @@ class Task {
       scheduledTime: scheduledTime,
       completionTime: DbUtils.msToDateNullable(map['completionTime'] as int?),
       subTasks: parsedSubTasks,
+      notes: map['notes'] as String?,
     );
   }
 
@@ -175,6 +179,7 @@ class Task {
     String? scheduledTime,
     DateTime? completionTime,
     List<SubTask>? subTasks,
+    String? notes,
   }) {
     return Task(
       id: id ?? this.id,
@@ -187,6 +192,7 @@ class Task {
       scheduledTime: scheduledTime ?? this.scheduledTime,
       completionTime: completionTime ?? this.completionTime,
       subTasks: subTasks ?? this.subTasks,
+      notes: notes ?? this.notes,
     );
   }
 }

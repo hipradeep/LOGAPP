@@ -1,0 +1,8 @@
+# melos_managed_dependency_overrides: core_services,core_ui,pomodoro_module
+dependency_overrides:
+  core_services:
+    path: ..\\core_services
+  core_ui:
+    path: ..\\core_ui
+  pomodoro_module:
+    path: ..\\pomodoro_module

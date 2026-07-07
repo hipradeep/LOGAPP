@@ -1,0 +1,14 @@
+# melos_managed_dependency_overrides: core_services,core_ui,notes_module,expenses_module,pomodoro_module,activities_module
+dependency_overrides:
+  activities_module:
+    path: packages\\activities_module
+  core_services:
+    path: packages\\core_services
+  core_ui:
+    path: packages\\core_ui
+  expenses_module:
+    path: packages\\expenses_module
+  notes_module:
+    path: packages\\notes_module
+  pomodoro_module:
+    path: packages\\pomodoro_module

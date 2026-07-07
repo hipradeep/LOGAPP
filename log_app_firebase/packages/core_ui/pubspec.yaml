@@ -1,0 +1,12 @@
+name: core_ui
+description: Shared UI library and styling tokens
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^8.0.2

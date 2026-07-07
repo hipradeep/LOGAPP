@@ -25,6 +25,16 @@ class Activity {
   final String? symbolType;
   final String? symbolValue;
   final bool? _skippable;
+  final int points;
+
+  // Weight / priority
+  final double weight;
+
+  // Pomodoro focus duration (in minutes, default 25)
+  final int focusDuration;
+
+  // Whether Pomodoro focus mode is enabled for this activity
+  final bool isPomodoroFocusEnabled;
 
   /// Whether this activity type supports sub-tasks.
   bool get hasSubTasks => trackingType == 'multiple' || trackingType == 'milestone';
@@ -49,6 +59,10 @@ class Activity {
     this.symbolType,
     this.symbolValue,
     bool? skippable = false,
+    this.points = 10,
+    this.weight = 1.0,
+    this.focusDuration = 25,
+    this.isPomodoroFocusEnabled = false,
   }) : _skippable = skippable;
 
   // ─── SQLite serialization ─────────────────────────────────────────────────
@@ -72,6 +86,10 @@ class Activity {
       'symbolType': symbolType,
       'symbolValue': symbolValue,
       'skippable': skippable ? 1 : 0,
+      'points': points,
+      'weight': weight,
+      'focusDuration': focusDuration,
+      'isPomodoroFocusEnabled': isPomodoroFocusEnabled ? 1 : 0,
     };
   }
 
@@ -122,6 +140,10 @@ class Activity {
       symbolType: map['symbolType'] as String?,
       symbolValue: map['symbolValue'] as String?,
       skippable: (map['skippable'] == 1 || map['skippable'] == true),
+      points: (map['points'] as int?) ?? 10,
+      weight: (map['weight'] as num?)?.toDouble() ?? 1.0,
+      focusDuration: (map['focusDuration'] as num?)?.toInt() ?? 25,
+      isPomodoroFocusEnabled: (map['isPomodoroFocusEnabled'] == 1 || map['isPomodoroFocusEnabled'] == true),
     );
   }
 
@@ -145,6 +167,10 @@ class Activity {
     String? symbolType,
     String? symbolValue,
     bool? skippable,
+    int? points,
+    double? weight,
+    int? focusDuration,
+    bool? isPomodoroFocusEnabled,
   }) {
     return Activity(
       id: id ?? this.id,
@@ -164,6 +190,66 @@ class Activity {
       symbolType: symbolType ?? this.symbolType,
       symbolValue: symbolValue ?? this.symbolValue,
       skippable: skippable ?? this.skippable,
+      points: points ?? this.points,
+      weight: weight ?? this.weight,
+      focusDuration: focusDuration ?? this.focusDuration,
+      isPomodoroFocusEnabled: isPomodoroFocusEnabled ?? this.isPomodoroFocusEnabled,
+    );
+  }
+
+  // ─── JSON serialization ───────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'isActive': isActive,
+      'timestamp': timestamp.toIso8601String(),
+      'trackingType': trackingType,
+      'targetCount': targetCount,
+      'reminderEnabled': reminderEnabled,
+      'repeatDays': repeatDays,
+      'scheduledTime': scheduledTime,
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+      'subTaskTemplates': subTaskTemplates,
+      'description': description,
+      'category': category,
+      'symbolType': symbolType,
+      'symbolValue': symbolValue,
+      'skippable': skippable,
+      'points': points,
+      'weight': weight,
+      'focusDuration': focusDuration,
+      'isPomodoroFocusEnabled': isPomodoroFocusEnabled,
+    };
+  }
+
+  factory Activity.fromJson(Map<String, dynamic> json) {
+    return Activity(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      isActive: json['isActive'] as bool? ?? false,
+      timestamp: json['timestamp'] != null
+          ? DateTime.parse(json['timestamp'] as String)
+          : DateTime.now(),
+      trackingType: json['trackingType'] as String? ?? 'single',
+      targetCount: json['targetCount'] as int? ?? 1,
+      reminderEnabled: json['reminderEnabled'] as bool? ?? true,
+      repeatDays: (json['repeatDays'] as List<dynamic>?)?.map((e) => e as int).toList() ?? const [1, 2, 3, 4, 5, 6, 7],
+      scheduledTime: json['scheduledTime'] as String?,
+      startDate: json['startDate'] != null ? DateTime.parse(json['startDate'] as String) : null,
+      endDate: json['endDate'] != null ? DateTime.parse(json['endDate'] as String) : null,
+      subTaskTemplates: (json['subTaskTemplates'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      description: json['description'] as String?,
+      category: json['category'] as String?,
+      symbolType: json['symbolType'] as String?,
+      symbolValue: json['symbolValue'] as String?,
+      skippable: json['skippable'] as bool? ?? false,
+      points: (json['points'] as num?)?.toInt() ?? 10,
+      weight: (json['weight'] as num?)?.toDouble() ?? 1.0,
+      focusDuration: (json['focusDuration'] as num?)?.toInt() ?? 25,
+      isPomodoroFocusEnabled: json['isPomodoroFocusEnabled'] as bool? ?? false,
     );
   }
 }

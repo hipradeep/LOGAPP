@@ -1,0 +1,4 @@
+name: log_app_firebase_workspace
+packages:
+  - .
+  - packages/*

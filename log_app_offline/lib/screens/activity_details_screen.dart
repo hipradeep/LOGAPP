@@ -822,6 +822,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             String? description,
             bool skippable = false,
             bool reminderEnabled = true,
+            int points = 10,
+            double weight = 1.0,
+            int focusDuration = 25,
+            bool isPomodoroFocusEnabled = false,
           }) {},
           initialActivity: activity,
           onEdit: (name, trackingType, targetCount, {
@@ -833,6 +837,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             String? description,
             bool skippable = false,
             bool reminderEnabled = true,
+            int points = 10,
+            double weight = 1.0,
+            int focusDuration = 25,
+            bool isPomodoroFocusEnabled = false,
           }) async {
             final messenger = ScaffoldMessenger.of(context);
             try {
@@ -846,9 +854,13 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 description: description,
                 skippable: skippable,
                 reminderEnabled: reminderEnabled,
+                points: points,
+                weight: weight,
+                focusDuration: focusDuration,
+                isPomodoroFocusEnabled: isPomodoroFocusEnabled,
               );
               messenger.showSnackBar(
-                const SnackBar(content: Text('Activity updated in Firestore.')),
+                const SnackBar(content: Text('Activity updated.')),
               );
             } catch (e) {
               messenger.showSnackBar(

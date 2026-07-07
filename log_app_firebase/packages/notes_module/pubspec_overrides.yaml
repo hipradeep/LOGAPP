@@ -1,0 +1,6 @@
+# melos_managed_dependency_overrides: core_services,core_ui
+dependency_overrides:
+  core_services:
+    path: ..\\core_services
+  core_ui:
+    path: ..\\core_ui

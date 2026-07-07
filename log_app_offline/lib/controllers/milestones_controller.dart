@@ -198,8 +198,32 @@ class MilestonesController extends ChangeNotifier {
     return true;
   }
 
-  Future<void> createTask(Activity activity, String taskName, DateTime timestamp, {List<SubTask> subTasks = const []}) async {
-    await _activityService.createTask(activity.id, taskName, timestamp, false, subTasks: subTasks);
+  Future<Task?> createTask(
+    Activity activity,
+    String taskName,
+    DateTime timestamp, {
+    List<SubTask> subTasks = const [],
+    String? symbolType,
+    String? symbolValue,
+    String? notes,
+  }) async {
+    try {
+      final task = await _activityService.createTask(
+        activity.id,
+        taskName,
+        timestamp,
+        false,
+        subTasks: subTasks,
+        symbolType: symbolType,
+        symbolValue: symbolValue,
+        notes: notes,
+      );
+      return task;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return null;
+    }
   }
 
   Future<void> toggleTask(Task task, bool checked) async {

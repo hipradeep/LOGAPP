@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../models/activity.dart';
 import '../models/task.dart';
 import 'symbol_indicator.dart';
+import 'app_toast.dart';
 
 class TaskCard extends StatefulWidget {
   final Task task;
@@ -114,7 +115,15 @@ class _TaskCardState extends State<TaskCard> {
                     padding: const EdgeInsets.only(top: 2),
                     child: GestureDetector(
                       onTap: () {
-                        widget.onToggleTask(widget.task, !widget.task.checked);
+                        final newChecked = !widget.task.checked;
+                        widget.onToggleTask(widget.task, newChecked);
+                        if (newChecked && parent.id.isNotEmpty) {
+                          AppToast.show(
+                            context: context,
+                            message: "Rewarded ${parent.points} Stars! ⭐",
+                            backgroundColor: AppTheme.successColor,
+                          );
+                        }
                       },
                       child: Container(
                         width: AppTheme.taskCheckboxSize,

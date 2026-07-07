@@ -14,6 +14,7 @@ import 'services/hive_service.dart';
 import 'services/database_service.dart';
 import 'services/service_locator.dart';
 import 'services/activity_service.dart';
+import 'services/navigation_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -139,6 +140,7 @@ class _MyAppState extends State<MyApp> {
       notifier: _themeController,
       child: MaterialApp(
         title: 'LOG',
+        navigatorKey: NavigationService.navigatorKey,
         debugShowCheckedModeBanner: false,
         themeMode: _themeController.themeMode,
         theme: AppTheme.lightTheme,

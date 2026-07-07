@@ -5,7 +5,6 @@ import '../widgets/app_spacers.dart';
 import '../controllers/settings_controller.dart';
 import '../services/notification_service.dart';
 import '../services/notification_transaction_service.dart';
-import 'activity_reminder_screen.dart';
 
 class ManageNotificationScreen extends StatelessWidget {
   final SettingsController controller;
@@ -63,21 +62,6 @@ class ManageNotificationScreen extends StatelessWidget {
           ),
           child: Column(
             children: [
-              _MenuItem(
-                icon: Icons.notifications_active_rounded,
-                iconBgColor: AppTheme.secondaryColor,
-                title: 'Activity Reminder',
-                subtitle: 'Configure alarms, reminder times and schedules',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ActivityReminderScreen(),
-                    ),
-                  );
-                },
-              ),
-              const _Divider(),
               _SwitchItem(
                 icon: Icons.notifications_active_outlined,
                 iconBgColor: AppTheme.primaryColor,
