@@ -39,3 +39,22 @@ android {
 flutter {
     source = "../.."
 }
+
+gradle.projectsEvaluated {
+    tasks.matching { it.name.contains("GlobalSynthetics") }.configureEach {
+        doFirst {
+            val buildDir = rootProject.layout.buildDirectory.get().asFile
+            buildDir.listFiles()?.forEach { subDir ->
+                if (subDir.isDirectory) {
+                    val compileJar = File(subDir, "intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar")
+                    val runtimeJar = File(subDir, "intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar")
+                    if (compileJar.exists() && !runtimeJar.exists()) {
+                        runtimeJar.parentFile.mkdirs()
+                        compileJar.copyTo(runtimeJar, overwrite = true)
+                    }
+                }
+            }
+        }
+    }
+}
+

@@ -3,6 +3,9 @@ allprojects {
         google()
         mavenCentral()
     }
+    extra.set("flutter", mapOf(
+        "ndkVersion" to "27.0.12077973"
+    ))
 }
 
 val newBuildDir: Directory =
