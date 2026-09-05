@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import '../models/budget.dart';
+import '../utils/id_utils.dart';
 
 class BudgetService {
   final CollectionReference _budgetsCollection =
@@ -10,7 +11,7 @@ class BudgetService {
       FirebaseFirestore.instance.collection('transactions');
 
   final DocumentReference _budgetSettingsDoc =
-      FirebaseFirestore.instance.collection('metadata').doc('budget_settings');
+      FirebaseFirestore.instance.collection('metadata').doc('bgt_budget_settings');
 
   // ==================== SALARY / INCOME SETTINGS ====================
 
@@ -62,8 +63,9 @@ class BudgetService {
     bool isActive = true,
     double alertThreshold = 0.7,
   }) async {
+    final docId = 'bgt_${IdUtils.generateId()}';
     final newItem = Budget(
-      id: '',
+      id: docId,
       name: name,
       categoryName: categoryName,
       limit: limit,
@@ -78,9 +80,9 @@ class BudgetService {
       alertThreshold: alertThreshold,
     );
 
-    final docRef = await _budgetsCollection.add(newItem.toFirestore());
+    await _budgetsCollection.doc(docId).set(newItem.toFirestore());
     if (isActive) {
-      await _deactivateOtherFirestoreBudgets(docRef.id);
+      await _deactivateOtherFirestoreBudgets(docId);
     }
   }
 
@@ -159,9 +161,10 @@ class BudgetService {
   }) async {
     final now = DateTime.now();
     final expenseTime = timestamp ?? now;
+    final txId = 'bgt_${IdUtils.generateId()}';
 
     final tx = Transaction(
-      id: '',
+      id: txId,
       budgetId: budgetId,
       tag: tag,
       description: description,
@@ -174,7 +177,7 @@ class BudgetService {
       paymentMethod: paymentMethod,
     );
 
-    await _transactionsCollection.add(tx.toMap());
+    await _transactionsCollection.doc(txId).set(tx.toMap());
   }
 
   Future<void> updateTransaction(Transaction updated) async {

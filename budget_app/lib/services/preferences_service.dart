@@ -53,9 +53,21 @@ class PreferencesService {
     final cache = await _readLocalCache();
     cache['user_name'] = name;
     await _writeLocalCache(cache);
+    try {
+      await _firestore.collection('metadata').doc('bgt_user_profile').set({
+        'name': name,
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<String> getUserName() async {
+    try {
+      final doc = await _firestore.collection('metadata').doc('bgt_user_profile').get();
+      if (doc.exists && doc.data() != null && doc.data()!['name'] != null) {
+        return doc.data()!['name'] as String;
+      }
+    } catch (_) {}
+
     final cache = await _readLocalCache();
     return cache['user_name'] as String? ?? 'Budget Master';
   }
@@ -64,9 +76,21 @@ class PreferencesService {
     final cache = await _readLocalCache();
     cache['user_avatar'] = avatar;
     await _writeLocalCache(cache);
+    try {
+      await _firestore.collection('metadata').doc('bgt_user_profile').set({
+        'avatar': avatar,
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<String> getUserAvatar() async {
+    try {
+      final doc = await _firestore.collection('metadata').doc('bgt_user_profile').get();
+      if (doc.exists && doc.data() != null && doc.data()!['avatar'] != null) {
+        return doc.data()!['avatar'] as String;
+      }
+    } catch (_) {}
+
     final cache = await _readLocalCache();
     return cache['user_avatar'] as String? ?? '💰';
   }
@@ -87,7 +111,11 @@ class PreferencesService {
 
   Future<List<Map<String, dynamic>>> getExpenseCategories() async {
     try {
-      final doc = await _firestore.collection('metadata').doc('expense_categories').get();
+      // Check bgt_expense_categories first, fallback to expense_categories
+      var doc = await _firestore.collection('metadata').doc('bgt_expense_categories').get();
+      if (!doc.exists) {
+        doc = await _firestore.collection('metadata').doc('expense_categories').get();
+      }
       if (doc.exists && doc.data() != null) {
         final list = doc.data()!['categories'] as List<dynamic>?;
         if (list != null && list.isNotEmpty) {
@@ -113,7 +141,7 @@ class PreferencesService {
     cache['expense_categories'] = categories;
     await _writeLocalCache(cache);
     try {
-      await _firestore.collection('metadata').doc('expense_categories').set({
+      await _firestore.collection('metadata').doc('bgt_expense_categories').set({
         'categories': categories,
       }, SetOptions(merge: true));
     } catch (_) {}
@@ -134,7 +162,11 @@ class PreferencesService {
 
   Future<List<Map<String, dynamic>>> getPaymentModes() async {
     try {
-      final doc = await _firestore.collection('metadata').doc('payment_modes').get();
+      // Check bgt_payment_modes first, fallback to payment_modes
+      var doc = await _firestore.collection('metadata').doc('bgt_payment_modes').get();
+      if (!doc.exists) {
+        doc = await _firestore.collection('metadata').doc('payment_modes').get();
+      }
       if (doc.exists && doc.data() != null) {
         final list = doc.data()!['modes'] as List<dynamic>?;
         if (list != null && list.isNotEmpty) {
@@ -160,7 +192,7 @@ class PreferencesService {
     cache['payment_modes'] = modes;
     await _writeLocalCache(cache);
     try {
-      await _firestore.collection('metadata').doc('payment_modes').set({
+      await _firestore.collection('metadata').doc('bgt_payment_modes').set({
         'modes': modes,
       }, SetOptions(merge: true));
     } catch (_) {}
@@ -171,7 +203,10 @@ class PreferencesService {
 
   Future<List<String>> getBudgetCategories() async {
     try {
-      final doc = await _firestore.collection('metadata').doc('budget_categories').get();
+      var doc = await _firestore.collection('metadata').doc('bgt_budget_categories').get();
+      if (!doc.exists) {
+        doc = await _firestore.collection('metadata').doc('budget_categories').get();
+      }
       if (doc.exists && doc.data() != null) {
         final list = doc.data()!['categories'] as List<dynamic>?;
         if (list != null && list.isNotEmpty) {
@@ -193,7 +228,7 @@ class PreferencesService {
     cache['budget_categories'] = categories;
     await _writeLocalCache(cache);
     try {
-      await _firestore.collection('metadata').doc('budget_categories').set({
+      await _firestore.collection('metadata').doc('bgt_budget_categories').set({
         'categories': categories,
       }, SetOptions(merge: true));
     } catch (_) {}
