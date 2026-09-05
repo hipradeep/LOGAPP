@@ -25,10 +25,14 @@ void main() async {
     ),
   );
 
-  // Initialize Firebase with Android platform options
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Initialize Firebase (using DefaultFirebaseOptions with native fallback)
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (_) {
+    await Firebase.initializeApp();
+  }
 
   runApp(const BudgetApp());
 }
