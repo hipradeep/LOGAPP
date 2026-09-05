@@ -358,7 +358,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         itemCount: _categories.length,
-                        separatorBuilder: (_, __) => const HGapSm(),
+                        separatorBuilder: (context, index) => const HGapSm(),
                         itemBuilder: (context, index) {
                           final cat = _categories[index];
                           final label = cat['label'] as String;

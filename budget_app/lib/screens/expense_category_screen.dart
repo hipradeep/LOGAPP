@@ -111,7 +111,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _availableIcons.length,
-                  separatorBuilder: (_, __) => const HGapSm(),
+                  separatorBuilder: (context, index) => const HGapSm(),
                   itemBuilder: (context, i) {
                     final item = _availableIcons[i];
                     final name = item['name'] as String;
@@ -142,7 +142,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _availableColors.length,
-                  separatorBuilder: (_, __) => const HGapSm(),
+                  separatorBuilder: (context, index) => const HGapSm(),
                   itemBuilder: (context, i) {
                     final color = _availableColors[i];
                     final isSel = selectedColor == color;
@@ -175,8 +175,10 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                     'count': 0,
                   });
                   await _prefs.saveExpenseCategories(updated);
-                  setState(() => _categories = updated);
-                  if (mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    setState(() => _categories = updated);
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
                 },
                 cancelLabel: 'Cancel',
                 onCancelPressed: () => Navigator.pop(ctx),

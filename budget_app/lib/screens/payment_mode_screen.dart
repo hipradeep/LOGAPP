@@ -102,7 +102,7 @@ class _PaymentModeScreenState extends State<PaymentModeScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _paymentIcons.length,
-                  separatorBuilder: (_, __) => const HGapSm(),
+                  separatorBuilder: (context, index) => const HGapSm(),
                   itemBuilder: (context, i) {
                     final item = _paymentIcons[i];
                     final name = item['name'] as String;
@@ -133,7 +133,7 @@ class _PaymentModeScreenState extends State<PaymentModeScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _paymentColors.length,
-                  separatorBuilder: (_, __) => const HGapSm(),
+                  separatorBuilder: (context, index) => const HGapSm(),
                   itemBuilder: (context, i) {
                     final color = _paymentColors[i];
                     final isSel = selectedColor == color;
@@ -166,8 +166,10 @@ class _PaymentModeScreenState extends State<PaymentModeScreen> {
                     'count': 0,
                   });
                   await _prefs.savePaymentModes(updated);
-                  setState(() => _modes = updated);
-                  if (mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    setState(() => _modes = updated);
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
                 },
                 cancelLabel: 'Cancel',
                 onCancelPressed: () => Navigator.pop(ctx),

@@ -98,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _userAvatar = chosenAvatar;
                   });
                 }
-                if (mounted) Navigator.pop(ctx);
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('Save'),
             ),
@@ -286,7 +286,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         physics: const NeverScrollableScrollPhysics(),
         padding: EdgeInsets.zero,
         itemCount: items.length,
-        separatorBuilder: (_, __) => Divider(color: AppTheme.borderColor(context), height: 1),
+        separatorBuilder: (context, index) => Divider(color: AppTheme.borderColor(context), height: 1),
         itemBuilder: (context, index) {
           final item = items[index];
           return ListTile(

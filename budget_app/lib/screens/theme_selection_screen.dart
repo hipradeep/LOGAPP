@@ -44,7 +44,7 @@ class ThemeSelectionScreen extends StatelessWidget {
               primaryColor: const Color(0xFF8B5CF6),
               secondaryColor: const Color(0xFFC4B5FD),
               surfaceColor: const Color(0xFF1E1E2D),
-              onTap: () => themeController.setThemeType(AppThemeType.dark),
+              onTap: () => controller.setThemeType(AppThemeType.dark),
             ),
             const VGapMd(),
             _ThemeOptionCard(
@@ -54,7 +54,7 @@ class ThemeSelectionScreen extends StatelessWidget {
               primaryColor: const Color(0xFF8B5CF6),
               secondaryColor: const Color(0xFF6D28D9),
               surfaceColor: const Color(0xFFF3F4F6),
-              onTap: () => themeController.setThemeType(AppThemeType.light),
+              onTap: () => controller.setThemeType(AppThemeType.light),
             ),
             const VGapMd(),
             _ThemeOptionCard(
@@ -64,7 +64,7 @@ class ThemeSelectionScreen extends StatelessWidget {
               primaryColor: const Color(0xFFF0C38E),
               secondaryColor: const Color(0xFFF1AA9B),
               surfaceColor: const Color(0xFF312C51),
-              onTap: () => themeController.setThemeType(AppThemeType.orix),
+              onTap: () => controller.setThemeType(AppThemeType.orix),
             ),
             const VGapMd(),
             _ThemeOptionCard(
@@ -74,7 +74,7 @@ class ThemeSelectionScreen extends StatelessWidget {
               primaryColor: const Color(0xFF206070),
               secondaryColor: const Color(0xFF389EB5),
               surfaceColor: const Color(0xFF0F3E48),
-              onTap: () => themeController.setThemeType(AppThemeType.logo),
+              onTap: () => controller.setThemeType(AppThemeType.logo),
             ),
             const VGapMd(),
             _ThemeOptionCard(
@@ -84,7 +84,7 @@ class ThemeSelectionScreen extends StatelessWidget {
               primaryColor: const Color(0xFF6D9773),
               secondaryColor: const Color(0xFF8FBA95),
               surfaceColor: const Color(0xFF4E7053),
-              onTap: () => themeController.setThemeType(AppThemeType.earth),
+              onTap: () => controller.setThemeType(AppThemeType.earth),
             ),
             const VGapMd(),
             _ThemeOptionCard(
@@ -93,8 +93,8 @@ class ThemeSelectionScreen extends StatelessWidget {
               isSelected: currentType == AppThemeType.system,
               primaryColor: AppTheme.primaryColor,
               secondaryColor: AppTheme.primaryLight,
-              surfaceColor: AppTheme.cardColor,
-              onTap: () => themeController.setThemeType(AppThemeType.system),
+              surfaceColor: AppTheme.surfaceColor,
+              onTap: () => controller.setThemeType(AppThemeType.system),
             ),
             const VGapXxl(),
           ],
@@ -127,16 +127,16 @@ class _ThemeOptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+      borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.cardColor,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+          color: AppTheme.surface(context),
+          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
           border: Border.all(
             color: isSelected
                 ? AppTheme.primaryColor
-                : AppTheme.borderColor.withValues(alpha: 0.5),
+                : AppTheme.borderColor(context).withValues(alpha: 0.5),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
@@ -158,7 +158,7 @@ class _ThemeOptionCard extends StatelessWidget {
                 color: surfaceColor,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: AppTheme.borderColor.withValues(alpha: 0.6),
+                  color: AppTheme.borderColor(context).withValues(alpha: 0.6),
                 ),
               ),
               child: Row(
@@ -193,14 +193,14 @@ class _ThemeOptionCard extends StatelessWidget {
                     title,
                     style: AppTheme.bodyMedium.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: isSelected ? AppTheme.primaryColor : AppTheme.textPrimary,
+                      color: isSelected ? AppTheme.primaryColor : AppTheme.textPrimaryColor(context),
                     ),
                   ),
                   const VGapXs(),
                   Text(
                     description,
                     style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryColor(context),
                     ),
                   ),
                 ],
@@ -216,7 +216,7 @@ class _ThemeOptionCard extends StatelessWidget {
                 border: Border.all(
                   color: isSelected
                       ? AppTheme.primaryColor
-                      : AppTheme.borderColor,
+                      : AppTheme.borderColor(context),
                   width: 2,
                 ),
               ),

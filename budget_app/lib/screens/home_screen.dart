@@ -271,7 +271,6 @@ class HomeScreen extends StatelessWidget {
   Widget _buildActiveBudgetCard(BuildContext context, Budget budget, List<Transaction> transactions) {
     final spent = budget.spentForCurrentPeriod(transactions);
     final limit = budget.limit;
-    final remaining = (limit - spent).clamp(0.0, double.infinity);
     final pct = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
     final isOver = spent > limit;
     final dailySafe = budget.safeToSpendDaily(transactions);

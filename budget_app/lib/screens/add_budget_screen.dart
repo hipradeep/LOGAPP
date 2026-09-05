@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
