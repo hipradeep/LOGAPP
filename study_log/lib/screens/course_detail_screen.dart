@@ -3,6 +3,7 @@ import '../models/course.dart';
 import '../models/section.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/study_confirmation_dialog.dart';
 import '../widgets/course_options_sheet.dart';
 import '../controllers/sections_controller.dart';
 import 'section_detail_screen.dart';
@@ -532,7 +533,27 @@ class _CourseSectionsListView extends StatelessWidget {
                     : '0 / 4 subsections',
                 badgeColor: color,
                 onTap: () => onSectionTap(section.title),
-                onLongPress: () => sectionsController.deleteSection(section.id),
+                onLongPress: () async {
+                  final confirmed = await StudyConfirmationDialog.showDeleteSection(
+                    context,
+                    sectionTitle: section.title,
+                  );
+                  if (confirmed && context.mounted) {
+                    await sectionsController.deleteSection(section.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Section "${section.title}" deleted'),
+                          backgroundColor: AppTheme.primaryColor,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
               );
             },
           );

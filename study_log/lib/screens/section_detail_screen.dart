@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/study_confirmation_dialog.dart';
 import '../services/local_subsection_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_sections_controller.dart';
@@ -220,6 +221,36 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
     }
   }
 
+  Future<void> _handleDeleteSubsection(int index) async {
+    final sub = _subsections[index];
+    final confirmed = await StudyConfirmationDialog.showDeleteSubsection(
+      context,
+      subsectionTitle: sub.title,
+    );
+
+    if (confirmed && mounted) {
+      setState(() {
+        _subsections.removeAt(index);
+      });
+      await LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
+      if (getIt.isRegistered<OngoingSectionsController>()) {
+        getIt<OngoingSectionsController>().refresh();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Subsection "${sub.title}" deleted'),
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -250,6 +281,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
               child: _SubsectionsListView(
                 subsections: _subsections,
                 onToggle: _toggleSubsectionStatus,
+                onDelete: _handleDeleteSubsection,
                 bottomPadding: bottomSafe + 24,
               ),
             ),
@@ -404,11 +436,13 @@ class _SubsectionsProgressHeader extends StatelessWidget {
 class _SubsectionsListView extends StatelessWidget {
   final List<SubsectionItem> subsections;
   final ValueChanged<int> onToggle;
+  final ValueChanged<int> onDelete;
   final double bottomPadding;
 
   const _SubsectionsListView({
     required this.subsections,
     required this.onToggle,
+    required this.onDelete,
     required this.bottomPadding,
   });
 
@@ -429,6 +463,7 @@ class _SubsectionsListView extends StatelessWidget {
         return _SubsectionListItem(
           item: item,
           onTap: () => onToggle(index),
+          onLongPress: () => onDelete(index),
         );
       },
     );
@@ -438,10 +473,12 @@ class _SubsectionsListView extends StatelessWidget {
 class _SubsectionListItem extends StatelessWidget {
   final SubsectionItem item;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   const _SubsectionListItem({
     required this.item,
     required this.onTap,
+    required this.onLongPress,
   });
 
   @override
@@ -451,6 +488,7 @@ class _SubsectionListItem extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(

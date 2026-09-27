@@ -3,13 +3,14 @@ import '../models/course.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_options_sheet.dart';
+import '../widgets/study_confirmation_dialog.dart';
 import '../controllers/courses_controller.dart';
 import '../services/service_locator.dart';
 import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 
 /// Redesigned Courses screen matching the reference design:
-/// - Top bar with Back navigation, "Courses" title, and "+ Add Course" purple button
+/// - Top bar with Back navigation, "Courses" title, circular "+", and 3-dots menu (Delete, Archive)
 /// - "Search courses..." rounded search bar
 /// - Pastel category cards (DSA, System Design, Gen AI, Android, Cloud Computing, DevOps)
 ///   with completed section ratios, progress bars, and percentage indicators
@@ -66,6 +67,48 @@ class _CoursesScreenState extends State<CoursesScreen> {
     CourseOptionsSheet.show(context, course: course);
   }
 
+  Future<void> _handleTopMenuAction(String action) async {
+    final coursesController = getIt<CoursesController>();
+    if (coursesController.courses.isEmpty) return;
+    final firstCourse = coursesController.courses.first;
+
+    if (action == 'delete') {
+      final confirmed = await StudyConfirmationDialog.showDeleteCourse(
+        context,
+        courseTitle: firstCourse.title,
+      );
+      if (confirmed && mounted) {
+        await coursesController.deleteCourse(firstCourse.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Course "${firstCourse.title}" deleted'),
+              backgroundColor: AppTheme.primaryColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } else if (action == 'archive') {
+      final confirmed = await StudyConfirmationDialog.showArchiveCourse(
+        context,
+        courseTitle: firstCourse.title,
+      );
+      if (confirmed && mounted) {
+        await coursesController.updateCourse(firstCourse.copyWith(status: 'archived'));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Course "${firstCourse.title}" archived'),
+              backgroundColor: AppTheme.primaryColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -79,6 +122,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
             _CoursesTopBar(
               onBack: _handleBack,
               onAddCourse: _openAddCourse,
+              onMenuAction: _handleTopMenuAction,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -106,10 +150,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
 class _CoursesTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onAddCourse;
+  final ValueChanged<String> onMenuAction;
 
   const _CoursesTopBar({
     required this.onBack,
     required this.onAddCourse,
+    required this.onMenuAction,
   });
 
   @override
@@ -138,35 +184,85 @@ class _CoursesTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Material(
-            color: AppTheme.primaryColor,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              onTap: onAddCourse,
-              borderRadius: BorderRadius.circular(10),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          // Circular "+" button matching reference screenshot
+          InkWell(
+            onTap: onAddCourse,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppTheme.primaryColor,
+                  width: 2,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.add_rounded,
+                color: AppTheme.primaryColor,
+                size: 22,
+              ),
+            ),
+          ),
+          const HGapXs(),
+          // 3-dots popup menu with Delete & Archive matching reference screenshot
+          PopupMenuButton<String>(
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              color: AppTheme.textPrimary,
+              size: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            elevation: 6,
+            onSelected: onMenuAction,
+            itemBuilder: (ctx) => [
+              const PopupMenuItem<String>(
+                value: 'delete',
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.add_rounded,
-                      color: Colors.white,
-                      size: 18,
+                      Icons.delete_outline_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 20,
                     ),
-                    HGapXs(),
+                    HGapMd(),
                     Text(
-                      'Add Course',
+                      'Delete',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
+                        color: Color(0xFFEF4444),
                         fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+              const PopupMenuItem<String>(
+                value: 'archive',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      color: Color(0xFF1E293B),
+                      size: 19,
+                    ),
+                    HGapMd(),
+                    Text(
+                      'Archive',
+                      style: TextStyle(
+                        color: Color(0xFF1E293B),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

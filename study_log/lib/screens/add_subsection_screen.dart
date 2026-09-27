@@ -784,7 +784,7 @@ class _ColorPaletteField extends StatelessWidget {
               padding: const EdgeInsets.only(right: 12.0),
               child: InkWell(
                 onTap: () => onSelectColor(index),
-                shape: const CircleBorder(),
+                customBorder: const CircleBorder(),
                 child: Container(
                   width: 38,
                   height: 38,
