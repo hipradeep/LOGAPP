@@ -5,10 +5,10 @@ import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/sections_controller.dart';
 
-/// Redesigned Standalone Add Section Screen matching the reference design:
-/// - Top bar with Back button, "Add Section" title, and purple "Save" button
+/// Redesigned Standalone Add Module Screen matching the reference design:
+/// - Top bar with Back button, "Add Module" title, and purple "Save" button
 /// - Course selection dropdown container showing active course
-/// - Section Name * required field
+/// - Module Name * required field
 /// - Description (Optional) with live 0/500 character counter
 /// - Icon preview squircle with "Change Icon" button and icon picker modal
 /// - Color swatches row with checkmark indicator on selected color
@@ -183,7 +183,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
                 ),
                 const VGapMd(),
                 const Text(
-                  'Select Section Icon',
+                  'Select Module Icon',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -242,7 +242,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please enter a section name'),
+          content: const Text('Please enter a module name'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -272,7 +272,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Section "$title" added successfully'),
+          content: Text('Module "$title" added successfully'),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -285,7 +285,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to add section: $e'),
+          content: Text('Failed to add module: $e'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -383,7 +383,7 @@ class _AddSectionTopBar extends StatelessWidget {
           ),
           const HGapXs(),
           const Text(
-            'Add Section',
+            'Add Module',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -499,7 +499,7 @@ class _SectionNameField extends StatelessWidget {
         const Row(
           children: [
             Text(
-              'Section Name ',
+              'Module Name ',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -531,7 +531,7 @@ class _SectionNameField extends StatelessWidget {
               color: AppTheme.textPrimary,
             ),
             decoration: const InputDecoration(
-              hintText: 'Enter section name',
+              hintText: 'Enter module name',
               hintStyle: TextStyle(
                 fontSize: 14,
                 color: Color(0xFF9CA3AF),

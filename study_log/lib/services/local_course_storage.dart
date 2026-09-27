@@ -60,4 +60,16 @@ class LocalCourseStorage {
       debugPrint('Error saving cached courses: $e');
     }
   }
+
+  /// Clears all locally cached courses from disk.
+  static Future<void> clearAll() async {
+    try {
+      final file = await _getFile();
+      if (file != null && await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('Error clearing courses cache: $e');
+    }
+  }
 }

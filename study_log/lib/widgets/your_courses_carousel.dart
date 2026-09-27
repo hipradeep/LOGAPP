@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import 'app_spacers.dart';
+import '../widgets/app_spacers.dart';
+import '../controllers/courses_controller.dart';
+import '../models/course.dart';
+import '../services/service_locator.dart';
 
-/// "Your Courses" horizontal carousel section matching the reference design:
-/// - Section header "Your Courses" with trailing chevron navigation
-/// - Horizontal list of course cards (DSA, System Design, Gen AI, Android)
-/// - "More" card with "..." icon and purple highlighted border that opens course list
-/// - Dynamic 3-pill carousel indicator that tracks scroll position
+/// "Your Courses" horizontal carousel — dynamic from CoursesController.
+/// - Listens to CoursesController via ListenableBuilder (surgical rebuild, Rule 3)
+/// - Cycling pastel color palette per card index
+/// - Shows loading shimmer, empty state, and a "More" card when > 4 courses
 class YourCoursesCarousel extends StatefulWidget {
   final VoidCallback? onMoreTap;
   final ValueChanged<String>? onCourseTap;
@@ -60,19 +62,69 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = getIt<CoursesController>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         _HeaderRow(onMoreTap: widget.onMoreTap),
         const VGapMd(),
-        SizedBox(
-          height: 146,
-          child: _CardsHorizontalList(
-            scrollController: _scrollController,
-            onCourseTap: widget.onCourseTap,
-            onMoreTap: widget.onMoreTap,
-          ),
+        ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
+            if (controller.isLoading && controller.courses.isEmpty) {
+              return const SizedBox(
+                height: 146,
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                ),
+              );
+            }
+
+            final courses = controller.courses;
+
+            if (courses.isEmpty) {
+              return _EmptyCourseCard(onTap: widget.onMoreTap);
+            }
+
+            // Show up to 4 courses + "More" card
+            final displayed = courses.length > 4 ? courses.sublist(0, 4) : courses;
+            final showMore = courses.length > 4;
+
+            return SizedBox(
+              height: 146,
+              child: ListView.separated(
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: displayed.length + (showMore ? 1 : 0),
+                separatorBuilder: (_, __) => const HGapMd(),
+                itemBuilder: (context, index) {
+                  if (showMore && index == displayed.length) {
+                    return _MoreCoursesCard(onTap: widget.onMoreTap);
+                  }
+                  final course = displayed[index];
+                  final palette = _cardPalettes[index % _cardPalettes.length];
+                  return _YourCourseCard(
+                    title: course.title,
+                    subtitle: _subtitleFor(course),
+                    progress: 0.0,
+                    progressLabel: '0%',
+                    icon: _iconFor(index),
+                    bgColor: palette.bg,
+                    borderColor: palette.border,
+                    accentColor: palette.accent,
+                    onTap: () => widget.onCourseTap?.call(course.title),
+                  );
+                },
+              ),
+            );
+          },
         ),
         const VGapSm(),
         ValueListenableBuilder<int>(
@@ -82,13 +134,50 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
       ],
     );
   }
+
+  String _subtitleFor(Course course) {
+    if (course.description.isNotEmpty) {
+      return course.description.length > 22
+          ? '${course.description.substring(0, 22)}…'
+          : course.description;
+    }
+    return course.status;
+  }
+
+  IconData _iconFor(int index) {
+    const icons = [
+      Icons.code_rounded,
+      Icons.settings_suggest_rounded,
+      Icons.smart_toy_rounded,
+      Icons.android_rounded,
+      Icons.menu_book_rounded,
+      Icons.insights_rounded,
+      Icons.hub_outlined,
+      Icons.psychology_rounded,
+    ];
+    return icons[index % icons.length];
+  }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
+// === Palette data class ===
+class _CardPalette {
+  final Color bg;
+  final Color border;
+  final Color accent;
+  const _CardPalette(this.bg, this.border, this.accent);
+}
+
+const List<_CardPalette> _cardPalettes = [
+  _CardPalette(AppTheme.pastelPurple, AppTheme.pastelPurpleBorder, AppTheme.pastelPurpleText),
+  _CardPalette(AppTheme.pastelGreen, AppTheme.pastelGreenBorder, AppTheme.pastelGreenText),
+  _CardPalette(AppTheme.pastelOrange, AppTheme.pastelOrangeBorder, AppTheme.pastelOrangeText),
+  _CardPalette(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF0284C7)),
+];
+
+// === Subcomponents ===
 
 class _HeaderRow extends StatelessWidget {
   final VoidCallback? onMoreTap;
-
   const _HeaderRow({this.onMoreTap});
 
   @override
@@ -122,83 +211,45 @@ class _HeaderRow extends StatelessWidget {
   }
 }
 
-class _CardsHorizontalList extends StatelessWidget {
-  final ScrollController scrollController;
-  final ValueChanged<String>? onCourseTap;
-  final VoidCallback? onMoreTap;
-
-  const _CardsHorizontalList({
-    required this.scrollController,
-    this.onCourseTap,
-    this.onMoreTap,
-  });
+class _EmptyCourseCard extends StatelessWidget {
+  final VoidCallback? onTap;
+  const _EmptyCourseCard({this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      controller: scrollController,
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.zero,
-      children: [
-        _YourCourseCard(
-          title: 'DSA',
-          subtitle: '6 / 20 sections',
-          progress: 0.30,
-          progressLabel: '30%',
-          icon: Icons.code_rounded,
-          bgColor: AppTheme.pastelPurple,
-          borderColor: AppTheme.pastelPurpleBorder,
-          accentColor: AppTheme.pastelPurpleText,
-          onTap: () => onCourseTap?.call('DSA'),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 100,
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+          border: Border.all(color: AppTheme.borderColor),
         ),
-        const HGapMd(),
-        _YourCourseCard(
-          title: 'System Design',
-          subtitle: '3 / 15 sections',
-          progress: 0.20,
-          progressLabel: '20%',
-          icon: Icons.settings_suggest_rounded,
-          bgColor: AppTheme.pastelGreen,
-          borderColor: AppTheme.pastelGreenBorder,
-          accentColor: AppTheme.pastelGreenText,
-          onTap: () => onCourseTap?.call('System Design'),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryColor, size: 28),
+              VGapXs(),
+              Text(
+                'Add your first course',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
-        const HGapMd(),
-        _YourCourseCard(
-          title: 'Gen AI',
-          subtitle: '1 / 10 sections',
-          progress: 0.10,
-          progressLabel: '10%',
-          icon: Icons.smart_toy_rounded,
-          bgColor: AppTheme.pastelOrange,
-          borderColor: AppTheme.pastelOrangeBorder,
-          accentColor: AppTheme.pastelOrangeText,
-          onTap: () => onCourseTap?.call('Gen AI'),
-        ),
-        const HGapMd(),
-        _YourCourseCard(
-          title: 'Android',
-          subtitle: '0 / 8 sections',
-          progress: 0.0,
-          progressLabel: '0%',
-          icon: Icons.android_rounded,
-          bgColor: const Color(0xFFE0F2FE),
-          borderColor: const Color(0xFFBAE6FD),
-          accentColor: const Color(0xFF0284C7),
-          onTap: () => onCourseTap?.call('Android'),
-        ),
-        const HGapMd(),
-        // "More" card - Tapping opens Course List screen
-        _MoreCoursesCard(onTap: onMoreTap),
-      ],
+      ),
     );
   }
 }
 
 class _MoreCoursesCard extends StatelessWidget {
   final VoidCallback? onTap;
-
   const _MoreCoursesCard({this.onTap});
 
   @override
@@ -222,11 +273,7 @@ class _MoreCoursesCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.more_horiz_rounded,
-                    color: AppTheme.primaryColor,
-                    size: 32,
-                  ),
+                  Icon(Icons.more_horiz_rounded, color: AppTheme.primaryColor, size: 32),
                   VGapSm(),
                   Text(
                     'More',
@@ -290,7 +337,6 @@ class _YourCourseCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Icon Container
                   Container(
                     width: 38,
                     height: 38,
@@ -300,11 +346,7 @@ class _YourCourseCard extends StatelessWidget {
                       border: Border.all(color: borderColor),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
-                      icon,
-                      color: accentColor,
-                      size: 20,
-                    ),
+                    child: Icon(icon, color: accentColor, size: 20),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,7 +411,6 @@ class _YourCourseCard extends StatelessWidget {
 
 class _CarouselIndicatorRow extends StatelessWidget {
   final int activeIndex;
-
   const _CarouselIndicatorRow({required this.activeIndex});
 
   @override

@@ -8,6 +8,7 @@ import 'services/service_locator.dart';
 import 'services/navigation_service.dart';
 import 'widgets/app_provider.dart';
 import 'screens/main_navigation_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,11 +73,11 @@ class _StudyLogAppState extends State<StudyLogApp> {
     return AppProvider<ThemeController>(
       notifier: _themeController,
       child: MaterialApp(
-        title: 'Study/log',
+        title: 'Study',
         debugShowCheckedModeBanner: false,
         navigatorKey: NavigationService.navigatorKey,
         theme: AppTheme.themeData,
-        home: const MainNavigationScreen(),
+        home: const SplashScreen(appName: 'Study'),
       ),
     );
   }

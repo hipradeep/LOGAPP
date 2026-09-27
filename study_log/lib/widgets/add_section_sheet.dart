@@ -4,7 +4,7 @@ import '../controllers/sections_controller.dart';
 import 'app_spacers.dart';
 import 'pill_button.dart';
 
-/// Modal bottom sheet to create a new Section for a course.
+/// Modal bottom sheet to create a new Module for a course.
 class AddSectionSheet extends StatefulWidget {
   final SectionsController controller;
   final String courseTitle;
@@ -58,7 +58,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please enter a section title'),
+          content: const Text('Please enter a module title'),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -83,7 +83,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Section "$title" added successfully'),
+          content: Text('Module "$title" added successfully'),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -96,7 +96,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to add section: $e'),
+          content: Text('Failed to add module: $e'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -145,7 +145,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Add Section',
+                      'Add Module',
                       style: AppTheme.headingSmall.copyWith(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -172,7 +172,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
               autofocus: true,
               style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Section Title',
+                labelText: 'Module Title',
                 hintText: 'e.g. Chapter 1: Foundations',
                 filled: true,
                 fillColor: AppTheme.surfaceVariant,
@@ -218,7 +218,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
             ),
             const VGapXl(),
             PillButton(
-              text: 'Add Section',
+              text: 'Add Module',
               icon: Icons.add_rounded,
               isLoading: _isSubmitting,
               onPressed: _onSubmit,

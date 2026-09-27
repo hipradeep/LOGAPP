@@ -7,10 +7,10 @@ import '../services/firestore_service.dart';
 import '../models/subsection.dart';
 import 'section_detail_screen.dart';
 
-/// Screen 9: Add Subsection Screen matching the reference design:
-/// - Top bar with Back arrow, "Add Subsection" title, and solid purple "Save" button
-/// - Section dropdown field
-/// - Subsection Name * with red asterisk and clear hint
+/// Screen 9: Add Topic Screen matching the reference design:
+/// - Top bar with Back arrow, "Add Topic" title, and solid purple "Save" button
+/// - Module dropdown field
+/// - Topic Name * with red asterisk and clear hint
 /// - Description (Optional) with multiline input and 0/500 character counter
 /// - Icon preview with "Change Icon" button and icon picker bottom sheet
 /// - Color palette picker with 6 swatches and checkmark indicator
@@ -139,7 +139,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
                 ),
                 const VGapMd(),
                 const Text(
-                  'Select Section',
+                  'Select Module',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -265,7 +265,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please enter a subsection name'),
+          content: const Text('Please enter a topic name'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -325,7 +325,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
       Navigator.of(context).pop(newItem);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Subsection "$name" added successfully'),
+          content: Text('Topic "$name" added successfully'),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -338,7 +338,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save subsection: $e'),
+          content: Text('Failed to save topic: $e'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -441,7 +441,7 @@ class _AddSubsectionTopBar extends StatelessWidget {
               ),
               const HGapXs(),
               const Text(
-                'Add Subsection',
+                'Add Topic',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -498,7 +498,7 @@ class _SectionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Section',
+          'Module',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
@@ -554,7 +554,7 @@ class _SubsectionNameField extends StatelessWidget {
       children: [
         RichText(
           text: const TextSpan(
-            text: 'Subsection Name ',
+            text: 'Topic Name ',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -580,7 +580,7 @@ class _SubsectionNameField extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
           decoration: InputDecoration(
-            hintText: 'Enter subsection name',
+            hintText: 'Enter topic name',
             hintStyle: const TextStyle(
               fontSize: 14,
               color: Color(0xFF9CA3AF),

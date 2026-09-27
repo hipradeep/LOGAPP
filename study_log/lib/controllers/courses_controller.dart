@@ -192,6 +192,15 @@ class CoursesController extends ChangeNotifier {
     }
   }
 
+  /// Clears in-memory state and re-fetches from Firestore. Call after clearing local cache.
+  void refresh() {
+    _courses = [];
+    _deletedCourseIds.clear();
+    _isLoading = true;
+    notifyListeners();
+    _initStream();
+  }
+
   @override
   void dispose() {
     _loadingFallbackTimer?.cancel();

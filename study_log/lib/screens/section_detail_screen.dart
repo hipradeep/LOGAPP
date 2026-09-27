@@ -84,17 +84,7 @@ class SubsectionItem {
   }
 }
 
-/// Screen 8: Section Screen (Arrays) matching the reference design:
-/// - Top bar with Back button, section title, and "+ Add Subsection" outlined button
-/// - Tapping "+ Add Subsection" navigates directly to AddSubsectionScreen (Screen 9)
-/// - Top Progress banner: "3 / 8 subsections", "38%", and purple linear progress bar
-/// - Interactive list of subsections:
-///   - Completed: Green check circle badge & "Completed" green label
-///   - In Progress: Purple circular progress ring & "In Progress" label
-///   - Not started: Empty circle outline & "Not started" label
-///   - Trailing chevrons and clean dividers
-/// - Tap to cycle status (Not started -> In Progress -> Completed) with live updates and disk persistence
-/// - Passes all 24 rules of [optimize.md]
+ 
 class SectionDetailScreen extends StatefulWidget {
   final String sectionTitle;
   final String courseTitle;
@@ -191,7 +181,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Subsection "${sub.title}" deleted'),
+            content: Text('Topic "${sub.title}" deleted'),
             backgroundColor: AppTheme.primaryColor,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -220,6 +210,21 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
               onBack: _handleBack,
               onAddSubsection: _openAddSubsectionScreen,
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
+              child: Text(
+                widget.sectionTitle+"HHH",
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.2,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const VGapXs(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
               child: _SubsectionsProgressHeader(
@@ -280,9 +285,9 @@ class _SectionDetailTopBar extends StatelessWidget {
                 constraints: const BoxConstraints(),
               ),
               const HGapSm(),
-              Text(
-                title,
-                style: const TextStyle(
+              const Text(
+                'Module',
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
@@ -314,7 +319,7 @@ class _SectionDetailTopBar extends StatelessWidget {
                   ),
                   HGapXs(),
                   Text(
-                    'Add Subsection',
+                    'Add Topic',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -354,7 +359,7 @@ class _SubsectionsProgressHeader extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '$completedCount / $totalCount subsections',
+              '$completedCount / $totalCount topics',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -417,7 +422,7 @@ class _SubsectionsListView extends StatelessWidget {
               ),
               const VGapMd(),
               const Text(
-                'No subsections yet',
+                'No topics yet',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -426,7 +431,7 @@ class _SubsectionsListView extends StatelessWidget {
               ),
               const VGapXs(),
               const Text(
-                'Tap "+ Add Subsection" to add your first topic.',
+                'Tap "+ Add Topic" to add your first topic.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -437,7 +442,7 @@ class _SubsectionsListView extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onAddSubsection,
                 icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add Subsection'),
+                label: const Text('Add Topic'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
                   foregroundColor: Colors.white,

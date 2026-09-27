@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../services/local_course_storage.dart';
+import '../services/local_subsection_storage.dart';
+import '../services/service_locator.dart';
+import '../controllers/courses_controller.dart';
 import 'courses_screen.dart';
+import 'upload_json_screen.dart';
 
 /// Redesigned Profile Screen matching the reference design:
 /// - "Profile" header with settings gear icon
@@ -17,6 +22,62 @@ class ProfileScreen extends StatelessWidget {
       context,
       MaterialPageRoute(builder: (_) => const CoursesScreen()),
     );
+  }
+
+  void _openUploadJson(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
+    );
+  }
+
+  Future<void> _handleClearCache(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Clear Cache?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'This will delete all locally stored course and topic data. '  
+          'Your Firestore data will remain safe.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Color(0xFFEF4444)),
+            child: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await Future.wait([
+        LocalCourseStorage.clearAll(),
+        LocalSubsectionStorage.clearAll(),
+      ]);
+      getIt<CoursesController>().refresh();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Cache cleared successfully'),
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -41,7 +102,11 @@ class ProfileScreen extends StatelessWidget {
               const VGapLg(),
               const _UserProfileCard(),
               const VGapLg(),
-              _ProfileMenuList(onCoursesTap: () => _openCourses(context)),
+              _ProfileMenuList(
+                onCoursesTap: () => _openCourses(context),
+                onUploadJsonTap: () => _openUploadJson(context),
+                onClearCacheTap: () => _handleClearCache(context),
+              ),
             ],
           ),
         ),
@@ -167,8 +232,14 @@ class _UserAvatar extends StatelessWidget {
 
 class _ProfileMenuList extends StatelessWidget {
   final VoidCallback onCoursesTap;
+  final VoidCallback onUploadJsonTap;
+  final VoidCallback onClearCacheTap;
 
-  const _ProfileMenuList({required this.onCoursesTap});
+  const _ProfileMenuList({
+    required this.onCoursesTap,
+    required this.onUploadJsonTap,
+    required this.onClearCacheTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -184,6 +255,19 @@ class _ProfileMenuList extends StatelessWidget {
         ),
         // "Courses" - Highlighted with purple stroke & only active link
         _ProfileCoursesHighlightedItem(onTap: onCoursesTap),
+        // "Upload JSON" - tappable import entry
+        _ProfileTappableMenuItem(
+          icon: Icons.upload_file_rounded,
+          title: 'Upload JSON',
+          onTap: onUploadJsonTap,
+        ),
+        // "Clear Cache" - red destructive action
+        _ProfileTappableMenuItem(
+          icon: Icons.cleaning_services_rounded,
+          title: 'Clear Cache',
+          onTap: onClearCacheTap,
+          isDestructive: true,
+        ),
         const _ProfileMenuItem(
           icon: Icons.settings_suggest_outlined,
           title: 'Revision Settings',
@@ -309,6 +393,60 @@ class _ProfileMenuItem extends StatelessWidget {
               size: 22,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A tappable profile menu item (with ripple) for active navigation entries.
+class _ProfileTappableMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _ProfileTappableMenuItem({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? const Color(0xFFEF4444) : const Color(0xFF374151);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 22),
+                const HGapMd(),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: color,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: isDestructive ? const Color(0xFFEF4444) : const Color(0xFF9CA3AF),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

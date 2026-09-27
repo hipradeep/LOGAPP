@@ -4,7 +4,7 @@ import 'app_spacers.dart';
 
 /// Confirmation dialog matching the reference designs:
 /// - Top icon (Purple calendar for Archive, Red trash for Delete)
-/// - Bold title (e.g. "Archive Course?", "Delete Course?", "Delete Section?", "Delete Subsection?")
+/// - Bold title (e.g. "Archive Course?", "Delete Course?", "Delete Module?", "Delete Topic?")
 /// - Descriptive message (e.g. "This action cannot be undone.")
 /// - Cancel (light lavender pill) and Confirm (solid purple / solid red) side by side
 class StudyConfirmationDialog extends StatelessWidget {
@@ -59,7 +59,7 @@ class StudyConfirmationDialog extends StatelessWidget {
     return result ?? false;
   }
 
-  /// Displays the "Delete Section?" dialog (only delete, no archive)
+  /// Displays the "Delete Module?" dialog (only delete, no archive)
   static Future<bool> showDeleteSection(BuildContext context, {String sectionTitle = ''}) async {
     final result = await showDialog<bool>(
       context: context,
@@ -67,7 +67,7 @@ class StudyConfirmationDialog extends StatelessWidget {
       builder: (ctx) => const StudyConfirmationDialog(
         icon: Icons.delete_outline_rounded,
         iconColor: Color(0xFFEF4444),
-        title: 'Delete Section?',
+        title: 'Delete Module?',
         message: 'This action cannot be undone.',
         confirmText: 'Delete',
         confirmColor: Color(0xFFEF4444),
@@ -76,7 +76,7 @@ class StudyConfirmationDialog extends StatelessWidget {
     return result ?? false;
   }
 
-  /// Displays the "Delete Subsection?" dialog (only delete, no archive)
+  /// Displays the "Delete Topic?" dialog (only delete, no archive)
   static Future<bool> showDeleteSubsection(BuildContext context, {String subsectionTitle = ''}) async {
     final result = await showDialog<bool>(
       context: context,
@@ -84,7 +84,7 @@ class StudyConfirmationDialog extends StatelessWidget {
       builder: (ctx) => const StudyConfirmationDialog(
         icon: Icons.delete_outline_rounded,
         iconColor: Color(0xFFEF4444),
-        title: 'Delete Subsection?',
+        title: 'Delete Topic?',
         message: 'This action cannot be undone.',
         confirmText: 'Delete',
         confirmColor: Color(0xFFEF4444),

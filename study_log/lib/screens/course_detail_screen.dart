@@ -9,13 +9,13 @@ import '../controllers/sections_controller.dart';
 import 'section_detail_screen.dart';
 import 'add_section_screen.dart';
 
-/// Redesigned Course Detail (Sections) screen matching the reference design:
-/// - Top bar with back button, course title (e.g. "DSA"), "+ Add Section" button, and 3-dots options menu
-/// - Top Progress banner: "6 / 20 sections", "30%", and full-width purple progress bar
-/// - "Sections (20)" and "Overview" tabs
-/// - Clean vertical list of syllabus sections with cycling pastel number badges
-///   (Green, Cyan, Orange, Purple), titles, subsections count, and trailing chevrons
-/// - Tapping "+ Add Section" opens the standalone AddSectionScreen
+/// Redesigned Course Detail (Modules) screen matching the reference design:
+/// - Top bar with back button, course title (e.g. "DSA"), "+ Add Module" button, and 3-dots options menu
+/// - Top Progress banner: "6 / 20 modules", "30%", and full-width purple progress bar
+/// - "Modules (20)" and "Overview" tabs
+/// - Clean vertical list of syllabus modules with cycling pastel number badges
+///   (Green, Cyan, Orange, Purple), titles, topics count, and trailing chevrons
+/// - Tapping "+ Add Module" opens the standalone AddSectionScreen
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
 
@@ -106,7 +106,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 const VGapMd(),
                 ListTile(
                   leading: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryColor),
-                  title: const Text('Add New Section', style: TextStyle(fontWeight: FontWeight.bold)),
+                  title: const Text('Add New Module', style: TextStyle(fontWeight: FontWeight.bold)),
                   onTap: () {
                     Navigator.pop(modalCtx);
                     _openAddSectionScreen();
@@ -154,6 +154,21 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
+                      child: Text(
+                        widget.course.title,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const VGapXs(),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
                       child: _CourseProgressHeader(
@@ -236,16 +251,14 @@ class _CourseDetailTopBar extends StatelessWidget {
           ),
           const HGapXs(),
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
+            child: const Text(
+              'Course',
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
                 letterSpacing: -0.3,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
           Material(
@@ -270,7 +283,7 @@ class _CourseDetailTopBar extends StatelessWidget {
                     ),
                     HGapXs(),
                     Text(
-                      'Add Section',
+                      'Add Module',
                       style: TextStyle(
                         color: AppTheme.primaryColor,
                         fontSize: 12,
@@ -322,7 +335,7 @@ class _CourseTabsRow extends StatelessWidget {
         child: Row(
           children: [
             _TabItem(
-              label: 'Sections ($sectionsCount)',
+              label: 'Modules ($sectionsCount)',
               isActive: activeIndex == 0,
               onTap: () => onTabSelected(0),
             ),
@@ -454,7 +467,7 @@ class _CourseProgressHeader extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '$completedSections / $totalSections sections',
+              '$completedSections / $totalSections modules',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -501,6 +514,15 @@ class _CourseSectionsListView extends StatelessWidget {
     required this.bottomPadding,
   });
 
+  static const List<Color> _badgeColorCycle = [
+    Color(0xFF10B981),
+    Color(0xFF38BDF8),
+    Color(0xFFFB923C),
+    Color(0xFF818CF8),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: sectionsController,
       builder: (context, _) {
@@ -520,7 +542,7 @@ class _CourseSectionsListView extends StatelessWidget {
                   ),
                   const VGapMd(),
                   const Text(
-                    'No sections yet',
+                    'No modules yet',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -529,7 +551,7 @@ class _CourseSectionsListView extends StatelessWidget {
                   ),
                   const VGapXs(),
                   const Text(
-                    'Tap "+ Add Section" to add topics to this course.',
+                    'Tap "+ Add Module" to add topics to this course.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -540,7 +562,7 @@ class _CourseSectionsListView extends StatelessWidget {
                   ElevatedButton.icon(
                     onPressed: onAddSection,
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('Add Section'),
+                    label: const Text('Add Module'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
@@ -574,7 +596,7 @@ class _CourseSectionsListView extends StatelessWidget {
               title: section.title,
               subtitle: section.description.isNotEmpty
                   ? section.description
-                  : '0 subsections',
+                  : '0 topics',
               badgeColor: color,
               onTap: () => onSectionTap(section.title),
               onLongPress: () async {
@@ -587,7 +609,7 @@ class _CourseSectionsListView extends StatelessWidget {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Section "${section.title}" deleted'),
+                        content: Text('Module "${section.title}" deleted'),
                         backgroundColor: AppTheme.primaryColor,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(

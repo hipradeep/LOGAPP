@@ -122,6 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ongoingController: ongoingController,
                 onSectionTap: _openSectionDetail,
                 onAddCourse: _openAddCourse,
+                onViewAll: _handleViewAll,
               ),
             ),
           ],
@@ -288,11 +289,13 @@ class _CurrentSectionsSliverList extends StatelessWidget {
   final OngoingSectionsController ongoingController;
   final void Function(String, String) onSectionTap;
   final void Function(BuildContext) onAddCourse;
+  final VoidCallback onViewAll;
 
   const _CurrentSectionsSliverList({
     required this.ongoingController,
     required this.onSectionTap,
     required this.onAddCourse,
+    required this.onViewAll,
   });
 
   @override
@@ -323,10 +326,38 @@ class _CurrentSectionsSliverList extends StatelessWidget {
           );
         }
 
+        final displayItems = items.length > 5 ? items.sublist(0, 5) : items;
+        final hasMore = items.length > 5;
+
         return SliverList.builder(
-          itemCount: items.length,
+          itemCount: displayItems.length + (hasMore ? 1 : 0),
           itemBuilder: (context, index) {
-            final item = items[index];
+            if (hasMore && index == displayItems.length) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: GestureDetector(
+                  onTap: onViewAll,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                      border: Border.all(color: AppTheme.borderColor),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'View All Modules →',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            final item = displayItems[index];
             return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: StudyScheduleCard(
@@ -349,7 +380,7 @@ class _CurrentSectionsSliverList extends StatelessWidget {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Section "${item.title}" deleted'),
+                          content: Text('Module "${item.title}" deleted'),
                           backgroundColor: AppTheme.primaryColor,
                           behavior: SnackBarBehavior.floating,
                           shape: RoundedRectangleBorder(

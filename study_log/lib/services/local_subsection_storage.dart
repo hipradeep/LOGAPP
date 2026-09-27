@@ -68,4 +68,16 @@ class LocalSubsectionStorage {
       debugPrint('Error saving cached subsections: $e');
     }
   }
+
+  /// Clears all locally cached subsections from disk.
+  static Future<void> clearAll() async {
+    try {
+      final file = await _getFile();
+      if (file != null && await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('Error clearing subsections cache: $e');
+    }
+  }
 }
