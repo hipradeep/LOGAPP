@@ -1,4 +1,4 @@
-package com.pradeepapp.studylog
+package com.logapp.studylog
 
 import io.flutter.embedding.android.FlutterActivity
 

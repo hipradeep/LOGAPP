@@ -1,15 +1,23 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'theme/app_theme.dart';
 import 'controllers/theme_controller.dart';
 import 'services/service_locator.dart';
 import 'services/navigation_service.dart';
 import 'widgets/app_provider.dart';
-import 'screens/main_navigation_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase with native google-services configuration
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase initialization failed/bypassed: $e');
+  }
 
   // Global Flutter error handling
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -68,7 +76,7 @@ class _StudyLogAppState extends State<StudyLogApp> {
         debugShowCheckedModeBanner: false,
         navigatorKey: NavigationService.navigatorKey,
         theme: AppTheme.themeData,
-        home: const MainNavigationScreen(),
+        home: const HomeScreen(),
       ),
     );
   }
