@@ -35,24 +35,6 @@ class CourseIconChip extends StatelessWidget {
     Icons.security_rounded,
   ];
 
-  static const List<Color> defaultBackgrounds = [
-    AppTheme.pastelPurple,
-    AppTheme.pastelGreen,
-    AppTheme.pastelOrange,
-    Color(0xFFE0F2FE),
-    Color(0xFFEEF2FF),
-    Color(0xFFECFEFF),
-  ];
-
-  static const List<Color> defaultForegrounds = [
-    AppTheme.pastelPurpleText,
-    AppTheme.pastelGreenText,
-    AppTheme.pastelOrangeText,
-    Color(0xFF0284C7),
-    Color(0xFF4F46E5),
-    Color(0xFF0891B2),
-  ];
-
   /// Stable index for [key] across restarts, unlike a list position.
   static int stableIndex(String key, int length) {
     if (key.isEmpty) return 0;
@@ -62,20 +44,23 @@ class CourseIconChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final index = stableIndex(courseId, _icons.length);
+    final tint = AppTheme.tintFor(context, index);
     final glyphSize = size * 0.55;
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: background ?? defaultBackgrounds[index],
+        color: background ?? tint.$1,
         borderRadius: BorderRadius.circular(radius),
-        border: borderColor == null ? null : Border.all(color: borderColor!),
+        border: borderColor == null
+            ? Border.all(color: tint.$3)
+            : Border.all(color: borderColor!),
       ),
       alignment: Alignment.center,
       child: Icon(
         _icons[index],
-        color: foreground ?? defaultForegrounds[index],
+        color: foreground ?? tint.$2,
         size: glyphSize,
       ),
     );

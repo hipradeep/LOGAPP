@@ -22,7 +22,7 @@ class ModuleDetailScreen extends StatefulWidget {
   const ModuleDetailScreen({
     super.key,
     required this.moduleTitle,
-    this.courseTitle = 'DSA',
+    required this.courseTitle,
     this.courseId = '',
     this.moduleId = '',
     this.moduleOrderIndex = 0,
@@ -141,7 +141,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -158,16 +158,16 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     height: 44,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: AppTheme.pastelPurple,
+                      color: AppTheme.pastelPurple(context),
                       borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                      border: Border.all(color: AppTheme.pastelPurpleBorder),
+                      border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
                     ),
                     child: Text(
                       '${widget.moduleOrderIndex + 1}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppTheme.pastelPurpleText,
+                        color: AppTheme.pastelPurpleText(context),
                       ),
                     ),
                   ),
@@ -175,10 +175,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   Expanded(
                     child: Text(
                       widget.moduleTitle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textPrimaryColor(context),
                         letterSpacing: -0.5,
                         height: 1.15,
                       ),
@@ -235,9 +235,9 @@ class _ModuleDetailTopBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.chevron_left_rounded,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                   size: 28,
                 ),
                 onPressed: onBack,
@@ -246,12 +246,12 @@ class _ModuleDetailTopBar extends StatelessWidget {
                 constraints: const BoxConstraints(),
               ),
               const HGapSm(),
-              const Text(
+              Text(
                 'MODULE',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                   letterSpacing: 1.0,
                 ),
               ),
@@ -291,27 +291,27 @@ class _TopicsListView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.format_list_bulleted_rounded,
                 size: 48,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
               ),
               const VGapMd(),
-              const Text(
+              Text(
                 'No topics yet',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                 ),
               ),
               const VGapXs(),
-              const Text(
+              Text(
                 'Tap "+ Add Topic" to add your first topic.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                 ),
               ),
               const VGapMd(),
@@ -388,10 +388,10 @@ class _TopicListItem extends StatelessWidget {
                     children: [
                       Text(
                         item.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

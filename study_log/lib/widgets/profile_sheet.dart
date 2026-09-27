@@ -36,8 +36,8 @@ class ProfileSheet extends StatelessWidget {
         top: 20,
         bottom: bottomPadding + 28,
       ),
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceColor,
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.cardBorderRadius),
         ),
@@ -52,7 +52,7 @@ class ProfileSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppTheme.borderColor,
+                color: AppTheme.borderColor(context),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -62,7 +62,7 @@ class ProfileSheet extends StatelessWidget {
           const _ProfileHeader(),
           const VGapXl(),
           Divider(
-            color: AppTheme.borderColor.withValues(alpha: 0.6),
+            color: AppTheme.borderColor(context).withValues(alpha: 0.6),
             height: 1,
           ),
           const VGapLg(),
@@ -89,7 +89,7 @@ class _ProfileHeader extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppTheme.primaryColor,
-            border: Border.all(color: AppTheme.borderColor, width: 2),
+            border: Border.all(color: AppTheme.borderColor(context), width: 2),
           ),
           alignment: Alignment.center,
           child: const Icon(
@@ -114,7 +114,7 @@ class _ProfileHeader extends StatelessWidget {
               const VGapXs(),
               Text(
                 'Student Account',
-                style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
+                style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondaryColor(context)),
               ),
             ],
           ),
@@ -137,9 +137,9 @@ class _CreateCourseOptionTile extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant,
+          color: AppTheme.surfaceVariant(context),
           borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-          border: Border.all(color: AppTheme.borderColor.withValues(alpha: 0.6)),
+          border: Border.all(color: AppTheme.borderColor(context).withValues(alpha: 0.6)),
         ),
         child: Row(
           children: [
@@ -174,15 +174,15 @@ class _CreateCourseOptionTile extends StatelessWidget {
                   Text(
                     'Add a new subject to track modules & study progress',
                     style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryColor(context),
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: AppTheme.textSecondary,
+              color: AppTheme.textSecondaryColor(context),
               size: 22,
             ),
           ],

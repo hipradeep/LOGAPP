@@ -86,11 +86,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       builder: (context, child) {
         return Theme(
           data: AppTheme.themeData.copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppTheme.primaryColor,
-              onPrimary: Colors.white,
-              onSurface: AppTheme.textPrimary,
-            ),
+            colorScheme: Theme.of(context).colorScheme,
           ),
           child: child!,
         );
@@ -110,25 +106,38 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final icons = [
       Icons.format_list_bulleted_rounded,
       Icons.code_rounded,
+      Icons.terminal_rounded,
+      Icons.data_object_rounded,
       Icons.settings_suggest_rounded,
       Icons.smart_toy_rounded,
       Icons.android_rounded,
+      Icons.flutter_dash_rounded,
       Icons.cloud_outlined,
       Icons.hub_outlined,
       Icons.menu_book_rounded,
-      Icons.terminal_rounded,
-      Icons.data_object_rounded,
-      Icons.psychology_rounded,
       Icons.school_rounded,
+      Icons.psychology_rounded,
+      Icons.storage_rounded,
+      Icons.dns_rounded,
+      Icons.coffee_rounded,
+      Icons.directions_boat_rounded,
+      Icons.account_tree_rounded,
+      Icons.science_rounded,
+      Icons.calculate_rounded,
+      Icons.palette_rounded,
+      Icons.laptop_chromebook_rounded,
+      Icons.biotech_rounded,
+      Icons.architecture_rounded,
     ];
 
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surfaceColor,
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -149,51 +158,58 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                   ),
                 ),
                 const VGapMd(),
-                const Text(
+                Text(
                   'Select Course Icon',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 const VGapMd(),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(ctx).height * 0.45,
                   ),
-                  itemCount: icons.length,
-                  itemBuilder: (context, index) {
-                    final icon = icons[index];
-                    final isSelected = icon == _selectedIcon;
-                    return InkWell(
-                      onTap: () {
-                        setState(() => _selectedIcon = icon);
-                        Navigator.pop(ctx);
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFF3F0FF) : const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor,
-                            width: isSelected ? 1.5 : 1.0,
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const BouncingScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 6,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemCount: icons.length,
+                    itemBuilder: (context, index) {
+                      final icon = icons[index];
+                      final isSelected = icon == _selectedIcon;
+                      return InkWell(
+                        onTap: () {
+                          setState(() => _selectedIcon = icon);
+                          Navigator.pop(ctx);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? _selectedColor.withValues(alpha: 0.12)
+                                : const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? _selectedColor : AppTheme.borderColor(context),
+                              width: isSelected ? 1.5 : 1.0,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            icon,
+                            color: isSelected ? _selectedColor : const Color(0xFF4B5563),
+                            size: 24,
                           ),
                         ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          icon,
-                          color: isSelected ? AppTheme.primaryColor : const Color(0xFF4B5563),
-                          size: 24,
-                        ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
                 const VGapMd(),
               ],
@@ -283,7 +299,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -312,13 +328,10 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       charCount: _descLength,
                     ),
                     const VGapLg(),
-                    _CourseIconModule(
+                    _CourseIconAndColorRow(
                       selectedIcon: _selectedIcon,
-                      onOpenPicker: _openIconPicker,
-                    ),
-                    const VGapLg(),
-                    _CourseColorModule(
                       selectedColor: _selectedColor,
+                      onOpenPicker: _openIconPicker,
                       onSelectColor: _selectColor,
                     ),
                     const VGapLg(),
@@ -358,9 +371,9 @@ class _AddCourseTopBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 28,
             ),
             onPressed: onBack,
@@ -369,10 +382,10 @@ class _AddCourseTopBar extends StatelessWidget {
           const HGapXs(),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               letterSpacing: -0.3,
             ),
           ),
@@ -400,14 +413,14 @@ class _CourseNameField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Row(
+        Row(
           children: [
             Text(
               'Course Name ',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
             ),
             Text(
@@ -423,16 +436,16 @@ class _CourseNameField extends StatelessWidget {
         const VGapSm(),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           child: TextField(
             controller: controller,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
             ),
             decoration: const InputDecoration(
               hintText: 'Enter course name',
@@ -466,20 +479,20 @@ class _CourseDescriptionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Description (Optional)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -489,9 +502,9 @@ class _CourseDescriptionField extends StatelessWidget {
                 controller: controller,
                 maxLines: 4,
                 maxLength: 500,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                 ),
                 decoration: const InputDecoration(
                   hintText: 'Enter description',
@@ -520,79 +533,16 @@ class _CourseDescriptionField extends StatelessWidget {
   }
 }
 
-class _CourseIconModule extends StatelessWidget {
+class _CourseIconAndColorRow extends StatelessWidget {
   final IconData selectedIcon;
-  final VoidCallback onOpenPicker;
-
-  const _CourseIconModule({
-    required this.selectedIcon,
-    required this.onOpenPicker,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Icon',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F0FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                selectedIcon,
-                color: AppTheme.primaryColor,
-                size: 26,
-              ),
-            ),
-            const HGapMd(),
-            Material(
-              color: const Color(0xFFF5F3FF),
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                onTap: onOpenPicker,
-                borderRadius: BorderRadius.circular(10),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Text(
-                    'Change Icon',
-                    style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _CourseColorModule extends StatelessWidget {
   final Color selectedColor;
+  final VoidCallback onOpenPicker;
   final ValueChanged<Color> onSelectColor;
 
-  const _CourseColorModule({
+  const _CourseIconAndColorRow({
+    required this.selectedIcon,
     required this.selectedColor,
+    required this.onOpenPicker,
     required this.onSelectColor,
   });
 
@@ -602,46 +552,138 @@ class _CourseColorModule extends StatelessWidget {
     Color(0xFF3B82F6),
     Color(0xFFF59E0B),
     Color(0xFFEF4444),
+    Color(0xFF8B5CF6),
     Color(0xFF6B7280),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Color',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          children: _availableColors.map((color) {
-            final isSelected = color == selectedColor;
-            return GestureDetector(
-              onTap: () => onSelectColor(color),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12.0),
+        // Clickable Icon Box
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Icon',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimaryColor(context),
+              ),
+            ),
+            const VGapSm(),
+            Material(
+              color: selectedColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: onOpenPicker,
+                borderRadius: BorderRadius.circular(14),
                 child: Container(
-                  width: 38,
-                  height: 38,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: selectedColor.withValues(alpha: 0.35),
+                      width: 1.5,
+                    ),
                   ),
                   alignment: Alignment.center,
-                  child: isSelected
-                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 20)
-                      : null,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        selectedIcon,
+                        color: selectedColor,
+                        size: 26,
+                      ),
+                      Positioned(
+                        right: 2,
+                        bottom: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: selectedColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.edit_rounded,
+                            color: Colors.white,
+                            size: 9,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            );
-          }).toList(),
+            ),
+          ],
+        ),
+        const HGapLg(),
+        // Color Selection Row
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Color',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimaryColor(context),
+                ),
+              ),
+              const VGapSm(),
+              SizedBox(
+                height: 48,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: _availableColors.map((color) {
+                      final isSelected = color == selectedColor;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 10.0),
+                        child: GestureDetector(
+                          onTap: () => onSelectColor(color),
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.4),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            alignment: Alignment.center,
+                            child: isSelected
+                                ? const Icon(
+                                    Icons.check_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  )
+                                : null,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -667,12 +709,12 @@ class _CourseDeadlineField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Deadline (Optional)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
@@ -681,9 +723,9 @@ class _CourseDeadlineField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
+              color: AppTheme.surface(context),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor),
+              border: Border.all(color: AppTheme.borderColor(context)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
@@ -702,7 +744,7 @@ class _CourseDeadlineField extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: selectedDeadline != null
-                          ? AppTheme.textPrimary
+                          ? AppTheme.textPrimaryColor(context)
                           : const Color(0xFF9CA3AF),
                       fontWeight: selectedDeadline != null
                           ? FontWeight.w600

@@ -91,8 +91,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (modalCtx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surfaceColor,
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -119,7 +119,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: AppTheme.textPrimary),
+                  leading: Icon(Icons.edit_outlined, color: AppTheme.textPrimaryColor(context)),
                   title: const Text('Edit Course Details'),
                   onTap: () {
                     Navigator.pop(modalCtx);
@@ -139,7 +139,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -184,14 +184,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: AppTheme.pastelPurple,
+                              color: AppTheme.pastelPurple(context),
                               borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                              border: Border.all(color: AppTheme.pastelPurpleBorder),
+                              border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
                             ),
                             alignment: Alignment.center,
-                            child: const Icon(
+                            child: Icon(
                               Icons.school_rounded,
-                              color: AppTheme.pastelPurpleText,
+                              color: AppTheme.pastelPurpleText(context),
                               size: 22,
                             ),
                           ),
@@ -199,10 +199,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           Expanded(
                             child: Text(
                               widget.course.title,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
-                                color: AppTheme.textPrimary,
+                                color: AppTheme.textPrimaryColor(context),
                                 letterSpacing: -0.5,
                                 height: 1.15,
                               ),
@@ -286,9 +286,9 @@ class _CourseDetailTopBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 28,
             ),
             onPressed: onBack,
@@ -298,10 +298,10 @@ class _CourseDetailTopBar extends StatelessWidget {
           Expanded(
             child: Text(
               _eyebrow.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 letterSpacing: 1.0,
               ),
             ),
@@ -312,9 +312,9 @@ class _CourseDetailTopBar extends StatelessWidget {
           ),
           const HGapSm(),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.more_vert_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 24,
             ),
             onPressed: onOptions,
@@ -425,19 +425,19 @@ class _CourseOverviewView extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'About This Course',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                 ),
               ),
               const VGapSm(),
@@ -445,10 +445,10 @@ class _CourseOverviewView extends StatelessWidget {
                 course.description.isNotEmpty
                     ? course.description
                     : 'Comprehensive syllabus and curriculum tracking for ${course.title}. Progress through modules and topics to complete your study goals.',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   height: 1.4,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                 ),
               ),
             ],
@@ -483,18 +483,18 @@ class _CourseProgressHeader extends StatelessWidget {
           children: [
             Text(
               '$completedModules / $totalModules modules',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
               ),
             ),
             Text(
               '$percent%',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
             ),
           ],
@@ -557,27 +557,27 @@ class _CourseModulesListView extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.layers_clear_outlined,
                     size: 48,
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryColor(context),
                   ),
                   const VGapMd(),
-                  const Text(
+                  Text(
                     'No modules yet',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.textPrimaryColor(context),
                     ),
                   ),
                   const VGapXs(),
-                  const Text(
+                  Text(
                     'Tap "+ Add Module" to add topics to this course.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryColor(context),
                     ),
                   ),
                   const VGapMd(),
@@ -710,8 +710,8 @@ class _ModuleListItem extends StatelessWidget {
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: isComplete
-                              ? AppTheme.textSecondary
-                              : AppTheme.textPrimary,
+                              ? AppTheme.textSecondaryColor(context)
+                              : AppTheme.textPrimaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -744,9 +744,9 @@ class _ModuleListItem extends StatelessWidget {
                           Expanded(
                             child: Text(
                               subtitle,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppTheme.textSecondary,
+                                color: AppTheme.textSecondaryColor(context),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

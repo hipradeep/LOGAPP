@@ -90,8 +90,8 @@ class ModuleOptionsSheet extends StatelessWidget {
         top: 16,
         bottom: bottomPadding + 16,
       ),
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceColor,
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.cardBorderRadius),
         ),
@@ -105,7 +105,7 @@ class ModuleOptionsSheet extends StatelessWidget {
           _ModuleHeader(module: module, courseTitle: courseTitle),
           const VGapMd(),
           Divider(
-            color: AppTheme.borderColor.withValues(alpha: 0.6),
+            color: AppTheme.borderColor(context).withValues(alpha: 0.6),
             height: 1,
           ),
           const VGapMd(),
@@ -140,7 +140,7 @@ class _HandleBar extends StatelessWidget {
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: AppTheme.borderColor,
+          color: AppTheme.borderColor(context),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -162,9 +162,9 @@ class _ModuleHeader extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: AppTheme.surfaceVariant,
+            color: AppTheme.surfaceVariant(context),
             borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -195,7 +195,7 @@ class _ModuleHeader extends StatelessWidget {
               Text(
                 module.description.isEmpty ? courseTitle : module.description,
                 style: AppTheme.bodySmall.copyWith(
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                   fontSize: 13,
                 ),
                 maxLines: 1,
@@ -227,13 +227,13 @@ class _ModuleOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconColor = isDestructive ? AppTheme.errorColor : AppTheme.primaryColor;
-    final titleColor = isDestructive ? AppTheme.errorColor : AppTheme.textPrimary;
+    final titleColor = isDestructive ? AppTheme.errorColor : AppTheme.textPrimaryColor(context);
     final tileBg = isDestructive
         ? AppTheme.errorColor.withValues(alpha: 0.06)
-        : AppTheme.surfaceVariant;
+        : AppTheme.surfaceVariant(context);
     final borderColor = isDestructive
         ? AppTheme.errorColor.withValues(alpha: 0.2)
-        : AppTheme.borderColor.withValues(alpha: 0.6);
+        : AppTheme.borderColor(context).withValues(alpha: 0.6);
 
     return Material(
       color: Colors.transparent,
@@ -282,7 +282,7 @@ class _ModuleOptionTile extends StatelessWidget {
                         fontSize: 12,
                         color: isDestructive
                             ? AppTheme.errorColor.withValues(alpha: 0.8)
-                            : AppTheme.textSecondary,
+                            : AppTheme.textSecondaryColor(context),
                       ),
                     ),
                   ],
@@ -292,7 +292,7 @@ class _ModuleOptionTile extends StatelessWidget {
                 Icons.chevron_right_rounded,
                 color: isDestructive
                     ? AppTheme.errorColor.withValues(alpha: 0.5)
-                    : AppTheme.textSecondary,
+                    : AppTheme.textSecondaryColor(context),
                 size: 20,
               ),
             ],

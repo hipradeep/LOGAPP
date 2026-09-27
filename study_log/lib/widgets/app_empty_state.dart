@@ -29,10 +29,10 @@ class AppEmptyState extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant.withValues(alpha: 0.7),
+          color: AppTheme.surfaceVariant(context).withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
           border: Border.all(
-            color: AppTheme.borderColor,
+            color: AppTheme.borderColor(context),
             width: 1,
           ),
         ),
@@ -43,10 +43,10 @@ class AppEmptyState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: AppTheme.surfaceColor,
+                color: AppTheme.surface(context),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppTheme.borderColor,
+                  color: AppTheme.borderColor(context),
                   width: 1,
                 ),
                 boxShadow: [
@@ -69,7 +69,7 @@ class AppEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppTheme.headingSmall.copyWith(
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
             ),
             const VGapSm(),
@@ -77,7 +77,7 @@ class AppEmptyState extends StatelessWidget {
               description,
               textAlign: TextAlign.center,
               style: AppTheme.bodyMedium.copyWith(
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 height: 1.4,
               ),
             ),

@@ -41,7 +41,7 @@ class ActivityListTile extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppTheme.surfaceVariant,
+                color: AppTheme.surfaceVariant(context),
                 borderRadius: BorderRadius.circular(AppTheme.iconBoxRadius),
               ),
               alignment: Alignment.center,
@@ -71,7 +71,7 @@ class ActivityListTile extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTheme.bodySmall.copyWith(
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.textSecondaryColor(context),
                       fontSize: 12,
                       height: 1.3,
                     ),

@@ -67,7 +67,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       valueListenable: _currentIndex,
       builder: (context, activeIndex, _) {
         return Scaffold(
-          backgroundColor: AppTheme.backgroundColor,
+          backgroundColor: AppTheme.background(context),
           body: IndexedStack(
             index: activeIndex,
             children: _pages,
@@ -97,9 +97,9 @@ class _StudyBottomNav extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        border: const Border(
-          top: BorderSide(color: AppTheme.borderColor, width: 1),
+        color: AppTheme.surface(context),
+        border: Border(
+          top: BorderSide(color: AppTheme.borderColor(context), width: 1),
         ),
         boxShadow: [
           BoxShadow(

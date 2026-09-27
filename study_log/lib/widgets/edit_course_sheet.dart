@@ -58,11 +58,7 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
       builder: (context, child) {
         return Theme(
           data: AppTheme.themeData.copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppTheme.primaryColor,
-              onPrimary: Colors.white,
-              onSurface: AppTheme.textPrimary,
-            ),
+            colorScheme: Theme.of(context).colorScheme,
           ),
           child: child!,
         );
@@ -119,7 +115,7 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
+        backgroundColor: AppTheme.surface(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
         ),
@@ -128,7 +124,7 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Cancel', style: TextStyle(color: AppTheme.textSecondaryColor(context))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -156,8 +152,8 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
         top: 20,
         bottom: viewInsets.bottom + 28,
       ),
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceColor,
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.cardBorderRadius),
         ),
@@ -172,7 +168,7 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppTheme.borderColor,
+                  color: AppTheme.borderColor(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -196,11 +192,11 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
             TextField(
               controller: _titleController,
               autofocus: true,
-              style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 15, color: AppTheme.textPrimaryColor(context)),
               decoration: InputDecoration(
                 labelText: 'Course Title',
                 filled: true,
-                fillColor: AppTheme.surfaceVariant,
+                fillColor: AppTheme.surfaceVariant(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                   borderSide: BorderSide.none,
@@ -211,11 +207,11 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
             TextField(
               controller: _descriptionController,
               maxLines: 2,
-              style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 14, color: AppTheme.textPrimaryColor(context)),
               decoration: InputDecoration(
                 labelText: 'Description',
                 filled: true,
-                fillColor: AppTheme.surfaceVariant,
+                fillColor: AppTheme.surfaceVariant(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                   borderSide: BorderSide.none,
@@ -229,7 +225,7 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceVariant,
+                  color: AppTheme.surfaceVariant(context),
                   borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                 ),
                 child: Row(
@@ -245,9 +241,9 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
                         _selectedDeadline == null
                             ? 'No Deadline set'
                             : 'Deadline: ${_selectedDeadline!.day}/${_selectedDeadline!.month}/${_selectedDeadline!.year}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                           fontWeight: FontWeight.w500,
                         ),
                       ),

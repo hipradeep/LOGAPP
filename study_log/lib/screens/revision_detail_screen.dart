@@ -106,8 +106,8 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (modalCtx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surfaceColor,
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -140,9 +140,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.restart_alt_rounded,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                   title: const Text('Reset to R1'),
                   onTap: () async {
@@ -181,7 +181,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _controller,
@@ -267,9 +267,9 @@ class _RevisionDetailTopBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 28,
             ),
             onPressed: onBack,
@@ -279,18 +279,18 @@ class _RevisionDetailTopBar extends StatelessWidget {
           Expanded(
             child: Text(
               _eyebrow.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
                 letterSpacing: 1.0,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.more_vert_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 24,
             ),
             onPressed: onOptions,
@@ -343,10 +343,10 @@ class _HeroBlock extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                     letterSpacing: -0.5,
                     height: 1.15,
                   ),
@@ -356,10 +356,10 @@ class _HeroBlock extends StatelessWidget {
                 const VGapXs(),
                 Text(
                   courseTitle.isEmpty ? 'No course' : courseTitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryColor(context),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -470,16 +470,16 @@ class _MetaItem extends StatelessWidget {
               leading!,
               const SizedBox(width: 6),
             ] else ...[
-              Icon(icon, color: AppTheme.textSecondary, size: 12),
+              Icon(icon, color: AppTheme.textSecondaryColor(context), size: 12),
               const HGapXs(),
             ],
             Flexible(
               child: Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                   letterSpacing: 0.4,
                 ),
                 maxLines: 1,
@@ -494,7 +494,7 @@ class _MetaItem extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: valueColor ?? AppTheme.textPrimary,
+            color: valueColor ?? AppTheme.textPrimaryColor(context),
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -513,7 +513,7 @@ class _MetaDivider extends StatelessWidget {
       width: 1,
       height: 30,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: AppTheme.borderColor,
+      color: AppTheme.borderColor(context),
     );
   }
 }
@@ -690,32 +690,32 @@ class _RevisionTopicsEmptyState extends StatelessWidget {
               width: 64,
               height: 64,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppTheme.pastelPurple,
+              decoration: BoxDecoration(
+                color: AppTheme.pastelPurple(context),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.playlist_add_rounded,
                 size: 30,
-                color: AppTheme.pastelPurpleText,
+                color: AppTheme.pastelPurpleText(context),
               ),
             ),
             const VGapMd(),
-            const Text(
+            Text(
               'No topics yet',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
             ),
             const VGapXs(),
-            const Text(
+            Text(
               'Add topics to this module to start tracking its revision ladder.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textSecondaryColor(context),
               ),
             ),
             const VGapMd(),
@@ -767,10 +767,10 @@ class _TopicListItem extends StatelessWidget {
                     children: [
                       Text(
                         topic.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -913,7 +913,7 @@ class _TimelineRow extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: isCurrent
                               ? AppTheme.primaryColor
-                              : AppTheme.textPrimary,
+                              : AppTheme.textPrimaryColor(context),
                         ),
                       ),
                       const HGapXs(),
@@ -925,9 +925,9 @@ class _TimelineRow extends StatelessWidget {
                     children: [
                       Text(
                         _formatDate(_scheduledAt),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryColor(context),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -947,7 +947,7 @@ class _TimelineRow extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: isCurrent
                               ? AppTheme.primaryColor
-                              : AppTheme.textSecondary,
+                              : AppTheme.textSecondaryColor(context),
                         ),
                       ),
                     ],
@@ -1008,9 +1008,9 @@ class _StatusIndicator extends StatelessWidget {
           width: 22,
           height: 22,
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.borderColor, width: 2),
+            border: Border.all(color: AppTheme.borderColor(context), width: 2),
           ),
         );
     }
@@ -1031,13 +1031,13 @@ class _StatusBadge extends StatelessWidget {
     switch (state) {
       case _StepState.cleared:
         label = 'Cleared';
-        bg = AppTheme.pastelGreen;
-        fg = AppTheme.pastelGreenText;
+        bg = AppTheme.pastelGreen(context);
+        fg = AppTheme.pastelGreenText(context);
         break;
       case _StepState.current:
         label = 'Pending';
-        bg = AppTheme.pastelPurple;
-        fg = AppTheme.pastelPurpleText;
+        bg = AppTheme.pastelPurple(context);
+        fg = AppTheme.pastelPurpleText(context);
         break;
       case _StepState.upcoming:
         label = 'Upcoming';

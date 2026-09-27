@@ -69,8 +69,6 @@ const String _kSampleJson = r'''
 }
 ''';
 
-// Screen
-
 /// Upload JSON Screen: lets the user pick a JSON file from their device and
 /// bulk-import Courses → Modules → Topics into local cache.
 /// Also displays a copyable sample JSON so the user knows the expected format.
@@ -263,7 +261,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(
@@ -306,8 +304,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
   }
 }
 
-// Sub-components
-
 class _UploadHeader extends StatelessWidget {
   const _UploadHeader();
 
@@ -321,24 +317,24 @@ class _UploadHeader extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
+              color: AppTheme.surface(context),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor),
+              border: Border.all(color: AppTheme.borderColor(context)),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.arrow_back_ios_new_rounded,
               size: 16,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
             ),
           ),
         ),
         const HGapMd(),
-        const Text(
+        Text(
           'Upload JSON',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
             letterSpacing: -0.3,
           ),
         ),
@@ -391,10 +387,10 @@ class _ModuleLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: AppTheme.textSecondary,
+        color: AppTheme.textSecondaryColor(context),
         letterSpacing: 0.4,
       ),
     );

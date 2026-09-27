@@ -33,15 +33,9 @@ void main() async {
 
   setupLocator();
 
-  // Configure system UI overlay matching the minimalist theme
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: AppTheme.backgroundColor,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+  // Resolve the saved theme before the first frame so the very first paint
+  // already uses the right brightness.
+  await getIt<ThemeController>().load();
 
   runApp(const StudyLogApp());
 }
@@ -63,21 +57,37 @@ class _StudyLogAppState extends State<StudyLogApp> {
   }
 
   @override
-  void dispose() {
-    // Note: getIt singletons are disposed on app termination if needed
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return AppProvider<ThemeController>(
       notifier: _themeController,
-      child: MaterialApp(
-        title: 'Study',
-        debugShowCheckedModeBanner: false,
-        navigatorKey: NavigationService.navigatorKey,
-        theme: AppTheme.themeData,
-        home: const SplashScreen(appName: 'Study'),
+      child: ListenableBuilder(
+        listenable: _themeController,
+        builder: (context, _) {
+          final isDark = _themeController.effectiveBrightness == Brightness.dark;
+
+          // Status bar icons must contrast with the active background.
+          SystemChrome.setSystemUIOverlayStyle(
+            SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+              statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+              systemNavigationBarColor:
+                  isDark ? const Color(0xFF0F0F14) : const Color(0xFFF8F9FE),
+              systemNavigationBarIconBrightness:
+                  isDark ? Brightness.light : Brightness.dark,
+            ),
+          );
+
+          return MaterialApp(
+            title: 'Study',
+            debugShowCheckedModeBanner: false,
+            navigatorKey: NavigationService.navigatorKey,
+            theme: AppTheme.themeData,
+            darkTheme: AppTheme.darkThemeData,
+            themeMode: _themeController.themeMode,
+            home: const SplashScreen(appName: 'Study'),
+          );
+        },
       ),
     );
   }

@@ -28,34 +28,34 @@ class StudyScheduleCard extends StatelessWidget {
     this.onLongPress,
   });
 
-  _PastelTheme _getTheme(int i) {
+  _PastelTheme _getTheme(BuildContext context, int i) {
     switch (i % 4) {
       case 0:
-        return const _PastelTheme(
-          bg: AppTheme.pastelOrange,
-          border: AppTheme.pastelOrangeBorder,
-          accent: AppTheme.pastelOrangeText,
+        return _PastelTheme(
+          bg: AppTheme.pastelOrange(context),
+          border: AppTheme.pastelOrangeBorder(context),
+          accent: AppTheme.pastelOrangeText(context),
           icon: Icons.code_rounded,
         );
       case 1:
-        return const _PastelTheme(
-          bg: AppTheme.pastelGreen,
-          border: AppTheme.pastelGreenBorder,
-          accent: AppTheme.pastelGreenText,
+        return _PastelTheme(
+          bg: AppTheme.pastelGreen(context),
+          border: AppTheme.pastelGreenBorder(context),
+          accent: AppTheme.pastelGreenText(context),
           icon: Icons.hub_outlined,
         );
       case 2:
-        return const _PastelTheme(
-          bg: AppTheme.pastelBlue,
-          border: AppTheme.pastelBlueBorder,
-          accent: AppTheme.pastelBlueText,
+        return _PastelTheme(
+          bg: AppTheme.pastelBlue(context),
+          border: AppTheme.pastelBlueBorder(context),
+          accent: AppTheme.pastelBlueText(context),
           icon: Icons.psychology_rounded,
         );
       default:
-        return const _PastelTheme(
-          bg: AppTheme.pastelPurple,
-          border: AppTheme.pastelPurpleBorder,
-          accent: AppTheme.pastelPurpleText,
+        return _PastelTheme(
+          bg: AppTheme.pastelPurple(context),
+          border: AppTheme.pastelPurpleBorder(context),
+          accent: AppTheme.pastelPurpleText(context),
           icon: Icons.data_object_rounded,
         );
     }
@@ -63,7 +63,7 @@ class StudyScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = _getTheme(index);
+    final theme = _getTheme(context, index);
 
     return RepaintBoundary(
       child: Material(
@@ -75,9 +75,9 @@ class StudyScheduleCard extends StatelessWidget {
           child: Ink(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
+              color: AppTheme.surface(context),
               borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor),
+              border: Border.all(color: AppTheme.borderColor(context)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.03),
@@ -114,10 +114,10 @@ class StudyScheduleCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -125,9 +125,9 @@ class StudyScheduleCard extends StatelessWidget {
                       const VGapXs(),
                       Text(
                         subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -150,10 +150,10 @@ class StudyScheduleCard extends StatelessWidget {
                             const HGapSm(),
                             Text(
                               progressRatio!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: AppTheme.textSecondary,
+                                color: AppTheme.textSecondaryColor(context),
                               ),
                             ),
                           ],

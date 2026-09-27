@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/appearance_sheet.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
@@ -94,7 +95,7 @@ class ProfileScreen extends StatelessWidget {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -115,6 +116,7 @@ class ProfileScreen extends StatelessWidget {
                 onCoursesTap: () => _openCourses(context),
                 onUploadJsonTap: () => _openUploadJson(context),
                 onClearCacheTap: () => _handleClearCache(context),
+                onAppearanceTap: () => AppearanceSheet.show(context),
               ),
             ],
           ),
@@ -129,7 +131,7 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -138,13 +140,13 @@ class _ProfileHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
             letterSpacing: -0.3,
           ),
         ),
         Icon(
           Icons.settings_outlined,
-          color: AppTheme.textPrimary,
+          color: AppTheme.textPrimaryColor(context),
           size: 24,
         ),
       ],
@@ -160,9 +162,9 @@ class _UserProfileCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
-        border: Border.all(color: AppTheme.borderColor),
+        border: Border.all(color: AppTheme.borderColor(context)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -171,7 +173,7 @@ class _UserProfileCard extends StatelessWidget {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         children: [
           _UserAvatar(letter: 'P'),
           HGapMd(),
@@ -185,7 +187,7 @@ class _UserProfileCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 VGapXs(),
@@ -193,7 +195,7 @@ class _UserProfileCard extends StatelessWidget {
                   'Software Developer',
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppTheme.textSecondary,
+                    color: AppTheme.textSecondaryColor(context),
                   ),
                 ),
               ],
@@ -241,11 +243,13 @@ class _ProfileMenuList extends StatelessWidget {
   final VoidCallback onCoursesTap;
   final VoidCallback onUploadJsonTap;
   final VoidCallback onClearCacheTap;
+  final VoidCallback onAppearanceTap;
 
   const _ProfileMenuList({
     required this.onCoursesTap,
     required this.onUploadJsonTap,
     required this.onClearCacheTap,
+    required this.onAppearanceTap,
   });
 
   @override
@@ -287,9 +291,10 @@ class _ProfileMenuList extends StatelessWidget {
           icon: Icons.notifications_none_rounded,
           title: 'Notifications',
         ),
-        const _ProfileMenuItem(
+        _ProfileTappableMenuItem(
           icon: Icons.brightness_6_outlined,
           title: 'Appearance',
+          onTap: onAppearanceTap,
         ),
         const _ProfileMenuItem(
           icon: Icons.cloud_outlined,
@@ -338,10 +343,10 @@ class _ProfileMenuItem extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                 ),
               ),
             ),

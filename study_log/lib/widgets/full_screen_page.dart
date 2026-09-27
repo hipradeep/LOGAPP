@@ -127,10 +127,10 @@ class FullScreenPage extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
-            color: AppTheme.backgroundColor.withValues(alpha: 0.85),
+            color: AppTheme.background(context).withValues(alpha: 0.85),
             border: Border(
               bottom: BorderSide(
-                color: AppTheme.borderColor.withValues(alpha: 0.6),
+                color: AppTheme.borderColor(context).withValues(alpha: 0.6),
                 width: 1,
               ),
             ),
@@ -147,9 +147,9 @@ class FullScreenPage extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppTheme.surfaceVariant,
+                        color: AppTheme.surfaceVariant(context),
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.borderColor),
+                        border: Border.all(color: AppTheme.borderColor(context)),
                       ),
                       child: const Icon(
                         Icons.arrow_back_ios_new_rounded,
@@ -261,7 +261,7 @@ class FullScreenPage extends StatelessWidget {
     final Widget body = Container(
       width: Responsive.width(context),
       height: Responsive.height(context),
-      color: showBackground ? AppTheme.backgroundColor : Colors.transparent,
+      color: showBackground ? AppTheme.background(context) : Colors.transparent,
       child: Stack(
         children: [
           if (backgroundWidgets != null) ...backgroundWidgets!,
@@ -288,7 +288,7 @@ class FullScreenPage extends StatelessWidget {
     if (!showScaffold) return mainBody;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: mainBody,
       floatingActionButton: floatingActionButton,
     );

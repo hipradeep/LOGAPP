@@ -25,10 +25,10 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isFeatured ? AppTheme.darkCardColor : AppTheme.surfaceVariant;
-    final titleColor = isFeatured ? AppTheme.textOnDark : AppTheme.textPrimary;
-    final durationColor = isFeatured ? AppTheme.textOnDarkSecondary : AppTheme.textSecondary;
-    final arrowBgColor = isFeatured ? AppTheme.surfaceColor : AppTheme.primaryColor;
+    final bgColor = isFeatured ? AppTheme.surface(context) : AppTheme.surfaceVariant(context);
+    final titleColor = isFeatured ? AppTheme.textOnDark : AppTheme.textPrimaryColor(context);
+    final durationColor = isFeatured ? AppTheme.textOnDarkSecondary : AppTheme.textSecondaryColor(context);
+    final arrowBgColor = isFeatured ? AppTheme.surface(context) : AppTheme.primaryColor;
     final arrowIconColor = isFeatured ? AppTheme.primaryColor : AppTheme.textOnDark;
 
     return Semantics(
@@ -46,7 +46,7 @@ class ActivityCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
               border: isFeatured
                   ? null
-                  : Border.all(color: AppTheme.borderColor.withValues(alpha: 0.5)),
+                  : Border.all(color: AppTheme.borderColor(context).withValues(alpha: 0.5)),
             ),
             padding: AppTheme.defaultCardPadding,
             child: Row(
@@ -72,7 +72,7 @@ class ActivityCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppTheme.darkBadgeFill,
+                            color: AppTheme.badgeFill(context),
                             borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                             border: Border.all(color: Colors.white24, width: 0.8),
                           ),

@@ -112,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final ongoingController = getIt<OngoingModulesController>();
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
@@ -152,7 +152,7 @@ class _GreetingHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -162,7 +162,7 @@ class _GreetingHeader extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                   letterSpacing: -0.3,
                 ),
               ),
@@ -171,7 +171,7 @@ class _GreetingHeader extends StatelessWidget {
                 'Keep learning, keep growing!',
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -183,9 +183,9 @@ class _GreetingHeader extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -195,12 +195,12 @@ class _GreetingHeader extends StatelessWidget {
             ],
           ),
           alignment: Alignment.center,
-          child: const Stack(
+          child: Stack(
             clipBehavior: Clip.none,
             children: [
               Icon(
                 Icons.notifications_none_rounded,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
                 size: 22,
               ),
               Positioned(
@@ -236,12 +236,12 @@ class _CurrentModulesHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           'Current Modules',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         GestureDetector(
@@ -363,9 +363,9 @@ class _CurrentModulesSliverList extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceColor,
+                      color: AppTheme.surface(context),
                       borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                      border: Border.all(color: AppTheme.borderColor),
+                      border: Border.all(color: AppTheme.borderColor(context)),
                     ),
                     alignment: Alignment.center,
                     child: const Text(
@@ -439,33 +439,33 @@ class _EmptyOngoingModulesCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        border: Border.all(color: AppTheme.borderColor),
+        border: Border.all(color: AppTheme.borderColor(context)),
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.auto_stories_outlined,
             size: 36,
-            color: AppTheme.textSecondary,
+            color: AppTheme.textSecondaryColor(context),
           ),
           const VGapMd(),
-          const Text(
+          Text(
             'No running or upcoming modules',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
             ),
           ),
           const VGapXs(),
-          const Text(
+          Text(
             'Add modules to your courses to see your study schedule here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
-              color: AppTheme.textSecondary,
+              color: AppTheme.textSecondaryColor(context),
             ),
           ),
           const VGapMd(),

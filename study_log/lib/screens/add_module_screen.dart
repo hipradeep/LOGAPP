@@ -103,8 +103,8 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surfaceColor,
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -125,12 +125,12 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                   ),
                 ),
                 const VGapMd(),
-                const Text(
+                Text(
                   'Select Course',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 const VGapMd(),
@@ -176,8 +176,8 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surfaceColor,
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -198,12 +198,12 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                   ),
                 ),
                 const VGapMd(),
-                const Text(
+                Text(
                   'Select Module Icon',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 const VGapMd(),
@@ -230,7 +230,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                           color: isSelected ? const Color(0xFFF3F0FF) : const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor,
+                            color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
                             width: isSelected ? 1.5 : 1.0,
                           ),
                         ),
@@ -333,7 +333,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -411,9 +411,9 @@ class _AddModuleTopBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 28,
             ),
             onPressed: onBack,
@@ -422,10 +422,10 @@ class _AddModuleTopBar extends StatelessWidget {
           const HGapXs(),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               letterSpacing: -0.3,
             ),
           ),
@@ -457,12 +457,12 @@ class _CourseSelectorField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Course',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
@@ -473,7 +473,7 @@ class _CourseSelectorField extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF3F4F8),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor),
+              border: Border.all(color: AppTheme.borderColor(context)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
@@ -481,10 +481,10 @@ class _CourseSelectorField extends StatelessWidget {
               children: [
                 Text(
                   courseTitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 const Icon(
@@ -512,14 +512,14 @@ class _ModuleNameField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Row(
+        Row(
           children: [
             Text(
               'Module Name ',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
             ),
             Text(
@@ -535,16 +535,16 @@ class _ModuleNameField extends StatelessWidget {
         const VGapSm(),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           child: TextField(
             controller: controller,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
             ),
             decoration: const InputDecoration(
               hintText: 'Enter module name',
@@ -578,20 +578,20 @@ class _ModuleDescriptionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Description (Optional)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -601,9 +601,9 @@ class _ModuleDescriptionField extends StatelessWidget {
                 controller: controller,
                 maxLines: 4,
                 maxLength: 500,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.textPrimaryColor(context),
                 ),
                 decoration: const InputDecoration(
                   hintText: 'Enter description',
@@ -647,12 +647,12 @@ class _ModuleIconModule extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Icon',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
@@ -723,12 +723,12 @@ class _ModuleColorModule extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Color',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
@@ -771,20 +771,20 @@ class _ModuleOrderField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Order (Optional)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         const VGapSm(),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
+            color: AppTheme.surface(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor),
+            border: Border.all(color: AppTheme.borderColor(context)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           child: Row(
@@ -793,9 +793,9 @@ class _ModuleOrderField extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                   decoration: const InputDecoration(
                     hintText: 'Enter order (e.g., 1, 2, 3)',

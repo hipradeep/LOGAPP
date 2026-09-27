@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import '../models/course.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/course_icon_chip.dart';
 import '../widgets/course_options_sheet.dart';
 import '../widgets/study_confirmation_dialog.dart';
 import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
 import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 
-/// Redesigned Courses screen matching the reference design:
+/// Courses screen listing only the user's own courses:
 /// - Top bar with Back navigation, "Courses" title, circular "+", and 3-dots menu (Delete, Archive)
 /// - "Search courses..." rounded search bar
-/// - Pastel category cards (DSA, System Design, Gen AI, Android, Cloud Computing, DevOps)
-///   with completed module ratios, progress bars, and percentage indicators
-/// - Fully responsive with realtime search filter and tap-to-inspect navigation
+/// - One card per course showing real module completion, progress bar and percentage
+/// - Icon and pastel colours come from the course id, so a course keeps the same
+///   glyph regardless of its position in the list
+/// - Empty and no-match states replace the old hardcoded sample courses
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
 
@@ -115,7 +118,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
     final coursesController = getIt<CoursesController>();
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -163,21 +166,21 @@ class _CoursesTopBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 28,
             ),
             onPressed: onBack,
             tooltip: 'Back',
           ),
           const HGapXs(),
-          const Text(
+          Text(
             'Courses',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               letterSpacing: -0.3,
             ),
           ),
@@ -207,9 +210,9 @@ class _CoursesTopBar extends StatelessWidget {
           const HGapXs(),
           // 3-dots popup menu with Delete & Archive matching reference screenshot
           PopupMenuButton<String>(
-            icon: const Icon(
+            icon: Icon(
               Icons.more_vert_rounded,
-              color: AppTheme.textPrimary,
+              color: AppTheme.textPrimaryColor(context),
               size: 24,
             ),
             shape: RoundedRectangleBorder(
@@ -277,9 +280,9 @@ class _CoursesSearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderColor),
+        border: Border.all(color: AppTheme.borderColor(context)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -300,9 +303,9 @@ class _CoursesSearchBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
               decoration: const InputDecoration(
                 hintText: 'Search courses...',
@@ -339,141 +342,80 @@ class _CoursesFilteredList extends StatelessWidget {
     required this.bottomPadding,
   });
 
-  static final List<_PresetCourseData> _presetCourses = [
-    const _PresetCourseData(
-      title: 'DSA',
-      subtitle: '6 / 20 modules',
-      progress: 0.30,
-      percentage: '30%',
-      icon: Icons.code_rounded,
-      bgColor: AppTheme.pastelPurple,
-      borderColor: AppTheme.pastelPurpleBorder,
-      accentColor: AppTheme.pastelPurpleText,
-    ),
-    const _PresetCourseData(
-      title: 'System Design',
-      subtitle: '3 / 15 modules',
-      progress: 0.20,
-      percentage: '20%',
-      icon: Icons.settings_suggest_rounded,
-      bgColor: AppTheme.pastelGreen,
-      borderColor: AppTheme.pastelGreenBorder,
-      accentColor: AppTheme.pastelGreenText,
-    ),
-    const _PresetCourseData(
-      title: 'Gen AI',
-      subtitle: '1 / 10 modules',
-      progress: 0.10,
-      percentage: '10%',
-      icon: Icons.smart_toy_rounded,
-      bgColor: AppTheme.pastelOrange,
-      borderColor: AppTheme.pastelOrangeBorder,
-      accentColor: AppTheme.pastelOrangeText,
-    ),
-    const _PresetCourseData(
-      title: 'Android',
-      subtitle: '0 / 8 modules',
-      progress: 0.0,
-      percentage: '0%',
-      icon: Icons.android_rounded,
-      bgColor: Color(0xFFE0F2FE),
-      borderColor: Color(0xFFBAE6FD),
-      accentColor: Color(0xFF0284C7),
-    ),
-    const _PresetCourseData(
-      title: 'Cloud Computing',
-      subtitle: '0 / 12 modules',
-      progress: 0.0,
-      percentage: '0%',
-      icon: Icons.cloud_outlined,
-      bgColor: Color(0xFFEEF2FF),
-      borderColor: Color(0xFFE0E7FF),
-      accentColor: Color(0xFF4F46E5),
-    ),
-    const _PresetCourseData(
-      title: 'DevOps',
-      subtitle: '0 / 10 modules',
-      progress: 0.0,
-      percentage: '0%',
-      icon: Icons.all_inclusive_rounded,
-      bgColor: Color(0xFFECFEFF),
-      borderColor: Color(0xFFCFFAFE),
-      accentColor: Color(0xFF0891B2),
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final ongoing = getIt.isRegistered<OngoingModulesController>()
+        ? getIt<OngoingModulesController>()
+        : null;
+
     return ListenableBuilder(
-      listenable: Listenable.merge([coursesController, searchQueryNotifier]),
+      listenable: Listenable.merge(
+          [coursesController, searchQueryNotifier, ?ongoing]),
       builder: (context, _) {
         final query = searchQueryNotifier.value;
         final userCourses = coursesController.courses;
 
-        // If user has saved custom courses, display them dynamically
-        if (userCourses.isNotEmpty) {
-          final filtered = userCourses.where((c) {
-            if (query.isEmpty) return true;
-            return c.title.toLowerCase().contains(query) ||
-                c.description.toLowerCase().contains(query);
-          }).toList();
+        final filtered = userCourses.where((c) {
+          if (query.isEmpty) return true;
+          return c.title.toLowerCase().contains(query) ||
+              c.description.toLowerCase().contains(query);
+        }).toList();
 
-          return ListView.builder(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.only(left: 16, right: 16, top: 8, bottom: bottomPadding),
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final Course course = filtered[index];
-              final theme = _presetCourses[index % _presetCourses.length];
-              final progress = (0.2 + (index * 0.15)) % 1.0;
-              final percent = (progress * 100).toInt();
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: _CourseItemCard(
-                  title: course.title,
-                  subtitle: course.description.isNotEmpty
-                      ? course.description
-                      : '2 / 6 modules',
-                  progress: progress,
-                  percentage: '$percent%',
-                  icon: theme.icon,
-                  bgColor: theme.bgColor,
-                  borderColor: theme.borderColor,
-                  accentColor: theme.accentColor,
-                  onTap: () => onCourseTap(course),
-                  onLongPress: () => onCourseLongPress(course),
-                ),
-              );
-            },
+        if (userCourses.isEmpty) {
+          return _CoursesEmptyState(
+            bottomPadding: bottomPadding,
+            onAddCourse: onAddCourse,
           );
         }
 
-        // Otherwise display the preset courses matching the design perfectly
-        final filteredPresets = _presetCourses.where((p) {
-          if (query.isEmpty) return true;
-          return p.title.toLowerCase().contains(query) ||
-              p.subtitle.toLowerCase().contains(query);
-        }).toList();
+        if (filtered.isEmpty) {
+          return ListView(
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.only(
+                left: 16, right: 16, top: 48, bottom: bottomPadding),
+            children: [
+              Center(
+                child: Text(
+                  'No courses match "$query"',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondaryColor(context),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
 
         return ListView.builder(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.only(left: 16, right: 16, top: 8, bottom: bottomPadding),
-          itemCount: filteredPresets.length,
+          itemCount: filtered.length,
           itemBuilder: (context, index) {
-            final item = filteredPresets[index];
+            final Course course = filtered[index];
+            final rollup = ongoing?.progressForCourse(course.id);
+            final progress = rollup?.ratio ?? 0.0;
+            final percent = (progress * 100).round();
+
+            final String subtitle;
+            if (course.description.isNotEmpty) {
+              subtitle = course.description;
+            } else if (rollup != null && rollup.hasModules) {
+              subtitle = '${rollup.completedModules} / ${rollup.totalModules} modules';
+            } else {
+              subtitle = 'No modules yet';
+            }
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: _CourseItemCard(
-                title: item.title,
-                subtitle: item.subtitle,
-                progress: item.progress,
-                percentage: item.percentage,
-                icon: item.icon,
-                bgColor: item.bgColor,
-                borderColor: item.borderColor,
-                accentColor: item.accentColor,
-                onTap: onAddCourse,
+                courseId: course.id,
+                title: course.title,
+                subtitle: subtitle,
+                progress: progress,
+                percentage: '$percent%',
+                onTap: () => onCourseTap(course),
+                onLongPress: () => onCourseLongPress(course),
               ),
             );
           },
@@ -483,33 +425,98 @@ class _CoursesFilteredList extends StatelessWidget {
   }
 }
 
+class _CoursesEmptyState extends StatelessWidget {
+  final VoidCallback onAddCourse;
+  final double bottomPadding;
+
+  const _CoursesEmptyState({
+    required this.onAddCourse,
+    required this.bottomPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(24, 72, 24, bottomPadding),
+      children: [
+        Center(
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppTheme.pastelPurple(context),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
+            ),
+            child: Icon(
+              Icons.school_outlined,
+              color: AppTheme.pastelPurpleText(context),
+              size: 30,
+            ),
+          ),
+        ),
+        const VGapMd(),
+        Text(
+          'No courses yet',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor(context),
+          ),
+        ),
+        const VGapXs(),
+        Text(
+          'Add a course to start tracking its modules and topics.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            color: AppTheme.textSecondaryColor(context),
+          ),
+        ),
+        const VGapMd(),
+        Center(
+          child: TextButton.icon(
+            onPressed: onAddCourse,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add course'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppTheme.primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CourseItemCard extends StatelessWidget {
+  final String courseId;
   final String title;
   final String subtitle;
   final double progress;
   final String percentage;
-  final IconData icon;
-  final Color bgColor;
-  final Color borderColor;
-  final Color accentColor;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
   const _CourseItemCard({
+    required this.courseId,
     required this.title,
     required this.subtitle,
     required this.progress,
     required this.percentage,
-    required this.icon,
-    required this.bgColor,
-    required this.borderColor,
-    required this.accentColor,
     this.onTap,
     this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
+    final accentIndex =
+        CourseIconChip.stableIndex(courseId, AppTheme.tintCount);
+    final accentColor = AppTheme.tintFor(context, accentIndex).$2;
+
     return RepaintBoundary(
       child: Material(
         color: Colors.transparent,
@@ -520,9 +527,9 @@ class _CourseItemCard extends StatelessWidget {
           child: Ink(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
+              color: AppTheme.surface(context),
               borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor),
+              border: Border.all(color: AppTheme.borderColor(context)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.03),
@@ -534,21 +541,10 @@ class _CourseItemCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Pastel rounded square icon container
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                    border: Border.all(color: borderColor, width: 1),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    icon,
-                    color: accentColor,
-                    size: 24,
-                  ),
+                CourseIconChip(
+                  courseId: courseId,
+                  size: 48,
+                  radius: AppTheme.smallBorderRadius,
                 ),
                 const HGapMd(),
                 // Title, Subtitle, Progress Bar & Percentage
@@ -559,10 +555,10 @@ class _CourseItemCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -570,9 +566,9 @@ class _CourseItemCard extends StatelessWidget {
                       const VGapXs(),
                       Text(
                         subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textSecondaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -594,10 +590,10 @@ class _CourseItemCard extends StatelessWidget {
                           const HGapSm(),
                           Text(
                             percentage,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.textSecondary,
+                              color: AppTheme.textSecondaryColor(context),
                             ),
                           ),
                         ],
@@ -621,24 +617,3 @@ class _CourseItemCard extends StatelessWidget {
   }
 }
 
-class _PresetCourseData {
-  final String title;
-  final String subtitle;
-  final double progress;
-  final String percentage;
-  final IconData icon;
-  final Color bgColor;
-  final Color borderColor;
-  final Color accentColor;
-
-  const _PresetCourseData({
-    required this.title,
-    required this.subtitle,
-    required this.progress,
-    required this.percentage,
-    required this.icon,
-    required this.bgColor,
-    required this.borderColor,
-    required this.accentColor,
-  });
-}

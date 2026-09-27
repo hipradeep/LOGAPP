@@ -27,11 +27,75 @@ enum RevisionScope {
   final String label;
 }
 
+class _RevisionLevelConfig {
+  final int level;
+  final String label;
+  final String interval;
+  final Color color;
+  final Color bg;
+  final Color border;
+
+  const _RevisionLevelConfig({
+    required this.level,
+    required this.label,
+    required this.interval,
+    required this.color,
+    required this.bg,
+    required this.border,
+  });
+}
+
+const List<_RevisionLevelConfig> _kLevelConfigs = [
+  _RevisionLevelConfig(
+    level: 1,
+    label: 'R1',
+    interval: '1 day',
+    color: Color(0xFFEF4444),
+    bg: Color(0xFFFEF2F2),
+    border: Color(0xFFFEE2E2),
+  ),
+  _RevisionLevelConfig(
+    level: 2,
+    label: 'R2',
+    interval: '3 days',
+    color: Color(0xFFF59E0B),
+    bg: Color(0xFFFFFBEB),
+    border: Color(0xFFFEF3C7),
+  ),
+  _RevisionLevelConfig(
+    level: 3,
+    label: 'R3',
+    interval: '7 days',
+    color: Color(0xFF0284C7),
+    bg: Color(0xFFF0F9FF),
+    border: Color(0xFFE0F2FE),
+  ),
+  _RevisionLevelConfig(
+    level: 4,
+    label: 'R4',
+    interval: '14 days',
+    color: Color(0xFF8B5CF6),
+    bg: Color(0xFFFAF5FF),
+    border: Color(0xFFF3E8FF),
+  ),
+  _RevisionLevelConfig(
+    level: 5,
+    label: 'R5',
+    interval: '30 days',
+    color: Color(0xFF16A34A),
+    bg: Color(0xFFF0FDF4),
+    border: Color(0xFFDCFCE7),
+  ),
+];
+
 /// Revision screen — a tracking list for the R1 -> R5 spaced repetition ladder.
 ///
-/// Deliberately a single continuous list ordered by due date: no "due in N
-/// days" groupings and no per-card action button. Tapping a card opens the
-/// module it tracks; progression itself is automatic.
+/// Clean visual design with:
+/// - Circular action buttons in top bar
+/// - Horizontal level tabs showing intervals and count badges
+/// - Section header showing active category with count and sort dropdown
+/// - Modern white item cards with tech icon glyphs, level pill tags, and due status
+/// - Play revision button and three-dot list item menu removed as requested.
 class RevisionScreen extends StatefulWidget {
   final RevisionController revisionController;
   final VoidCallback onBack;
@@ -109,7 +173,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
 
     switch (_sortMode) {
       case RevisionSortMode.dueDate:
-        // Most urgent first. Ties keep finished records at the bottom.
         filtered.sort((a, b) {
           if (a.isFinished != b.isFinished) return a.isFinished ? 1 : -1;
           return a.nextRevisionAt.compareTo(b.nextRevisionAt);
@@ -135,12 +198,26 @@ class _RevisionScreenState extends State<RevisionScreen> {
     return filtered;
   }
 
+  void _handleLevelSelected(int? level) {
+    setState(() {
+      if (_levelFilter == level) {
+        _levelFilter = null;
+      } else {
+        _levelFilter = level;
+      }
+    });
+  }
+
+  void _handleSortChanged(RevisionSortMode mode) {
+    setState(() => _sortMode = mode);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -152,18 +229,63 @@ class _RevisionScreenState extends State<RevisionScreen> {
             ),
             if (_isSearchVisible)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: _RevisionSearchBar(controller: _searchController),
               ),
-            _RevisionLevelFilterRow(
-              selectedLevel: _levelFilter,
-              onSelected: (level) => setState(() => _levelFilter = level),
+            ListenableBuilder(
+              listenable: widget.revisionController,
+              builder: (context, _) {
+                return _RevisionLevelFilterRow(
+                  selectedLevel: _levelFilter,
+                  revisions: widget.revisionController.revisions,
+                  onSelected: _handleLevelSelected,
+                );
+              },
             ),
-            _RevisionSortRow(
-              sortMode: _sortMode,
-              scope: _scope,
-              onSortChanged: (mode) => setState(() => _sortMode = mode),
-              onFilterPressed: _openFilterSheet,
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                widget.revisionController,
+                _searchQuery,
+              ]),
+              builder: (context, _) {
+                final now = DateTime.now();
+                final revisions = _visibleRevisions(now);
+                final dueCount = revisions.where((r) => r.isDueAt(now)).length;
+
+                final String sectionTitle;
+                final int sectionCount;
+
+                if (_scope == RevisionScope.dueToday) {
+                  sectionTitle = 'Due Today';
+                  sectionCount = revisions.length;
+                } else if (_levelFilter != null) {
+                  sectionTitle = 'R$_levelFilter Revisions';
+                  sectionCount = revisions.length;
+                } else if (_scope == RevisionScope.upcoming) {
+                  sectionTitle = 'Upcoming';
+                  sectionCount = revisions.length;
+                } else if (_scope == RevisionScope.finished) {
+                  sectionTitle = 'Finished';
+                  sectionCount = revisions.length;
+                } else {
+                  if (dueCount > 0) {
+                    sectionTitle = 'Due Today';
+                    sectionCount = dueCount;
+                  } else {
+                    sectionTitle = 'All Revisions';
+                    sectionCount = revisions.length;
+                  }
+                }
+
+                return _RevisionSectionHeader(
+                  title: sectionTitle,
+                  count: sectionCount,
+                  sortMode: _sortMode,
+                  scope: _scope,
+                  onSortChanged: _handleSortChanged,
+                  onFilterPressed: _openFilterSheet,
+                );
+              },
             ),
             Expanded(
               child: ListenableBuilder(
@@ -212,11 +334,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
                       final revision = revisions[index];
                       return _RevisionItemCard(
                         revision: revision,
-                        palette: _cardPalettes[
-                            CourseIconChip.stableIndex(
-                          revision.moduleId,
-                          _cardPalettes.length,
-                        )],
                         onTap: () => widget.onOpenRevision(revision),
                       );
                     },
@@ -274,7 +391,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
   Future<void> _openFilterSheet() async {
     final result = await showModalBottomSheet<RevisionScope>(
       context: context,
-      backgroundColor: AppTheme.surfaceColor,
+      backgroundColor: AppTheme.surface(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -287,17 +404,17 @@ class _RevisionScreenState extends State<RevisionScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppTheme.borderColor,
+                color: AppTheme.borderColor(context),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const VGapMd(),
-            const Text(
+            Text(
               'Filter revisions',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
             ),
             const VGapSm(),
@@ -308,7 +425,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
                   _scopeIconFor(scope),
                   color: scope == _scope
                       ? AppTheme.primaryColor
-                      : AppTheme.textSecondary,
+                      : AppTheme.textSecondaryColor(context),
                   size: 20,
                 ),
                 title: Text(
@@ -319,7 +436,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
                         scope == _scope ? FontWeight.bold : FontWeight.w500,
                     color: scope == _scope
                         ? AppTheme.primaryColor
-                        : AppTheme.textPrimary,
+                        : AppTheme.textPrimaryColor(context),
                   ),
                 ),
                 trailing: scope == _scope
@@ -353,32 +470,8 @@ class _RevisionScreenState extends State<RevisionScreen> {
   }
 }
 
-class _CardPalette {
-  final Color bg;
-  final Color border;
-  final Color accent;
-  const _CardPalette(this.bg, this.border, this.accent);
-}
-
-const List<_CardPalette> _cardPalettes = [
-  _CardPalette(
-    AppTheme.pastelPurple,
-    AppTheme.pastelPurpleBorder,
-    AppTheme.pastelPurpleText,
-  ),
-  _CardPalette(
-    AppTheme.pastelGreen,
-    AppTheme.pastelGreenBorder,
-    AppTheme.pastelGreenText,
-  ),
-  _CardPalette(
-    AppTheme.pastelOrange,
-    AppTheme.pastelOrangeBorder,
-    AppTheme.pastelOrangeText,
-  ),
-  _CardPalette(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF0284C7)),
-];
-
+/// Top header matching the reference design:
+/// Circular back button, bold title, circular search, circular overflow menu.
 class _RevisionTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSearchTap;
@@ -395,53 +488,81 @@ class _RevisionTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
-              size: 28,
+          Material(
+            color: const Color(0xFFF1F5F9),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onBack,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.chevron_left_rounded,
+                  color: AppTheme.textPrimaryColor(context),
+                  size: 26,
+                ),
+              ),
             ),
-            onPressed: onBack,
-            tooltip: 'Back',
           ),
-          const HGapXs(),
-          const Text(
+          const HGapMd(),
+          Text(
             'Revision',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-              letterSpacing: -0.3,
+              color: AppTheme.textPrimaryColor(context),
+              letterSpacing: -0.4,
             ),
           ),
           const Spacer(),
-          IconButton(
-            icon: Icon(
-              isSearchActive
-                  ? Icons.search_off_rounded
-                  : Icons.search_rounded,
-              color: isSearchActive
-                  ? AppTheme.primaryColor
-                  : AppTheme.textPrimary,
-              size: 24,
+          Material(
+            color: isSearchActive
+                ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                : const Color(0xFFF1F5F9),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onSearchTap,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSearchActive
+                        ? AppTheme.primaryColor
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  isSearchActive
+                      ? Icons.close_rounded
+                      : Icons.search_rounded,
+                  color: isSearchActive
+                      ? AppTheme.primaryColor
+                      : const Color(0xFF334155),
+                  size: 20,
+                ),
+              ),
             ),
-            onPressed: onSearchTap,
-            tooltip: 'Search',
           ),
+          const HGapSm(),
           PopupMenuButton<String>(
-            icon: const Icon(
-              Icons.more_vert_rounded,
-              color: AppTheme.textPrimary,
-              size: 24,
-            ),
+            onSelected: onMenuAction,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
             ),
             elevation: 6,
-            onSelected: onMenuAction,
             itemBuilder: (ctx) => const [
               PopupMenuItem<String>(
                 value: 'showFinished',
@@ -465,6 +586,21 @@ class _RevisionTopBar extends StatelessWidget {
                 ),
               ),
             ],
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.more_vert_rounded,
+                color: Color(0xFF334155),
+                size: 20,
+              ),
+            ),
           ),
         ],
       ),
@@ -481,38 +617,38 @@ class _RevisionSearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderColor),
+        color: AppTheme.surface(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
       child: Row(
         children: [
           const Icon(
             Icons.search_rounded,
-            color: Color(0xFF9CA3AF),
+            color: Color(0xFF94A3B8),
             size: 20,
           ),
           const HGapSm(),
           Expanded(
             child: TextField(
               controller: controller,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppTheme.textPrimary,
+                color: AppTheme.textPrimaryColor(context),
               ),
               decoration: const InputDecoration(
                 hintText: 'Search revisions...',
                 hintStyle: TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF9CA3AF),
+                  color: Color(0xFF94A3B8),
                 ),
                 border: InputBorder.none,
                 isDense: true,
@@ -526,35 +662,40 @@ class _RevisionSearchBar extends StatelessWidget {
   }
 }
 
-/// Horizontal R-level chips: All, R1, R2, R3, R4, R5.
+/// Horizontal category filter row: All (12), R1 (1 day), R2 (3 days), R3 (7 days), etc.
 class _RevisionLevelFilterRow extends StatelessWidget {
   final int? selectedLevel;
+  final List<Revision> revisions;
   final ValueChanged<int?> onSelected;
 
   const _RevisionLevelFilterRow({
     required this.selectedLevel,
+    required this.revisions,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final totalCount = revisions.length;
+
     return SizedBox(
-      height: 38,
+      height: 60,
       child: ListView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
-          _LevelChip(
-            label: 'All',
+          _AllPillTab(
             isSelected: selectedLevel == null,
+            count: totalCount,
             onTap: () => onSelected(null),
           ),
-          for (var level = 1; level <= RevisionSchedule.maxLevel; level++)
-            _LevelChip(
-              label: 'R$level',
-              isSelected: selectedLevel == level,
-              onTap: () => onSelected(level),
+          for (final config in _kLevelConfigs)
+            _LevelTabCard(
+              config: config,
+              count: revisions.where((r) => r.currentLevel == config.level).length,
+              isSelected: selectedLevel == config.level,
+              onTap: () => onSelected(config.level),
             ),
         ],
       ),
@@ -562,42 +703,47 @@ class _RevisionLevelFilterRow extends StatelessWidget {
   }
 }
 
-class _LevelChip extends StatelessWidget {
-  final String label;
+class _AllPillTab extends StatelessWidget {
   final bool isSelected;
+  final int count;
   final VoidCallback onTap;
 
-  const _LevelChip({
-    required this.label,
+  const _AllPillTab({
     required this.isSelected,
+    required this.count,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.only(right: 10),
       child: Material(
-        color: isSelected ? AppTheme.primaryColor : AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(20),
+        color: isSelected ? const Color(0xFFEEF2FF) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor,
+                color: isSelected
+                    ? const Color(0xFFC7D2FE)
+                    : const Color(0xFFE2E8F0),
+                width: isSelected ? 1.4 : 1.0,
               ),
             ),
             child: Text(
-              label,
+              'All ($count)',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected ? Colors.white : AppTheme.textSecondary,
+                color: isSelected
+                    ? const Color(0xFF4F46E5)
+                    : const Color(0xFF64748B),
               ),
             ),
           ),
@@ -607,14 +753,103 @@ class _LevelChip extends StatelessWidget {
   }
 }
 
-/// Sort selector ("Due Date") plus the filter icon.
-class _RevisionSortRow extends StatelessWidget {
+class _LevelTabCard extends StatelessWidget {
+  final _RevisionLevelConfig config;
+  final int count;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _LevelTabCard({
+    required this.config,
+    required this.count,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: Material(
+        color: config.bg,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 74,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected ? config.color : config.border,
+                width: isSelected ? 1.6 : 1.0,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      config.label,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        color: config.color,
+                      ),
+                    ),
+                    const HGapXs(),
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: config.color,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const VGapXs(),
+                Text(
+                  config.interval,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Section header row: Left title + count badge, Right sort dropdown + filter icon
+class _RevisionSectionHeader extends StatelessWidget {
+  final String title;
+  final int count;
   final RevisionSortMode sortMode;
   final RevisionScope scope;
   final ValueChanged<RevisionSortMode> onSortChanged;
   final VoidCallback onFilterPressed;
 
-  const _RevisionSortRow({
+  const _RevisionSectionHeader({
+    required this.title,
+    required this.count,
     required this.sortMode,
     required this.scope,
     required this.onSortChanged,
@@ -624,15 +859,35 @@ class _RevisionSortRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       child: Row(
         children: [
-          const Icon(
-            Icons.swap_vert_rounded,
-            color: Color(0xFF9CA3AF),
-            size: 18,
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryColor(context),
+              letterSpacing: -0.3,
+            ),
           ),
-          const HGapXs(),
+          const HGapSm(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4F46E5),
+              ),
+            ),
+          ),
+          const Spacer(),
           PopupMenuButton<RevisionSortMode>(
             initialValue: sortMode,
             onSelected: onSortChanged,
@@ -649,67 +904,64 @@ class _RevisionSortRow extends StatelessWidget {
                     mode.label,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: mode == sortMode
-                          ? FontWeight.bold
-                          : FontWeight.w500,
+                      fontWeight:
+                          mode == sortMode ? FontWeight.bold : FontWeight.w500,
                       color: mode == sortMode
                           ? AppTheme.primaryColor
-                          : AppTheme.textPrimary,
+                          : AppTheme.textPrimaryColor(context),
                     ),
                   ),
                 ),
             ],
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    sortMode.label,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
-                    ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  sortMode.label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
                   ),
-                  const Icon(
-                    Icons.expand_more_rounded,
-                    color: AppTheme.textSecondary,
-                    size: 18,
-                  ),
-                ],
-              ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF475569),
+                  size: 20,
+                ),
+              ],
             ),
           ),
-          const Spacer(),
-          if (scope != RevisionScope.all)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
+          const HGapSm(),
+          Material(
+            color: scope != RevisionScope.all
+                ? const Color(0xFFEEF2FF)
+                : const Color(0xFFF1F5F9),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onFilterPressed,
+              customBorder: const CircleBorder(),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: AppTheme.pastelPurple,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  scope.label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.pastelPurpleText,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: scope != RevisionScope.all
+                        ? const Color(0xFFC7D2FE)
+                        : const Color(0xFFE2E8F0),
                   ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: scope != RevisionScope.all
+                      ? const Color(0xFF4F46E5)
+                      : const Color(0xFF475569),
+                  size: 18,
                 ),
               ),
             ),
-          IconButton(
-            onPressed: onFilterPressed,
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(
-              Icons.tune_rounded,
-              color: AppTheme.textPrimary,
-              size: 20,
-            ),
-            tooltip: 'Filter',
           ),
         ],
       ),
@@ -717,14 +969,19 @@ class _RevisionSortRow extends StatelessWidget {
   }
 }
 
+/// Item card for a revision:
+/// - Rounded rectangular card
+/// - Tech icon / glyph container
+/// - Title with R-level pill tag
+/// - Subtitle (course & description)
+/// - Red clock with due status
+/// - Play revision button & three-dot menu removed as requested.
 class _RevisionItemCard extends StatelessWidget {
   final Revision revision;
-  final _CardPalette palette;
   final VoidCallback onTap;
 
   const _RevisionItemCard({
     required this.revision,
-    required this.palette,
     required this.onTap,
   });
 
@@ -733,38 +990,38 @@ class _RevisionItemCard extends StatelessWidget {
     final now = DateTime.now();
     final days = revision.daysUntilDue(now);
     final isDue = revision.isDueAt(now);
-    final dueColor = _dueColor(days, isDue, revision);
+    final dueColor = _dueColor(context, days, isDue, revision);
 
     return RepaintBoundary(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          borderRadius: BorderRadius.circular(20),
           child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor),
+              color: AppTheme.surface(context),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFF1F5F9),
+                width: 1.2,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                CourseIconChip(
+                _RevisionIconBox(
                   courseId: revision.courseId,
-                  size: 44,
-                  radius: AppTheme.smallBorderRadius,
-                  background: palette.bg,
-                  foreground: palette.accent,
-                  borderColor: palette.border,
+                  moduleTitle: revision.moduleTitle,
+                  courseTitle: revision.courseTitle,
                 ),
                 const HGapMd(),
                 Expanded(
@@ -772,22 +1029,32 @@ class _RevisionItemCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        revision.moduleTitle,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              revision.moduleTitle,
+                              style: TextStyle(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimaryColor(context),
+                                letterSpacing: -0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const HGapSm(),
+                          _RevisionLevelPill(level: revision.currentLevel),
+                        ],
                       ),
                       const VGapXs(),
                       Text(
                         _subtitleFor(revision),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.textSecondaryColor(context),
+                          fontWeight: FontWeight.w400,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -798,18 +1065,19 @@ class _RevisionItemCard extends StatelessWidget {
                           Icon(
                             revision.isFinished
                                 ? Icons.check_circle_rounded
-                                : Icons.event_rounded,
-                            size: 13,
-                            color: dueColor,
+                                : Icons.access_time_rounded,
+                            size: 15,
+                            color: isDue ? const Color(0xFFEF4444) : dueColor,
                           ),
                           const HGapXs(),
                           Flexible(
                             child: Text(
-                              _dueLabel(days, isDue),
+                              _dueLabel(days, isDue, revision),
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: dueColor,
+                                color:
+                                    isDue ? const Color(0xFFEF4444) : dueColor,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -820,12 +1088,6 @@ class _RevisionItemCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const HGapSm(),
-                _LevelBadge(
-                  label: revision.levelLabel,
-                  isDue: isDue,
-                  isFinished: revision.isFinished,
-                ),
               ],
             ),
           ),
@@ -834,63 +1096,184 @@ class _RevisionItemCard extends StatelessWidget {
     );
   }
 
-  /// Course name leads, then the module description when there is one.
   static String _subtitleFor(Revision revision) {
-    final course = revision.courseTitle.trim();
     final description = revision.moduleDescription.trim();
-    if (course.isEmpty) return description;
-    if (description.isEmpty) return course;
-    return '$course · $description';
+    if (description.isNotEmpty) return description;
+    return revision.courseTitle.trim();
   }
 
-  static String _dueLabel(int days, bool isDue) {
+  static String _dueLabel(int days, bool isDue, Revision revision) {
+    if (revision.isFinished) return 'Completed';
     if (isDue) return days < 0 ? 'Overdue ${days.abs()}d' : 'Due today';
     if (days <= 0) return 'Due today';
     if (days == 1) return 'Due tomorrow';
     return 'In ${days}d';
   }
 
-  static Color _dueColor(int days, bool isDue, Revision revision) {
+  static Color _dueColor(
+      BuildContext context, int days, bool isDue, Revision revision) {
     if (revision.isFinished) return AppTheme.successColor;
-    if (isDue) return days < 0 ? AppTheme.errorColor : AppTheme.primaryColor;
-    return AppTheme.textSecondary;
+    if (isDue) {
+      return days < 0 ? const Color(0xFFDC2626) : AppTheme.errorColor;
+    }
+    return AppTheme.textSecondaryColor(context);
   }
 }
 
-class _LevelBadge extends StatelessWidget {
-  final String label;
-  final bool isDue;
-  final bool isFinished;
+/// Rounded icon box for a module/course with tech-specific glyphs
+class _RevisionIconBox extends StatelessWidget {
+  final String courseId;
+  final String moduleTitle;
+  final String courseTitle;
 
-  const _LevelBadge({
-    required this.label,
-    required this.isDue,
-    required this.isFinished,
+  const _RevisionIconBox({
+    required this.courseId,
+    required this.moduleTitle,
+    required this.courseTitle,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bg = isFinished
-        ? AppTheme.successColor
-        : isDue
-            ? AppTheme.primaryColor
-            : AppTheme.pastelPurple;
-    final fg =
-        isFinished || isDue ? Colors.white : AppTheme.pastelPurpleText;
+    final lower = '${moduleTitle.toLowerCase()} ${courseTitle.toLowerCase()}';
 
+    if (lower.contains('java') || lower.contains('spring')) {
+      return _buildBox(
+        icon: Icons.coffee_rounded,
+        bg: const Color(0xFFFFF1F2),
+        fg: const Color(0xFFEF4444),
+        border: const Color(0xFFFEE2E2),
+      );
+    }
+    if (lower.contains('docker') ||
+        lower.contains('container') ||
+        lower.contains('k8s') ||
+        lower.contains('kubernetes')) {
+      return _buildBox(
+        icon: Icons.directions_boat_rounded,
+        bg: const Color(0xFFEFF6FF),
+        fg: const Color(0xFF2563EB),
+        border: const Color(0xFFDBEAFE),
+      );
+    }
+    if (lower.contains('python')) {
+      return _buildBox(
+        icon: Icons.terminal_rounded,
+        bg: const Color(0xFFFEF9C3),
+        fg: const Color(0xFFCA8A04),
+        border: const Color(0xFFFEF08A),
+      );
+    }
+    if (lower.contains('flutter') ||
+        lower.contains('dart') ||
+        lower.contains('android') ||
+        lower.contains('ios')) {
+      return _buildBox(
+        icon: Icons.flutter_dash_rounded,
+        bg: const Color(0xFFE0F2FE),
+        fg: const Color(0xFF0284C7),
+        border: const Color(0xFFBAE6FD),
+      );
+    }
+    if (lower.contains('database') ||
+        lower.contains('sql') ||
+        lower.contains('mongo') ||
+        lower.contains('postgres')) {
+      return _buildBox(
+        icon: Icons.dns_rounded,
+        bg: const Color(0xFFECFDF5),
+        fg: const Color(0xFF059669),
+        border: const Color(0xFFA7F3D0),
+      );
+    }
+    if (lower.contains('git')) {
+      return _buildBox(
+        icon: Icons.call_split_rounded,
+        bg: const Color(0xFFFFF7ED),
+        fg: const Color(0xFFEA580C),
+        border: const Color(0xFFFFEDD5),
+      );
+    }
+    if (lower.contains('dsa') ||
+        lower.contains('algo') ||
+        lower.contains('tree') ||
+        lower.contains('graph')) {
+      return _buildBox(
+        icon: Icons.account_tree_rounded,
+        bg: const Color(0xFFF5F3FF),
+        fg: const Color(0xFF6366F1),
+        border: const Color(0xFFDDD6FE),
+      );
+    }
+    if (lower.contains('react') ||
+        lower.contains('javascript') ||
+        lower.contains('js') ||
+        lower.contains('frontend') ||
+        lower.contains('web')) {
+      return _buildBox(
+        icon: Icons.code_rounded,
+        bg: const Color(0xFFFAF5FF),
+        fg: const Color(0xFF7C3AED),
+        border: const Color(0xFFF3E8FF),
+      );
+    }
+
+    return CourseIconChip(
+      courseId: courseId,
+      size: 52,
+      radius: 16,
+    );
+  }
+
+  Widget _buildBox({
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+    required Color border,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 1),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        icon,
+        color: fg,
+        size: 26,
+      ),
+    );
+  }
+}
+
+/// Pill badge showing R1, R2, etc. next to the title
+class _RevisionLevelPill extends StatelessWidget {
+  final int level;
+
+  const _RevisionLevelPill({required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = _kLevelConfigs.firstWhere(
+      (c) => c.level == level,
+      orElse: () => _kLevelConfigs.first,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: config.bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: config.border, width: 0.8),
       ),
       child: Text(
-        label,
+        config.label,
         style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: fg,
-          letterSpacing: -0.2,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: config.color,
         ),
       ),
     );

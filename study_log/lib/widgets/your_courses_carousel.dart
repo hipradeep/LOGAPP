@@ -130,7 +130,7 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
                     return _MoreCoursesCard(onTap: widget.onMoreTap);
                   }
                   final course = displayed[index];
-                  final palette = _cardPalettes[index % _cardPalettes.length];
+                  final palette = _cardPalettes(context)[index % AppTheme.tintCount];
                   final progress = ongoing?.progressForCourse(course.id);
                   final isComplete = progress?.isComplete ?? false;
                   return _YourCourseCard(
@@ -196,12 +196,15 @@ class _CardPalette {
   const _CardPalette(this.bg, this.border, this.accent);
 }
 
-const List<_CardPalette> _cardPalettes = [
-  _CardPalette(AppTheme.pastelPurple, AppTheme.pastelPurpleBorder, AppTheme.pastelPurpleText),
-  _CardPalette(AppTheme.pastelGreen, AppTheme.pastelGreenBorder, AppTheme.pastelGreenText),
-  _CardPalette(AppTheme.pastelOrange, AppTheme.pastelOrangeBorder, AppTheme.pastelOrangeText),
-  _CardPalette(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF0284C7)),
-];
+List<_CardPalette> _cardPalettes(BuildContext context) {
+  return [
+    for (var i = 0; i < 4; i++)
+      () {
+        final tint = AppTheme.tintFor(context, i);
+        return _CardPalette(tint.$1, tint.$3, tint.$2);
+      }(),
+  ];
+}
 
 class _HeaderRow extends StatelessWidget {
   final VoidCallback? onMoreTap;
@@ -212,12 +215,12 @@ class _HeaderRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
+        Text(
           'Your Courses',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: AppTheme.textPrimaryColor(context),
           ),
         ),
         if (onMoreTap != null)
@@ -249,11 +252,11 @@ class _EmptyCourseCard extends StatelessWidget {
       child: Container(
         height: 100,
         decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
+          color: AppTheme.surface(context),
           borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
-          border: Border.all(color: AppTheme.borderColor),
+          border: Border.all(color: AppTheme.borderColor(context)),
         ),
-        child: const Center(
+        child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -264,7 +267,7 @@ class _EmptyCourseCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary,
+                  color: AppTheme.textSecondaryColor(context),
                 ),
               ),
             ],
@@ -384,10 +387,10 @@ class _YourCourseCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -399,7 +402,7 @@ class _YourCourseCard extends StatelessWidget {
                           fontSize: 10,
                           color: isComplete
                               ? AppTheme.successColor
-                              : AppTheme.textSecondary,
+                              : AppTheme.textSecondaryColor(context),
                           fontWeight:
                               isComplete ? FontWeight.w700 : FontWeight.w500,
                         ),
@@ -425,10 +428,10 @@ class _YourCourseCard extends StatelessWidget {
                       const HGapXs(),
                       Text(
                         progressLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.textPrimaryColor(context),
                         ),
                       ),
                     ],

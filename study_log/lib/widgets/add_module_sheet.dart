@@ -115,8 +115,8 @@ class _AddModuleSheetState extends State<AddModuleSheet> {
         top: 20,
         bottom: viewInsets.bottom + 28,
       ),
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceColor,
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.cardBorderRadius),
         ),
@@ -131,7 +131,7 @@ class _AddModuleSheetState extends State<AddModuleSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppTheme.borderColor,
+                  color: AppTheme.borderColor(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -154,12 +154,12 @@ class _AddModuleSheetState extends State<AddModuleSheet> {
                     const VGapXs(),
                     Text(
                       'For ${widget.courseTitle}',
-                      style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
+                      style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondaryColor(context)),
                     ),
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecondary),
+                  icon: Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecondaryColor(context)),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -170,12 +170,12 @@ class _AddModuleSheetState extends State<AddModuleSheet> {
             TextField(
               controller: _titleController,
               autofocus: true,
-              style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 15, color: AppTheme.textPrimaryColor(context)),
               decoration: InputDecoration(
                 labelText: 'Module Title',
                 hintText: 'e.g. Chapter 1: Foundations',
                 filled: true,
-                fillColor: AppTheme.surfaceVariant,
+                fillColor: AppTheme.surfaceVariant(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                   borderSide: BorderSide.none,
@@ -186,12 +186,12 @@ class _AddModuleSheetState extends State<AddModuleSheet> {
             TextField(
               controller: _descriptionController,
               maxLines: 2,
-              style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 14, color: AppTheme.textPrimaryColor(context)),
               decoration: InputDecoration(
                 labelText: 'Description (Optional)',
                 hintText: 'Core topics, reading material, key concepts',
                 filled: true,
-                fillColor: AppTheme.surfaceVariant,
+                fillColor: AppTheme.surfaceVariant(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                   borderSide: BorderSide.none,
@@ -255,10 +255,10 @@ class _StatusChip extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryColor : AppTheme.surfaceVariant,
+            color: isSelected ? AppTheme.primaryColor : AppTheme.surfaceVariant(context),
             borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
             border: Border.all(
-              color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor,
+              color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
             ),
           ),
           alignment: Alignment.center,
@@ -267,7 +267,7 @@ class _StatusChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : AppTheme.textSecondary,
+              color: isSelected ? Colors.white : AppTheme.textSecondaryColor(context),
             ),
           ),
         ),
