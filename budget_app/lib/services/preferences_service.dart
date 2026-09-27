@@ -32,7 +32,10 @@ class PreferencesService {
   Future<void> _writeLocalCache(Map<String, dynamic> data) async {
     try {
       final file = await _file;
-      await file.writeAsString(jsonEncode(data));
+      if (!await file.parent.exists()) {
+        await file.parent.create(recursive: true);
+      }
+      await file.writeAsString(jsonEncode(data), flush: true);
     } catch (_) {}
   }
 
@@ -107,6 +110,10 @@ class PreferencesService {
     {'label': 'Home', 'icon': 'home_rounded', 'color': 0xFF607D8B, 'count': 0},
     {'label': 'Bills', 'icon': 'receipt_long_rounded', 'color': 0xFFFF5252, 'count': 0},
     {'label': 'Timepass', 'icon': 'sports_esports_rounded', 'color': 0xFF9C27B0, 'count': 0},
+    {'label': 'Transfer', 'icon': 'compare_arrows_rounded', 'color': 0xFF2196F3, 'count': 0},
+    {'label': 'QuickMart', 'icon': 'storefront_rounded', 'color': 0xFF7C4DFF, 'count': 0},
+    {'label': 'Shopping', 'icon': 'shopping_bag_rounded', 'color': 0xFFE91E63, 'count': 0},
+    {'label': 'Other', 'icon': 'more_horiz_rounded', 'color': 0xFF9E9E9E, 'count': 0},
   ];
 
   Future<List<Map<String, dynamic>>> getExpenseCategories() async {
@@ -133,7 +140,7 @@ class PreferencesService {
     if (list != null && list.isNotEmpty) {
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
-    return defaultExpenseCategories;
+    return List<Map<String, dynamic>>.from(defaultExpenseCategories);
   }
 
   Future<void> saveExpenseCategories(List<Map<String, dynamic>> categories) async {
@@ -184,7 +191,7 @@ class PreferencesService {
     if (list != null && list.isNotEmpty) {
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
-    return defaultPaymentModes;
+    return List<Map<String, dynamic>>.from(defaultPaymentModes);
   }
 
   Future<void> savePaymentModes(List<Map<String, dynamic>> modes) async {
@@ -220,7 +227,7 @@ class PreferencesService {
     if (list != null && list.isNotEmpty) {
       return list.map((e) => e.toString()).toList();
     }
-    return defaultBudgetCategories;
+    return List<String>.from(defaultBudgetCategories);
   }
 
   Future<void> saveBudgetCategories(List<String> categories) async {
@@ -231,6 +238,87 @@ class PreferencesService {
       await _firestore.collection('metadata').doc('bgt_budget_categories').set({
         'categories': categories,
       }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  Future<void> incrementCategoryCount(String label) async {
+    final categories = await getExpenseCategories();
+    bool found = false;
+    for (var cat in categories) {
+      if (cat['label'].toString().toLowerCase() == label.toLowerCase()) {
+        cat['count'] = (cat['count'] as int? ?? 0) + 1;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      categories.add({
+        'label': label,
+        'icon': 'more_horiz_rounded',
+        'color': 0xFF9E9E9E,
+        'count': 1,
+      });
+    }
+    await saveExpenseCategories(categories);
+  }
+
+  Future<void> incrementPaymentModeCount(String label) async {
+    final modes = await getPaymentModes();
+    bool found = false;
+    for (var m in modes) {
+      if (m['label'].toString().toLowerCase() == label.toLowerCase()) {
+        m['count'] = (m['count'] as int? ?? 0) + 1;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      modes.add({
+        'label': label,
+        'icon': 'account_balance_rounded',
+        'color': 0xFF9E9E9E,
+        'count': 1,
+      });
+    }
+    await savePaymentModes(modes);
+  }
+
+  // === Custom Budget Rules ===
+  Future<List<Map<String, dynamic>>> getCustomRules() async {
+    try {
+      final doc = await _firestore
+          .collection('metadata')
+          .doc('bgt_custom_rules')
+          .get()
+          .timeout(const Duration(seconds: 3));
+      if (doc.exists && doc.data() != null && doc.data()!['rules'] is List) {
+        final list = doc.data()!['rules'] as List<dynamic>;
+        final res = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        final cache = await _readLocalCache();
+        cache['custom_rules'] = res;
+        await _writeLocalCache(cache);
+        return res;
+      }
+    } catch (_) {}
+
+    final cache = await _readLocalCache();
+    if (cache.containsKey('custom_rules') && cache['custom_rules'] is List) {
+      return List<Map<String, dynamic>>.from(
+        (cache['custom_rules'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
+      );
+    }
+    return [];
+  }
+
+  Future<void> saveCustomRules(List<Map<String, dynamic>> rules) async {
+    final cache = await _readLocalCache();
+    cache['custom_rules'] = rules;
+    await _writeLocalCache(cache);
+    try {
+      await _firestore.collection('metadata').doc('bgt_custom_rules').set({
+        'rules': rules,
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 4));
     } catch (_) {}
   }
 }

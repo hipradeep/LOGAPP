@@ -2,73 +2,121 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
+/// A premium, reusable action button component that supports both single primary button
+/// and dual action buttons (Secondary Outline + Primary Elevated) side by side.
 class AppActionButtons extends StatelessWidget {
   final String primaryLabel;
-  final String cancelLabel;
-  final VoidCallback onPrimaryPressed;
-  final VoidCallback onCancelPressed;
+  final VoidCallback? onPrimaryPressed;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondaryPressed;
+  final String? cancelLabel;
+  final VoidCallback? onCancelPressed;
   final bool isPrimaryLoading;
+  final bool isSecondaryLoading;
+  final Color? primaryColor;
+  final Color? secondaryColor;
+  final int primaryFlex;
+  final int secondaryFlex;
+  final double height;
 
   const AppActionButtons({
     super.key,
-    this.primaryLabel = 'Save',
-    this.cancelLabel = 'Cancel',
+    required this.primaryLabel,
     required this.onPrimaryPressed,
-    required this.onCancelPressed,
+    this.secondaryLabel,
+    this.onSecondaryPressed,
+    this.cancelLabel,
+    this.onCancelPressed,
     this.isPrimaryLoading = false,
+    this.isSecondaryLoading = false,
+    this.primaryColor,
+    this.secondaryColor,
+    this.primaryFlex = 2,
+    this.secondaryFlex = 1,
+    this.height = 52,
   });
 
   @override
   Widget build(BuildContext context) {
+    final actualPrimaryColor = primaryColor ?? AppTheme.primaryColor;
+    final secLabel = secondaryLabel ?? cancelLabel;
+    final secPressed = onSecondaryPressed ?? onCancelPressed;
+    final secColor = secondaryColor ?? (cancelLabel != null ? AppTheme.textSecondaryColor(context) : AppTheme.errorColor);
+    final hasSecondary = secPressed != null && secLabel != null && secLabel.isNotEmpty;
+
+    final primaryBtn = ElevatedButton(
+      onPressed: (isPrimaryLoading || isSecondaryLoading) ? null : onPrimaryPressed,
+      style: ElevatedButton.styleFrom(
+        minimumSize: Size(double.infinity, height),
+        backgroundColor: actualPrimaryColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 0,
+      ),
+      child: isPrimaryLoading
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Colors.white,
+              ),
+            )
+          : Text(
+              primaryLabel,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+                fontSize: 15,
+                color: Colors.white,
+              ),
+            ),
+    );
+
+    if (!hasSecondary) {
+      return primaryBtn;
+    }
+
     return Row(
       children: [
+        // Secondary Button (Flex 1)
         Expanded(
+          flex: secondaryFlex,
           child: OutlinedButton(
-            onPressed: onCancelPressed,
+            onPressed: (isPrimaryLoading || isSecondaryLoading) ? null : secPressed,
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: AppTheme.borderColor(context)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              minimumSize: Size(0, height),
+              foregroundColor: secColor,
+              side: BorderSide(color: secColor.withValues(alpha: 0.5), width: 1),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
-            child: Text(
-              cancelLabel,
-              style: AppTheme.bodyMedium.copyWith(
-                color: AppTheme.textSecondaryColor(context),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-        const HGapMd(),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: isPrimaryLoading ? null : onPrimaryPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              ),
-            ),
-            child: isPrimaryLoading
-                ? const SizedBox(
+            child: isSecondaryLoading
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: secColor,
                     ),
                   )
                 : Text(
-                    primaryLabel,
-                    style: AppTheme.bodyMedium.copyWith(
-                      color: Colors.white,
+                    secLabel,
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: secColor,
                     ),
                   ),
           ),
+        ),
+        const HGapMd(),
+        // Primary Button (Flex 2)
+        Expanded(
+          flex: primaryFlex,
+          child: primaryBtn,
         ),
       ],
     );

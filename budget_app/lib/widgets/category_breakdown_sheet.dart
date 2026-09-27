@@ -22,12 +22,13 @@ class CategoryBreakdownSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Group by tag label → sum amounts (positive only)
     final Map<String, double> tagTotals = {};
     final Map<String, IconData> tagIcons = {};
     final Map<String, Color> tagColors = {};
 
     for (final t in transactions) {
-      if (!t.isExpense || t.amount <= 0) continue;
+      if (t.amount <= 0) continue; // skip gains/refunds
       final lookup = t.tag.isNotEmpty ? t.tag : t.description;
       final label = getTagName(lookup);
       tagTotals[label] = (tagTotals[label] ?? 0) + t.amount;
@@ -55,6 +56,7 @@ class CategoryBreakdownSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Handle bar
           Center(
             child: Container(
               width: 36,
@@ -72,13 +74,14 @@ class CategoryBreakdownSheet extends StatelessWidget {
           ),
           const VGapXs(),
           Text(
-            'Spend by category (₹ INR)',
+            'Spend by category',
             style: AppTheme.bodySmall.copyWith(
               color: AppTheme.textSecondaryColor(context),
               letterSpacing: 0.5,
             ),
           ),
           const VGapMd(),
+          // Donut chart
           if (sorted.isNotEmpty)
             Center(
               child: ExpenseDonutChart(
@@ -101,7 +104,7 @@ class CategoryBreakdownSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
                 child: Text(
-                  'No transactions logged yet.',
+                  'No transactions yet.',
                   style: AppTheme.bodySmall.copyWith(
                     color: AppTheme.textSecondaryColor(context),
                     fontStyle: FontStyle.italic,
@@ -143,7 +146,8 @@ class CategoryBreakdownSheet extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     label,
@@ -172,8 +176,11 @@ class CategoryBreakdownSheet extends StatelessWidget {
                                       child: LinearProgressIndicator(
                                         value: pct,
                                         minHeight: 4,
-                                        backgroundColor: color.withValues(alpha: 0.1),
-                                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                                        backgroundColor:
+                                            color.withValues(alpha: 0.1),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                                color),
                                       ),
                                     ),
                                   ),
@@ -181,7 +188,8 @@ class CategoryBreakdownSheet extends StatelessWidget {
                                   Text(
                                     '${(pct * 100).toStringAsFixed(0)}%',
                                     style: TextStyle(
-                                      color: AppTheme.textSecondaryColor(context),
+                                      color:
+                                          AppTheme.textSecondaryColor(context),
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -205,7 +213,7 @@ class CategoryBreakdownSheet extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Total Spent',
+                  'Total',
                   style: TextStyle(
                     color: AppTheme.textSecondaryColor(context),
                     fontWeight: FontWeight.bold,

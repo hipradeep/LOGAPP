@@ -86,6 +86,38 @@ class BudgetService {
     }
   }
 
+  Future<String> createOrUpdateRuleBudget({
+    required String name,
+    required double salary,
+    required String rule,
+    required double expenseLimit,
+    required List<BudgetCategoryAllocation> allocations,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? existingBudgetId,
+  }) async {
+    final docId = existingBudgetId ?? 'bgt_${IdUtils.generateId()}';
+    final budget = Budget(
+      id: docId,
+      name: name,
+      categoryName: 'Expenses',
+      limit: expenseLimit,
+      period: 'monthly',
+      description: '$rule rule budget based on monthly salary ₹${salary.toStringAsFixed(0)}',
+      startDate: startDate,
+      endDate: endDate,
+      salary: salary,
+      rule: rule,
+      allocations: allocations,
+      isActive: true,
+    );
+
+    await _budgetsCollection.doc(docId).set(budget.toFirestore());
+    await _deactivateOtherFirestoreBudgets(docId);
+    await updateSalary(salary);
+    return docId;
+  }
+
   Future<void> updateBudget(
     String budgetId, {
     String? name,
@@ -177,15 +209,24 @@ class BudgetService {
       paymentMethod: paymentMethod,
     );
 
-    await _transactionsCollection.doc(txId).set(tx.toMap());
+    await _transactionsCollection.doc(txId).set(tx.toMap()).timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    );
   }
 
   Future<void> updateTransaction(Transaction updated) async {
-    await _transactionsCollection.doc(updated.id).update(updated.toMap());
+    await _transactionsCollection.doc(updated.id).update(updated.toMap()).timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    );
   }
 
   Future<void> deleteTransaction(String transactionId) async {
-    await _transactionsCollection.doc(transactionId).delete();
+    await _transactionsCollection.doc(transactionId).delete().timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    );
   }
 
   Future<void> moveTransaction({
@@ -194,6 +235,9 @@ class BudgetService {
   }) async {
     await _transactionsCollection.doc(transaction.id).update({
       'budgetId': destBudgetId,
-    });
+    }).timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    );
   }
 }

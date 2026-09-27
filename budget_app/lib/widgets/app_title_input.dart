@@ -1,46 +1,117 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import 'app_spacers.dart';
 
 class AppTitleInput extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode? focusNode;
+  final String label;
   final String hintText;
+  final IconData icon;
+  final int minLines;
+  final int maxLines;
+  final String? Function(String?)? validator;
+  final Widget? trailing;
+  final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
-  final TextInputAction textInputAction;
-  final bool autofocus;
 
   const AppTitleInput({
     super.key,
     required this.controller,
     this.focusNode,
-    this.hintText = 'Title...',
+    required this.label,
+    required this.hintText,
+    required this.icon,
+    this.minLines = 1,
+    this.maxLines = 1,
+    this.validator,
+    this.trailing,
+    this.keyboardType,
     this.onChanged,
-    this.textInputAction = TextInputAction.next,
-    this.autofocus = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      focusNode: focusNode,
-      autofocus: autofocus,
-      textInputAction: textInputAction,
-      style: AppTheme.headingMedium.copyWith(
-        color: AppTheme.textPrimaryColor(context),
-      ),
-      onChanged: onChanged,
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: AppTheme.headingMedium.copyWith(
-          color: AppTheme.hintColor(context),
+    final trailingWidget = trailing;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: AppTheme.bodySmall.copyWith(
+                color: AppTheme.textSecondaryColor(context),
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+              ),
+            ),
+            if (trailingWidget != null) trailingWidget,
+          ],
         ),
-        filled: false,
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
-      ),
+        const VGapSm(),
+        TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          autofocus: false,
+          onChanged: onChanged,
+          style: GoogleFonts.outfit(
+            color: AppTheme.textPrimaryColor(context),
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+          keyboardType: keyboardType ?? (maxLines > 1 ? TextInputType.multiline : TextInputType.text),
+          minLines: minLines,
+          maxLines: maxLines,
+          textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+          validator: validator ?? (val) {
+            if (val == null || val.trim().isEmpty) {
+              return 'Please enter a title';
+            }
+            return null;
+          },
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: GoogleFonts.outfit(
+              color: AppTheme.hintColor(context),
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            filled: false,
+            fillColor: Colors.transparent,
+            border: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: AppTheme.inputBorderColor(context),
+                width: 1.5,
+              ),
+            ),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: AppTheme.inputBorderColor(context),
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+            ),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Icon(
+                icon,
+                color: AppTheme.primaryAccentColor(context),
+                size: 28,
+              ),
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

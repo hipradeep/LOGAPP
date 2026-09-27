@@ -1,27 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/budget.dart';
+import '../services/budget_service.dart';
 import '../controllers/budget_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/glow_blob.dart';
-import '../widgets/budget_progress_bar.dart';
+import '../widgets/app_provider.dart';
+import '../widgets/app_premium_fab.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/transaction_filter_sheet.dart';
+import 'add_transaction_screen.dart';
 import '../widgets/budget_expense_graph.dart';
 import '../widgets/category_breakdown_sheet.dart';
-import '../widgets/app_premium_fab.dart';
-import '../widgets/add_transaction_sheet.dart';
-import '../widgets/app_empty_state.dart';
-import '../services/preferences_service.dart';
+import '../widgets/budget_progress_bar.dart';
 import 'add_budget_screen.dart';
-import 'manage_budget_screen.dart';
 
 class BudgetScreen extends StatefulWidget {
-  final BudgetController controller;
+  final BudgetController? controller;
+  final String? selectedBudgetId;
+  final ValueChanged<Budget?>? onBudgetChanged;
 
   const BudgetScreen({
     super.key,
-    required this.controller,
+    this.controller,
+    this.selectedBudgetId,
+    this.onBudgetChanged,
   });
 
   @override
@@ -29,301 +34,1242 @@ class BudgetScreen extends StatefulWidget {
 }
 
 class _BudgetScreenState extends State<BudgetScreen> {
-  final PreferencesService _prefs = PreferencesService();
-  List<Map<String, dynamic>> _categories = [];
+  BudgetController? __controller;
+  bool _createdLocalController = false;
+
+  BudgetController get _controller {
+    if (__controller == null) {
+      _initController();
+    }
+    return __controller!;
+  }
+
+  void _initController() {
+    if (widget.controller != null) {
+      __controller = widget.controller;
+      _createdLocalController = false;
+    } else {
+      __controller = BudgetController(
+        onBudgetChanged: widget.onBudgetChanged,
+        initialSelectedBudgetId: widget.selectedBudgetId,
+      );
+      _createdLocalController = true;
+    }
+  }
+
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
+  String _filterType = 'all'; // 'all', 'debit', 'credit'
+  String _filterValidation = 'all'; // 'all', 'validated', 'pending'
 
   @override
   void initState() {
     super.initState();
-    _loadCategories();
+    _initController();
+    _filterStartDate = DateTime.now().subtract(const Duration(days: 30));
+    _filterEndDate = DateTime.now();
   }
 
-  Future<void> _loadCategories() async {
-    final cats = await _prefs.getExpenseCategories();
-    if (mounted) setState(() => _categories = cats);
-  }
-
-  String _formatInr(double amount) {
-    final format = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    return format.format(amount);
-  }
-
-  IconData _getTagIcon(String tag) {
-    for (var c in _categories) {
-      if (c['label'].toString().toLowerCase() == tag.toLowerCase()) {
-        return Icons.local_grocery_store_rounded;
-      }
+  @override
+  void didUpdateWidget(covariant BudgetScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (__controller == null) {
+      _initController();
+      return;
     }
-    return Icons.category_rounded;
-  }
-
-  Color _getTagColor(String tag) {
-    for (var c in _categories) {
-      if (c['label'].toString().toLowerCase() == tag.toLowerCase()) {
-        return Color(c['color'] as int? ?? 0xFF8B5CF6);
+    if (widget.controller != null && widget.controller != __controller) {
+      if (_createdLocalController) {
+        __controller?.dispose();
+        _createdLocalController = false;
       }
+      __controller = widget.controller;
     }
-    return AppTheme.primaryColor;
+    if (widget.selectedBudgetId != oldWidget.selectedBudgetId) {
+      __controller?.setSelectedBudgetIdSilently(widget.selectedBudgetId);
+    }
   }
 
-  void _showCategoryBreakdown(Budget budget, List<Transaction> transactions) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => CategoryBreakdownSheet(
-        budget: budget,
-        transactions: transactions,
-        getTagIcon: _getTagIcon,
-        getTagColor: _getTagColor,
-        getTagName: (tag) => tag,
-      ),
-    );
+  @override
+  void dispose() {
+    if (_createdLocalController) {
+      __controller?.dispose();
+    }
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final budget = widget.controller.selectedBudget;
-    final budgets = widget.controller.budgets;
-    final transactions = widget.controller.selectedBudgetTransactions;
-
-    return Stack(
-      children: [
-        FullScreenPage(
-          showScaffold: false,
-          isScrollable: true,
-          title: 'Budget',
-          padding: AppTheme.defaultScreenPadding,
-          backgroundWidgets: [
-            GlowBlob(
-              top: -40,
-              left: -40,
-              size: 220,
-              color: AppTheme.primaryColor,
-              opacity: 0.12,
+    return AppProvider<BudgetController>(
+      notifier: _controller,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: FullScreenPage(
+              showScaffold: false,
+              isScrollable: false,
+              title: 'Budget',
+              headerSpacing: MediaQuery.paddingOf(context).top + 52.0,
+              padding: EdgeInsets.zero,
+              backgroundWidgets: [
+                GlowBlob(
+                  top: -40,
+                  left: -40,
+                  size: 220,
+                  color: AppTheme.primaryColor,
+                  opacity: 0.08,
+                ),
+                GlowBlob(
+                  bottom: -50,
+                  right: -50,
+                  size: 260,
+                  color: AppTheme.secondaryColor,
+                  opacity: 0.05,
+                ),
+              ],
+              children: [
+                Expanded(
+                  child: ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, _) => _buildBody(context),
+                  ),
+                ),
+              ],
             ),
-            GlowBlob(
-              bottom: -50,
-              right: -50,
-              size: 260,
-              color: AppTheme.secondaryColor,
-              opacity: 0.08,
-            ),
-          ],
-          actions: [
-            IconButton(
-              icon: Icon(Icons.tune_rounded, color: AppTheme.primaryLight, size: 22),
-              tooltip: 'Manage Budgets',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ManageBudgetScreen()),
+          ),
+          ListenableBuilder(
+            listenable: _controller,
+            builder: (context, _) {
+              final hasBudgets = _controller.budgets.isNotEmpty;
+              final selectedBudget = _controller.selectedBudget;
+              final isPeriodOver = selectedBudget?.isPeriodOver ?? false;
+              if (hasBudgets &&
+                  !_controller.isLoading &&
+                  _controller.errorMessage == null &&
+                  !isPeriodOver) {
+                return AppPremiumFab(
+                  right: 24,
+                  onPressed: () {
+                    if (_controller.selectedBudget != null) {
+                      _showAddTransactionSheet(context, _controller.selectedBudget!);
+                    }
+                  },
                 );
-              },
-            ),
-          ],
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_controller.isLoading) {
+      return Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      );
+    }
+
+    if (_controller.errorMessage != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Center(
+          child: Text(
+            'Failed to load data:\n${_controller.errorMessage}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.errorColor),
+          ),
+        ),
+      );
+    }
+
+    if (_controller.budgets.isEmpty) {
+      return AppEmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: 'No Budget Limits Set',
+        message: 'Define limits for categories to track and optimize your spending.',
+        actionLabel: 'Set Budget Limit',
+        onAction: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddBudgetScreen()),
+          );
+        },
+      );
+    }
+
+    final budgets = _controller.budgets;
+    final selectedBudget = _controller.selectedBudget;
+
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          bottom: bottomPadding + 100 + viewInsetsBottom,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const VGapSm(),
-            if (budgets.isNotEmpty) ...[
-              // Budget switcher selector
-              _buildBudgetSelector(budgets, budget),
-              const VGapLg(),
-            ],
-            if (budget != null) ...[
-              _buildDetailedCard(budget, transactions),
-              const VGapLg(),
-              // Multi-period / 7-Day & Monthly Expense Graph
-              BudgetExpenseGraph(
-                budget: budget,
-                transactions: transactions,
-              ),
-              const VGapLg(),
-              // Breakdown sheet button
-              OutlinedButton.icon(
-                onPressed: () => _showCategoryBreakdown(budget, transactions),
-                icon: const Icon(Icons.pie_chart_outline_rounded, size: 18),
-                label: const Text('View Category Breakdown'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                  ),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildBudgetDropdown(budgets, _controller),
                 ),
-              ),
-            ] else if (!widget.controller.isLoading) ...[
-              AppEmptyState(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'No Budgets Configured',
-                message: 'Create your first budget cap in ₹ to start monitoring expenses.',
-                actionLabel: 'Add Budget',
-                onAction: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AddBudgetScreen()),
-                  );
-                },
-              ),
+                const HGapSm(),
+                _buildCalendarButton(context, selectedBudget),
+                const HGapSm(),
+                _buildProgressButton(context, selectedBudget),
+                const HGapSm(),
+                _buildScannerStatusButton(context, selectedBudget),
+              ],
+            ),
+            const VGapMd(),
+
+            // Render selected budget details
+            if (selectedBudget == null)
+              _buildEmptyState('Select a budget category above.')
+            else ...[
+              _buildSelectedBudgetDetails(selectedBudget, _controller),
             ],
-            const VGapBottomNav(),
           ],
         ),
-        AppPremiumFab(
-          right: 24,
-          bottom: 84,
-          onPressed: () {
-            if (budgets.isEmpty) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddBudgetScreen()),
-              );
-            } else {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (ctx) => AddTransactionSheet(
-                  budgetId: budget?.id,
-                  budgets: budgets,
-                ),
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBudgetSelector(List<Budget> budgets, Budget? selected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context).withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selected?.id,
-          isExpanded: true,
-          dropdownColor: AppTheme.surface(context),
-          items: budgets.map((b) {
-            return DropdownMenuItem(
-              value: b.id,
-              child: Row(
-                children: [
-                  Text(
-                    b.name,
-                    style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Limit: ${_formatInr(b.limit)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (id) {
-            if (id != null) {
-              widget.controller.updateSelectedBudgetId(id);
-            }
-          },
-        ),
       ),
     );
   }
 
-  Widget _buildDetailedCard(Budget budget, List<Transaction> transactions) {
-    final spent = budget.spentForCurrentPeriod(transactions);
-    final limit = budget.limit;
-    final remaining = (limit - spent).clamp(0.0, double.infinity);
-    final pct = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
-    final isOver = spent > limit;
-
-    final statusColor = isOver
-        ? AppTheme.errorColor
-        : (pct >= budget.alertThreshold ? AppTheme.warningColor : AppTheme.primaryColor);
-
+  Widget _buildPeriodOverBanner(Budget budget) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: AppTheme.surface(context).withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius * 1.2),
-        border: Border.all(color: AppTheme.borderColor(context), width: 1.2),
+        color: AppTheme.errorColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.errorColor.withValues(alpha: 0.25),
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              const Icon(Icons.info_outline_rounded, color: AppTheme.errorColor, size: 20),
+              const HGapSm(),
               Text(
-                'Period: ${budget.period.toUpperCase()}',
+                'Budget Period Over',
                 style: TextStyle(
-                  fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                  color: AppTheme.primaryLight,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  isOver ? 'OVER BUDGET' : '${(pct * 100).toStringAsFixed(0)}% USED',
-                  style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                  color: AppTheme.textPrimaryColor(context),
+                  fontSize: 14,
                 ),
               ),
             ],
+          ),
+          const VGapSm(),
+          Text(
+            'This budget period ended on ${DateFormat('MMMM d, yyyy').format(budget.endDate!)}. This budget is now read-only.',
+            style: TextStyle(
+              color: AppTheme.textSecondaryColor(context),
+              fontSize: 12,
+              height: 1.4,
+            ),
           ),
           const VGapMd(),
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Total Spent', style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryColor(context))),
-                    const VGapXs(),
-                    Text(_formatInr(spent), style: AppTheme.headingMedium.copyWith(fontWeight: FontWeight.bold)),
-                  ],
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AddBudgetScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                  label: const Text(
+                    'New Budget',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
               ),
+              const HGapSm(),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Remaining Balance', style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryColor(context))),
-                    const VGapXs(),
-                    Text(
-                      _formatInr(remaining),
-                      style: AppTheme.headingMedium.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: isOver ? AppTheme.errorColor : AppTheme.successColor,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddBudgetScreen(
+                          existingBudget: budget,
+                          isCopy: true,
+                        ),
                       ),
+                    );
+                  },
+                  icon: Icon(Icons.copy_rounded, size: 16, color: AppTheme.primaryLight),
+                  label: Text(
+                    'Copy Budget',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryLight,
                     ),
-                  ],
+                  ),
+                  style: TextButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                  ),
                 ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTransactionSheet(BuildContext context, Budget budget) {
+    AddTransactionScreen.navigate(
+      context,
+      budgetId: budget.id,
+      categoryName: budget.categoryName,
+      budgets: _controller.budgets,
+    );
+  }
+
+  Widget _buildBudgetDropdown(List<Budget> budgets, BudgetController controller) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context).withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.primaryColor.withValues(alpha: 0.25),
+          width: 1,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          dropdownColor: AppTheme.surface(context),
+          isExpanded: true,
+          isDense: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppTheme.textSecondary.withValues(alpha: 0.7),
+            size: 20,
+          ),
+          value: controller.selectedBudgetId,
+          hint: Text(
+            budgets.isEmpty ? 'No budgets' : 'Select a budget',
+            style: TextStyle(
+              color: AppTheme.textSecondary.withValues(alpha: 0.6),
+              fontSize: 13,
+            ),
+          ),
+          items: budgets.map((budget) {
+            String suffix = '';
+            if (budget.isPeriodOver) {
+              suffix = ' (Ended)';
+            } else if (!budget.isActive) {
+              suffix = ' (Completed)';
+            }
+            return DropdownMenuItem<String>(
+              value: budget.id,
+              child: Text(
+                '${budget.name}$suffix',
+                style: TextStyle(
+                  color: budget.isActive && !budget.isPeriodOver
+                      ? AppTheme.textPrimaryColor(context)
+                      : AppTheme.textSecondaryColor(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          onChanged: (id) {
+            if (id != null) {
+              controller.updateSelectedBudgetId(id);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedBudgetDetails(Budget budget, BudgetController controller) {
+    final spent = budget.spentForCurrentPeriod(controller.transactions);
+    final percent = budget.limit > 0 ? (spent / budget.limit).clamp(0.0, 1.0) : 0.0;
+    final isOver = budget.isOverBudget(controller.transactions);
+    final isActive = budget.isActive;
+
+    final Color statusColor = !isActive
+        ? AppTheme.successColor
+        : (isOver
+            ? AppTheme.errorColor
+            : (percent >= 0.7 ? AppTheme.warningColor : AppTheme.primaryColor));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Visual Progress Card
+        Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: AppTheme.surface(context).withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: statusColor.withValues(alpha: 0.25),
+              width: 1.2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                budget.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimaryColor(context),
+                                  fontSize: 15,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const HGapSm(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                budget.categoryName.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: AppTheme.primaryLight,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const HGapSm(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.textPrimaryColor(context).withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                budget.period.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: AppTheme.textSecondaryColor(context),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (budget.period == 'custom' &&
+                            budget.startDate != null &&
+                            budget.endDate != null) ...[
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              _buildCardTag(
+                                Icons.calendar_today_rounded,
+                                '${DateFormat('MMM d').format(budget.startDate!)} - ${DateFormat('MMM d').format(budget.endDate!)}',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppTheme.successColor.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: const Text(
+                            'COMPLETED',
+                            style: TextStyle(
+                              color: AppTheme.successColor,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      const HGapSm(),
+                      GestureDetector(
+                        onTap: () => _showCategoryBreakdownSheet(
+                          budget,
+                          controller.selectedBudgetTransactions,
+                        ),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: statusColor.withValues(alpha: 0.25),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.pie_chart_outline_rounded,
+                            size: 14,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const VGapMd(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Spent: ₹${spent.toStringAsFixed(1)}',
+                    style: TextStyle(
+                      color: isOver && isActive
+                          ? AppTheme.errorColor
+                          : AppTheme.textSecondaryColor(context),
+                      fontSize: 12,
+                    ),
+                  ),
+                  Text(
+                    'Limit: ₹${budget.limit.toStringAsFixed(1)}',
+                    style: TextStyle(
+                      color: AppTheme.textSecondaryColor(context),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const VGapMd(),
+              BudgetProgressBar(
+                percent: percent,
+                alertThreshold: budget.alertThreshold,
+                statusColor: statusColor,
+                minHeight: 6,
+              ),
+            ],
+          ),
+        ),
+        if (budget.isPeriodOver) ...[
           const VGapMd(),
-          BudgetProgressBar(
-            percent: pct,
-            alertThreshold: budget.alertThreshold,
-            statusColor: statusColor,
-            minHeight: 8,
+          _buildPeriodOverBanner(budget),
+        ],
+        const VGapMd(),
+
+        // Expense History Bar Graph
+        RepaintBoundary(
+          child: BudgetExpenseGraph(
+            budget: budget,
+            transactions: controller.transactions,
+          ),
+        ),
+        const VGapMd(),
+
+        // Expenses list header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Expense History',
+              style: TextStyle(
+                color: AppTheme.textPrimaryColor(context),
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.filter_list_rounded,
+                color: (_filterStartDate != null ||
+                        _filterType != 'all' ||
+                        _filterValidation != 'all')
+                    ? AppTheme.primaryLight
+                    : AppTheme.textSecondaryColor(context),
+                size: 20,
+              ),
+              onPressed: _showFilterSheet,
+            ),
+          ],
+        ),
+        const VGapSm(),
+        () {
+          final filteredExpenses = controller.selectedBudgetTransactions.where((expense) {
+            if (_filterStartDate != null && expense.expenseDate.isBefore(_filterStartDate!)) {
+              return false;
+            }
+            if (_filterEndDate != null &&
+                expense.expenseDate.isAfter(_filterEndDate!.add(const Duration(days: 1)))) {
+              return false;
+            }
+            final isGain = expense.amount < 0;
+            if (_filterType == 'debit' && isGain) return false;
+            if (_filterType == 'credit' && !isGain) return false;
+            if (_filterValidation == 'validated' && !expense.isValidated) return false;
+            if (_filterValidation == 'pending' && expense.isValidated) return false;
+            return true;
+          }).toList();
+
+          filteredExpenses.sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
+          final displayExpenses = filteredExpenses;
+
+          if (displayExpenses.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No matching expenses found.',
+                  style: TextStyle(
+                    color: AppTheme.textSecondaryColor(context),
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: displayExpenses.length,
+            itemBuilder: (context, index) {
+              final expense = displayExpenses[index];
+              final formattedDate = DateFormat('d MMM yyyy - h:mm a').format(expense.expenseDate);
+              final lookup = expense.tag.isNotEmpty ? expense.tag : expense.description;
+              final iconColor = _getTagColor(lookup);
+              final iconData = _getTagIcon(lookup);
+              final tagName = expense.tag.isNotEmpty ? expense.tag : _getTagName(expense.description);
+              final isGain = expense.amount < 0;
+              return GestureDetector(
+                onTap: () => _handleExpenseTap(budget, expense),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: expense.isValidated
+                        ? AppTheme.surface(context).withValues(alpha: 0.5)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: expense.isValidated
+                          ? AppTheme.borderColor(context)
+                          : AppTheme.warningColor.withValues(alpha: 0.35),
+                      width: expense.isValidated ? 1.0 : 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: iconColor.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(iconData, color: iconColor, size: 16),
+                            ),
+                            const HGapMd(),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          expense.description.isNotEmpty
+                                              ? '$tagName | ${expense.description} [${expense.paymentMethod}]'
+                                              : '$tagName [${expense.paymentMethod}]',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.textPrimaryColor(context),
+                                            fontSize: 13,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (!expense.isValidated) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 1.5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.warningColor.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(
+                                              color: AppTheme.warningColor.withValues(alpha: 0.3),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Pending',
+                                            style: TextStyle(
+                                              color: AppTheme.warningColor,
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    formattedDate,
+                                    style: TextStyle(
+                                      color: AppTheme.textSecondaryColor(context),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const HGapMd(),
+                      Text(
+                        '${isGain ? '+' : '-'}₹${expense.amount.abs().toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isGain ? AppTheme.successColor : AppTheme.errorColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        }(),
+      ],
+    );
+  }
+
+  Widget _buildCardTag(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.textPrimaryColor(context).withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 10,
+            color: AppTheme.textSecondaryColor(context),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 9,
+              color: AppTheme.textSecondaryColor(context),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildCalendarButton(BuildContext context, Budget? budget) {
+    final hasDates = budget != null && (budget.startDate != null || budget.endDate != null);
+
+    return Tooltip(
+      message: hasDates ? 'View Budget Dates' : 'No Dates Set',
+      child: GestureDetector(
+        onTap: () {
+          if (budget == null) return;
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: AppTheme.surface(context),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                budget.name,
+                style: TextStyle(
+                  color: AppTheme.textPrimaryColor(context),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (budget.description.isNotEmpty) ...[
+                    Text(
+                      budget.description,
+                      style: TextStyle(
+                        color: AppTheme.textSecondaryColor(context),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const VGapMd(),
+                  ],
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.date_range_rounded,
+                        color: AppTheme.primaryLight,
+                        size: 18,
+                      ),
+                      const HGapSm(),
+                      Text(
+                        budget.startDate != null
+                            ? 'Start: ${DateFormat('MMM d, yyyy').format(budget.startDate!)}'
+                            : 'Start: Not set',
+                        style: TextStyle(
+                          color: AppTheme.textPrimaryColor(context),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const VGapSm(),
+                  Row(
+                    children: [
+                      const Icon(Icons.event_available_rounded, color: AppTheme.successColor, size: 18),
+                      const HGapSm(),
+                      Text(
+                        budget.endDate != null
+                            ? 'End: ${DateFormat('MMM d, yyyy').format(budget.endDate!)}'
+                            : 'End: Not set',
+                        style: TextStyle(
+                          color: AppTheme.textPrimaryColor(context),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (budget.repeatDays.isNotEmpty) ...[
+                    const VGapSm(),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.repeat_rounded,
+                          color: AppTheme.primaryLight,
+                          size: 18,
+                        ),
+                        const HGapSm(),
+                        Expanded(
+                          child: Text(
+                            'Repeat: ${budget.repeatDays.join(', ')}',
+                            style: TextStyle(
+                              color: AppTheme.textPrimaryColor(context),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (budget.scheduledTime != null) ...[
+                    const VGapSm(),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.notifications_active_outlined,
+                          color: AppTheme.primaryLight,
+                          size: 18,
+                        ),
+                        const HGapSm(),
+                        Text(
+                          'Reminder: ${budget.scheduledTime!}',
+                          style: TextStyle(
+                            color: AppTheme.textPrimaryColor(context),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Close', style: TextStyle(color: AppTheme.primaryColor)),
+                ),
+              ],
+            ),
+          );
+        },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: hasDates
+                ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                : AppTheme.surface(context).withValues(alpha: 0.25),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: hasDates
+                  ? AppTheme.primaryColor.withValues(alpha: 0.25)
+                  : AppTheme.borderColor(context),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            Icons.calendar_today_rounded,
+            color: hasDates
+                ? AppTheme.primaryLight
+                : AppTheme.textSecondaryColor(context).withValues(alpha: 0.5),
+            size: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressButton(BuildContext context, Budget? budget) {
+    if (budget == null) return const SizedBox.shrink();
+    final controller = AppProvider.watch<BudgetController>(context);
+    final total = budget.limit;
+    final spent = budget.spentForCurrentPeriod(controller.transactions);
+    final percent = total > 0 ? (spent / total).clamp(0.0, 1.0) : 0.0;
+    final isOver = budget.isOverBudget(controller.transactions);
+    final isActive = budget.isActive;
+
+    final Color statusColor = !isActive
+        ? AppTheme.successColor
+        : (isOver
+            ? AppTheme.errorColor
+            : (percent >= 0.7 ? AppTheme.warningColor : AppTheme.primaryColor));
+
+    return Tooltip(
+      message:
+          'Progress: ₹${spent.toStringAsFixed(1)}/₹${total.toStringAsFixed(1)} spent (${(percent * 100).toStringAsFixed(0)}%)',
+      child: GestureDetector(
+        onTap: () {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Budget Progress: ₹${spent.toStringAsFixed(1)} of ₹${total.toStringAsFixed(1)} spent (${(percent * 100).toStringAsFixed(0)}%)',
+                style: TextStyle(
+                  color: AppTheme.textPrimaryColor(context),
+                ),
+              ),
+              backgroundColor: AppTheme.surface(context),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: statusColor.withValues(alpha: 0.25),
+              width: 1,
+            ),
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                value: percent,
+                strokeWidth: 2.5,
+                backgroundColor: AppTheme.textPrimaryColor(context).withValues(alpha: 0.1),
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScannerStatusButton(BuildContext context, Budget? budget) {
+    return Tooltip(
+      message: 'Notification Scanner Settings',
+      child: GestureDetector(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: AppTheme.surface(context),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                'Notification Scanner Access',
+                style: TextStyle(
+                  color: AppTheme.textPrimaryColor(context),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Text(
+                'LOG requires Notification Access to automatically scan and import transaction alerts from banking and UPI apps in real time. Your messages are parsed locally on your device.',
+                style: TextStyle(
+                  color: AppTheme.textSecondaryColor(context),
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Notification transaction scanner is running in the background.'),
+                        backgroundColor: AppTheme.successColor,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Enable Access',
+                    style: TextStyle(
+                      color: AppTheme.primaryAccentColor(context),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppTheme.primaryColor.withValues(alpha: 0.25),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            Icons.notifications_active_rounded,
+            color: AppTheme.primaryAccentColor(context),
+            size: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCategoryBreakdownSheet(Budget budget, List<Transaction> transactions) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => CategoryBreakdownSheet(
+        budget: budget,
+        transactions: transactions,
+        getTagIcon: _getTagIcon,
+        getTagColor: _getTagColor,
+        getTagName: _getTagName,
+      ),
+    );
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => TransactionFilterSheet(
+        initialStartDate: _filterStartDate,
+        initialEndDate: _filterEndDate,
+        initialType: _filterType,
+        initialValidation: _filterValidation,
+        onApply: _handleApplyFilters,
+      ),
+    );
+  }
+
+  void _handleApplyFilters(
+    DateTime? start,
+    DateTime? end,
+    String type,
+    String validation,
+  ) {
+    setState(() {
+      _filterStartDate = start;
+      _filterEndDate = end;
+      _filterType = type;
+      _filterValidation = validation;
+    });
+  }
+
+  void _handleExpenseTap(Budget budget, Transaction expense) {
+    AddTransactionScreen.navigate(
+      context,
+      budgetId: budget.id,
+      categoryName: budget.categoryName,
+      existingTransaction: expense,
+      budgets: _controller.budgets,
+    );
+  }
+
+  Widget _buildEmptyState(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: AppTheme.textSecondary.withValues(alpha: 0.6),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Tag-based icon/color lookup (matches expense description) ──
+
+  static const _tagIcons = <String, IconData>{
+    'grocery': Icons.local_grocery_store_rounded,
+    'fast food': Icons.fastfood_rounded,
+    'meals': Icons.restaurant_rounded,
+    'drinks': Icons.local_bar_rounded,
+    'supplements': Icons.medication_rounded,
+    'travel': Icons.flight_rounded,
+    'care': Icons.favorite_rounded,
+    'home': Icons.home_rounded,
+    'bills': Icons.receipt_long_rounded,
+    'timepass': Icons.sports_esports_rounded,
+    'transfer': Icons.compare_arrows_rounded,
+    'quickmart': Icons.storefront_rounded,
+    'shopping': Icons.shopping_bag_rounded,
+    'receive': Icons.call_received_rounded,
+    'other': Icons.more_horiz_rounded,
+    'bill': Icons.receipt_long_rounded,
+    'credit card': Icons.credit_card_rounded,
+    'dinner': Icons.dinner_dining_rounded,
+    'drink': Icons.local_cafe_rounded,
+    'fuel': Icons.local_gas_station_rounded,
+    'health': Icons.medical_services_rounded,
+    'snack': Icons.fastfood_rounded,
+  };
+
+  static const _tagColors = <String, Color>{
+    'grocery': Colors.green,
+    'fast food': Colors.orange,
+    'meals': Colors.deepOrange,
+    'drinks': Colors.cyan,
+    'supplements': Colors.teal,
+    'travel': Colors.indigo,
+    'care': Colors.pink,
+    'home': Colors.blueGrey,
+    'bills': Colors.redAccent,
+    'timepass': Colors.purple,
+    'transfer': Colors.blue,
+    'quickmart': Colors.deepPurpleAccent,
+    'shopping': Colors.pinkAccent,
+    'receive': Colors.greenAccent,
+    'other': Colors.grey,
+    'bill': Colors.redAccent,
+    'credit card': Colors.indigo,
+    'dinner': Colors.amber,
+    'drink': Colors.brown,
+    'fuel': Colors.blue,
+    'health': Colors.teal,
+    'snack': Colors.orange,
+  };
+
+  String _getTagName(String description) {
+    final key = description.toLowerCase();
+    if (key.contains('quickmart')) return 'QuickMart';
+    for (final entry in _tagIcons.entries) {
+      if (key.contains(entry.key)) {
+        return entry.key
+            .split(' ')
+            .map((w) => w[0].toUpperCase() + w.substring(1))
+            .join(' ');
+      }
+    }
+    return 'Other';
+  }
+
+  IconData _getTagIcon(String description) {
+    final key = description.toLowerCase();
+    for (final entry in _tagIcons.entries) {
+      if (key.contains(entry.key)) return entry.value;
+    }
+    return Icons.payment_rounded;
+  }
+
+  Color _getTagColor(String description) {
+    final key = description.toLowerCase();
+    for (final entry in _tagColors.entries) {
+      if (key.contains(entry.key)) return entry.value;
+    }
+    return AppTheme.primaryColor;
   }
 }

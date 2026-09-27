@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Rules for Budget App collections
+    match /budgets/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /transactions/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /metadata/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Fallback for all other collections
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

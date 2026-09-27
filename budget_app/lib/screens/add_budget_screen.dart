@@ -9,10 +9,12 @@ import '../services/preferences_service.dart';
 
 class AddBudgetScreen extends StatefulWidget {
   final Budget? existingBudget;
+  final bool isCopy;
 
   const AddBudgetScreen({
     super.key,
     this.existingBudget,
+    this.isCopy = false,
   });
 
   @override
@@ -83,7 +85,8 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     final categoryName = _categoryNameController.text.trim();
 
     try {
-      if (widget.existingBudget != null) {
+      final isEditing = widget.existingBudget != null && !widget.isCopy;
+      if (isEditing) {
         await _budgetService.updateBudget(
           widget.existingBudget!.id,
           name: name,
@@ -124,7 +127,7 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   }
 
   void _deleteBudget() async {
-    if (widget.existingBudget == null) return;
+    if (widget.existingBudget == null || widget.isCopy) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -155,11 +158,11 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.existingBudget != null;
+    final isEditing = widget.existingBudget != null && !widget.isCopy;
 
     return FullScreenPage(
       showScaffold: true,
-      title: isEditing ? 'Edit Budget' : 'New Budget Cap',
+      title: isEditing ? 'Edit Budget' : (widget.isCopy ? 'Copy Budget' : 'New Budget Cap'),
       showBackButton: true,
       actions: [
         if (isEditing)

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import 'app_spacers.dart';
 import 'app_action_buttons.dart';
+import 'app_spacers.dart';
 
 class TransactionFilterSheet extends StatefulWidget {
   final DateTime? initialStartDate;
@@ -29,7 +29,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   DateTime? _endDate;
   late String _selectedType; // 'all', 'debit', 'credit'
   late String _selectedValidation; // 'all', 'validated', 'pending'
-  String _selectedQuickDate = 'all';
+  String _selectedQuickDate = 'all'; // 'all', '1m', '3m', '6m', 'custom'
 
   @override
   void initState() {
@@ -48,9 +48,9 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
       final diffDays = _endDate!.difference(_startDate!).inDays;
       if (diffDays == 30 || diffDays == 31) {
         _selectedQuickDate = '1m';
-      } else if (diffDays >= 89 && diffDays <= 93) {
+      } else if (diffDays == 90 || diffDays == 91 || diffDays == 92) {
         _selectedQuickDate = '3m';
-      } else if (diffDays >= 179 && diffDays <= 184) {
+      } else if (diffDays == 180 || diffDays == 181 || diffDays == 182 || diffDays == 183) {
         _selectedQuickDate = '6m';
       } else {
         _selectedQuickDate = 'custom';
@@ -168,6 +168,113 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     Navigator.pop(context);
   }
 
+  void _handleTypeSelect(String type) {
+    setState(() {
+      _selectedType = type;
+    });
+  }
+
+  void _handleValidationSelect(String val) {
+    setState(() {
+      _selectedValidation = val;
+    });
+  }
+
+  Widget _buildDragHandle() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: AppTheme.borderColor(context),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateShortcutsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(title: 'Date Range Shortcut'),
+        const VGapSm(),
+        _QuickDateSelector(
+          selectedValue: _selectedQuickDate,
+          onSelect: _handleQuickDateSelect,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomRangeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(title: 'Custom Range'),
+        const VGapSm(),
+        Row(
+          children: [
+            Expanded(
+              child: _DateInputField(
+                label: 'Start Date',
+                date: _startDate,
+                onTap: _handleSelectStartDate,
+              ),
+            ),
+            const HGapSm(),
+            Expanded(
+              child: _DateInputField(
+                label: 'End Date',
+                date: _endDate,
+                onTap: _handleSelectEndDate,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTypeSelectorSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(title: 'Transaction Type'),
+        const VGapSm(),
+        _TypeSelector(
+          selectedType: _selectedType,
+          onSelect: _handleTypeSelect,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildValidationSelectorSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(title: 'Validation Status'),
+        const VGapSm(),
+        _ValidationSelector(
+          selectedVal: _selectedValidation,
+          onSelect: _handleValidationSelect,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return AppActionButtons(
+      primaryLabel: 'Apply Filters',
+      onPrimaryPressed: _handleApply,
+      secondaryLabel: 'Reset',
+      onSecondaryPressed: _handleReset,
+      primaryColor: AppTheme.primaryColor,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -182,127 +289,105 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.borderColor(context),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Filter Transactions',
-                  style: AppTheme.headingSmall.copyWith(fontSize: 20),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context)),
-                ),
-              ],
-            ),
+            _buildDragHandle(),
+            _FilterHeader(onClose: () => Navigator.pop(context)),
             const VGapSm(),
             Divider(color: AppTheme.borderColor(context)),
             const VGapMd(),
-            Text(
-              'Date Range Shortcut',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textSecondaryColor(context),
-                letterSpacing: 0.8,
-              ),
-            ),
-            const VGapSm(),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
-                children: [
-                  _buildQuickChip('1 Month', '1m'),
-                  const SizedBox(width: 8),
-                  _buildQuickChip('3 Months', '3m'),
-                  const SizedBox(width: 8),
-                  _buildQuickChip('6 Months', '6m'),
-                  const SizedBox(width: 8),
-                  _buildQuickChip('Custom', 'custom'),
-                ],
-              ),
-            ),
+            _buildDateShortcutsSection(),
             const VGapMd(),
-            Text(
-              'Custom Dates',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textSecondaryColor(context),
-                letterSpacing: 0.8,
-              ),
-            ),
-            const VGapSm(),
-            Row(
-              children: [
-                Expanded(
-                  child: _DateInputField(
-                    label: 'Start Date',
-                    date: _startDate,
-                    onTap: _handleSelectStartDate,
-                  ),
-                ),
-                const HGapSm(),
-                Expanded(
-                  child: _DateInputField(
-                    label: 'End Date',
-                    date: _endDate,
-                    onTap: _handleSelectEndDate,
-                  ),
-                ),
-              ],
-            ),
+            _buildCustomRangeSection(),
             const VGapLg(),
-            Text(
-              'Transaction Type',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textSecondaryColor(context),
-                letterSpacing: 0.8,
-              ),
-            ),
-            const VGapSm(),
-            Row(
-              children: [
-                _buildTypeChip('All', 'all'),
-                const HGapSm(),
-                _buildTypeChip('Debit (Expense)', 'debit'),
-                const HGapSm(),
-                _buildTypeChip('Credit (Income)', 'credit'),
-              ],
-            ),
+            _buildTypeSelectorSection(),
+            const VGapLg(),
+            _buildValidationSelectorSection(),
             const VGapXxl(),
-            AppActionButtons(
-              primaryLabel: 'Apply Filters',
-              onPrimaryPressed: _handleApply,
-              cancelLabel: 'Reset',
-              onCancelPressed: _handleReset,
-            ),
+            _buildActionButtons(),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildQuickChip(String label, String value) {
-    final isSelected = _selectedQuickDate == value;
+class _FilterHeader extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _FilterHeader({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Filter Transactions',
+            style: AppTheme.headingSmall.copyWith(fontSize: 20),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.subtleFillColor(context),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.borderColor(context)),
+            ),
+            child: IconButton(
+              onPressed: onClose,
+              icon: Icon(Icons.close_rounded, color: AppTheme.textSecondaryColor(context), size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+
+  const _SectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondaryColor(context), letterSpacing: 0.8),
+    );
+  }
+}
+
+class _QuickDateSelector extends StatelessWidget {
+  final String selectedValue;
+  final ValueChanged<String> onSelect;
+
+  const _QuickDateSelector({required this.selectedValue, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          _buildChip(context, '1 Month', '1m'),
+          const SizedBox(width: 8),
+          _buildChip(context, '3 Months', '3m'),
+          const SizedBox(width: 8),
+          _buildChip(context, '6 Months', '6m'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(BuildContext context, String label, String value) {
+    final isSelected = selectedValue == value;
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (_) => _handleQuickDateSelect(value),
+      onSelected: (_) => onSelect(value),
       selectedColor: AppTheme.segmentedSelectedBgColor(context),
       backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
       side: BorderSide(
@@ -316,29 +401,6 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
       ),
       showCheckmark: false,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    );
-  }
-
-  Widget _buildTypeChip(String label, String value) {
-    final isSelected = _selectedType == value;
-    return Expanded(
-      child: ChoiceChip(
-        label: Center(child: Text(label, style: const TextStyle(fontSize: 11))),
-        selected: isSelected,
-        onSelected: (_) => setState(() => _selectedType = value),
-        selectedColor: AppTheme.segmentedSelectedBgColor(context),
-        backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
-        side: BorderSide(
-          color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
-          width: 1.2,
-        ),
-        labelStyle: TextStyle(
-          color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-        ),
-        showCheckmark: false,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
     );
   }
 }
@@ -377,11 +439,7 @@ class _DateInputField extends StatelessWidget {
           children: [
             Text(
               label,
-              style: TextStyle(
-                color: AppTheme.textSecondaryColor(context),
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(color: AppTheme.textSecondaryColor(context), fontSize: 10, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 4),
             Row(
@@ -407,6 +465,94 @@ class _DateInputField extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TypeSelector extends StatelessWidget {
+  final String selectedType;
+  final ValueChanged<String> onSelect;
+
+  const _TypeSelector({required this.selectedType, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _buildChip(context, 'All', 'all'),
+        const HGapSm(),
+        _buildChip(context, 'Debit', 'debit'),
+        const HGapSm(),
+        _buildChip(context, 'Credit', 'credit'),
+      ],
+    );
+  }
+
+  Widget _buildChip(BuildContext context, String label, String value) {
+    final isSelected = selectedType == value;
+    return Expanded(
+      child: ChoiceChip(
+        label: Center(child: Text(label)),
+        selected: isSelected,
+        onSelected: (_) => onSelect(value),
+        selectedColor: AppTheme.segmentedSelectedBgColor(context),
+        backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
+        side: BorderSide(
+          color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
+          width: 1.2,
+        ),
+        labelStyle: TextStyle(
+          color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+        ),
+        showCheckmark: false,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+}
+
+class _ValidationSelector extends StatelessWidget {
+  final String selectedVal;
+  final ValueChanged<String> onSelect;
+
+  const _ValidationSelector({required this.selectedVal, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _buildChip(context, 'All', 'all'),
+        const HGapSm(),
+        _buildChip(context, 'Validated', 'validated'),
+        const HGapSm(),
+        _buildChip(context, 'Pending', 'pending'),
+      ],
+    );
+  }
+
+  Widget _buildChip(BuildContext context, String label, String value) {
+    final isSelected = selectedVal == value;
+    return Expanded(
+      child: ChoiceChip(
+        label: Center(child: Text(label)),
+        selected: isSelected,
+        onSelected: (_) => onSelect(value),
+        selectedColor: AppTheme.segmentedSelectedBgColor(context),
+        backgroundColor: AppTheme.surface(context).withValues(alpha: 0.35),
+        side: BorderSide(
+          color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
+          width: 1.2,
+        ),
+        labelStyle: TextStyle(
+          color: isSelected ? AppTheme.primaryAccentColor(context) : AppTheme.textSecondaryColor(context),
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+        ),
+        showCheckmark: false,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

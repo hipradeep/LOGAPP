@@ -7,7 +7,7 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/glow_blob.dart';
 import '../widgets/transaction_filter_sheet.dart';
-import '../widgets/add_transaction_sheet.dart';
+import 'add_transaction_screen.dart';
 import '../widgets/app_premium_fab.dart';
 import '../widgets/app_empty_state.dart';
 
@@ -58,15 +58,11 @@ class _LogScreenState extends State<LogScreen> {
   }
 
   void _openEditTransaction(Transaction tx) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => AddTransactionSheet(
-        existingTransaction: tx,
-        budgetId: tx.budgetId,
-        budgets: widget.controller.budgets,
-      ),
+    AddTransactionScreen.navigate(
+      context,
+      existingTransaction: tx,
+      budgetId: tx.budgetId,
+      budgets: widget.controller.budgets,
     );
   }
 
@@ -228,14 +224,10 @@ class _LogScreenState extends State<LogScreen> {
           right: 24,
           bottom: 84,
           onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (ctx) => AddTransactionSheet(
-                budgetId: widget.controller.selectedBudget?.id,
-                budgets: widget.controller.budgets,
-              ),
+            AddTransactionScreen.navigate(
+              context,
+              budgetId: widget.controller.selectedBudget?.id,
+              budgets: widget.controller.budgets,
             );
           },
         ),

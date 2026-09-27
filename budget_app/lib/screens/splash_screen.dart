@@ -72,25 +72,30 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: AppTheme.background(context),
       body: Stack(
         children: [
-          // Background ambient lights
-          Positioned(
-            top: -60,
-            left: -60,
-            child: GlowBlob(
-              color: AppTheme.primaryColor.withValues(alpha: 0.25),
-              size: 260,
+          // Background ambient gradient
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: AppTheme.resolvedBackgroundGradient(context),
+              ),
             ),
           ),
-          Positioned(
+
+          // Background ambient lights
+          GlowBlob(
+            top: -60,
+            left: -60,
+            color: AppTheme.primaryColor.withValues(alpha: 0.25),
+            size: 260,
+          ),
+          GlowBlob(
             bottom: -60,
             right: -60,
-            child: GlowBlob(
-              color: AppTheme.primaryLight.withValues(alpha: 0.2),
-              size: 280,
-            ),
+            color: AppTheme.primaryLight.withValues(alpha: 0.2),
+            size: 280,
           ),
 
           Center(
@@ -139,6 +144,7 @@ class _SplashScreenState extends State<SplashScreen>
                     Text(
                       'Budget',
                       style: AppTheme.headingLarge.copyWith(
+                        color: AppTheme.textPrimaryColor(context),
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w800,
                       ),
@@ -147,7 +153,7 @@ class _SplashScreenState extends State<SplashScreen>
                     Text(
                       'Smart Cloud Financial Tracker',
                       style: AppTheme.bodyMedium.copyWith(
-                        color: AppTheme.textSecondary,
+                        color: AppTheme.textSecondaryColor(context),
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -167,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Text(
                   'Powered by Firebase Cloud Sync',
                   style: AppTheme.bodySmall.copyWith(
-                    color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                    color: AppTheme.textMutedColor(context),
                     letterSpacing: 0.5,
                   ),
                 ),

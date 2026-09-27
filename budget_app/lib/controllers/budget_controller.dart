@@ -33,6 +33,9 @@ class BudgetController extends ChangeNotifier {
       if (matches.isNotEmpty) return matches.first;
     }
     if (_budgets.isNotEmpty) {
+      final activeNotEnded = _budgets.where((b) => b.isActive && !b.isPeriodOver).toList();
+      if (activeNotEnded.isNotEmpty) return activeNotEnded.first;
+
       final activeBudgets = _budgets.where((b) => b.isActive).toList();
       return activeBudgets.isNotEmpty ? activeBudgets.first : _budgets.first;
     }

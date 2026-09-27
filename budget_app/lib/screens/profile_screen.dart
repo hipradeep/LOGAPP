@@ -5,6 +5,8 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/glow_blob.dart';
 import 'manage_budget_screen.dart';
+import 'manage_budget1_screen.dart';
+import 'manage_budget2_screen.dart';
 import 'expense_category_screen.dart';
 import 'payment_mode_screen.dart';
 import 'theme_selection_screen.dart';
@@ -194,7 +196,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _MenuItem(
               icon: Icons.account_balance_wallet_outlined,
               title: 'Manage Budgets',
-              subtitle: 'Create, edit limits, or activate budgets',
               onTap: () {
                 Navigator.push(
                   context,
@@ -203,9 +204,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             _MenuItem(
+              icon: Icons.pie_chart_outline_rounded,
+              title: 'Manage Budget 1',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ManageBudget1Screen()),
+                );
+              },
+            ),
+            _MenuItem(
+              icon: Icons.add_chart_rounded,
+              title: 'Manage Budget 2',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ManageBudget2Screen()),
+                );
+              },
+            ),
+            _MenuItem(
               icon: Icons.category_outlined,
               title: 'Expense Categories',
-              subtitle: 'Customize spending tags, icons & colors',
               onTap: () {
                 Navigator.push(
                   context,
@@ -216,7 +236,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _MenuItem(
               icon: Icons.payment_outlined,
               title: 'Payment Modes',
-              subtitle: 'UPI, Cash, Bank Accounts & Cards',
               onTap: () {
                 Navigator.push(
                   context,
@@ -243,7 +262,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _MenuItem(
               icon: Icons.palette_outlined,
               title: 'App Theme',
-              subtitle: 'Switch between Dark, Light, Orix, Logo, Earth',
               onTap: () {
                 Navigator.push(
                   context,
@@ -254,7 +272,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _MenuItem(
               icon: Icons.info_outline_rounded,
               title: 'About Budget',
-              subtitle: 'Version 1.0.0 • Cloud Firestore Powered',
               onTap: () {
                 showAboutDialog(
                   context: context,
@@ -299,7 +316,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Icon(item.icon, color: AppTheme.primaryLight, size: 20),
             ),
             title: Text(item.title, style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
-            subtitle: Text(item.subtitle, style: TextStyle(fontSize: 12, color: AppTheme.textSecondaryColor(context))),
             trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textSecondaryColor(context)),
             onTap: item.onTap,
           );
@@ -312,13 +328,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _MenuItem {
   final IconData icon;
   final String title;
-  final String subtitle;
   final VoidCallback onTap;
 
   const _MenuItem({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.onTap,
   });
 }

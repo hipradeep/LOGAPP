@@ -7,7 +7,7 @@ import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
 import 'home_screen.dart';
 import 'budget_screen.dart';
-import 'log_screen.dart';
+import 'spending_screen.dart';
 import 'profile_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -55,7 +55,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onNavigateToBudget: () => _onTabSelected(1),
       ),
       BudgetScreen(controller: _budgetController),
-      LogScreen(controller: _budgetController),
+      SpendingScreen(controller: _budgetController),
       const ProfileScreen(),
     ];
 
@@ -89,9 +89,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         label: 'Budget',
       ),
       _NavItem(
-        icon: Icons.receipt_long_outlined,
-        activeIcon: Icons.receipt_long_rounded,
-        label: 'Log',
+        icon: Icons.pie_chart_outline_rounded,
+        activeIcon: Icons.pie_chart_rounded,
+        label: 'Spending',
       ),
       _NavItem(
         icon: Icons.person_outline_rounded,

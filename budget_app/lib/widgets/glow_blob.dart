@@ -28,19 +28,21 @@ class GlowBlob extends StatelessWidget {
       left: left,
       right: right,
       child: IgnorePointer(
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: opacity),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: opacity),
-                blurRadius: size * 0.6,
-                spreadRadius: size * 0.2,
-              ),
-            ],
+        child: RepaintBoundary(
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: opacity),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: opacity),
+                  blurRadius: size * 0.6,
+                  spreadRadius: size * 0.2,
+                ),
+              ],
+            ),
           ),
         ),
       ),

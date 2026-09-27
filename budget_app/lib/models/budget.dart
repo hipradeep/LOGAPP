@@ -93,6 +93,95 @@ class Transaction {
   }
 }
 
+class BudgetSubCategory {
+  final String name;
+  final double percentage;
+  final double amount;
+
+  BudgetSubCategory({
+    required this.name,
+    required this.percentage,
+    required this.amount,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'percentage': percentage,
+      'amount': amount,
+    };
+  }
+
+  factory BudgetSubCategory.fromMap(Map<String, dynamic> map) {
+    return BudgetSubCategory(
+      name: map['name'] as String? ?? '',
+      percentage: (map['percentage'] as num?)?.toDouble() ?? 0.0,
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  BudgetSubCategory copyWith({
+    String? name,
+    double? percentage,
+    double? amount,
+  }) {
+    return BudgetSubCategory(
+      name: name ?? this.name,
+      percentage: percentage ?? this.percentage,
+      amount: amount ?? this.amount,
+    );
+  }
+}
+
+class BudgetCategoryAllocation {
+  final String name; // 'Expenses', 'Savings', 'Needs', 'Wants'
+  final double percentage;
+  final double amount;
+  final List<BudgetSubCategory> subCategories;
+
+  BudgetCategoryAllocation({
+    required this.name,
+    required this.percentage,
+    required this.amount,
+    this.subCategories = const [],
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'percentage': percentage,
+      'amount': amount,
+      'subCategories': subCategories.map((s) => s.toMap()).toList(),
+    };
+  }
+
+  factory BudgetCategoryAllocation.fromMap(Map<String, dynamic> map) {
+    final rawSub = map['subCategories'] as List<dynamic>? ?? [];
+    return BudgetCategoryAllocation(
+      name: map['name'] as String? ?? '',
+      percentage: (map['percentage'] as num?)?.toDouble() ?? 0.0,
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+      subCategories: rawSub
+          .map((s) => BudgetSubCategory.fromMap(Map<String, dynamic>.from(s as Map)))
+          .toList(),
+    );
+  }
+
+  BudgetCategoryAllocation copyWith({
+    String? name,
+    double? percentage,
+    double? amount,
+    List<BudgetSubCategory>? subCategories,
+  }) {
+    return BudgetCategoryAllocation(
+      name: name ?? this.name,
+      percentage: percentage ?? this.percentage,
+      amount: amount ?? this.amount,
+      subCategories: subCategories ?? this.subCategories,
+    );
+  }
+}
+
 class Budget {
   final String id;
   final String name;
@@ -107,6 +196,9 @@ class Budget {
   final bool repeat;
   final bool isActive;
   final double alertThreshold;
+  final double? salary;
+  final String? rule; // '80/20', '70/30', '50/30/20', 'custom'
+  final List<BudgetCategoryAllocation> allocations;
 
   Budget({
     required this.id,
@@ -122,6 +214,9 @@ class Budget {
     this.repeat = true,
     this.isActive = true,
     this.alertThreshold = 0.7,
+    this.salary,
+    this.rule,
+    this.allocations = const [],
   });
 
   // Calculate total expense spent in the active period
@@ -181,6 +276,14 @@ class Budget {
   bool isOverBudget(List<Transaction> allTransactions) =>
       spentForCurrentPeriod(allTransactions) > limit;
 
+  bool get isPeriodOver {
+    if (endDate == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final budgetEnd = DateTime(endDate!.year, endDate!.month, endDate!.day);
+    return today.isAfter(budgetEnd);
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'name': name,
@@ -195,6 +298,9 @@ class Budget {
       'repeat': repeat,
       'isActive': isActive,
       'alertThreshold': alertThreshold,
+      'salary': salary,
+      'rule': rule,
+      'allocations': allocations.map((a) => a.toMap()).toList(),
     };
   }
 
@@ -207,6 +313,11 @@ class Budget {
     final List<int> parsedRepeatDays = rawRepeatDays is List
         ? rawRepeatDays.map<int>((e) => (e as num).toInt()).toList()
         : const [1, 2, 3, 4, 5, 6, 7];
+
+    final rawAllocations = data['allocations'] as List<dynamic>? ?? [];
+    final parsedAllocations = rawAllocations
+        .map((a) => BudgetCategoryAllocation.fromMap(Map<String, dynamic>.from(a as Map)))
+        .toList();
 
     return Budget(
       id: doc.id,
@@ -222,6 +333,9 @@ class Budget {
       repeat: data['repeat'] as bool? ?? true,
       isActive: data['isActive'] as bool? ?? true,
       alertThreshold: (data['alertThreshold'] as num?)?.toDouble() ?? 0.7,
+      salary: (data['salary'] as num?)?.toDouble(),
+      rule: data['rule'] as String?,
+      allocations: parsedAllocations,
     );
   }
 
@@ -239,6 +353,9 @@ class Budget {
     bool? repeat,
     bool? isActive,
     double? alertThreshold,
+    double? salary,
+    String? rule,
+    List<BudgetCategoryAllocation>? allocations,
   }) {
     return Budget(
       id: id ?? this.id,
@@ -254,6 +371,9 @@ class Budget {
       repeat: repeat ?? this.repeat,
       isActive: isActive ?? this.isActive,
       alertThreshold: alertThreshold ?? this.alertThreshold,
+      salary: salary ?? this.salary,
+      rule: rule ?? this.rule,
+      allocations: allocations ?? this.allocations,
     );
   }
 }

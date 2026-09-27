@@ -1,74 +1,80 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-class AppBinaryToggle extends StatelessWidget {
-  final String firstOption;
-  final String secondOption;
-  final bool isFirstSelected;
-  final ValueChanged<bool> onToggle;
+/// A premium, reusable toggle switch for choosing between two options.
+class AppBinaryToggle extends StatefulWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String trueLabel;
+  final String falseLabel;
+  final Color trueColor;
+  final Color falseColor;
 
   const AppBinaryToggle({
     super.key,
-    required this.firstOption,
-    required this.secondOption,
-    required this.isFirstSelected,
-    required this.onToggle,
+    required this.value,
+    required this.onChanged,
+    required this.trueLabel,
+    required this.falseLabel,
+    this.trueColor = AppTheme.errorColor,
+    this.falseColor = AppTheme.successColor,
   });
 
   @override
+  State<AppBinaryToggle> createState() => _AppBinaryToggleState();
+}
+
+class _AppBinaryToggleState extends State<AppBinaryToggle> {
+  late bool _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(covariant AppBinaryToggle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      setState(() {
+        _value = widget.value;
+      });
+    }
+  }
+
+  void _handleToggle() {
+    setState(() {
+      _value = !_value;
+    });
+    widget.onChanged(_value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onToggle(true),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isFirstSelected ? AppTheme.primaryColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius - 4),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  firstOption,
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontWeight: isFirstSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isFirstSelected ? Colors.white : AppTheme.textSecondaryColor(context),
-                  ),
-                ),
-              ),
-            ),
+    final activeColor = _value ? widget.trueColor : widget.falseColor;
+    final activeLabel = _value ? widget.trueLabel : widget.falseLabel;
+
+    return GestureDetector(
+      onTap: _handleToggle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: activeColor.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: activeColor.withValues(alpha: 0.4),
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onToggle(false),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: !isFirstSelected ? AppTheme.primaryColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius - 4),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  secondOption,
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontWeight: !isFirstSelected ? FontWeight.bold : FontWeight.normal,
-                    color: !isFirstSelected ? Colors.white : AppTheme.textSecondaryColor(context),
-                  ),
-                ),
-              ),
-            ),
+        ),
+        child: Text(
+          activeLabel,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: activeColor,
           ),
-        ],
+        ),
       ),
     );
   }
