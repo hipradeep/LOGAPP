@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/calendar_event.dart';
-import '../models/revision.dart';
 import '../services/service_locator.dart';
 import 'revision_controller.dart';
 import 'courses_controller.dart';
@@ -261,13 +260,13 @@ class CalendarController extends ChangeNotifier {
   }
 
   /// Distinct indicator dot colors for a given day in the Month grid.
-  List<Color> dotsForDate(DateTime date) {
+  List<Color> dotsForDate(DateTime date, BuildContext context) {
     final events = eventsForDate(date);
     if (events.isEmpty) return const [];
 
     final dots = <Color>[];
     for (final e in events) {
-      final c = e.color;
+      final c = e.color(context);
       if (!dots.contains(c)) {
         dots.add(c);
       }

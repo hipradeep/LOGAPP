@@ -5,7 +5,7 @@ import '../../theme/app_theme.dart';
 class CalendarMonthGrid extends StatelessWidget {
   final DateTime focusedMonth;
   final DateTime selectedDate;
-  final List<Color> Function(DateTime date) dotsForDate;
+  final List<Color> Function(DateTime date, BuildContext context) dotsForDate;
   final ValueChanged<DateTime> onSelectDate;
 
   const CalendarMonthGrid({
@@ -90,7 +90,7 @@ class CalendarMonthGrid extends StatelessWidget {
                 final cellDate = DateTime(focusedMonth.year, focusedMonth.month, dayNumber);
                 final isSelected = cellDate == normalizedSelected;
                 final isToday = cellDate == today;
-                final dots = dotsForDate(cellDate);
+                final dots = dotsForDate(cellDate, context);
 
                 return _CalendarDayCell(
                   dayNumber: dayNumber,

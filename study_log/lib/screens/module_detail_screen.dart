@@ -49,7 +49,27 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       fallbackTitle: widget.moduleTitle,
     );
     if (!mounted) return;
-    setState(() => _topics = cached);
+    if (cached.isNotEmpty) {
+      setState(() => _topics = cached);
+    }
+
+    if (cached.isEmpty &&
+        widget.moduleId.isNotEmpty &&
+        getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable) {
+        try {
+          final remote = await firestore
+              .streamTopics(moduleId: widget.moduleId)
+              .first
+              .timeout(const Duration(milliseconds: 1500), onTimeout: () => []);
+          if (remote.isNotEmpty && mounted) {
+            setState(() => _topics = remote);
+            await LocalTopicStorage.saveTopics(widget.moduleTitle, remote);
+          }
+        } catch (_) {}
+      }
+    }
   }
 
   void _handleBack() {
@@ -75,7 +95,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             final fs = getIt<FirestoreService>();
             if (fs.isAvailable) {
               try {
-                await fs.updateModule(updatedModule);
+                await fs.updateModule(updatedModule).timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () {},
+                );
               } catch (_) {}
             }
           }
@@ -105,6 +128,19 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       });
       await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
       await _syncModuleCompletion();
+      if (getIt.isRegistered<FirestoreService>()) {
+        final firestore = getIt<FirestoreService>();
+        if (firestore.isAvailable && result.id.isNotEmpty) {
+          try {
+            await firestore.addTopic(result).timeout(
+              const Duration(seconds: 4),
+              onTimeout: () {},
+            );
+          } catch (e) {
+            debugPrint('Error adding topic to firestore: $e');
+          }
+        }
+      }
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
       }
@@ -125,9 +161,29 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         next = TopicStatus.notStarted;
         break;
     }
+    final topicId = current.id.isNotEmpty
+        ? current.id
+        : 'topic_${widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle.toLowerCase().replaceAll(' ', '_')}_$index';
+    final courseId =
+        current.courseId.isNotEmpty ? current.courseId : widget.courseId;
+    final moduleId =
+        current.moduleId.isNotEmpty ? current.moduleId : widget.moduleId;
+
     final updated = next == TopicStatus.completed
-        ? current.copyWith(status: next, completedAt: DateTime.now())
-        : current.copyWith(status: next, clearCompletedAt: true);
+        ? current.copyWith(
+            id: topicId,
+            courseId: courseId,
+            moduleId: moduleId,
+            status: next,
+            completedAt: DateTime.now(),
+          )
+        : current.copyWith(
+            id: topicId,
+            courseId: courseId,
+            moduleId: moduleId,
+            status: next,
+            clearCompletedAt: true,
+          );
 
     setState(() {
       _topics[index] = updated;
@@ -139,9 +195,16 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     if (getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable && updated.id.isNotEmpty) {
-        firestore.updateTopic(updated).catchError((e) {
+        try {
+          await firestore.updateTopic(updated).timeout(
+            const Duration(seconds: 4),
+            onTimeout: () {
+              debugPrint('Firestore updateTopic timed out, kept local state.');
+            },
+          );
+        } catch (e) {
           debugPrint('Error updating topic in firestore: $e');
-        });
+        }
       }
     }
 
@@ -167,9 +230,14 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       if (getIt.isRegistered<FirestoreService>()) {
         final firestore = getIt<FirestoreService>();
         if (firestore.isAvailable && sub.id.isNotEmpty) {
-          firestore.deleteTopic(sub.id).catchError((e) {
+          try {
+            await firestore.deleteTopic(sub.id).timeout(
+              const Duration(seconds: 4),
+              onTimeout: () {},
+            );
+          } catch (e) {
             debugPrint('Error deleting topic in firestore: $e');
-          });
+          }
         }
       }
 

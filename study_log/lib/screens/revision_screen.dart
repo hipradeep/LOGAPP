@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../theme/revision_level_palette.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';

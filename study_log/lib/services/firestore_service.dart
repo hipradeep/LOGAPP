@@ -60,7 +60,7 @@ class FirestoreService {
   Future<void> updateCourse(Course course) async {
     final ref = _coursesRef;
     if (ref == null) return;
-    await ref.doc(course.id).update(course.toMap());
+    await ref.doc(course.id).set(course.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteCourse(String courseId) async {
@@ -104,8 +104,8 @@ class FirestoreService {
 
   Future<void> updateModule(Module module) async {
     final ref = _modulesRef;
-    if (ref == null) return;
-    await ref.doc(module.id).update(module.toMap());
+    if (ref == null || module.id.isEmpty) return;
+    await ref.doc(module.id).set(module.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteModule(String moduleId) async {
@@ -150,7 +150,7 @@ class FirestoreService {
   Future<void> updateTopic(Topic topic) async {
     final ref = _topicsRef;
     if (ref == null || topic.id.isEmpty) return;
-    await ref.doc(topic.id).update(topic.toMap());
+    await ref.doc(topic.id).set(topic.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteTopic(String topicId) async {
@@ -190,8 +190,8 @@ class FirestoreService {
 
   Future<void> updateRevision(Revision revision) async {
     final ref = _revisionsRef;
-    if (ref == null) return;
-    await ref.doc(revision.id).update(revision.toMap());
+    if (ref == null || revision.id.isEmpty) return;
+    await ref.doc(revision.id).set(revision.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteRevision(String revisionId) async {
