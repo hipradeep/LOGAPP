@@ -163,6 +163,34 @@ class SectionsController extends ChangeNotifier {
     }
   }
 
+  Future<void> updateSection(Section section) async {
+    final index = _sections.indexWhere((s) => s.id == section.id);
+    if (index == -1) return;
+    final updated = section.copyWith(updatedAt: DateTime.now());
+    _deletedSectionIds.remove(updated.id);
+    _sections[index] = updated;
+    _sections.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    _isLoading = false;
+    _errorMessage = null;
+    await LocalSectionStorage.saveSectionsForCourse(courseId, _sections);
+    notifyListeners();
+
+    if (getIt.isRegistered<OngoingSectionsController>()) {
+      getIt<OngoingSectionsController>().refresh();
+    }
+
+    try {
+      await _firestoreService.updateSection(updated).timeout(
+        const Duration(seconds: 4),
+        onTimeout: () {
+          debugPrint('Firestore updateSection timed out, stored locally.');
+        },
+      );
+    } catch (e) {
+      debugPrint('Firestore updateSection error: $e');
+    }
+  }
+
   Future<void> deleteSection(String sectionId) async {
     _deletedSectionIds.add(sectionId);
     _sections.removeWhere((s) => s.id == sectionId);

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../services/local_subsection_storage.dart';
+import '../services/local_section_storage.dart';
 import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
 import '../models/subsection.dart';
-import 'section_detail_screen.dart';
+import '../models/subsection_item.dart';
+import '../controllers/ongoing_sections_controller.dart';
 
 /// Screen 9: Add Topic Screen matching the reference design:
 /// - Top bar with Back arrow, "Add Topic" title, and solid purple "Save" button
@@ -26,8 +29,8 @@ class AddSubsectionScreen extends StatefulWidget {
   const AddSubsectionScreen({
     super.key,
     required this.sectionTitle,
+    required this.courseId,
     this.courseTitle = 'DSA',
-    this.courseId = '',
     this.sectionId = '',
     this.availableSections = const [],
   });
@@ -45,6 +48,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
   IconData _selectedIcon = Icons.format_list_bulleted_rounded;
   int _selectedColorIndex = 0;
   bool _isSaving = false;
+  bool _isPickingSection = false;
 
   static const List<Color> _swatchColors = [
     Color(0xFF6366F1), // Purple (default)
@@ -76,7 +80,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
     _orderController = TextEditingController();
-    _selectedSectionTitle = widget.sectionTitle.isNotEmpty ? widget.sectionTitle : 'Arrays';
+    _selectedSectionTitle = widget.sectionTitle;
     _descriptionController.addListener(_onDescriptionChanged);
   }
 
@@ -106,10 +110,20 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
     setState(() => _selectedIcon = icon);
   }
 
-  void _openSectionPicker() {
-    final sections = widget.availableSections.isNotEmpty
-        ? widget.availableSections
-        : [widget.sectionTitle, 'Strings', 'Linked List', 'Stack & Queue', 'Trees', 'Graphs'];
+  Future<void> _openSectionPicker() async {
+    List<String> sections = List<String>.of(widget.availableSections);
+
+    if (sections.isEmpty && widget.courseId.isNotEmpty) {
+      setState(() => _isPickingSection = true);
+      final stored = await LocalSectionStorage.loadSections(widget.courseId);
+      if (!mounted) return;
+      setState(() => _isPickingSection = false);
+      sections = stored.map((s) => s.title).toList();
+    }
+
+    if (sections.isEmpty && widget.sectionTitle.isNotEmpty) {
+      sections = <String>[widget.sectionTitle];
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -147,26 +161,38 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
                   ),
                 ),
                 const VGapMd(),
-                ...sections.map((sec) => ListTile(
-                      title: Text(
-                        sec,
-                        style: TextStyle(
-                          fontWeight: sec == _selectedSectionTitle
-                              ? FontWeight.bold
-                              : FontWeight.w500,
-                          color: sec == _selectedSectionTitle
-                              ? AppTheme.primaryColor
-                              : AppTheme.textPrimary,
-                        ),
+                if (sections.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: Text(
+                      'No modules found for this course yet.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
                       ),
-                      trailing: sec == _selectedSectionTitle
-                          ? const Icon(Icons.check_rounded, color: AppTheme.primaryColor)
-                          : null,
-                      onTap: () {
-                        setState(() => _selectedSectionTitle = sec);
-                        Navigator.pop(ctx);
-                      },
-                    )),
+                    ),
+                  )
+                else
+                  ...sections.map((sec) => ListTile(
+                        title: Text(
+                          sec,
+                          style: TextStyle(
+                            fontWeight: sec == _selectedSectionTitle
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: sec == _selectedSectionTitle
+                                ? AppTheme.primaryColor
+                                : AppTheme.textPrimary,
+                          ),
+                        ),
+                        trailing: sec == _selectedSectionTitle
+                            ? const Icon(Icons.check_rounded, color: AppTheme.primaryColor)
+                            : null,
+                        onTap: () {
+                          setState(() => _selectedSectionTitle = sec);
+                          Navigator.pop(ctx);
+                        },
+                      )),
               ],
             ),
           ),
@@ -261,6 +287,20 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
   }
 
   Future<void> _handleSave() async {
+    if (_selectedSectionTitle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please select a module first'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+      return;
+    }
+
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -278,6 +318,22 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
 
     final description = _descriptionController.text.trim();
     final order = int.tryParse(_orderController.text.trim()) ?? 0;
+    final courseId = widget.courseId.trim();
+    if (courseId.isEmpty) {
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Could not resolve the course for this topic'),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+      return;
+    }
+    final sectionId = widget.sectionId.trim();
     setState(() => _isSaving = true);
 
     try {
@@ -286,6 +342,8 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
 
       final newItem = SubsectionItem(
         id: newId,
+        courseId: courseId,
+        sectionId: sectionId,
         title: name,
         status: SubsectionStatus.notStarted,
         description: description,
@@ -307,8 +365,8 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
             await firestore.addSubsection(
               Subsection(
                 id: newId,
-                courseId: widget.courseId,
-                sectionId: widget.sectionId.isNotEmpty ? widget.sectionId : _selectedSectionTitle,
+                courseId: courseId,
+                sectionId: sectionId,
                 title: name,
                 description: description,
                 orderIndex: order,
@@ -319,6 +377,10 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
             ).timeout(const Duration(seconds: 3), onTimeout: () {});
           } catch (_) {}
         }
+      }
+
+      if (getIt.isRegistered<OngoingSectionsController>()) {
+        getIt<OngoingSectionsController>().refresh();
       }
 
       if (!mounted) return;
@@ -374,6 +436,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
                   children: [
                     _SectionField(
                       selectedTitle: _selectedSectionTitle,
+                      isLoading: _isPickingSection,
                       onTap: _openSectionPicker,
                     ),
                     const VGapLg(),
@@ -451,31 +514,11 @@ class _AddSubsectionTopBar extends StatelessWidget {
               ),
             ],
           ),
-          ElevatedButton(
-            onPressed: isSaving ? null : onSave,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text(
-                    'Save',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.1,
-                    ),
-                  ),
+          AddPillButton(
+            label: 'Save',
+            icon: Icons.check_rounded,
+            isLoading: isSaving,
+            onPressed: onSave,
           ),
         ],
       ),
@@ -486,10 +529,12 @@ class _AddSubsectionTopBar extends StatelessWidget {
 class _SectionField extends StatelessWidget {
   final String selectedTitle;
   final VoidCallback onTap;
+  final bool isLoading;
 
   const _SectionField({
     required this.selectedTitle,
     required this.onTap,
+    this.isLoading = false,
   });
 
   @override
@@ -507,7 +552,7 @@ class _SectionField extends StatelessWidget {
         ),
         const VGapSm(),
         InkWell(
-          onTap: onTap,
+          onTap: isLoading ? null : onTap,
           borderRadius: BorderRadius.circular(12),
           child: Container(
             height: 50,
@@ -520,19 +565,33 @@ class _SectionField extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  selectedTitle,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
+                Expanded(
+                  child: Text(
+                    selectedTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF9CA3AF),
-                  size: 22,
-                ),
+                if (isLoading)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: Color(0xFF9CA3AF),
+                    size: 22,
+                  ),
               ],
             ),
           ),

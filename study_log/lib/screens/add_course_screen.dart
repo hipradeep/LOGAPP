@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
@@ -378,33 +379,11 @@ class _AddCourseTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Material(
-            color: AppTheme.primaryColor,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              onTap: isSubmitting ? null : onSave,
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Save',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ),
+          AddPillButton(
+            label: 'Save',
+            icon: Icons.check_rounded,
+            isLoading: isSubmitting,
+            onPressed: onSave,
           ),
         ],
       ),

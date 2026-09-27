@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/course.dart';
 import '../models/section.dart';
 import '../models/subsection.dart';
+import '../models/revision.dart';
 
 /// Firebase Firestore Service with graceful fallbacks.
 /// If Firebase is unavailable or uninitialized on the current platform,
@@ -103,6 +104,12 @@ class FirestoreService {
     await docRef.set(sectionToSave.toMap());
   }
 
+  Future<void> updateSection(Section section) async {
+    final ref = _sectionsRef;
+    if (ref == null) return;
+    await ref.doc(section.id).update(section.toMap());
+  }
+
   Future<void> deleteSection(String sectionId) async {
     final ref = _sectionsRef;
     if (ref == null) return;
@@ -141,5 +148,47 @@ class FirestoreService {
     final docRef = subsection.id.isEmpty ? ref.doc() : ref.doc(subsection.id);
     final subToSave = subsection.id.isEmpty ? subsection.copyWith(id: docRef.id) : subsection;
     await docRef.set(subToSave.toMap());
+  }
+
+  // === REVISIONS ===
+  CollectionReference<Map<String, dynamic>>? get _revisionsRef =>
+      _firestore?.collection('revisions');
+
+  Stream<List<Revision>> streamRevisions() {
+    final ref = _revisionsRef;
+    if (ref == null) {
+      return const Stream.empty();
+    }
+    return ref.snapshots().map((snapshot) {
+      final list = <Revision>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Revision.fromMap(doc.data(), documentId: doc.id));
+        } catch (e) {
+          // Skip corrupt document safely
+        }
+      }
+      return list;
+    });
+  }
+
+  Future<void> addRevision(Revision revision) async {
+    final ref = _revisionsRef;
+    if (ref == null) return;
+    final docRef = revision.id.isEmpty ? ref.doc() : ref.doc(revision.id);
+    final toSave = revision.id.isEmpty ? revision.copyWith(id: docRef.id) : revision;
+    await docRef.set(toSave.toMap());
+  }
+
+  Future<void> updateRevision(Revision revision) async {
+    final ref = _revisionsRef;
+    if (ref == null) return;
+    await ref.doc(revision.id).update(revision.toMap());
+  }
+
+  Future<void> deleteRevision(String revisionId) async {
+    final ref = _revisionsRef;
+    if (ref == null) return;
+    await ref.doc(revisionId).delete();
   }
 }

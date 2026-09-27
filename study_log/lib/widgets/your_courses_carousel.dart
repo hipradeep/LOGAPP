@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_sections_controller.dart';
 import '../models/course.dart';
 import '../services/service_locator.dart';
 
 /// "Your Courses" horizontal carousel — dynamic from CoursesController.
 /// - Listens to CoursesController via ListenableBuilder (surgical rebuild, Rule 3)
+/// - Shows up to 4 courses ordered by highest module completion, completed last
 /// - Cycling pastel color palette per card index
 /// - Shows loading shimmer, empty state, and a "More" card when > 4 courses
 class YourCoursesCarousel extends StatefulWidget {
@@ -63,6 +65,9 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
   @override
   Widget build(BuildContext context) {
     final controller = getIt<CoursesController>();
+    final ongoing = getIt.isRegistered<OngoingSectionsController>()
+        ? getIt<OngoingSectionsController>()
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -70,11 +75,11 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
         _HeaderRow(onMoreTap: widget.onMoreTap),
         const VGapMd(),
         ListenableBuilder(
-          listenable: controller,
+          listenable: ongoing ?? controller,
           builder: (context, _) {
             if (controller.isLoading && controller.courses.isEmpty) {
               return const SizedBox(
-                height: 146,
+                height: 128,
                 child: Center(
                   child: SizedBox(
                     width: 24,
@@ -91,12 +96,28 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
               return _EmptyCourseCard(onTap: widget.onMoreTap);
             }
 
+            // Completed courses are pushed to the end; the rest are ordered by
+            // highest module completion first.
+            final sorted = [...courses]..sort((a, b) {
+              final pa = ongoing?.progressForCourse(a.id);
+              final pb = ongoing?.progressForCourse(b.id);
+              final aComplete = pa?.isComplete ?? false;
+              final bComplete = pb?.isComplete ?? false;
+              if (aComplete != bComplete) return aComplete ? 1 : -1;
+              final ra = pa?.ratio ?? 0.0;
+              final rb = pb?.ratio ?? 0.0;
+              if (ra == rb) return 0;
+              return rb.compareTo(ra);
+            });
+
             // Show up to 4 courses + "More" card
-            final displayed = courses.length > 4 ? courses.sublist(0, 4) : courses;
-            final showMore = courses.length > 4;
+            const maxVisible = 4;
+            final displayed =
+                sorted.length > maxVisible ? sorted.sublist(0, maxVisible) : sorted;
+            final showMore = sorted.length > maxVisible;
 
             return SizedBox(
-              height: 146,
+              height: 128,
               child: ListView.separated(
                 controller: _scrollController,
                 scrollDirection: Axis.horizontal,
@@ -110,15 +131,20 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
                   }
                   final course = displayed[index];
                   final palette = _cardPalettes[index % _cardPalettes.length];
+                  final progress = ongoing?.progressForCourse(course.id);
+                  final isComplete = progress?.isComplete ?? false;
                   return _YourCourseCard(
                     title: course.title,
-                    subtitle: _subtitleFor(course),
-                    progress: 0.0,
-                    progressLabel: '0%',
+                    subtitle: _subtitleFor(course, progress),
+                    progress: progress?.ratio ?? 0.0,
+                    progressLabel: progress == null || !progress.hasModules
+                        ? '0%'
+                        : '${(progress.ratio * 100).round()}%',
+                    isComplete: isComplete,
                     icon: _iconFor(index),
                     bgColor: palette.bg,
                     borderColor: palette.border,
-                    accentColor: palette.accent,
+                    accentColor: isComplete ? AppTheme.successColor : palette.accent,
                     onTap: () => widget.onCourseTap?.call(course.title),
                   );
                 },
@@ -135,7 +161,11 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
     );
   }
 
-  String _subtitleFor(Course course) {
+  String _subtitleFor(Course course, CourseModuleProgress? progress) {
+    if (progress != null) {
+      if (!progress.hasModules) return 'No modules yet';
+      return '${progress.completedModules} / ${progress.totalModules} modules';
+    }
     if (course.description.isNotEmpty) {
       return course.description.length > 22
           ? '${course.description.substring(0, 22)}…'
@@ -256,7 +286,7 @@ class _MoreCoursesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: Container(
-        width: 120,
+        width: 104,
         decoration: BoxDecoration(
           color: const Color(0xFFF8F7FF),
           borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -302,6 +332,7 @@ class _YourCourseCard extends StatelessWidget {
   final Color bgColor;
   final Color borderColor;
   final Color accentColor;
+  final bool isComplete;
   final VoidCallback? onTap;
 
   const _YourCourseCard({
@@ -313,6 +344,7 @@ class _YourCourseCard extends StatelessWidget {
     required this.bgColor,
     required this.borderColor,
     required this.accentColor,
+    this.isComplete = false,
     this.onTap,
   });
 
@@ -320,7 +352,7 @@ class _YourCourseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: Container(
-        width: 138,
+        width: 120,
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -332,22 +364,23 @@ class _YourCourseCard extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
                       border: Border.all(color: borderColor),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(icon, color: accentColor, size: 20),
+                    child: Icon(icon, color: accentColor, size: 16),
                   ),
+                  const VGapSm(),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -355,7 +388,7 @@ class _YourCourseCard extends StatelessWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textPrimary,
                         ),
@@ -365,16 +398,20 @@ class _YourCourseCard extends StatelessWidget {
                       const VGapXs(),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                          fontWeight: FontWeight.w500,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isComplete
+                              ? AppTheme.successColor
+                              : AppTheme.textSecondary,
+                          fontWeight:
+                              isComplete ? FontWeight.w700 : FontWeight.w500,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
+                  const VGapXs(),
                   Row(
                     children: [
                       Expanded(
@@ -388,11 +425,11 @@ class _YourCourseCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const HGapSm(),
+                      const HGapXs(),
                       Text(
                         progressLabel,
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textPrimary,
                         ),

@@ -3,17 +3,30 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
-/// "Today's Progress" card widget matching the reference design:
+/// "Today's Progress" card matching the reference design:
 /// - Header with "Today's Progress" and dynamic formatted date
-/// - Surface card with 4 stats: Completed (3), Revisions Due (5), Daily Goal (62%), Day Streak (4)
+/// - Surface card with 4 stats derived from real topic data:
+///   Completed today, topics still pending, overall goal ratio, day streak
 class TodayProgressCard extends StatelessWidget {
-  const TodayProgressCard({super.key});
+  final int completedToday;
+  final int pendingCount;
+  final int dayStreak;
+  final double goalProgress;
+
+  const TodayProgressCard({
+    super.key,
+    required this.completedToday,
+    required this.pendingCount,
+    required this.dayStreak,
+    required this.goalProgress,
+  });
 
   static final DateFormat _dateFormat = DateFormat('EEE, d MMM yyyy');
 
   @override
   Widget build(BuildContext context) {
     final dateString = _dateFormat.format(DateTime.now());
+    final goalPercent = (goalProgress * 100).round().clamp(0, 100);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,32 +69,32 @@ class TodayProgressCard extends StatelessWidget {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _StatItem(
                 icon: Icons.check_circle_rounded,
-                iconColor: Color(0xFF10B981),
-                value: '3',
+                iconColor: const Color(0xFF10B981),
+                value: '$completedToday',
                 label: 'Completed',
               ),
               _StatItem(
                 icon: Icons.sync_rounded,
-                iconColor: Color(0xFF6366F1),
-                value: '5',
+                iconColor: const Color(0xFF6366F1),
+                value: '$pendingCount',
                 label: 'Revisions Due',
                 isCircleFilled: true,
               ),
               _StatItem(
                 icon: Icons.calendar_today_rounded,
-                iconColor: Color(0xFF3B82F6),
-                value: '62%',
+                iconColor: const Color(0xFF3B82F6),
+                value: '$goalPercent%',
                 label: 'Daily Goal',
               ),
               _StatItem(
                 icon: Icons.local_fire_department_rounded,
-                iconColor: Color(0xFFF97316),
-                value: '4',
+                iconColor: const Color(0xFFF97316),
+                value: '$dayStreak',
                 label: 'Day Streak',
               ),
             ],

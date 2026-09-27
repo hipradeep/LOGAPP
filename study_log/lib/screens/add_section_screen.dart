@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/sections_controller.dart';
+import '../models/section.dart';
 
 /// Redesigned Standalone Add Module Screen matching the reference design:
 /// - Top bar with Back button, "Add Module" title, and purple "Save" button
@@ -18,13 +20,17 @@ class AddSectionScreen extends StatefulWidget {
   final String courseId;
   final String courseTitle;
   final SectionsController? sectionsController;
+  final Section? sectionToEdit;
 
   const AddSectionScreen({
     super.key,
     required this.courseId,
     required this.courseTitle,
     this.sectionsController,
+    this.sectionToEdit,
   });
+
+  bool get isEditing => sectionToEdit != null;
 
   @override
   State<AddSectionScreen> createState() => _AddSectionScreenState();
@@ -51,6 +57,15 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
     _descriptionController.addListener(_onDescChanged);
     _selectedCourseTitle = widget.courseTitle;
     _selectedCourseId = widget.courseId;
+
+    final editing = widget.sectionToEdit;
+    if (editing != null) {
+      _titleController.text = editing.title;
+      _descriptionController.text = editing.description;
+      _orderController.text = '${editing.orderIndex}';
+      _descLength = editing.description.length;
+      _selectedCourseId = editing.courseId.isNotEmpty ? editing.courseId : widget.courseId;
+    }
   }
 
   @override
@@ -79,6 +94,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
   }
 
   void _openCourseSelector() {
+    if (widget.isEditing) return;
     final allCourses = getIt<CoursesController>().courses;
     if (allCourses.isEmpty) return;
 
@@ -261,18 +277,33 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
       final controller = widget.sectionsController ??
           SectionsController(courseId: _selectedCourseId);
 
-      await controller.addSection(
-        title: title,
-        description: description,
-        orderIndex: order,
-        status: 'active',
-      );
+      final editing = widget.sectionToEdit;
+      if (editing != null) {
+        await controller.updateSection(
+          editing.copyWith(
+            title: title,
+            description: description,
+            orderIndex: order,
+          ),
+        );
+      } else {
+        await controller.addSection(
+          title: title,
+          description: description,
+          orderIndex: order,
+          status: 'active',
+        );
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Module "$title" added successfully'),
+          content: Text(
+            editing != null
+                ? 'Module "$title" updated successfully'
+                : 'Module "$title" added successfully',
+          ),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -285,7 +316,11 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to add module: $e'),
+          content: Text(
+            widget.isEditing
+                ? 'Failed to update module: $e'
+                : 'Failed to add module: $e',
+          ),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -303,6 +338,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
         child: Column(
           children: [
             _AddSectionTopBar(
+              title: widget.isEditing ? 'Edit Module' : 'Add Module',
               onBack: _handleBack,
               onSave: _handleSubmit,
               isSubmitting: _isSubmitting,
@@ -319,11 +355,13 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _CourseSelectorField(
-                      courseTitle: _selectedCourseTitle,
-                      onTap: _openCourseSelector,
-                    ),
-                    const VGapLg(),
+                    if (!widget.isEditing) ...[
+                      _CourseSelectorField(
+                        courseTitle: _selectedCourseTitle,
+                        onTap: _openCourseSelector,
+                      ),
+                      const VGapLg(),
+                    ],
                     _SectionNameField(controller: _titleController),
                     const VGapLg(),
                     _SectionDescriptionField(
@@ -359,11 +397,13 @@ class _AddSectionTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSave;
   final bool isSubmitting;
+  final String title;
 
   const _AddSectionTopBar({
     required this.onBack,
     required this.onSave,
     required this.isSubmitting,
+    this.title = 'Add Module',
   });
 
   @override
@@ -382,9 +422,9 @@ class _AddSectionTopBar extends StatelessWidget {
             tooltip: 'Back',
           ),
           const HGapXs(),
-          const Text(
-            'Add Module',
-            style: TextStyle(
+          Text(
+            title,
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
@@ -392,33 +432,11 @@ class _AddSectionTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Material(
-            color: AppTheme.primaryColor,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              onTap: isSubmitting ? null : onSave,
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                child: isSubmitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Save',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ),
+          AddPillButton(
+            label: 'Save',
+            icon: Icons.check_rounded,
+            isLoading: isSubmitting,
+            onPressed: onSave,
           ),
         ],
       ),

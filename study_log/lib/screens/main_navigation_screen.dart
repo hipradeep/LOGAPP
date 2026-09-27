@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/service_locator.dart';
+import '../controllers/revision_controller.dart';
+import '../models/revision.dart';
 import 'home_screen.dart';
 import 'revision_screen.dart';
+import 'revision_detail_screen.dart';
 import 'calendar_screen.dart';
 import 'profile_screen.dart';
 
 /// Root navigation screen housing the 4 core tabs:
 /// - Home
-/// - Revision (empty)
+/// - Revision (R1 -> R5 spaced repetition ladder)
 /// - Calendar (empty)
-/// - Profile (empty)
+/// - Profile
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -20,12 +24,31 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final ValueNotifier<int> _currentIndex = ValueNotifier<int>(0);
 
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    RevisionScreen(),
-    CalendarScreen(),
-    ProfileScreen(),
-  ];
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      const HomeScreen(),
+      RevisionScreen(
+        revisionController: getIt<RevisionController>(),
+        onBack: () => _onTabSelected(0),
+        onOpenRevision: _openRevisionDetail,
+      ),
+      const CalendarScreen(),
+      const ProfileScreen(),
+    ];
+  }
+
+  void _openRevisionDetail(Revision revision) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RevisionDetailScreen(revision: revision),
+      ),
+    );
+  }
 
   @override
   void dispose() {

@@ -3,8 +3,10 @@ import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_subsection_storage.dart';
+import '../services/local_revision_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
+import '../controllers/revision_controller.dart';
 import 'courses_screen.dart';
 import 'upload_json_screen.dart';
 
@@ -63,8 +65,12 @@ class ProfileScreen extends StatelessWidget {
       await Future.wait([
         LocalCourseStorage.clearAll(),
         LocalSubsectionStorage.clearAll(),
+        LocalRevisionStorage.clearAll(),
       ]);
       getIt<CoursesController>().refresh();
+      if (getIt.isRegistered<RevisionController>()) {
+        await getIt<RevisionController>().reconcile();
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

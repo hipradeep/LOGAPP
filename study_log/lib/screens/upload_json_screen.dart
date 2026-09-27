@@ -10,7 +10,7 @@ import '../models/section.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_section_storage.dart';
 import '../services/local_subsection_storage.dart';
-import '../screens/section_detail_screen.dart';
+import '../models/subsection_item.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 
@@ -229,6 +229,8 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
 
           final subItem = SubsectionItem(
             id: subMap['id']?.toString() ?? '${sectionId}_sub_$ssIdx',
+            courseId: courseId,
+            sectionId: sectionId,
             title: subMap['title']?.toString() ?? 'Untitled Subsection',
             description: subMap['description']?.toString() ?? '',
             orderIndex: (subMap['orderIndex'] as num?)?.toInt() ?? ssIdx,

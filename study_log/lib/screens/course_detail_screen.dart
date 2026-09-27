@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/course.dart';
 import '../models/section.dart';
 import '../theme/app_theme.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/study_confirmation_dialog.dart';
 import '../widgets/course_options_sheet.dart';
+import '../widgets/section_options_sheet.dart';
 import '../controllers/sections_controller.dart';
+import '../controllers/ongoing_sections_controller.dart';
+import '../services/service_locator.dart';
 import 'section_detail_screen.dart';
 import 'add_section_screen.dart';
 
@@ -49,13 +52,16 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     Navigator.of(context).pop();
   }
 
-  void _openSectionDetail(String sectionTitle) {
+  void _openSectionDetail(Section section, int orderIndex) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SectionDetailScreen(
-          sectionTitle: sectionTitle,
+          sectionTitle: section.title,
           courseTitle: widget.course.title,
+          courseId: widget.course.id,
+          sectionId: section.id,
+          sectionOrderIndex: orderIndex,
         ),
       ),
     );
@@ -144,10 +150,26 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               onOptions: _openOptionsMenu,
             ),
             ListenableBuilder(
-              listenable: _sectionsController,
+              listenable: Listenable.merge([
+                _sectionsController,
+                if (getIt.isRegistered<OngoingSectionsController>())
+                  getIt<OngoingSectionsController>(),
+              ]),
               builder: (context, _) {
                 final sections = _sectionsController.sections;
-                final completedCount = sections.where((s) => s.status.toLowerCase() == 'completed').length;
+                final ongoing = getIt.isRegistered<OngoingSectionsController>()
+                    ? getIt<OngoingSectionsController>()
+                    : null;
+                // Derive module completion from real topic state rather than the
+                // Section's stored `status` string, which is never rewritten when
+                // topics are ticked off.
+                var completedCount = 0;
+                for (final s in sections) {
+                  final complete = ongoing != null
+                      ? ongoing.isSectionComplete(s.id)
+                      : s.status.toLowerCase() == 'completed';
+                  if (complete) completedCount++;
+                }
                 final totalCount = sections.length;
                 final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
 
@@ -156,16 +178,39 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
-                      child: Text(
-                        widget.course.title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                          letterSpacing: -0.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppTheme.pastelPurple,
+                              borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
+                              border: Border.all(color: AppTheme.pastelPurpleBorder),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.school_rounded,
+                              color: AppTheme.pastelPurpleText,
+                              size: 22,
+                            ),
+                          ),
+                          const HGapSm(),
+                          Expanded(
+                            child: Text(
+                              widget.course.title,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5,
+                                height: 1.15,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const VGapXs(),
@@ -234,6 +279,8 @@ class _CourseDetailTopBar extends StatelessWidget {
     required this.onOptions,
   });
 
+  static const String _eyebrow = 'Course';
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -251,49 +298,19 @@ class _CourseDetailTopBar extends StatelessWidget {
           ),
           const HGapXs(),
           Expanded(
-            child: const Text(
-              'Course',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.3,
+            child: Text(
+              _eyebrow.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+                letterSpacing: 1.0,
               ),
             ),
           ),
-          Material(
-            color: const Color(0xFFF5F3FF),
-            borderRadius: BorderRadius.circular(8),
-            child: InkWell(
-              onTap: onAddSection,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFDDD6FE)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.add_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 16,
-                    ),
-                    HGapXs(),
-                    Text(
-                      'Add Module',
-                      style: TextStyle(
-                        color: AppTheme.primaryColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          AddPillButton(
+            label: 'Add Module',
+            onPressed: onAddSection,
           ),
           const HGapSm(),
           IconButton(
@@ -502,7 +519,7 @@ class _CourseProgressHeader extends StatelessWidget {
 class _CourseSectionsListView extends StatelessWidget {
   final Course course;
   final SectionsController sectionsController;
-  final ValueChanged<String> onSectionTap;
+  final void Function(Section, int) onSectionTap;
   final VoidCallback onAddSection;
   final double bottomPadding;
 
@@ -524,9 +541,16 @@ class _CourseSectionsListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: sectionsController,
+      listenable: Listenable.merge([
+        sectionsController,
+        if (getIt.isRegistered<OngoingSectionsController>())
+          getIt<OngoingSectionsController>(),
+      ]),
       builder: (context, _) {
         final dynamicSections = sectionsController.sections;
+        final ongoing = getIt.isRegistered<OngoingSectionsController>()
+            ? getIt<OngoingSectionsController>()
+            : null;
 
         if (dynamicSections.isEmpty) {
           return Center(
@@ -591,36 +615,28 @@ class _CourseSectionsListView extends StatelessWidget {
           itemBuilder: (context, index) {
             final Section section = dynamicSections[index];
             final color = _badgeColorCycle[index % _badgeColorCycle.length];
+            final topicCount = ongoing?.topicCountForSection(section.id) ?? 0;
+            final completedTopics =
+                ongoing?.completedTopicCountForSection(section.id) ?? 0;
+            final isComplete = topicCount > 0 && completedTopics >= topicCount;
             return _SectionListItem(
               number: index + 1,
               title: section.title,
               subtitle: section.description.isNotEmpty
                   ? section.description
-                  : '0 topics',
-              badgeColor: color,
-              onTap: () => onSectionTap(section.title),
-              onLongPress: () async {
-                final confirmed = await StudyConfirmationDialog.showDeleteSection(
-                  context,
-                  sectionTitle: section.title,
-                );
-                if (confirmed && context.mounted) {
-                  await sectionsController.deleteSection(section.id);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Module "${section.title}" deleted'),
-                        backgroundColor: AppTheme.primaryColor,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                        ),
-                      ),
-                    );
-                  }
-                }
-              },
-            );
+                  : topicCount > 0
+                      ? '$completedTopics / $topicCount topics'
+                      : 'No topics yet',
+              isComplete: isComplete,
+              badgeColor: isComplete ? AppTheme.successColor : color,
+              onTap: () => onSectionTap(section, index),
+              onLongPress: () => SectionOptionsSheet.show(
+                context,
+                section: section,
+                courseTitle: course.title,
+                sectionsController: sectionsController,
+              ),
+            );  
           },
         );
       },
@@ -633,6 +649,7 @@ class _SectionListItem extends StatelessWidget {
   final String title;
   final String subtitle;
   final Color badgeColor;
+  final bool isComplete;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -641,6 +658,7 @@ class _SectionListItem extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.badgeColor,
+    this.isComplete = false,
     this.onTap,
     this.onLongPress,
   });
@@ -666,14 +684,20 @@ class _SectionListItem extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    '$number',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
+                  child: isComplete
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        )
+                      : Text(
+                          '$number',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
                 ),
                 const HGapMd(),
                 // Title & Subsections Subtitle
@@ -684,23 +708,53 @@ class _SectionListItem extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: isComplete
+                              ? AppTheme.textSecondary
+                              : AppTheme.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const VGapXs(),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          if (isComplete) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'COMPLETED',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF10B981),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            const HGapXs(),
+                          ],
+                          Expanded(
+                            child: Text(
+                              subtitle,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

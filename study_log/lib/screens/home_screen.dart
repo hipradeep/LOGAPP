@@ -7,6 +7,7 @@ import '../widgets/your_courses_carousel.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_sections_controller.dart';
+import '../controllers/revision_controller.dart';
 import '../models/course.dart';
 import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     getIt<CoursesController>();
     getIt<OngoingSectionsController>();
+    getIt<RevisionController>();
   }
 
   void _openCourseDetail(BuildContext context, Course course) {
@@ -42,13 +44,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openSectionDetail(String sectionTitle, String courseTitle) {
+  void _openSectionDetail(
+    String sectionTitle,
+    String courseTitle,
+    String courseId,
+    String sectionId,
+    int orderIndex,
+  ) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SectionDetailScreen(
           sectionTitle: sectionTitle,
           courseTitle: courseTitle,
+          courseId: courseId,
+          sectionId: sectionId,
+          sectionOrderIndex: orderIndex,
         ),
       ),
     );
@@ -111,6 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
               sliver: SliverToBoxAdapter(
                 child: _HomeTopSection(
+                  ongoingController: ongoingController,
                   onViewAll: _handleViewAll,
                   onCourseTap: _openCourseByTitle,
                 ),
@@ -255,10 +267,12 @@ class _CurrentSectionsHeader extends StatelessWidget {
 }
 
 class _HomeTopSection extends StatelessWidget {
+  final OngoingSectionsController ongoingController;
   final VoidCallback onViewAll;
   final ValueChanged<String> onCourseTap;
 
   const _HomeTopSection({
+    required this.ongoingController,
     required this.onViewAll,
     required this.onCourseTap,
   });
@@ -276,7 +290,18 @@ class _HomeTopSection extends StatelessWidget {
           onCourseTap: onCourseTap,
         ),
         const VGapLg(),
-        const TodayProgressCard(),
+        ListenableBuilder(
+          listenable: Listenable.merge([
+            ongoingController,
+            getIt<RevisionController>(),
+          ]),
+          builder: (context, _) => TodayProgressCard(
+            completedToday: ongoingController.completedTodayCount,
+            pendingCount: getIt<RevisionController>().dueCount,
+            dayStreak: ongoingController.dayStreakCount,
+            goalProgress: ongoingController.goalProgress,
+          ),
+        ),
         const VGapLg(),
         _CurrentSectionsHeader(onViewAll: onViewAll),
         const VGapSm(),
@@ -287,7 +312,7 @@ class _HomeTopSection extends StatelessWidget {
 
 class _CurrentSectionsSliverList extends StatelessWidget {
   final OngoingSectionsController ongoingController;
-  final void Function(String, String) onSectionTap;
+  final void Function(String, String, String, String, int) onSectionTap;
   final void Function(BuildContext) onAddCourse;
   final VoidCallback onViewAll;
 
@@ -368,7 +393,13 @@ class _CurrentSectionsSliverList extends StatelessWidget {
                 index: index,
                 progress: item.progress,
                 onTap: () {
-                  onSectionTap(item.section.title, item.course.title);
+                  onSectionTap(
+                    item.section.title,
+                    item.course.title,
+                    item.course.id,
+                    item.section.id,
+                    item.section.orderIndex,
+                  );
                 },
                 onLongPress: () async {
                   final confirmed = await StudyConfirmationDialog.showDeleteSection(

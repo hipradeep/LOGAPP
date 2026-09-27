@@ -1,98 +1,28 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/study_confirmation_dialog.dart';
+import '../models/subsection_item.dart';
 import '../services/local_subsection_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_sections_controller.dart';
 import 'add_subsection_screen.dart';
 
-enum SubsectionStatus {
-  completed,
-  inProgress,
-  notStarted,
-}
-
-class SubsectionItem {
-  final String id;
-  final String title;
-  final SubsectionStatus status;
-  final String description;
-  final int orderIndex;
-  final int? iconCodePoint;
-  final int? colorValue;
-
-  const SubsectionItem({
-    required this.id,
-    required this.title,
-    required this.status,
-    this.description = '',
-    this.orderIndex = 0,
-    this.iconCodePoint,
-    this.colorValue,
-  });
-
-  SubsectionItem copyWith({
-    String? id,
-    String? title,
-    SubsectionStatus? status,
-    String? description,
-    int? orderIndex,
-    int? iconCodePoint,
-    int? colorValue,
-  }) {
-    return SubsectionItem(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      status: status ?? this.status,
-      description: description ?? this.description,
-      orderIndex: orderIndex ?? this.orderIndex,
-      iconCodePoint: iconCodePoint ?? this.iconCodePoint,
-      colorValue: colorValue ?? this.colorValue,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'status': status.name,
-      'description': description,
-      'orderIndex': orderIndex,
-      'iconCodePoint': iconCodePoint,
-      'colorValue': colorValue,
-    };
-  }
-
-  factory SubsectionItem.fromMap(Map<String, dynamic> map) {
-    SubsectionStatus parsedStatus = SubsectionStatus.notStarted;
-    final statusStr = map['status'] as String?;
-    if (statusStr == 'completed') {
-      parsedStatus = SubsectionStatus.completed;
-    } else if (statusStr == 'inProgress') {
-      parsedStatus = SubsectionStatus.inProgress;
-    }
-    return SubsectionItem(
-      id: map['id'] as String? ?? '',
-      title: map['title'] as String? ?? '',
-      status: parsedStatus,
-      description: map['description'] as String? ?? '',
-      orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
-      iconCodePoint: (map['iconCodePoint'] as num?)?.toInt(),
-      colorValue: (map['colorValue'] as num?)?.toInt(),
-    );
-  }
-}
-
- 
 class SectionDetailScreen extends StatefulWidget {
   final String sectionTitle;
   final String courseTitle;
+  final String courseId;
+  final String sectionId;
+  final int sectionOrderIndex;
 
   const SectionDetailScreen({
     super.key,
     required this.sectionTitle,
     this.courseTitle = 'DSA',
+    this.courseId = '',
+    this.sectionId = '',
+    this.sectionOrderIndex = 0,
   });
 
   @override
@@ -109,7 +39,10 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
   }
 
   Future<void> _loadSubsections() async {
-    final cached = await LocalSubsectionStorage.loadSubsections(widget.sectionTitle);
+    final cached = await LocalSubsectionStorage.loadSubsectionsForSection(
+      sectionId: widget.sectionId,
+      fallbackTitle: widget.sectionTitle,
+    );
     if (!mounted) return;
     setState(() => _subsections = cached);
   }
@@ -125,6 +58,8 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
         builder: (_) => AddSubsectionScreen(
           sectionTitle: widget.sectionTitle,
           courseTitle: widget.courseTitle,
+          courseId: widget.courseId,
+          sectionId: widget.sectionId,
         ),
       ),
     );
@@ -155,7 +90,9 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
           next = SubsectionStatus.notStarted;
           break;
       }
-      _subsections[index] = current.copyWith(status: next);
+      _subsections[index] = next == SubsectionStatus.completed
+          ? current.copyWith(status: next, completedAt: DateTime.now())
+          : current.copyWith(status: next, clearCompletedAt: true);
     });
     LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
     if (getIt.isRegistered<OngoingSectionsController>()) {
@@ -206,22 +143,47 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
         child: Column(
           children: [
             _SectionDetailTopBar(
-              title: widget.sectionTitle,
               onBack: _handleBack,
               onAddSubsection: _openAddSubsectionScreen,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
-              child: Text(
-                widget.sectionTitle+"HHH",
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.2,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppTheme.pastelPurple,
+                      borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
+                      border: Border.all(color: AppTheme.pastelPurpleBorder),
+                    ),
+                    child: Text(
+                      '${widget.sectionOrderIndex + 1}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.pastelPurpleText,
+                      ),
+                    ),
+                  ),
+                  const HGapSm(),
+                  Expanded(
+                    child: Text(
+                      widget.sectionTitle,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -0.5,
+                        height: 1.15,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
             const VGapXs(),
@@ -253,12 +215,10 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
 // === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
 
 class _SectionDetailTopBar extends StatelessWidget {
-  final String title;
   final VoidCallback onBack;
   final VoidCallback onAddSubsection;
 
   const _SectionDetailTopBar({
-    required this.title,
     required this.onBack,
     required this.onAddSubsection,
   });
@@ -286,49 +246,19 @@ class _SectionDetailTopBar extends StatelessWidget {
               ),
               const HGapSm(),
               const Text(
-                'Module',
+                'MODULE',
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.3,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 1.0,
                 ),
               ),
             ],
           ),
-          InkWell(
-            onTap: onAddSubsection,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: AppTheme.primaryColor,
-                  width: 1.2,
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.add_rounded,
-                    color: AppTheme.primaryColor,
-                    size: 16,
-                  ),
-                  HGapXs(),
-                  Text(
-                    'Add Topic',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          AddPillButton(
+            label: 'Add Topic',
+            onPressed: onAddSubsection,
           ),
         ],
       ),
