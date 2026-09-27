@@ -64,28 +64,45 @@ class _ProfileSheetState extends State<ProfileSheet> {
     }
   }
 
-  void _onSubmitCourse() {
+  bool _isSubmitting = false;
+
+  void _onSubmitCourse() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
 
     final description = _descriptionController.text.trim();
-    getIt<CoursesController>().addCourse(
-      title: title,
-      description: description.isEmpty ? 'No description provided.' : description,
-      deadline: _selectedDeadline,
-    );
+    setState(() => _isSubmitting = true);
 
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Course "$title" created successfully'),
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+    try {
+      await getIt<CoursesController>().addCourse(
+        title: title,
+        description: description.isEmpty ? 'No description provided.' : description,
+        deadline: _selectedDeadline,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Course "$title" created successfully'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save course: $e'),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -241,6 +258,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
           text: 'Create Course',
           onPressed: _onSubmitCourse,
           icon: Icons.add_rounded,
+          isLoading: _isSubmitting,
         ),
       ],
     );

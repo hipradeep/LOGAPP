@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Course {
   final String id;
   final String title;
@@ -23,9 +25,9 @@ class Course {
       'title': title,
       'description': description,
       'status': status,
-      'deadline': deadline?.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'deadline': deadline != null ? Timestamp.fromDate(deadline!) : null,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
     };
   }
 
@@ -35,15 +37,9 @@ class Course {
       title: map['title'] as String? ?? '',
       description: map['description'] as String? ?? '',
       status: map['status'] as String? ?? 'active',
-      deadline: map['deadline'] != null
-          ? DateTime.tryParse(map['deadline'].toString())
-          : null,
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      deadline: _parseDateTime(map['deadline']),
+      createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
+      updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
     );
   }
 
@@ -65,5 +61,13 @@ class Course {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    return DateTime.tryParse(value.toString());
   }
 }

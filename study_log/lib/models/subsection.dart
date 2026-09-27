@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Subsection {
   final String id;
   final String courseId;
@@ -36,11 +38,11 @@ class Subsection {
       'description': description,
       'orderIndex': orderIndex,
       'status': status,
-      'scheduledStart': scheduledStart?.toIso8601String(),
-      'scheduledEnd': scheduledEnd?.toIso8601String(),
-      'completedAt': completedAt?.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'scheduledStart': scheduledStart != null ? Timestamp.fromDate(scheduledStart!) : null,
+      'scheduledEnd': scheduledEnd != null ? Timestamp.fromDate(scheduledEnd!) : null,
+      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
     };
   }
 
@@ -53,21 +55,11 @@ class Subsection {
       description: map['description'] as String? ?? '',
       orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
       status: map['status'] as String? ?? 'active',
-      scheduledStart: map['scheduledStart'] != null
-          ? DateTime.tryParse(map['scheduledStart'].toString())
-          : null,
-      scheduledEnd: map['scheduledEnd'] != null
-          ? DateTime.tryParse(map['scheduledEnd'].toString())
-          : null,
-      completedAt: map['completedAt'] != null
-          ? DateTime.tryParse(map['completedAt'].toString())
-          : null,
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      scheduledStart: _parseDateTime(map['scheduledStart']),
+      scheduledEnd: _parseDateTime(map['scheduledEnd']),
+      completedAt: _parseDateTime(map['completedAt']),
+      createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
+      updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
     );
   }
 
@@ -99,5 +91,13 @@ class Subsection {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    return DateTime.tryParse(value.toString());
   }
 }

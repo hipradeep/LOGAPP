@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Section {
   final String id;
   final String courseId;
@@ -27,8 +29,8 @@ class Section {
       'description': description,
       'orderIndex': orderIndex,
       'status': status,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
     };
   }
 
@@ -40,12 +42,8 @@ class Section {
       description: map['description'] as String? ?? '',
       orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
       status: map['status'] as String? ?? 'active',
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
+      updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
     );
   }
 
@@ -69,5 +67,13 @@ class Section {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    return DateTime.tryParse(value.toString());
   }
 }
