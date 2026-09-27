@@ -143,21 +143,36 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               onAddSection: _openAddSectionScreen,
               onOptions: _openOptionsMenu,
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: _CourseProgressHeader(
-                completedSections: 6,
-                totalSections: 20,
-                progress: 0.30,
-              ),
-            ),
-            ValueListenableBuilder<int>(
-              valueListenable: _activeTab,
-              builder: (context, activeIdx, _) {
-                return _CourseTabsRow(
-                  activeIndex: activeIdx,
-                  sectionsCount: 20,
-                  onTabSelected: _handleTabSelected,
+            ListenableBuilder(
+              listenable: _sectionsController,
+              builder: (context, _) {
+                final sections = _sectionsController.sections;
+                final completedCount = sections.where((s) => s.status.toLowerCase() == 'completed').length;
+                final totalCount = sections.length;
+                final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                      child: _CourseProgressHeader(
+                        completedSections: completedCount,
+                        totalSections: totalCount,
+                        progress: progress,
+                      ),
+                    ),
+                    ValueListenableBuilder<int>(
+                      valueListenable: _activeTab,
+                      builder: (context, activeIdx, _) {
+                        return _CourseTabsRow(
+                          activeIndex: activeIdx,
+                          sectionsCount: totalCount,
+                          onTabSelected: _handleTabSelected,
+                        );
+                      },
+                    ),
+                  ],
                 );
               },
             ),
@@ -486,84 +501,65 @@ class _CourseSectionsListView extends StatelessWidget {
     required this.bottomPadding,
   });
 
-  static const List<_SectionPreset> _defaultPresets = [
-    _SectionPreset(title: 'Arrays', subtitle: '3 / 8 subsections', badgeColor: Color(0xFF10B981)),
-    _SectionPreset(title: 'Strings', subtitle: '0 / 7 subsections', badgeColor: Color(0xFF38BDF8)),
-    _SectionPreset(title: 'Linked List', subtitle: '0 / 6 subsections', badgeColor: Color(0xFFFB923C)),
-    _SectionPreset(title: 'Stack & Queue', subtitle: '1 / 7 subsections', badgeColor: Color(0xFF818CF8)),
-    _SectionPreset(title: 'Trees', subtitle: '0 / 10 subsections', badgeColor: Color(0xFF34D399)),
-    _SectionPreset(title: 'Graphs', subtitle: '0 / 8 subsections', badgeColor: Color(0xFFFB923C)),
-    _SectionPreset(title: 'Dynamic Programming', subtitle: '0 / 5 subsections', badgeColor: Color(0xFFA78BFA)),
-  ];
-
-  static const List<Color> _badgeColorCycle = [
-    Color(0xFF10B981),
-    Color(0xFF38BDF8),
-    Color(0xFFFB923C),
-    Color(0xFF818CF8),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: sectionsController,
       builder: (context, _) {
         final dynamicSections = sectionsController.sections;
 
-        // If user has saved custom sections for this course, render them
-        if (dynamicSections.isNotEmpty) {
-          return ListView.separated(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
-            itemCount: dynamicSections.length,
-            separatorBuilder: (context, index) => const Divider(
-              height: 1,
-              indent: 72,
-              endIndent: 20,
-              color: Color(0xFFF3F4F6),
+        if (dynamicSections.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.layers_clear_outlined,
+                    size: 48,
+                    color: AppTheme.textSecondary,
+                  ),
+                  const VGapMd(),
+                  const Text(
+                    'No sections yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const VGapXs(),
+                  const Text(
+                    'Tap "+ Add Section" to add topics to this course.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const VGapMd(),
+                  ElevatedButton.icon(
+                    onPressed: onAddSection,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Add Section'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            itemBuilder: (context, index) {
-              final Section section = dynamicSections[index];
-              final color = _badgeColorCycle[index % _badgeColorCycle.length];
-              return _SectionListItem(
-                number: index + 1,
-                title: section.title,
-                subtitle: section.description.isNotEmpty
-                    ? section.description
-                    : '0 / 4 subsections',
-                badgeColor: color,
-                onTap: () => onSectionTap(section.title),
-                onLongPress: () async {
-                  final confirmed = await StudyConfirmationDialog.showDeleteSection(
-                    context,
-                    sectionTitle: section.title,
-                  );
-                  if (confirmed && context.mounted) {
-                    await sectionsController.deleteSection(section.id);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Section "${section.title}" deleted'),
-                          backgroundColor: AppTheme.primaryColor,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                          ),
-                        ),
-                      );
-                    }
-                  }
-                },
-              );
-            },
           );
         }
 
-        // Default sections matching the reference screenshot
         return ListView.separated(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
-          itemCount: _defaultPresets.length,
+          itemCount: dynamicSections.length,
           separatorBuilder: (context, index) => const Divider(
             height: 1,
             indent: 72,
@@ -571,13 +567,37 @@ class _CourseSectionsListView extends StatelessWidget {
             color: Color(0xFFF3F4F6),
           ),
           itemBuilder: (context, index) {
-            final preset = _defaultPresets[index];
+            final Section section = dynamicSections[index];
+            final color = _badgeColorCycle[index % _badgeColorCycle.length];
             return _SectionListItem(
               number: index + 1,
-              title: preset.title,
-              subtitle: preset.subtitle,
-              badgeColor: preset.badgeColor,
-              onTap: () => onSectionTap(preset.title),
+              title: section.title,
+              subtitle: section.description.isNotEmpty
+                  ? section.description
+                  : '0 subsections',
+              badgeColor: color,
+              onTap: () => onSectionTap(section.title),
+              onLongPress: () async {
+                final confirmed = await StudyConfirmationDialog.showDeleteSection(
+                  context,
+                  sectionTitle: section.title,
+                );
+                if (confirmed && context.mounted) {
+                  await sectionsController.deleteSection(section.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Section "${section.title}" deleted'),
+                        backgroundColor: AppTheme.primaryColor,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
             );
           },
         );
@@ -678,14 +698,4 @@ class _SectionListItem extends StatelessWidget {
   }
 }
 
-class _SectionPreset {
-  final String title;
-  final String subtitle;
-  final Color badgeColor;
 
-  const _SectionPreset({
-    required this.title,
-    required this.subtitle,
-    required this.badgeColor,
-  });
-}

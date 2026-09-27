@@ -103,6 +103,12 @@ class FirestoreService {
     await docRef.set(sectionToSave.toMap());
   }
 
+  Future<void> deleteSection(String sectionId) async {
+    final ref = _sectionsRef;
+    if (ref == null) return;
+    await ref.doc(sectionId).delete();
+  }
+
   // === SUBSECTIONS ===
   CollectionReference<Map<String, dynamic>>? get _subsectionsRef =>
       _firestore?.collection('subsections');

@@ -32,9 +32,9 @@ class StudyScheduleCard extends StatelessWidget {
     switch (i % 4) {
       case 0:
         return const _PastelTheme(
-          bg: AppTheme.pastelPurple,
-          border: AppTheme.pastelPurpleBorder,
-          accent: AppTheme.pastelPurpleText,
+          bg: AppTheme.pastelOrange,
+          border: AppTheme.pastelOrangeBorder,
+          accent: AppTheme.pastelOrangeText,
           icon: Icons.code_rounded,
         );
       case 1:
@@ -42,21 +42,21 @@ class StudyScheduleCard extends StatelessWidget {
           bg: AppTheme.pastelGreen,
           border: AppTheme.pastelGreenBorder,
           accent: AppTheme.pastelGreenText,
-          icon: Icons.settings_suggest_rounded,
+          icon: Icons.hub_outlined,
         );
       case 2:
-        return const _PastelTheme(
-          bg: AppTheme.pastelOrange,
-          border: AppTheme.pastelOrangeBorder,
-          accent: AppTheme.pastelOrangeText,
-          icon: Icons.smart_toy_rounded,
-        );
-      default:
         return const _PastelTheme(
           bg: AppTheme.pastelBlue,
           border: AppTheme.pastelBlueBorder,
           accent: AppTheme.pastelBlueText,
-          icon: Icons.hub_outlined,
+          icon: Icons.psychology_rounded,
+        );
+      default:
+        return const _PastelTheme(
+          bg: AppTheme.pastelPurple,
+          border: AppTheme.pastelPurpleBorder,
+          accent: AppTheme.pastelPurpleText,
+          icon: Icons.data_object_rounded,
         );
     }
   }
@@ -139,10 +139,10 @@ class StudyScheduleCard extends StatelessWidget {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(3),
                               child: LinearProgressIndicator(
-                                value: progress.clamp(0.05, 1.0),
+                                value: progress.clamp(0.0, 1.0),
                                 minHeight: 5,
                                 backgroundColor: const Color(0xFFECEEF6),
-                                valueColor: AlwaysStoppedAnimation<Color>(theme.accent),
+                                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
                               ),
                             ),
                           ),

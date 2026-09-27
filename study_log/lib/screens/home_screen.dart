@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/study_schedule_card.dart';
-import '../widgets/course_options_sheet.dart';
 import '../widgets/today_progress_card.dart';
 import '../widgets/your_courses_carousel.dart';
 import '../services/service_locator.dart';
@@ -13,6 +12,7 @@ import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 import 'courses_screen.dart';
 import 'section_detail_screen.dart';
+import '../widgets/study_confirmation_dialog.dart';
 
 /// Redesigned Home Screen matching the reference design:
 /// - "Hi, Pradeep 👋" greeting & notification bell with badge dot
@@ -120,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
               sliver: _CurrentSectionsSliverList(
                 ongoingController: ongoingController,
-                onCourseTap: _openCourseDetail,
                 onSectionTap: _openSectionDetail,
                 onAddCourse: _openAddCourse,
               ),
@@ -287,13 +286,11 @@ class _HomeTopSection extends StatelessWidget {
 
 class _CurrentSectionsSliverList extends StatelessWidget {
   final OngoingSectionsController ongoingController;
-  final void Function(BuildContext, Course) onCourseTap;
   final void Function(String, String) onSectionTap;
   final void Function(BuildContext) onAddCourse;
 
   const _CurrentSectionsSliverList({
     required this.ongoingController,
-    required this.onCourseTap,
     required this.onSectionTap,
     required this.onAddCourse,
   });
@@ -333,20 +330,36 @@ class _CurrentSectionsSliverList extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: StudyScheduleCard(
-                key: ValueKey(item.section?.id ?? item.course.id),
+                key: ValueKey(item.section.id),
                 title: item.title,
                 subtitle: item.breadcrumb,
                 progressRatio: item.progressRatio,
                 index: index,
                 progress: item.progress,
                 onTap: () {
-                  if (item.section != null) {
-                    onSectionTap(item.section!.title, item.course.title);
-                  } else {
-                    onCourseTap(context, item.course);
+                  onSectionTap(item.section.title, item.course.title);
+                },
+                onLongPress: () async {
+                  final confirmed = await StudyConfirmationDialog.showDeleteSection(
+                    context,
+                    sectionTitle: item.title,
+                  );
+                  if (confirmed && context.mounted) {
+                    await ongoingController.deleteSection(item);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Section "${item.title}" deleted'),
+                          backgroundColor: AppTheme.primaryColor,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                          ),
+                        ),
+                      );
+                    }
                   }
                 },
-                onLongPress: () => CourseOptionsSheet.show(context, course: item.course),
               ),
             );
           },
@@ -379,7 +392,7 @@ class _EmptyOngoingSectionsCard extends StatelessWidget {
           ),
           const VGapMd(),
           const Text(
-            'No ongoing courses yet',
+            'No running or upcoming sections',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -388,7 +401,7 @@ class _EmptyOngoingSectionsCard extends StatelessWidget {
           ),
           const VGapXs(),
           const Text(
-            'Add or resume a course to see your ongoing sections.',
+            'Add sections to your courses to see your study schedule here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,

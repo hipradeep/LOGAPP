@@ -112,49 +112,6 @@ class SectionDetailScreen extends StatefulWidget {
 class _SectionDetailScreenState extends State<SectionDetailScreen> {
   List<SubsectionItem> _subsections = [];
 
-  static const List<SubsectionItem> _defaultSubsections = [
-    SubsectionItem(
-      id: '1',
-      title: 'Introduction',
-      status: SubsectionStatus.completed,
-    ),
-    SubsectionItem(
-      id: '2',
-      title: 'Traversing an Array',
-      status: SubsectionStatus.completed,
-    ),
-    SubsectionItem(
-      id: '3',
-      title: 'Basic Problems',
-      status: SubsectionStatus.inProgress,
-    ),
-    SubsectionItem(
-      id: '4',
-      title: 'Two Pointer',
-      status: SubsectionStatus.notStarted,
-    ),
-    SubsectionItem(
-      id: '5',
-      title: 'Sliding Window',
-      status: SubsectionStatus.notStarted,
-    ),
-    SubsectionItem(
-      id: '6',
-      title: 'Prefix Sum',
-      status: SubsectionStatus.notStarted,
-    ),
-    SubsectionItem(
-      id: '7',
-      title: 'Sorting in Arrays',
-      status: SubsectionStatus.notStarted,
-    ),
-    SubsectionItem(
-      id: '8',
-      title: 'Binary Search',
-      status: SubsectionStatus.notStarted,
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -164,12 +121,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
   Future<void> _loadSubsections() async {
     final cached = await LocalSubsectionStorage.loadSubsections(widget.sectionTitle);
     if (!mounted) return;
-    if (cached.isNotEmpty) {
-      setState(() => _subsections = cached);
-    } else {
-      setState(() => _subsections = List<SubsectionItem>.from(_defaultSubsections));
-      await LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
-    }
+    setState(() => _subsections = cached);
   }
 
   void _handleBack() {
@@ -282,6 +234,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
                 subsections: _subsections,
                 onToggle: _toggleSubsectionStatus,
                 onDelete: _handleDeleteSubsection,
+                onAddSubsection: _openAddSubsectionScreen,
                 bottomPadding: bottomSafe + 24,
               ),
             ),
@@ -437,17 +390,69 @@ class _SubsectionsListView extends StatelessWidget {
   final List<SubsectionItem> subsections;
   final ValueChanged<int> onToggle;
   final ValueChanged<int> onDelete;
+  final VoidCallback onAddSubsection;
   final double bottomPadding;
 
   const _SubsectionsListView({
     required this.subsections,
     required this.onToggle,
     required this.onDelete,
+    required this.onAddSubsection,
     required this.bottomPadding,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (subsections.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.format_list_bulleted_rounded,
+                size: 48,
+                color: AppTheme.textSecondary,
+              ),
+              const VGapMd(),
+              const Text(
+                'No subsections yet',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const VGapXs(),
+              const Text(
+                'Tap "+ Add Subsection" to add your first topic.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const VGapMd(),
+              ElevatedButton.icon(
+                onPressed: onAddSubsection,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add Subsection'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
