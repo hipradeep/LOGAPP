@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
@@ -7,11 +8,15 @@ import '../widgets/topic_progress_header.dart';
 import '../widgets/topic_status_indicator.dart';
 import '../widgets/topic_status_label.dart';
 import '../models/topic.dart';
+import '../models/course.dart';
+import '../models/module.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
+import '../controllers/courses_controller.dart';
+import '../controllers/revision_controller.dart';
 import 'add_topic_screen.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
@@ -36,6 +41,7 @@ class ModuleDetailScreen extends StatefulWidget {
 
 class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   List<Topic> _topics = [];
+  StreamSubscription<List<Topic>>? _topicsSubscription;
 
   @override
   void initState() {
@@ -43,7 +49,14 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     _loadTopics();
   }
 
+  @override
+  void dispose() {
+    _topicsSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadTopics() async {
+    // 1. Immediately render local cached topics for zero-latency load
     final cached = await LocalTopicStorage.loadTopicsForModule(
       moduleId: widget.moduleId,
       fallbackTitle: widget.moduleTitle,
@@ -51,23 +64,36 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     if (!mounted) return;
     if (cached.isNotEmpty) {
       setState(() => _topics = cached);
+      if (cached.every((t) => t.isCompleted)) {
+        unawaited(_syncModuleCompletion());
+      }
     }
 
-    if (cached.isEmpty &&
-        widget.moduleId.isNotEmpty &&
-        getIt.isRegistered<FirestoreService>()) {
+    // 2. Real-time stream subscription from Firestore
+    if (widget.moduleId.isNotEmpty && getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable) {
-        try {
-          final remote = await firestore
-              .streamTopics(moduleId: widget.moduleId)
-              .first
-              .timeout(const Duration(milliseconds: 1500), onTimeout: () => []);
-          if (remote.isNotEmpty && mounted) {
-            setState(() => _topics = remote);
-            await LocalTopicStorage.saveTopics(widget.moduleTitle, remote);
+        _topicsSubscription?.cancel();
+        _topicsSubscription = firestore
+            .streamTopics(moduleId: widget.moduleId)
+            .listen((remoteTopics) async {
+          if (!mounted) return;
+          if (remoteTopics.isNotEmpty) {
+            setState(() => _topics = remoteTopics);
+            final key = widget.moduleId.isNotEmpty
+                ? widget.moduleId
+                : widget.moduleTitle;
+            await LocalTopicStorage.saveTopics(key, remoteTopics);
+            if (remoteTopics.every((t) => t.isCompleted)) {
+              await _syncModuleCompletion();
+            }
+            if (getIt.isRegistered<OngoingModulesController>()) {
+              getIt<OngoingModulesController>().refresh();
+            }
           }
-        } catch (_) {}
+        }, onError: (e) {
+          debugPrint('Error streaming topics from Firestore: $e');
+        });
       }
     }
   }
@@ -77,32 +103,110 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   }
 
   Future<void> _syncModuleCompletion() async {
-    if (widget.courseId.isEmpty || widget.moduleId.isEmpty) return;
+    String courseId = widget.courseId;
+    String moduleId = widget.moduleId;
+
+    // Resolve courseId and moduleId from disk cache if either is empty
+    if (courseId.isEmpty || moduleId.isEmpty) {
+      final all = await LocalModuleStorage.loadAllModules();
+      final match = all.firstWhere(
+        (m) => (moduleId.isNotEmpty && m.id == moduleId) ||
+               (widget.moduleTitle.isNotEmpty && m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
+        orElse: () => Module(id: '', courseId: '', title: '', status: '', createdAt: DateTime.now(), updatedAt: DateTime.now()),
+      );
+      if (match.id.isNotEmpty) {
+        if (courseId.isEmpty) courseId = match.courseId;
+        if (moduleId.isEmpty) moduleId = match.id;
+      }
+    }
+
+    if (courseId.isEmpty) return;
     try {
-      final modules = await LocalModuleStorage.loadModules(widget.courseId);
-      final idx = modules.indexWhere((m) => m.id == widget.moduleId);
+      final modules = await LocalModuleStorage.loadModules(courseId);
+      final idx = modules.indexWhere(
+        (m) => (moduleId.isNotEmpty && m.id == moduleId) ||
+               (widget.moduleTitle.isNotEmpty && m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
+      );
+      final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
+      final newStatus = allDone ? 'completed' : 'active';
+      final now = DateTime.now();
+
+      final Module targetModule;
       if (idx != -1) {
-        final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
-        final newStatus = allDone ? 'completed' : 'active';
         if (modules[idx].status.toLowerCase() != newStatus) {
-          final updatedModule = modules[idx].copyWith(
+          targetModule = modules[idx].copyWith(
             status: newStatus,
-            updatedAt: DateTime.now(),
+            updatedAt: now,
           );
-          modules[idx] = updatedModule;
-          await LocalModuleStorage.saveModulesForCourse(widget.courseId, modules);
+          modules[idx] = targetModule;
+          await LocalModuleStorage.saveModulesForCourse(courseId, modules);
           if (getIt.isRegistered<FirestoreService>()) {
             final fs = getIt<FirestoreService>();
             if (fs.isAvailable) {
               try {
-                await fs.updateModule(updatedModule).timeout(
+                await fs.updateModule(targetModule).timeout(
                   const Duration(seconds: 4),
                   onTimeout: () {},
                 );
               } catch (_) {}
             }
           }
+        } else {
+          targetModule = modules[idx];
         }
+      } else {
+        // Module not cached yet for this course — create and store it
+        targetModule = Module(
+          id: moduleId.isNotEmpty ? moduleId : 'module_${now.millisecondsSinceEpoch}',
+          courseId: courseId,
+          title: widget.moduleTitle,
+          status: newStatus,
+          orderIndex: widget.moduleOrderIndex,
+          createdAt: now,
+          updatedAt: now,
+        );
+        modules.add(targetModule);
+        await LocalModuleStorage.saveModulesForCourse(courseId, modules);
+        if (getIt.isRegistered<FirestoreService>()) {
+          final fs = getIt<FirestoreService>();
+          if (fs.isAvailable) {
+            try {
+              await fs.updateModule(targetModule).timeout(
+                const Duration(seconds: 4),
+                onTimeout: () {},
+              );
+            } catch (_) {}
+          }
+        }
+      }
+
+      // If all modules in this course are now completed, also update course to completed
+      if (modules.isNotEmpty && modules.every((m) => m.status.toLowerCase() == 'completed')) {
+        if (getIt.isRegistered<CoursesController>()) {
+          final coursesCtrl = getIt<CoursesController>();
+          final course = coursesCtrl.courses.firstWhere(
+            (c) => c.id == courseId,
+            orElse: () => Course(id: '', title: '', description: '', status: '', createdAt: DateTime.now(), updatedAt: DateTime.now()),
+          );
+          if (course.id.isNotEmpty && course.status.toLowerCase() != 'completed') {
+            await coursesCtrl.updateCourse(course.copyWith(status: 'completed'));
+          }
+        }
+      }
+
+      // Ensure R1 revision is created immediately for completed module
+      if (allDone && getIt.isRegistered<RevisionController>()) {
+        await getIt<RevisionController>().createOrEnsureRevision(
+          courseId: courseId,
+          moduleId: targetModule.id.isNotEmpty ? targetModule.id : moduleId,
+          courseTitle: widget.courseTitle,
+          moduleTitle: widget.moduleTitle,
+        );
+      }
+
+      // Reconcile revision ladder so any pending state is updated
+      if (getIt.isRegistered<RevisionController>()) {
+        await getIt<RevisionController>().reconcile();
       }
     } catch (e) {
       debugPrint('Error syncing module completion: $e');
@@ -126,7 +230,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       setState(() {
         _topics.add(result);
       });
-      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
+      await LocalTopicStorage.saveTopics(key, _topics);
+      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
+        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      }
       await _syncModuleCompletion();
       if (getIt.isRegistered<FirestoreService>()) {
         final firestore = getIt<FirestoreService>();
@@ -189,7 +297,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       _topics[index] = updated;
     });
 
-    await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+    final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
+    await LocalTopicStorage.saveTopics(key, _topics);
+    if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
+      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+    }
     await _syncModuleCompletion();
 
     if (getIt.isRegistered<FirestoreService>()) {
@@ -211,6 +323,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     if (getIt.isRegistered<OngoingModulesController>()) {
       await getIt<OngoingModulesController>().refresh();
     }
+    if (getIt.isRegistered<RevisionController>()) {
+      await getIt<RevisionController>().reconcile();
+    }
   }
 
   Future<void> _handleDeleteTopic(int index) async {
@@ -224,7 +339,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       setState(() {
         _topics.removeAt(index);
       });
-      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
+      await LocalTopicStorage.saveTopics(key, _topics);
+      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
+        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      }
       await _syncModuleCompletion();
 
       if (getIt.isRegistered<FirestoreService>()) {
@@ -243,6 +362,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
+      }
+      if (getIt.isRegistered<RevisionController>()) {
+        await getIt<RevisionController>().reconcile();
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

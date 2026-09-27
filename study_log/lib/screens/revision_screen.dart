@@ -100,6 +100,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    widget.revisionController.reconcile();
   }
 
   @override
@@ -225,7 +226,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
               builder: (context, _) {
                 final now = DateTime.now();
                 final revisions = _visibleRevisions(now);
-                final dueCount = revisions.where((r) => r.isDueAt(now)).length;
 
                 final String sectionTitle;
                 final int sectionCount;
@@ -243,13 +243,8 @@ class _RevisionScreenState extends State<RevisionScreen> {
                   sectionTitle = 'Finished';
                   sectionCount = revisions.length;
                 } else {
-                  if (dueCount > 0) {
-                    sectionTitle = 'Due Today';
-                    sectionCount = dueCount;
-                  } else {
-                    sectionTitle = 'All Revisions';
-                    sectionCount = revisions.length;
-                  }
+                  sectionTitle = 'All Revisions';
+                  sectionCount = revisions.length;
                 }
 
                 return _RevisionSectionHeader(
@@ -283,35 +278,45 @@ class _RevisionScreenState extends State<RevisionScreen> {
                   }
 
                   if (revisions.isEmpty) {
-                    return SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: AppEmptyState(
-                        icon: Icons.sync_rounded,
-                        title: _emptyTitleFor(),
-                        description: _emptyDescriptionFor(),
+                    return RefreshIndicator(
+                      onRefresh: () => widget.revisionController.reconcile(),
+                      color: AppTheme.primaryColor,
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        child: AppEmptyState(
+                          icon: Icons.sync_rounded,
+                          title: _emptyTitleFor(),
+                          description: _emptyDescriptionFor(),
+                        ),
                       ),
                     );
                   }
 
-                  return ListView.separated(
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
+                  return RefreshIndicator(
+                    onRefresh: () => widget.revisionController.reconcile(),
+                    color: AppTheme.primaryColor,
+                    child: ListView.separated(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        4,
+                        16,
+                        bottomSafe + 24,
+                      ),
+                      itemCount: revisions.length,
+                      separatorBuilder: (_, __) => const VGapSm(),
+                      itemBuilder: (context, index) {
+                        final revision = revisions[index];
+                        return _RevisionItemCard(
+                          revision: revision,
+                          onTap: () => widget.onOpenRevision(revision),
+                        );
+                      },
                     ),
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      4,
-                      16,
-                      bottomSafe + 24,
-                    ),
-                    itemCount: revisions.length,
-                    separatorBuilder: (_, __) => const VGapSm(),
-                    itemBuilder: (context, index) {
-                      final revision = revisions[index];
-                      return _RevisionItemCard(
-                        revision: revision,
-                        onTap: () => widget.onOpenRevision(revision),
-                      );
-                    },
                   );
                 },
               ),

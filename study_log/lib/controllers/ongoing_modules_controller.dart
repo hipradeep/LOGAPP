@@ -184,6 +184,9 @@ class OngoingModulesController extends ChangeNotifier {
                 .streamModules(courseId: course.id)
                 .first
                 .timeout(const Duration(milliseconds: 1500), onTimeout: () => []);
+            if (modules.isNotEmpty) {
+              await LocalModuleStorage.saveModulesForCourse(course.id, modules);
+            }
           } catch (_) {
             modules = [];
           }

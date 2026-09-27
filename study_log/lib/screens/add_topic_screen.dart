@@ -352,9 +352,13 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
       );
 
       // 1. Persist locally to storage cache
-      final existing = await LocalTopicStorage.loadTopics(_selectedModuleTitle);
+      final existing = await LocalTopicStorage.loadTopicsForModule(
+        moduleId: moduleId,
+        fallbackTitle: _selectedModuleTitle,
+      );
       final updated = List<Topic>.from(existing)..add(newItem);
-      await LocalTopicStorage.saveTopics(_selectedModuleTitle, updated);
+      final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
+      await LocalTopicStorage.saveTopics(key, updated);
 
       // 2. Optionally sync the same record to Firestore if configured
       if (getIt.isRegistered<FirestoreService>()) {

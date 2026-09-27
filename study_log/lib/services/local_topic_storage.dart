@@ -105,18 +105,53 @@ class LocalTopicStorage {
     String? fallbackTitle,
   }) {
     if (moduleId.isEmpty) {
-      return fallbackTitle == null ? <Topic>[] : buckets[fallbackTitle] ?? <Topic>[];
+      if (fallbackTitle == null) return <Topic>[];
+      if (buckets.containsKey(fallbackTitle)) return buckets[fallbackTitle]!;
+      for (final entry in buckets.entries) {
+        if (entry.key.toLowerCase() == fallbackTitle.toLowerCase()) {
+          return entry.value;
+        }
+      }
+      return <Topic>[];
     }
 
+    // 1. Direct key lookup by moduleId
+    if (buckets.containsKey(moduleId) && buckets[moduleId]!.isNotEmpty) {
+      return buckets[moduleId]!;
+    }
+
+    // 2. Case-insensitive key lookup for moduleId
+    for (final entry in buckets.entries) {
+      if (entry.key.toLowerCase() == moduleId.toLowerCase() && entry.value.isNotEmpty) {
+        return entry.value;
+      }
+    }
+
+    // 3. Match by item.moduleId across all buckets (with deduplication)
     final byId = <Topic>[];
+    final seen = <String>{};
     for (final items in buckets.values) {
       for (final item in items) {
-        if (item.moduleId == moduleId) byId.add(item);
+        if (item.moduleId == moduleId) {
+          final idKey = item.id.isNotEmpty ? item.id : item.title;
+          if (seen.add(idKey)) {
+            byId.add(item);
+          }
+        }
       }
     }
     if (byId.isNotEmpty) return byId;
+
+    // 4. Fallback title lookup
     if (fallbackTitle != null) {
-      return buckets[fallbackTitle] ?? <Topic>[];
+      if (buckets.containsKey(fallbackTitle)) {
+        return buckets[fallbackTitle]!;
+      }
+      for (final entry in buckets.entries) {
+        if (entry.key.toLowerCase() == fallbackTitle.toLowerCase()) {
+          return entry.value;
+        }
+      }
     }
     return <Topic>[];
   }
@@ -142,7 +177,7 @@ class LocalTopicStorage {
         }
       }
 
-      data[moduleKey] = items.map((i) => i.toMap()).toList();
+      data[moduleKey] = items.map((i) => i.toMap(forLocalJson: true)).toList();
 
       // Buckets are keyed by module title, so a renamed module would leave the
       // previous title's bucket behind holding the same records. Drop any bucket

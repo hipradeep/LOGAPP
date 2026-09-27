@@ -60,7 +60,9 @@ class FirestoreService {
   Future<void> updateCourse(Course course) async {
     final ref = _coursesRef;
     if (ref == null) return;
-    await ref.doc(course.id).set(course.toMap(), SetOptions(merge: true));
+    final docRef = course.id.isEmpty ? ref.doc() : ref.doc(course.id);
+    final courseToSave = course.id.isEmpty ? course.copyWith(id: docRef.id) : course;
+    await docRef.set(courseToSave.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteCourse(String courseId) async {
@@ -104,8 +106,10 @@ class FirestoreService {
 
   Future<void> updateModule(Module module) async {
     final ref = _modulesRef;
-    if (ref == null || module.id.isEmpty) return;
-    await ref.doc(module.id).set(module.toMap(), SetOptions(merge: true));
+    if (ref == null) return;
+    final docRef = module.id.isEmpty ? ref.doc() : ref.doc(module.id);
+    final moduleToSave = module.id.isEmpty ? module.copyWith(id: docRef.id) : module;
+    await docRef.set(moduleToSave.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteModule(String moduleId) async {
@@ -149,8 +153,10 @@ class FirestoreService {
 
   Future<void> updateTopic(Topic topic) async {
     final ref = _topicsRef;
-    if (ref == null || topic.id.isEmpty) return;
-    await ref.doc(topic.id).set(topic.toMap(), SetOptions(merge: true));
+    if (ref == null) return;
+    final docRef = topic.id.isEmpty ? ref.doc() : ref.doc(topic.id);
+    final subToSave = topic.id.isEmpty ? topic.copyWith(id: docRef.id) : topic;
+    await docRef.set(subToSave.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteTopic(String topicId) async {
@@ -190,8 +196,10 @@ class FirestoreService {
 
   Future<void> updateRevision(Revision revision) async {
     final ref = _revisionsRef;
-    if (ref == null || revision.id.isEmpty) return;
-    await ref.doc(revision.id).set(revision.toMap(), SetOptions(merge: true));
+    if (ref == null) return;
+    final docRef = revision.id.isEmpty ? ref.doc() : ref.doc(revision.id);
+    final toSave = revision.id.isEmpty ? revision.copyWith(id: docRef.id) : revision;
+    await docRef.set(toSave.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteRevision(String revisionId) async {

@@ -57,8 +57,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _onTabSelected(int index) {
-    if (_currentIndex.value == index) return;
+    if (_currentIndex.value == index) {
+      if (index == 1 && getIt.isRegistered<RevisionController>()) {
+        getIt<RevisionController>().reconcile();
+      }
+      return;
+    }
     _currentIndex.value = index;
+    if (index == 1 && getIt.isRegistered<RevisionController>()) {
+      getIt<RevisionController>().reconcile();
+    }
   }
 
   @override

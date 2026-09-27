@@ -192,13 +192,23 @@ class CoursesController extends ChangeNotifier {
     }
   }
 
-  /// Clears in-memory state and re-fetches from Firestore. Call after clearing local cache.
-  void refresh() {
-    _courses = [];
+  /// Reloads courses from local disk storage and syncs with Firestore stream.
+  Future<void> loadCourses() async {
     _deletedCourseIds.clear();
-    _isLoading = true;
-    notifyListeners();
+    try {
+      final cached = await LocalCourseStorage.loadCourses();
+      _courses = cached;
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error reloading courses: $e');
+    }
     _initStream();
+  }
+
+  /// Clears in-memory state and re-fetches from local cache & Firestore.
+  void refresh() {
+    loadCourses();
   }
 
   @override

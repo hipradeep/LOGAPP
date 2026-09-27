@@ -11,6 +11,11 @@ import '../services/local_course_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../models/topic.dart';
+import '../services/service_locator.dart';
+import '../services/firestore_service.dart';
+import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import '../controllers/revision_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 
@@ -153,6 +158,8 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     final existingIds = existingCourses.map((c) => c.id).toSet();
 
     final newCourses = List<Course>.from(existingCourses);
+    final allImportedModules = <Module>[];
+    final allImportedTopics = <Topic>[];
 
     for (final rawCourse in coursesList) {
       if (rawCourse is! Map) continue;
@@ -200,6 +207,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
           updatedAt: now,
         );
         courseModules.add(module);
+        allImportedModules.add(module);
         moduleCount++;
 
         // "subsections" is the pre-rename key; still accepted.
@@ -231,6 +239,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             colorValue: (subMap['colorValue'] as num?)?.toInt(),
           );
           topicItems.add(subItem);
+          allImportedTopics.add(subItem);
           topicCount++;
           ssIdx++;
         }
@@ -250,6 +259,38 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     }
 
     await LocalCourseStorage.saveCourses(newCourses);
+
+    // Sync imported course tree to Firestore if available
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable) {
+        for (final c in newCourses) {
+          try {
+            await firestore.updateCourse(c);
+          } catch (_) {}
+        }
+        for (final m in allImportedModules) {
+          try {
+            await firestore.updateModule(m);
+          } catch (_) {}
+        }
+        for (final t in allImportedTopics) {
+          try {
+            await firestore.updateTopic(t);
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (getIt.isRegistered<CoursesController>()) {
+      await getIt<CoursesController>().loadCourses();
+    }
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      await getIt<OngoingModulesController>().refresh();
+    }
+    if (getIt.isRegistered<RevisionController>()) {
+      await getIt<RevisionController>().reconcile();
+    }
 
     return {
       'courses': courseCount,
