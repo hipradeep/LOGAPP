@@ -4,12 +4,13 @@ import '../theme/app_theme.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import 'app_spacers.dart';
-import 'edit_course_sheet.dart';
+import 'study_confirmation_dialog.dart';
+import '../screens/add_course_screen.dart';
 
-enum CourseOptionAction { edit, delete }
+enum CourseOptionAction { edit, archive, delete }
 
 /// Bottom action sheet presented when long-pressing a Course card.
-/// Presents options (Edit, Delete) before opening the full edit form.
+/// Presents options (Edit, Archive, Delete) matching the reference design.
 class CourseOptionsSheet extends StatelessWidget {
   final Course course;
 
@@ -30,56 +31,64 @@ class CourseOptionsSheet extends StatelessWidget {
 
     switch (action) {
       case CourseOptionAction.edit:
-        await EditCourseSheet.show(context, course: course);
-        break;
-      case CourseOptionAction.delete:
-        await _confirmAndDelete(context, course);
-        break;
-    }
-  }
-
-  static Future<void> _confirmAndDelete(BuildContext context, Course course) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
-        ),
-        title: const Text('Delete Course?', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete "${course.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppTheme.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: AppTheme.errorColor, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      await getIt<CoursesController>().deleteCourse(course.id);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Course "${course.title}" deleted'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AddCourseScreen(courseToEdit: course),
           ),
         );
-      }
+        break;
+      case CourseOptionAction.archive:
+        final confirmed = await StudyConfirmationDialog.showArchiveCourse(
+          context,
+          courseTitle: course.title,
+        );
+        if (confirmed && context.mounted) {
+          await getIt<CoursesController>().updateCourse(course.copyWith(status: 'archived'));
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Course "${course.title}" archived'),
+                backgroundColor: AppTheme.primaryColor,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                ),
+              ),
+            );
+          }
+        }
+        break;
+      case CourseOptionAction.delete:
+        final confirmed = await StudyConfirmationDialog.showDeleteCourse(
+          context,
+          courseTitle: course.title,
+        );
+        if (confirmed && context.mounted) {
+          await getIt<CoursesController>().deleteCourse(course.id);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Course "${course.title}" deleted'),
+                backgroundColor: AppTheme.primaryColor,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                ),
+              ),
+            );
+          }
+        }
+        break;
     }
   }
 
   void _selectEdit(BuildContext context) {
     Navigator.pop(context, CourseOptionAction.edit);
+  }
+
+  void _selectArchive(BuildContext context) {
+    Navigator.pop(context, CourseOptionAction.archive);
   }
 
   void _selectDelete(BuildContext context) {
@@ -121,6 +130,13 @@ class CourseOptionsSheet extends StatelessWidget {
             title: 'Edit Course',
             subtitle: 'Change title, description, or deadline',
             onTap: () => _selectEdit(context),
+          ),
+          const VGapSm(),
+          _CourseOptionTile(
+            icon: Icons.calendar_today_outlined,
+            title: 'Archive Course',
+            subtitle: 'Move course to archive',
+            onTap: () => _selectArchive(context),
           ),
           const VGapSm(),
           _CourseOptionTile(

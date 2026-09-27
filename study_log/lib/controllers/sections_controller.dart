@@ -4,6 +4,7 @@ import '../models/section.dart';
 import '../services/firestore_service.dart';
 import '../services/local_section_storage.dart';
 import '../services/service_locator.dart';
+import 'ongoing_sections_controller.dart';
 
 /// Controller managing Section entities for a given Course with offline persistence.
 class SectionsController extends ChangeNotifier {
@@ -116,13 +117,15 @@ class SectionsController extends ChangeNotifier {
   Future<void> addSection({
     required String title,
     required String description,
+    int? orderIndex,
     String status = 'active',
   }) async {
     final now = DateTime.now();
     final newId = 'section_${now.millisecondsSinceEpoch}';
-    final nextOrder = _sections.isEmpty
-        ? 1
-        : (_sections.map((s) => s.orderIndex).reduce((a, b) => a > b ? a : b) + 1);
+    final nextOrder = orderIndex ??
+        (_sections.isEmpty
+            ? 1
+            : (_sections.map((s) => s.orderIndex).reduce((a, b) => a > b ? a : b) + 1));
 
     final newSection = Section(
       id: newId,
@@ -144,6 +147,10 @@ class SectionsController extends ChangeNotifier {
     await LocalSectionStorage.saveSectionsForCourse(courseId, _sections);
     notifyListeners();
 
+    if (getIt.isRegistered<OngoingSectionsController>()) {
+      getIt<OngoingSectionsController>().refresh();
+    }
+
     try {
       await _firestoreService.addSection(newSection).timeout(
         const Duration(seconds: 4),
@@ -161,6 +168,10 @@ class SectionsController extends ChangeNotifier {
     _sections.removeWhere((s) => s.id == sectionId);
     await LocalSectionStorage.saveSectionsForCourse(courseId, _sections);
     notifyListeners();
+
+    if (getIt.isRegistered<OngoingSectionsController>()) {
+      getIt<OngoingSectionsController>().refresh();
+    }
   }
 
   @override

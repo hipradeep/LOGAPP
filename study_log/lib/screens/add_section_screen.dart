@@ -1,54 +1,56 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
+import '../controllers/sections_controller.dart';
 
-/// Redesigned Add Course Screen matching the reference design:
-/// - Top bar with Back button, "Add Course" title, and purple "Save" button
-/// - Course Name * required field
-/// - Description (Optional) with 0/500 live character counter
-/// - Icon preview with soft lavender squircle container and "Change Icon" button
-/// - Color picker row with checkmark indicator on selected circular swatch
-/// - Deadline field with date picker and clear button as explicitly requested
-import '../models/course.dart';
-
-/// Redesigned Add Course Screen matching the reference design:
-/// - Top bar with Back button, "Add Course" / "Edit Course" title, and purple "Save" button
-/// - Course Name * required field
-/// - Description (Optional) with 0/500 live character counter
-/// - Icon preview with soft lavender squircle container and "Change Icon" button
-/// - Color picker row with checkmark indicator on selected circular swatch
-/// - Deadline field with date picker and clear button as explicitly requested
+/// Redesigned Standalone Add Section Screen matching the reference design:
+/// - Top bar with Back button, "Add Section" title, and purple "Save" button
+/// - Course selection dropdown container showing active course
+/// - Section Name * required field
+/// - Description (Optional) with live 0/500 character counter
+/// - Icon preview squircle with "Change Icon" button and icon picker modal
+/// - Color swatches row with checkmark indicator on selected color
+/// - Order (Optional) numeric input field with stepper icons
 /// - Strict compliance with optimize.md (build < 40 lines, named callbacks, const)
-class AddCourseScreen extends StatefulWidget {
-  final Course? courseToEdit;
+class AddSectionScreen extends StatefulWidget {
+  final String courseId;
+  final String courseTitle;
+  final SectionsController? sectionsController;
 
-  const AddCourseScreen({super.key, this.courseToEdit});
+  const AddSectionScreen({
+    super.key,
+    required this.courseId,
+    required this.courseTitle,
+    this.sectionsController,
+  });
 
   @override
-  State<AddCourseScreen> createState() => _AddCourseScreenState();
+  State<AddSectionScreen> createState() => _AddSectionScreenState();
 }
 
-class _AddCourseScreenState extends State<AddCourseScreen> {
+class _AddSectionScreenState extends State<AddSectionScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _orderController;
+  late String _selectedCourseTitle;
+  late String _selectedCourseId;
 
   IconData _selectedIcon = Icons.format_list_bulleted_rounded;
   Color _selectedColor = const Color(0xFF5B4DFB);
-  DateTime? _selectedDeadline;
   int _descLength = 0;
   bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.courseToEdit?.title ?? '');
-    _descriptionController = TextEditingController(text: widget.courseToEdit?.description ?? '');
-    _selectedDeadline = widget.courseToEdit?.deadline;
-    _descLength = _descriptionController.text.length;
+    _titleController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _orderController = TextEditingController();
     _descriptionController.addListener(_onDescChanged);
+    _selectedCourseTitle = widget.courseTitle;
+    _selectedCourseId = widget.courseId;
   }
 
   @override
@@ -56,6 +58,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     _descriptionController.removeListener(_onDescChanged);
     _titleController.dispose();
     _descriptionController.dispose();
+    _orderController.dispose();
     super.dispose();
   }
 
@@ -75,34 +78,65 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     setState(() => _selectedColor = color);
   }
 
-  void _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
+  void _openCourseSelector() {
+    final allCourses = getIt<CoursesController>().courses;
+    if (allCourses.isEmpty) return;
+
+    showModalBottomSheet<void>(
       context: context,
-      initialDate: _selectedDeadline ?? now.add(const Duration(days: 30)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 730)),
-      builder: (context, child) {
-        return Theme(
-          data: AppTheme.themeData.copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppTheme.primaryColor,
-              onPrimary: Colors.white,
-              onSurface: AppTheme.textPrimary,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const VGapMd(),
+                const Text(
+                  'Select Course',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const VGapMd(),
+                ...allCourses.map((c) => ListTile(
+                      title: Text(c.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      trailing: c.id == _selectedCourseId
+                          ? const Icon(Icons.check_rounded, color: AppTheme.primaryColor)
+                          : null,
+                      onTap: () {
+                        setState(() {
+                          _selectedCourseId = c.id;
+                          _selectedCourseTitle = c.title;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                    )),
+              ],
             ),
           ),
-          child: child!,
         );
       },
     );
-
-    if (picked != null) {
-      setState(() => _selectedDeadline = picked);
-    }
-  }
-
-  void _clearDate() {
-    setState(() => _selectedDeadline = null);
   }
 
   void _openIconPicker() {
@@ -149,7 +183,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                 ),
                 const VGapMd(),
                 const Text(
-                  'Select Course Icon',
+                  'Select Section Icon',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -208,7 +242,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please enter a course name'),
+          content: const Text('Please enter a section name'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -220,35 +254,17 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     }
 
     final description = _descriptionController.text.trim();
+    final order = int.tryParse(_orderController.text.trim()) ?? 0;
     setState(() => _isSubmitting = true);
 
     try {
-      if (widget.courseToEdit != null) {
-        final updated = widget.courseToEdit!.copyWith(
-          title: title,
-          description: description,
-          deadline: _selectedDeadline,
-        );
-        await getIt<CoursesController>().updateCourse(updated);
-        if (!mounted) return;
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Course "$title" updated successfully'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            ),
-          ),
-        );
-        return;
-      }
+      final controller = widget.sectionsController ??
+          SectionsController(courseId: _selectedCourseId);
 
-      await getIt<CoursesController>().addCourse(
+      await controller.addSection(
         title: title,
         description: description,
-        deadline: _selectedDeadline,
+        orderIndex: order,
         status: 'active',
       );
 
@@ -256,7 +272,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Course "$title" created successfully'),
+          content: Text('Section "$title" added successfully'),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -269,7 +285,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save course: $e'),
+          content: Text('Failed to add section: $e'),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -286,8 +302,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _AddCourseTopBar(
-              title: widget.courseToEdit != null ? 'Edit Course' : 'Add Course',
+            _AddSectionTopBar(
               onBack: _handleBack,
               onSave: _handleSubmit,
               isSubmitting: _isSubmitting,
@@ -304,28 +319,29 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _CourseNameField(controller: _titleController),
+                    _CourseSelectorField(
+                      courseTitle: _selectedCourseTitle,
+                      onTap: _openCourseSelector,
+                    ),
                     const VGapLg(),
-                    _CourseDescriptionField(
+                    _SectionNameField(controller: _titleController),
+                    const VGapLg(),
+                    _SectionDescriptionField(
                       controller: _descriptionController,
                       charCount: _descLength,
                     ),
                     const VGapLg(),
-                    _CourseIconSection(
+                    _SectionIconSection(
                       selectedIcon: _selectedIcon,
                       onOpenPicker: _openIconPicker,
                     ),
                     const VGapLg(),
-                    _CourseColorSection(
+                    _SectionColorSection(
                       selectedColor: _selectedColor,
                       onSelectColor: _selectColor,
                     ),
                     const VGapLg(),
-                    _CourseDeadlineField(
-                      selectedDeadline: _selectedDeadline,
-                      onPickDate: _pickDate,
-                      onClearDate: _clearDate,
-                    ),
+                    _SectionOrderField(controller: _orderController),
                   ],
                 ),
               ),
@@ -339,14 +355,12 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
 
 // === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
 
-class _AddCourseTopBar extends StatelessWidget {
-  final String title;
+class _AddSectionTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSave;
   final bool isSubmitting;
 
-  const _AddCourseTopBar({
-    this.title = 'Add Course',
+  const _AddSectionTopBar({
     required this.onBack,
     required this.onSave,
     required this.isSubmitting,
@@ -368,9 +382,9 @@ class _AddCourseTopBar extends StatelessWidget {
             tooltip: 'Back',
           ),
           const HGapXs(),
-          Text(
-            title,
-            style: const TextStyle(
+          const Text(
+            'Add Section',
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
@@ -412,10 +426,69 @@ class _AddCourseTopBar extends StatelessWidget {
   }
 }
 
-class _CourseNameField extends StatelessWidget {
+class _CourseSelectorField extends StatelessWidget {
+  final String courseTitle;
+  final VoidCallback onTap;
+
+  const _CourseSelectorField({
+    required this.courseTitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Course',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const VGapSm(),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.borderColor),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  courseTitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF6B7280),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionNameField extends StatelessWidget {
   final TextEditingController controller;
 
-  const _CourseNameField({required this.controller});
+  const _SectionNameField({required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -426,7 +499,7 @@ class _CourseNameField extends StatelessWidget {
         const Row(
           children: [
             Text(
-              'Course Name ',
+              'Section Name ',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -458,7 +531,7 @@ class _CourseNameField extends StatelessWidget {
               color: AppTheme.textPrimary,
             ),
             decoration: const InputDecoration(
-              hintText: 'Enter course name',
+              hintText: 'Enter section name',
               hintStyle: TextStyle(
                 fontSize: 14,
                 color: Color(0xFF9CA3AF),
@@ -474,11 +547,11 @@ class _CourseNameField extends StatelessWidget {
   }
 }
 
-class _CourseDescriptionField extends StatelessWidget {
+class _SectionDescriptionField extends StatelessWidget {
   final TextEditingController controller;
   final int charCount;
 
-  const _CourseDescriptionField({
+  const _SectionDescriptionField({
     required this.controller,
     required this.charCount,
   });
@@ -543,11 +616,11 @@ class _CourseDescriptionField extends StatelessWidget {
   }
 }
 
-class _CourseIconSection extends StatelessWidget {
+class _SectionIconSection extends StatelessWidget {
   final IconData selectedIcon;
   final VoidCallback onOpenPicker;
 
-  const _CourseIconSection({
+  const _SectionIconSection({
     required this.selectedIcon,
     required this.onOpenPicker,
   });
@@ -610,11 +683,11 @@ class _CourseIconSection extends StatelessWidget {
   }
 }
 
-class _CourseColorSection extends StatelessWidget {
+class _SectionColorSection extends StatelessWidget {
   final Color selectedColor;
   final ValueChanged<Color> onSelectColor;
 
-  const _CourseColorSection({
+  const _SectionColorSection({
     required this.selectedColor,
     required this.onSelectColor,
   });
@@ -671,18 +744,10 @@ class _CourseColorSection extends StatelessWidget {
   }
 }
 
-class _CourseDeadlineField extends StatelessWidget {
-  final DateTime? selectedDeadline;
-  final VoidCallback onPickDate;
-  final VoidCallback onClearDate;
+class _SectionOrderField extends StatelessWidget {
+  final TextEditingController controller;
 
-  const _CourseDeadlineField({
-    required this.selectedDeadline,
-    required this.onPickDate,
-    required this.onClearDate,
-  });
-
-  static final DateFormat _dateFormat = DateFormat('EEE, d MMM yyyy');
+  const _SectionOrderField({required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -691,7 +756,7 @@ class _CourseDeadlineField extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Deadline (Optional)',
+          'Order (Optional)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
@@ -699,57 +764,41 @@ class _CourseDeadlineField extends StatelessWidget {
           ),
         ),
         const VGapSm(),
-        InkWell(
-          onTap: onPickDate,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.calendar_today_rounded,
-                  color: AppTheme.primaryColor,
-                  size: 20,
-                ),
-                const HGapMd(),
-                Expanded(
-                  child: Text(
-                    selectedDeadline != null
-                        ? _dateFormat.format(selectedDeadline!)
-                        : 'Select deadline',
-                    style: TextStyle(
+        Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.borderColor),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textPrimary,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'Enter order (e.g., 1, 2, 3)',
+                    hintStyle: TextStyle(
                       fontSize: 14,
-                      color: selectedDeadline != null
-                          ? AppTheme.textPrimary
-                          : const Color(0xFF9CA3AF),
-                      fontWeight: selectedDeadline != null
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      color: Color(0xFF9CA3AF),
                     ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
-                if (selectedDeadline != null)
-                  GestureDetector(
-                    onTap: onClearDate,
-                    child: const Icon(
-                      Icons.close_rounded,
-                      color: Color(0xFF9CA3AF),
-                      size: 20,
-                    ),
-                  )
-                else
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Color(0xFF9CA3AF),
-                    size: 22,
-                  ),
-              ],
-            ),
+              ),
+              const Icon(
+                Icons.unfold_more_rounded,
+                color: Color(0xFF9CA3AF),
+                size: 20,
+              ),
+            ],
           ),
         ),
       ],

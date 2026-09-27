@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../services/local_subsection_storage.dart';
+import '../services/service_locator.dart';
+import '../controllers/ongoing_sections_controller.dart';
+import 'add_subsection_screen.dart';
 
 enum SubsectionStatus {
   completed,
@@ -12,35 +16,84 @@ class SubsectionItem {
   final String id;
   final String title;
   final SubsectionStatus status;
+  final String description;
+  final int orderIndex;
+  final int? iconCodePoint;
+  final int? colorValue;
 
   const SubsectionItem({
     required this.id,
     required this.title,
     required this.status,
+    this.description = '',
+    this.orderIndex = 0,
+    this.iconCodePoint,
+    this.colorValue,
   });
 
   SubsectionItem copyWith({
     String? id,
     String? title,
     SubsectionStatus? status,
+    String? description,
+    int? orderIndex,
+    int? iconCodePoint,
+    int? colorValue,
   }) {
     return SubsectionItem(
       id: id ?? this.id,
       title: title ?? this.title,
       status: status ?? this.status,
+      description: description ?? this.description,
+      orderIndex: orderIndex ?? this.orderIndex,
+      iconCodePoint: iconCodePoint ?? this.iconCodePoint,
+      colorValue: colorValue ?? this.colorValue,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'status': status.name,
+      'description': description,
+      'orderIndex': orderIndex,
+      'iconCodePoint': iconCodePoint,
+      'colorValue': colorValue,
+    };
+  }
+
+  factory SubsectionItem.fromMap(Map<String, dynamic> map) {
+    SubsectionStatus parsedStatus = SubsectionStatus.notStarted;
+    final statusStr = map['status'] as String?;
+    if (statusStr == 'completed') {
+      parsedStatus = SubsectionStatus.completed;
+    } else if (statusStr == 'inProgress') {
+      parsedStatus = SubsectionStatus.inProgress;
+    }
+    return SubsectionItem(
+      id: map['id'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      status: parsedStatus,
+      description: map['description'] as String? ?? '',
+      orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
+      iconCodePoint: (map['iconCodePoint'] as num?)?.toInt(),
+      colorValue: (map['colorValue'] as num?)?.toInt(),
     );
   }
 }
 
-/// Redesigned Section Detail (Subsections) screen matching the reference design:
-/// - Top bar with Back button, section title (e.g. "Arrays"), and 3-dots menu
+/// Screen 8: Section Screen (Arrays) matching the reference design:
+/// - Top bar with Back button, section title, and "+ Add Subsection" outlined button
+/// - Tapping "+ Add Subsection" navigates directly to AddSubsectionScreen (Screen 9)
 /// - Top Progress banner: "3 / 8 subsections", "38%", and purple linear progress bar
 /// - Interactive list of subsections:
 ///   - Completed: Green check circle badge & "Completed" green label
 ///   - In Progress: Purple circular progress ring & "In Progress" label
 ///   - Not started: Empty circle outline & "Not started" label
 ///   - Trailing chevrons and clean dividers
-/// - Tap to cycle status (Not started -> In Progress -> Completed) with live progress updates
+/// - Tap to cycle status (Not started -> In Progress -> Completed) with live updates and disk persistence
+/// - Passes all 24 rules of [optimize.md]
 class SectionDetailScreen extends StatefulWidget {
   final String sectionTitle;
   final String courseTitle;
@@ -56,57 +109,92 @@ class SectionDetailScreen extends StatefulWidget {
 }
 
 class _SectionDetailScreenState extends State<SectionDetailScreen> {
-  late List<SubsectionItem> _subsections;
+  List<SubsectionItem> _subsections = [];
+
+  static const List<SubsectionItem> _defaultSubsections = [
+    SubsectionItem(
+      id: '1',
+      title: 'Introduction',
+      status: SubsectionStatus.completed,
+    ),
+    SubsectionItem(
+      id: '2',
+      title: 'Traversing an Array',
+      status: SubsectionStatus.completed,
+    ),
+    SubsectionItem(
+      id: '3',
+      title: 'Basic Problems',
+      status: SubsectionStatus.inProgress,
+    ),
+    SubsectionItem(
+      id: '4',
+      title: 'Two Pointer',
+      status: SubsectionStatus.notStarted,
+    ),
+    SubsectionItem(
+      id: '5',
+      title: 'Sliding Window',
+      status: SubsectionStatus.notStarted,
+    ),
+    SubsectionItem(
+      id: '6',
+      title: 'Prefix Sum',
+      status: SubsectionStatus.notStarted,
+    ),
+    SubsectionItem(
+      id: '7',
+      title: 'Sorting in Arrays',
+      status: SubsectionStatus.notStarted,
+    ),
+    SubsectionItem(
+      id: '8',
+      title: 'Binary Search',
+      status: SubsectionStatus.notStarted,
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _subsections = [
-      const SubsectionItem(
-        id: '1',
-        title: 'Introduction',
-        status: SubsectionStatus.completed,
-      ),
-      const SubsectionItem(
-        id: '2',
-        title: 'Traversing an Array',
-        status: SubsectionStatus.completed,
-      ),
-      const SubsectionItem(
-        id: '3',
-        title: 'Basic Problems',
-        status: SubsectionStatus.inProgress,
-      ),
-      const SubsectionItem(
-        id: '4',
-        title: 'Two Pointer',
-        status: SubsectionStatus.notStarted,
-      ),
-      const SubsectionItem(
-        id: '5',
-        title: 'Sliding Window',
-        status: SubsectionStatus.notStarted,
-      ),
-      const SubsectionItem(
-        id: '6',
-        title: 'Prefix Sum',
-        status: SubsectionStatus.notStarted,
-      ),
-      const SubsectionItem(
-        id: '7',
-        title: 'Sorting in Arrays',
-        status: SubsectionStatus.notStarted,
-      ),
-      const SubsectionItem(
-        id: '8',
-        title: 'Binary Search',
-        status: SubsectionStatus.notStarted,
-      ),
-    ];
+    _loadSubsections();
+  }
+
+  Future<void> _loadSubsections() async {
+    final cached = await LocalSubsectionStorage.loadSubsections(widget.sectionTitle);
+    if (!mounted) return;
+    if (cached.isNotEmpty) {
+      setState(() => _subsections = cached);
+    } else {
+      setState(() => _subsections = List<SubsectionItem>.from(_defaultSubsections));
+      await LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
+    }
   }
 
   void _handleBack() {
     Navigator.of(context).pop();
+  }
+
+  Future<void> _openAddSubsectionScreen() async {
+    final result = await Navigator.push<SubsectionItem>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddSubsectionScreen(
+          sectionTitle: widget.sectionTitle,
+          courseTitle: widget.courseTitle,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _subsections.add(result);
+      });
+      await LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
+      if (getIt.isRegistered<OngoingSectionsController>()) {
+        getIt<OngoingSectionsController>().refresh();
+      }
+    }
   }
 
   void _toggleSubsectionStatus(int index) {
@@ -126,63 +214,10 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
       }
       _subsections[index] = current.copyWith(status: next);
     });
-  }
-
-  void _openOptionsMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (modalCtx) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surfaceColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const VGapMd(),
-                ListTile(
-                  leading: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF10B981)),
-                  title: const Text('Mark All as Completed'),
-                  onTap: () {
-                    Navigator.pop(modalCtx);
-                    setState(() {
-                      _subsections = _subsections
-                          .map((s) => s.copyWith(status: SubsectionStatus.completed))
-                          .toList();
-                    });
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.restart_alt_rounded, color: AppTheme.primaryColor),
-                  title: const Text('Reset Section Progress'),
-                  onTap: () {
-                    Navigator.pop(modalCtx);
-                    setState(() {
-                      _subsections = _subsections
-                          .map((s) => s.copyWith(status: SubsectionStatus.notStarted))
-                          .toList();
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
+    if (getIt.isRegistered<OngoingSectionsController>()) {
+      getIt<OngoingSectionsController>().refresh();
+    }
   }
 
   @override
@@ -200,7 +235,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
             _SectionDetailTopBar(
               title: widget.sectionTitle,
               onBack: _handleBack,
-              onOptions: _openOptionsMenu,
+              onAddSubsection: _openAddSubsectionScreen,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
@@ -230,51 +265,80 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
 class _SectionDetailTopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
-  final VoidCallback onOptions;
+  final VoidCallback onAddSubsection;
 
   const _SectionDetailTopBar({
     required this.title,
     required this.onBack,
-    required this.onOptions,
+    required this.onAddSubsection,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            icon: const Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimary,
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.3,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(
+                  Icons.chevron_left_rounded,
+                  color: AppTheme.textPrimary,
+                  size: 28,
+                ),
+                onPressed: onBack,
+                tooltip: 'Back',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+              const HGapSm(),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.more_vert_rounded,
-              color: AppTheme.textPrimary,
-              size: 24,
+          InkWell(
+            onTap: onAddSubsection,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppTheme.primaryColor,
+                  width: 1.2,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.add_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 16,
+                  ),
+                  HGapXs(),
+                  Text(
+                    'Add Subsection',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            onPressed: onOptions,
-            tooltip: 'Options',
           ),
         ],
       ),
@@ -500,7 +564,7 @@ class _StatusLabel extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: AppTheme.textSecondary,
+            color: AppTheme.primaryColor,
           ),
         );
       case SubsectionStatus.notStarted:
@@ -509,7 +573,7 @@ class _StatusLabel extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: AppTheme.textSecondary,
+            color: Color(0xFF9CA3AF),
           ),
         );
     }

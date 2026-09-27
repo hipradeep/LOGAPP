@@ -7,6 +7,7 @@ import '../widgets/today_progress_card.dart';
 import '../widgets/your_courses_carousel.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_sections_controller.dart';
 import '../models/course.dart';
 import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
@@ -17,7 +18,7 @@ import 'section_detail_screen.dart';
 /// - "Hi, Pradeep 👋" greeting & notification bell with badge dot
 /// - "Your Courses" horizontal carousel with progress bars and indicator dots
 /// - "Today's Progress" with formatted date and 4 statistics
-/// - "Current Sections" with "View All" link and category-accented cards
+/// - "Current Sections" fetching ongoing courses and active ongoing sections
 /// - Passes all 24 rules of [optimize.md]
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     getIt<CoursesController>();
+    getIt<OngoingSectionsController>();
   }
 
   void _openCourseDetail(BuildContext context, Course course) {
@@ -66,6 +68,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openCourseByTitle(String title) {
+    final courses = getIt<CoursesController>().courses;
+    Course? match;
+    for (final c in courses) {
+      if (c.title.toLowerCase() == title.toLowerCase()) {
+        match = c;
+        break;
+      }
+    }
+    final course = match ?? Course(
+      id: title.toLowerCase().replaceAll(' ', '_'),
+      title: title,
+      description: '$title syllabus and topics',
+      status: 'active',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CourseDetailScreen(course: course)),
+    );
+  }
+
   void _handleViewAll() {
     _openAllCourses(context);
   }
@@ -73,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final coursesController = getIt<CoursesController>();
+    final ongoingController = getIt<OngoingSectionsController>();
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
@@ -85,26 +110,16 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverPadding(
               padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
               sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _GreetingHeader(),
-                    const VGapLg(),
-                    YourCoursesCarousel(onCourseTap: _handleViewAll),
-                    const VGapLg(),
-                    const TodayProgressCard(),
-                    const VGapLg(),
-                    _CurrentSectionsHeader(onViewAll: _handleViewAll),
-                    const VGapSm(),
-                  ],
+                child: _HomeTopSection(
+                  onViewAll: _handleViewAll,
+                  onCourseTap: _openCourseByTitle,
                 ),
               ),
             ),
             SliverPadding(
               padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
               sliver: _CurrentSectionsSliverList(
-                coursesController: coursesController,
+                ongoingController: ongoingController,
                 onCourseTap: _openCourseDetail,
                 onSectionTap: _openSectionDetail,
                 onAddCourse: _openAddCourse,
@@ -239,14 +254,45 @@ class _CurrentSectionsHeader extends StatelessWidget {
   }
 }
 
+class _HomeTopSection extends StatelessWidget {
+  final VoidCallback onViewAll;
+  final ValueChanged<String> onCourseTap;
+
+  const _HomeTopSection({
+    required this.onViewAll,
+    required this.onCourseTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _GreetingHeader(),
+        const VGapLg(),
+        YourCoursesCarousel(
+          onMoreTap: onViewAll,
+          onCourseTap: onCourseTap,
+        ),
+        const VGapLg(),
+        const TodayProgressCard(),
+        const VGapLg(),
+        _CurrentSectionsHeader(onViewAll: onViewAll),
+        const VGapSm(),
+      ],
+    );
+  }
+}
+
 class _CurrentSectionsSliverList extends StatelessWidget {
-  final CoursesController coursesController;
+  final OngoingSectionsController ongoingController;
   final void Function(BuildContext, Course) onCourseTap;
   final void Function(String, String) onSectionTap;
   final void Function(BuildContext) onAddCourse;
 
   const _CurrentSectionsSliverList({
-    required this.coursesController,
+    required this.ongoingController,
     required this.onCourseTap,
     required this.onSectionTap,
     required this.onAddCourse,
@@ -255,75 +301,116 @@ class _CurrentSectionsSliverList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: coursesController,
+      listenable: ongoingController,
       builder: (context, _) {
-        final courses = coursesController.courses;
+        final items = ongoingController.ongoingItems;
 
-        // If user has created custom courses, show them dynamically
-        if (courses.isNotEmpty) {
-          return SliverList.builder(
-            itemCount: courses.length,
-            itemBuilder: (context, index) {
-              final Course course = courses[index];
-              final progress = (0.35 + (index * 0.2)) % 1.0;
-              final completed = (index + 1) * 2;
-              final total = completed + 3;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: StudyScheduleCard(
-                  key: ValueKey(course.id),
-                  title: course.title,
-                  subtitle: '${course.title} › Syllabus',
-                  progressRatio: '$completed / $total',
-                  index: index,
-                  progress: progress,
-                  onTap: () => onCourseTap(context, course),
-                  onLongPress: () => CourseOptionsSheet.show(context, course: course),
+        if (ongoingController.isLoading && items.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
                 ),
-              );
-            },
+              ),
+            ),
           );
         }
 
-        // Default sections matching the reference design perfectly
-        return SliverList.list(
-          children: [
-            Padding(
+        if (items.isEmpty) {
+          return SliverToBoxAdapter(
+            child: _EmptyOngoingSectionsCard(onAddCourse: () => onAddCourse(context)),
+          );
+        }
+
+        return SliverList.builder(
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: StudyScheduleCard(
-                title: 'Arrays',
-                subtitle: 'DSA › Basic Problems',
-                progressRatio: '3 / 8',
-                index: 0,
-                progress: 3 / 8,
-                onTap: () => onSectionTap('Arrays', 'DSA'),
+                key: ValueKey(item.section?.id ?? item.course.id),
+                title: item.title,
+                subtitle: item.breadcrumb,
+                progressRatio: item.progressRatio,
+                index: index,
+                progress: item.progress,
+                onTap: () {
+                  if (item.section != null) {
+                    onSectionTap(item.section!.title, item.course.title);
+                  } else {
+                    onCourseTap(context, item.course);
+                  }
+                },
+                onLongPress: () => CourseOptionsSheet.show(context, course: item.course),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: StudyScheduleCard(
-                title: 'System Design Basics',
-                subtitle: 'System Design › Introduction',
-                progressRatio: '2 / 6',
-                index: 1,
-                progress: 2 / 6,
-                onTap: () => onSectionTap('System Design Basics', 'System Design'),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: StudyScheduleCard(
-                title: 'LLM Fundamentals',
-                subtitle: 'Gen AI › Basics',
-                progressRatio: '1 / 5',
-                index: 2,
-                progress: 1 / 5,
-                onTap: () => onSectionTap('LLM Fundamentals', 'Gen AI'),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
+    );
+  }
+}
+
+class _EmptyOngoingSectionsCard extends StatelessWidget {
+  final VoidCallback onAddCourse;
+
+  const _EmptyOngoingSectionsCard({required this.onAddCourse});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        border: Border.all(color: AppTheme.borderColor),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.auto_stories_outlined,
+            size: 36,
+            color: AppTheme.textSecondary,
+          ),
+          const VGapMd(),
+          const Text(
+            'No ongoing courses yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const VGapXs(),
+          const Text(
+            'Add or resume a course to see your ongoing sections.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const VGapMd(),
+          ElevatedButton.icon(
+            onPressed: onAddCourse,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add Course'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

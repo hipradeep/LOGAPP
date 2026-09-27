@@ -3,17 +3,18 @@ import '../models/course.dart';
 import '../models/section.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/add_section_sheet.dart';
 import '../widgets/course_options_sheet.dart';
 import '../controllers/sections_controller.dart';
 import 'section_detail_screen.dart';
+import 'add_section_screen.dart';
 
 /// Redesigned Course Detail (Sections) screen matching the reference design:
-/// - Top bar with back button, course title (e.g. "DSA"), and 3-dots options menu
+/// - Top bar with back button, course title (e.g. "DSA"), "+ Add Section" button, and 3-dots options menu
 /// - Top Progress banner: "6 / 20 sections", "30%", and full-width purple progress bar
+/// - "Sections (20)" and "Overview" tabs
 /// - Clean vertical list of syllabus sections with cycling pastel number badges
 ///   (Green, Cyan, Orange, Purple), titles, subsections count, and trailing chevrons
-/// - Full interactive integration: tap sections, add new sections, edit/delete course
+/// - Tapping "+ Add Section" opens the standalone AddSectionScreen
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
 
@@ -28,6 +29,7 @@ class CourseDetailScreen extends StatefulWidget {
 
 class _CourseDetailScreenState extends State<CourseDetailScreen> {
   late final SectionsController _sectionsController;
+  final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -38,6 +40,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   @override
   void dispose() {
     _sectionsController.dispose();
+    _activeTab.dispose();
     super.dispose();
   }
 
@@ -57,12 +60,22 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     );
   }
 
-  void _openAddSectionModal() {
-    AddSectionSheet.show(
+  void _openAddSectionScreen() {
+    Navigator.push(
       context,
-      controller: _sectionsController,
-      courseTitle: widget.course.title,
+      MaterialPageRoute(
+        builder: (_) => AddSectionScreen(
+          courseId: widget.course.id,
+          courseTitle: widget.course.title,
+          sectionsController: _sectionsController,
+        ),
+      ),
     );
+  }
+
+  void _handleTabSelected(int index) {
+    if (_activeTab.value == index) return;
+    _activeTab.value = index;
   }
 
   void _openOptionsMenu() {
@@ -95,7 +108,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   title: const Text('Add New Section', style: TextStyle(fontWeight: FontWeight.bold)),
                   onTap: () {
                     Navigator.pop(modalCtx);
-                    _openAddSectionModal();
+                    _openAddSectionScreen();
                   },
                 ),
                 ListTile(
@@ -126,6 +139,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             _CourseDetailTopBar(
               title: widget.course.title,
               onBack: _handleBack,
+              onAddSection: _openAddSectionScreen,
               onOptions: _openOptionsMenu,
             ),
             const Padding(
@@ -136,14 +150,35 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 progress: 0.30,
               ),
             ),
+            ValueListenableBuilder<int>(
+              valueListenable: _activeTab,
+              builder: (context, activeIdx, _) {
+                return _CourseTabsRow(
+                  activeIndex: activeIdx,
+                  sectionsCount: 20,
+                  onTabSelected: _handleTabSelected,
+                );
+              },
+            ),
             const VGapSm(),
             Expanded(
-              child: _CourseSectionsListView(
-                course: widget.course,
-                sectionsController: _sectionsController,
-                onSectionTap: _openSectionDetail,
-                onAddSection: _openAddSectionModal,
-                bottomPadding: bottomSafe + 24,
+              child: ValueListenableBuilder<int>(
+                valueListenable: _activeTab,
+                builder: (context, activeIdx, _) {
+                  if (activeIdx == 1) {
+                    return _CourseOverviewView(
+                      course: widget.course,
+                      bottomPadding: bottomSafe + 24,
+                    );
+                  }
+                  return _CourseSectionsListView(
+                    course: widget.course,
+                    sectionsController: _sectionsController,
+                    onSectionTap: _openSectionDetail,
+                    onAddSection: _openAddSectionScreen,
+                    bottomPadding: bottomSafe + 24,
+                  );
+                },
               ),
             ),
           ],
@@ -158,11 +193,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 class _CourseDetailTopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
+  final VoidCallback onAddSection;
   final VoidCallback onOptions;
 
   const _CourseDetailTopBar({
     required this.title,
     required this.onBack,
+    required this.onAddSection,
     required this.onOptions,
   });
 
@@ -195,6 +232,41 @@ class _CourseDetailTopBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          Material(
+            color: const Color(0xFFF5F3FF),
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: onAddSection,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.add_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 16,
+                    ),
+                    HGapXs(),
+                    Text(
+                      'Add Section',
+                      style: TextStyle(
+                        color: AppTheme.primaryColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const HGapSm(),
           IconButton(
             icon: const Icon(
               Icons.more_vert_rounded,
@@ -206,6 +278,139 @@ class _CourseDetailTopBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CourseTabsRow extends StatelessWidget {
+  final int activeIndex;
+  final int sectionsCount;
+  final ValueChanged<int> onTabSelected;
+
+  const _CourseTabsRow({
+    required this.activeIndex,
+    required this.sectionsCount,
+    required this.onTabSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+      child: Container(
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Color(0xFFEEF0F5), width: 1.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            _TabItem(
+              label: 'Sections ($sectionsCount)',
+              isActive: activeIndex == 0,
+              onTap: () => onTabSelected(0),
+            ),
+            const HGapLg(),
+            _TabItem(
+              label: 'Overview',
+              isActive: activeIndex == 1,
+              onTap: () => onTabSelected(1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TabItem extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _TabItem({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        decoration: BoxDecoration(
+          border: isActive
+              ? const Border(
+                  bottom: BorderSide(
+                    color: AppTheme.primaryColor,
+                    width: 2.5,
+                  ),
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+            color: isActive ? AppTheme.primaryColor : const Color(0xFF6B7280),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseOverviewView extends StatelessWidget {
+  final Course course;
+  final double bottomPadding;
+
+  const _CourseOverviewView({
+    required this.course,
+    required this.bottomPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: bottomPadding),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+            border: Border.all(color: AppTheme.borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'About This Course',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const VGapSm(),
+              Text(
+                course.description.isNotEmpty
+                    ? course.description
+                    : 'Comprehensive syllabus and curriculum tracking for ${course.title}. Progress through sections and subsections to complete your study goals.',
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

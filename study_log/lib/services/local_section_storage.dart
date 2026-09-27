@@ -18,6 +18,35 @@ class LocalSectionStorage {
     }
   }
 
+  /// Loads all cached sections across all courses.
+  static Future<List<Section>> loadAllSections() async {
+    try {
+      final file = await _getFile();
+      if (file == null || !await file.exists()) {
+        return [];
+      }
+      final jsonString = await file.readAsString();
+      if (jsonString.trim().isEmpty) return [];
+
+      final List<dynamic> jsonList = jsonDecode(jsonString);
+      final List<Section> sections = [];
+      for (final item in jsonList) {
+        if (item is Map) {
+          try {
+            sections.add(Section.fromMap(Map<String, dynamic>.from(item)));
+          } catch (e) {
+            debugPrint('Error parsing cached section: $e');
+          }
+        }
+      }
+      sections.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return sections;
+    } catch (e) {
+      debugPrint('Error loading all cached sections: $e');
+      return [];
+    }
+  }
+
   /// Loads cached sections for a specific courseId.
   static Future<List<Section>> loadSections(String courseId) async {
     try {
