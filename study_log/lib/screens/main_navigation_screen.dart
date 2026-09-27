@@ -1,9 +1,15 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
-import 'activity_screen.dart';
+import 'revision_screen.dart';
+import 'calendar_screen.dart';
+import 'profile_screen.dart';
 
+/// Root navigation screen housing the 4 core tabs:
+/// - Home
+/// - Revision (empty)
+/// - Calendar (empty)
+/// - Profile (empty)
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -12,154 +18,165 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
+  final ValueNotifier<int> _currentIndex = ValueNotifier<int>(0);
 
-  static const List<Widget> _screens = [
+  final List<Widget> _pages = const [
     HomeScreen(),
-    ActivityScreen(),
+    RevisionScreen(),
+    CalendarScreen(),
+    ProfileScreen(),
   ];
 
-  static const List<_NavItem> _navItems = [
-    _NavItem(
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home_filled,
-      label: 'Home',
-    ),
-    _NavItem(
-      icon: Icons.explore_outlined,
-      activeIcon: Icons.explore_rounded,
-      label: 'Activity',
-    ),
-  ];
+  @override
+  void dispose() {
+    _currentIndex.dispose();
+    super.dispose();
+  }
 
   void _onTabSelected(int index) {
-    if (_currentIndex == index) return;
-    setState(() => _currentIndex = index);
+    if (_currentIndex.value == index) return;
+    _currentIndex.value = index;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      resizeToAvoidBottomInset: false,
-      extendBody: true,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: _BottomNavBar(
-        currentIndex: _currentIndex,
-        navItems: _navItems,
-        onTabSelected: _onTabSelected,
-      ),
-    );
-  }
-}
-
-class _BottomNavBar extends StatelessWidget {
-  final int currentIndex;
-  final List<_NavItem> navItems;
-  final ValueChanged<int> onTabSelected;
-
-  const _BottomNavBar({
-    required this.currentIndex,
-    required this.navItems,
-    required this.onTabSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.paddingOf(context).bottom;
-
-    return Container(
-      color: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppTheme.cardBorderRadius),
-        ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            height: AppTheme.bnbHeight + bottomPadding,
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              bottom: bottomPadding,
-              top: 8,
-            ),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceColor.withValues(alpha: 0.9),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(AppTheme.cardBorderRadius),
-              ),
-              border: Border(
-                top: BorderSide(
-                  color: AppTheme.borderColor.withValues(alpha: 0.8),
-                  width: 1,
-                ),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 20,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(navItems.length, (index) {
-                final isActive = currentIndex == index;
-                final item = navItems[index];
-                return _NavBarItemWidget(
-                  item: item,
-                  isActive: isActive,
-                  onTap: () => onTabSelected(index),
-                );
-              }),
-            ),
+    return ValueListenableBuilder<int>(
+      valueListenable: _currentIndex,
+      builder: (context, activeIndex, _) {
+        return Scaffold(
+          backgroundColor: AppTheme.backgroundColor,
+          body: IndexedStack(
+            index: activeIndex,
+            children: _pages,
           ),
-        ),
-      ),
+          bottomNavigationBar: _StudyBottomNav(
+            currentIndex: activeIndex,
+            onTap: _onTabSelected,
+          ),
+        );
+      },
     );
   }
 }
 
-class _NavBarItemWidget extends StatelessWidget {
-  final _NavItem item;
-  final bool isActive;
-  final VoidCallback onTap;
+class _StudyBottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
 
-  const _NavBarItemWidget({
-    required this.item,
-    required this.isActive,
+  const _StudyBottomNav({
+    required this.currentIndex,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? AppTheme.primaryColor : AppTheme.textMuted;
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        border: const Border(
+          top: BorderSide(color: AppTheme.borderColor, width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        left: 8,
+        right: 8,
+        top: 8,
+        bottom: bottomSafe > 0 ? bottomSafe : 8,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _NavItem(
+            index: 0,
+            currentIndex: currentIndex,
+            label: 'Home',
+            selectedIcon: Icons.home_rounded,
+            unselectedIcon: Icons.home_outlined,
+            onTap: onTap,
+          ),
+          _NavItem(
+            index: 1,
+            currentIndex: currentIndex,
+            label: 'Revision',
+            selectedIcon: Icons.sync_rounded,
+            unselectedIcon: Icons.sync_outlined,
+            onTap: onTap,
+          ),
+          _NavItem(
+            index: 2,
+            currentIndex: currentIndex,
+            label: 'Calendar',
+            selectedIcon: Icons.calendar_today_rounded,
+            unselectedIcon: Icons.calendar_today_outlined,
+            onTap: onTap,
+          ),
+          _NavItem(
+            index: 3,
+            currentIndex: currentIndex,
+            label: 'Profile',
+            selectedIcon: Icons.person_rounded,
+            unselectedIcon: Icons.person_outline_rounded,
+            onTap: onTap,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final int index;
+  final int currentIndex;
+  final String label;
+  final IconData selectedIcon;
+  final IconData unselectedIcon;
+  final ValueChanged<int> onTap;
+
+  const _NavItem({
+    required this.index,
+    required this.currentIndex,
+    required this.label,
+    required this.selectedIcon,
+    required this.unselectedIcon,
+    required this.onTap,
+  });
+
+  void _handleTap() => onTap(index);
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = index == currentIndex;
+    final color = isSelected ? AppTheme.bnbActiveColor : AppTheme.bnbInactiveColor;
+
+    return InkWell(
+      onTap: _handleTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isActive ? item.activeIcon : item.icon,
+              isSelected ? selectedIcon : unselectedIcon,
               color: color,
               size: 24,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
-              item.label,
+              label,
               style: TextStyle(
                 color: color,
                 fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
@@ -167,16 +184,4 @@ class _NavBarItemWidget extends StatelessWidget {
       ),
     );
   }
-}
-
-class _NavItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-  });
 }

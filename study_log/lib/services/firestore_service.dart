@@ -1,83 +1,138 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/course.dart';
 import '../models/section.dart';
 import '../models/subsection.dart';
 
+/// Firebase Firestore Service with graceful fallbacks.
+/// If Firebase is unavailable or uninitialized on the current platform,
+/// it safely returns empty streams and logs warnings without crashing.
 class FirestoreService {
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? _firestore;
 
   FirestoreService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _firestore = firestore ?? _getSafeInstance();
+
+  static FirebaseFirestore? _getSafeInstance() {
+    try {
+      return FirebaseFirestore.instance;
+    } catch (e) {
+      debugPrint('Firestore instance not available on current platform: $e');
+      return null;
+    }
+  }
+
+  bool get isAvailable => _firestore != null;
 
   // === COURSES ===
-  CollectionReference<Map<String, dynamic>> get _coursesRef =>
-      _firestore.collection('courses');
+  CollectionReference<Map<String, dynamic>>? get _coursesRef =>
+      _firestore?.collection('courses');
 
   Stream<List<Course>> streamCourses() {
-    return _coursesRef
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Course.fromMap(doc.data(), documentId: doc.id);
-      }).toList();
+    final ref = _coursesRef;
+    if (ref == null) {
+      return const Stream.empty();
+    }
+    return ref.snapshots().map((snapshot) {
+      final list = <Course>[];
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          list.add(Course.fromMap(data, documentId: doc.id));
+        } catch (e) {
+          // Ignore individual parsing failures safely
+        }
+      }
+      // Sort in-memory to prevent missing-index errors and support offline documents
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
     });
   }
 
   Future<void> addCourse(Course course) async {
-    final docRef = course.id.isEmpty ? _coursesRef.doc() : _coursesRef.doc(course.id);
+    final ref = _coursesRef;
+    if (ref == null) return;
+    final docRef = course.id.isEmpty ? ref.doc() : ref.doc(course.id);
     final courseToSave = course.id.isEmpty ? course.copyWith(id: docRef.id) : course;
     await docRef.set(courseToSave.toMap());
   }
 
   Future<void> updateCourse(Course course) async {
-    await _coursesRef.doc(course.id).update(course.toMap());
+    final ref = _coursesRef;
+    if (ref == null) return;
+    await ref.doc(course.id).update(course.toMap());
   }
 
   Future<void> deleteCourse(String courseId) async {
-    await _coursesRef.doc(courseId).delete();
+    final ref = _coursesRef;
+    if (ref == null) return;
+    await ref.doc(courseId).delete();
   }
 
   // === SECTIONS ===
-  CollectionReference<Map<String, dynamic>> get _sectionsRef =>
-      _firestore.collection('sections');
+  CollectionReference<Map<String, dynamic>>? get _sectionsRef =>
+      _firestore?.collection('sections');
 
   Stream<List<Section>> streamSections({required String courseId}) {
-    return _sectionsRef
+    final ref = _sectionsRef;
+    if (ref == null) {
+      return const Stream.empty();
+    }
+    return ref
         .where('courseId', isEqualTo: courseId)
-        .orderBy('orderIndex')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Section.fromMap(doc.data(), documentId: doc.id);
-      }).toList();
+      final list = <Section>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Section.fromMap(doc.data(), documentId: doc.id));
+        } catch (e) {
+          // Skip corrupt document safely
+        }
+      }
+      list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return list;
     });
   }
 
   Future<void> addSection(Section section) async {
-    final docRef = section.id.isEmpty ? _sectionsRef.doc() : _sectionsRef.doc(section.id);
+    final ref = _sectionsRef;
+    if (ref == null) return;
+    final docRef = section.id.isEmpty ? ref.doc() : ref.doc(section.id);
     final sectionToSave = section.id.isEmpty ? section.copyWith(id: docRef.id) : section;
     await docRef.set(sectionToSave.toMap());
   }
 
   // === SUBSECTIONS ===
-  CollectionReference<Map<String, dynamic>> get _subsectionsRef =>
-      _firestore.collection('subsections');
+  CollectionReference<Map<String, dynamic>>? get _subsectionsRef =>
+      _firestore?.collection('subsections');
 
   Stream<List<Subsection>> streamSubsections({required String sectionId}) {
-    return _subsectionsRef
+    final ref = _subsectionsRef;
+    if (ref == null) {
+      return const Stream.empty();
+    }
+    return ref
         .where('sectionId', isEqualTo: sectionId)
-        .orderBy('orderIndex')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Subsection.fromMap(doc.data(), documentId: doc.id);
-      }).toList();
+      final list = <Subsection>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Subsection.fromMap(doc.data(), documentId: doc.id));
+        } catch (e) {
+          // Skip corrupt document safely
+        }
+      }
+      list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return list;
     });
   }
 
   Future<void> addSubsection(Subsection subsection) async {
-    final docRef = subsection.id.isEmpty ? _subsectionsRef.doc() : _subsectionsRef.doc(subsection.id);
+    final ref = _subsectionsRef;
+    if (ref == null) return;
+    final docRef = subsection.id.isEmpty ? ref.doc() : ref.doc(subsection.id);
     final subToSave = subsection.id.isEmpty ? subsection.copyWith(id: docRef.id) : subsection;
     await docRef.set(subToSave.toMap());
   }

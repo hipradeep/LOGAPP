@@ -21,7 +21,7 @@ class Section {
     required this.updatedAt,
   });
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({bool forLocalJson = false}) {
     return {
       'id': id,
       'courseId': courseId,
@@ -29,19 +29,21 @@ class Section {
       'description': description,
       'orderIndex': orderIndex,
       'status': status,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
+      'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
+      'updatedAt': forLocalJson ? updatedAt.toIso8601String() : Timestamp.fromDate(updatedAt),
     };
   }
 
   factory Section.fromMap(Map<String, dynamic> map, {String? documentId}) {
     return Section(
-      id: documentId ?? map['id'] as String? ?? '',
-      courseId: map['courseId'] as String? ?? '',
-      title: map['title'] as String? ?? '',
-      description: map['description'] as String? ?? '',
+      id: (documentId != null && documentId.isNotEmpty)
+          ? documentId
+          : (map['id']?.toString() ?? ''),
+      courseId: map['courseId']?.toString() ?? '',
+      title: map['title']?.toString() ?? 'Untitled Section',
+      description: map['description']?.toString() ?? '',
       orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
-      status: map['status'] as String? ?? 'active',
+      status: map['status']?.toString() ?? 'active',
       createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
     );

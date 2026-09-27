@@ -19,24 +19,28 @@ class Course {
     required this.updatedAt,
   });
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({bool forLocalJson = false}) {
     return {
       'id': id,
       'title': title,
       'description': description,
       'status': status,
-      'deadline': deadline != null ? Timestamp.fromDate(deadline!) : null,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
+      'deadline': deadline != null
+          ? (forLocalJson ? deadline!.toIso8601String() : Timestamp.fromDate(deadline!))
+          : null,
+      'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
+      'updatedAt': forLocalJson ? updatedAt.toIso8601String() : Timestamp.fromDate(updatedAt),
     };
   }
 
   factory Course.fromMap(Map<String, dynamic> map, {String? documentId}) {
     return Course(
-      id: documentId ?? map['id'] as String? ?? '',
-      title: map['title'] as String? ?? '',
-      description: map['description'] as String? ?? '',
-      status: map['status'] as String? ?? 'active',
+      id: (documentId != null && documentId.isNotEmpty)
+          ? documentId
+          : (map['id']?.toString() ?? ''),
+      title: map['title']?.toString() ?? 'Untitled Course',
+      description: map['description']?.toString() ?? '',
+      status: map['status']?.toString() ?? 'active',
       deadline: _parseDateTime(map['deadline']),
       createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),

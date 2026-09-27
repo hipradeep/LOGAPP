@@ -7,7 +7,7 @@ import 'controllers/theme_controller.dart';
 import 'services/service_locator.dart';
 import 'services/navigation_service.dart';
 import 'widgets/app_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,7 +76,7 @@ class _StudyLogAppState extends State<StudyLogApp> {
         debugShowCheckedModeBanner: false,
         navigatorKey: NavigationService.navigatorKey,
         theme: AppTheme.themeData,
-        home: const HomeScreen(),
+        home: const MainNavigationScreen(),
       ),
     );
   }
