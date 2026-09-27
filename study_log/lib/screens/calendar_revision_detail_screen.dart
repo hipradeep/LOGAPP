@@ -94,6 +94,7 @@ class _CalendarRevisionDetailScreenState extends State<CalendarRevisionDetailScr
                       if (val == 'progress') _openProgress();
                     },
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    color: AppTheme.surface(context),
                     itemBuilder: (ctx) => [
                       PopupMenuItem(
                         value: 'progress',
@@ -134,16 +135,16 @@ class _CalendarRevisionDetailScreenState extends State<CalendarRevisionDetailScr
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: _event.bgTint,
+                            color: _event.bgTint(context),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: _event.color.withValues(alpha: 0.3)),
+                            border: Border.all(color: _event.color(context).withValues(alpha: 0.3)),
                           ),
                           child: Text(
                             _event.levelLabel,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: _event.color,
+                              color: _event.color(context),
                             ),
                           ),
                         ),
@@ -201,7 +202,7 @@ class _CalendarRevisionDetailScreenState extends State<CalendarRevisionDetailScr
                   onPressed: _event.isCompleted || _isMarking ? null : _handleMarkCompleted,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _event.isCompleted
-                        ? const Color(0xFF10B981)
+                        ?  AppTheme.successColor
                         : AppTheme.primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -256,7 +257,7 @@ class _DetailFieldCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: AppTheme.shadowColor(context),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

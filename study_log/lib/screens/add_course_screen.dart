@@ -37,7 +37,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
   late final TextEditingController _descriptionController;
 
   IconData _selectedIcon = Icons.format_list_bulleted_rounded;
-  Color _selectedColor = const Color(0xFF5B4DFB);
+  Color _selectedColor =  AppTheme.primaryColor;
   DateTime? _selectedDeadline;
   int _descLength = 0;
   bool _isSubmitting = false;
@@ -428,7 +428,7 @@ class _CourseNameField extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFEF4444),
+                color: AppTheme.errorColor,
               ),
             ),
           ],
@@ -447,11 +447,11 @@ class _CourseNameField extends StatelessWidget {
               fontSize: 14,
               color: AppTheme.textPrimaryColor(context),
             ),
-            decoration: const InputDecoration(
+            decoration:  InputDecoration(
               hintText: 'Enter course name',
               hintStyle: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF9CA3AF),
+                color: AppTheme.textMutedColor(context),
               ),
               border: InputBorder.none,
               isDense: true,
@@ -506,11 +506,11 @@ class _CourseDescriptionField extends StatelessWidget {
                   fontSize: 14,
                   color: AppTheme.textPrimaryColor(context),
                 ),
-                decoration: const InputDecoration(
+                decoration:  InputDecoration(
                   hintText: 'Enter description',
                   hintStyle: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF9CA3AF),
+                    color: AppTheme.textMutedColor(context),
                   ),
                   border: InputBorder.none,
                   counterText: '',
@@ -520,9 +520,9 @@ class _CourseDescriptionField extends StatelessWidget {
               ),
               Text(
                 '$charCount/500',
-                style: const TextStyle(
+                style:  TextStyle(
                   fontSize: 11,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                 ),
               ),
             ],
@@ -547,11 +547,11 @@ class _CourseIconAndColorRow extends StatelessWidget {
   });
 
   static const List<Color> _availableColors = [
-    Color(0xFF5B4DFB),
-    Color(0xFF10B981),
+    AppTheme.primaryColor,
+    AppTheme.successColor,
     Color(0xFF3B82F6),
-    Color(0xFFF59E0B),
-    Color(0xFFEF4444),
+    AppTheme.warningColor,
+    AppTheme.errorColor,
     Color(0xFF8B5CF6),
     Color(0xFF6B7280),
   ];
@@ -745,7 +745,7 @@ class _CourseDeadlineField extends StatelessWidget {
                       fontSize: 14,
                       color: selectedDeadline != null
                           ? AppTheme.textPrimaryColor(context)
-                          : const Color(0xFF9CA3AF),
+                          : AppTheme.textMutedColor(context),
                       fontWeight: selectedDeadline != null
                           ? FontWeight.w600
                           : FontWeight.normal,
@@ -755,16 +755,16 @@ class _CourseDeadlineField extends StatelessWidget {
                 if (selectedDeadline != null)
                   GestureDetector(
                     onTap: onClearDate,
-                    child: const Icon(
+                    child:  Icon(
                       Icons.close_rounded,
-                      color: Color(0xFF9CA3AF),
+                      color: AppTheme.textMutedColor(context),
                       size: 20,
                     ),
                   )
                 else
-                  const Icon(
+                   Icon(
                     Icons.chevron_right_rounded,
-                    color: Color(0xFF9CA3AF),
+                    color: AppTheme.textMutedColor(context),
                     size: 22,
                   ),
               ],

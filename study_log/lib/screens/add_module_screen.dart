@@ -44,7 +44,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
   late String _selectedCourseId;
 
   IconData _selectedIcon = Icons.format_list_bulleted_rounded;
-  Color _selectedColor = const Color(0xFF5B4DFB);
+  Color _selectedColor =  AppTheme.primaryColor;
   int _descLength = 0;
   bool _isSubmitting = false;
 
@@ -471,7 +471,7 @@ class _CourseSelectorField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F8),
+              color: AppTheme.surfaceVariant(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppTheme.borderColor(context)),
             ),
@@ -487,9 +487,9 @@ class _CourseSelectorField extends StatelessWidget {
                     color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
-                const Icon(
+                 Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF6B7280),
+                  color: AppTheme.textSecondaryColor(context),
                   size: 22,
                 ),
               ],
@@ -527,7 +527,7 @@ class _ModuleNameField extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFEF4444),
+                color: AppTheme.errorColor,
               ),
             ),
           ],
@@ -546,11 +546,11 @@ class _ModuleNameField extends StatelessWidget {
               fontSize: 14,
               color: AppTheme.textPrimaryColor(context),
             ),
-            decoration: const InputDecoration(
+            decoration:  InputDecoration(
               hintText: 'Enter module name',
               hintStyle: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF9CA3AF),
+                color: AppTheme.textMutedColor(context),
               ),
               border: InputBorder.none,
               isDense: true,
@@ -605,11 +605,11 @@ class _ModuleDescriptionField extends StatelessWidget {
                   fontSize: 14,
                   color: AppTheme.textPrimaryColor(context),
                 ),
-                decoration: const InputDecoration(
+                decoration:  InputDecoration(
                   hintText: 'Enter description',
                   hintStyle: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF9CA3AF),
+                    color: AppTheme.textMutedColor(context),
                   ),
                   border: InputBorder.none,
                   counterText: '',
@@ -619,9 +619,9 @@ class _ModuleDescriptionField extends StatelessWidget {
               ),
               Text(
                 '$charCount/500',
-                style: const TextStyle(
+                style:  TextStyle(
                   fontSize: 11,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                 ),
               ),
             ],
@@ -709,11 +709,11 @@ class _ModuleColorModule extends StatelessWidget {
   });
 
   static const List<Color> _availableColors = [
-    Color(0xFF5B4DFB),
-    Color(0xFF10B981),
+    AppTheme.primaryColor,
+    AppTheme.successColor,
     Color(0xFF3B82F6),
-    Color(0xFFF59E0B),
-    Color(0xFFEF4444),
+    AppTheme.warningColor,
+    AppTheme.errorColor,
     Color(0xFF6B7280),
   ];
 
@@ -797,11 +797,11 @@ class _ModuleOrderField extends StatelessWidget {
                     fontSize: 14,
                     color: AppTheme.textPrimaryColor(context),
                   ),
-                  decoration: const InputDecoration(
+                  decoration:  InputDecoration(
                     hintText: 'Enter order (e.g., 1, 2, 3)',
                     hintStyle: TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF9CA3AF),
+                      color: AppTheme.textMutedColor(context),
                     ),
                     border: InputBorder.none,
                     isDense: true,
@@ -809,9 +809,9 @@ class _ModuleOrderField extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(
+               Icon(
                 Icons.unfold_more_rounded,
-                color: Color(0xFF9CA3AF),
+                color: AppTheme.textMutedColor(context),
                 size: 20,
               ),
             ],

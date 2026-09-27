@@ -58,7 +58,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Color(0xFFEF4444)),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
             child: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
@@ -167,7 +167,7 @@ class _UserProfileCard extends StatelessWidget {
         border: Border.all(color: AppTheme.borderColor(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppTheme.shadowColor(context),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -203,7 +203,7 @@ class _UserProfileCard extends StatelessWidget {
           ),
           Icon(
             Icons.chevron_right_rounded,
-            color: Color(0xFF9CA3AF),
+            color: AppTheme.textMutedColor(context),
             size: 24,
           ),
         ],
@@ -350,9 +350,9 @@ class _ProfileMenuItem extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(
+             Icon(
               Icons.chevron_right_rounded,
-              color: Color(0xFF9CA3AF),
+              color: AppTheme.textMutedColor(context),
               size: 22,
             ),
           ],
@@ -378,7 +378,7 @@ class _ProfileTappableMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? const Color(0xFFEF4444) : const Color(0xFF374151);
+    final color = isDestructive ?  AppTheme.errorColor : const Color(0xFF374151);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Material(
@@ -404,7 +404,7 @@ class _ProfileTappableMenuItem extends StatelessWidget {
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: isDestructive ? const Color(0xFFEF4444) : const Color(0xFF9CA3AF),
+                  color: isDestructive ? AppTheme.errorColor :  AppTheme.textMutedColor(context),
                   size: 22,
                 ),
               ],

@@ -25,6 +25,8 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // theme_rules Rule 3: repaint on theme switch.
+    Theme.of(context);
     final bgColor = isFeatured ? AppTheme.surface(context) : AppTheme.surfaceVariant(context);
     final titleColor = isFeatured ? AppTheme.textOnDark : AppTheme.textPrimaryColor(context);
     final durationColor = isFeatured ? AppTheme.textOnDarkSecondary : AppTheme.textSecondaryColor(context);

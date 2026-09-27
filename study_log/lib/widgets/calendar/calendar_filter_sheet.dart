@@ -170,13 +170,13 @@ class _CalendarFilterSheetState extends State<CalendarFilterSheet> {
             const VGapSm(),
             _CheckboxRow(
               label: 'Completions',
-              color: const Color(0xFF10B981),
+              color:  AppTheme.successColor,
               value: _showCompletions,
               onChanged: (val) => setState(() => _showCompletions = val ?? true),
             ),
             _CheckboxRow(
               label: 'R1 (1 day)',
-              color: const Color(0xFFEF4444),
+              color:  AppTheme.errorColor,
               value: _levels.contains(1),
               onChanged: (val) => setState(() {
                 if (val == true) {
@@ -188,7 +188,7 @@ class _CalendarFilterSheetState extends State<CalendarFilterSheet> {
             ),
             _CheckboxRow(
               label: 'R2 (3 days)',
-              color: const Color(0xFFF59E0B),
+              color:  AppTheme.warningColor,
               value: _levels.contains(2),
               onChanged: (val) => setState(() {
                 if (val == true) {
@@ -200,7 +200,7 @@ class _CalendarFilterSheetState extends State<CalendarFilterSheet> {
             ),
             _CheckboxRow(
               label: 'R3 (7 days)',
-              color: const Color(0xFF0284C7),
+              color: AppTheme.pastelSkyText(context),
               value: _levels.contains(3),
               onChanged: (val) => setState(() {
                 if (val == true) {

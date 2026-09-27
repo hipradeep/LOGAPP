@@ -146,7 +146,7 @@ class _AgendaItemCard extends StatelessWidget {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -159,7 +159,7 @@ class _AgendaItemCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: event.bgTint,
+                  color: event.bgTint(context),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -167,7 +167,7 @@ class _AgendaItemCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: event.color,
+                    color: event.color(context),
                   ),
                 ),
               ),

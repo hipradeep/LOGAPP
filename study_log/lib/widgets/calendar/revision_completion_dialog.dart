@@ -51,7 +51,7 @@ class RevisionCompletionDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: AppTheme.shadowColor(context),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -74,7 +74,7 @@ class RevisionCompletionDialog extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
+              color: AppTheme.successColor,
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -155,7 +155,7 @@ class RevisionCompletionDialog extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFF59E0B),
+                          color: AppTheme.warningColor,
                         ),
                       ),
                     ),

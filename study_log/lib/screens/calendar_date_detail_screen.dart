@@ -162,7 +162,7 @@ class _DateChecklistItem extends StatelessWidget {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -179,9 +179,9 @@ class _DateChecklistItem extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: event.isCompleted ? const Color(0xFF10B981) : Colors.transparent,
+                    color: event.isCompleted ?  AppTheme.successColor : Colors.transparent,
                     border: Border.all(
-                      color: event.isCompleted ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                      color: event.isCompleted ?  AppTheme.successColor : const Color(0xFFCBD5E1),
                       width: 1.8,
                     ),
                   ),
@@ -196,7 +196,7 @@ class _DateChecklistItem extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: event.bgTint,
+                  color: event.bgTint(context),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -204,7 +204,7 @@ class _DateChecklistItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: event.color,
+                    color: event.color(context),
                   ),
                 ),
               ),

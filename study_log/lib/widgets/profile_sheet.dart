@@ -81,6 +81,8 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // theme_rules Rule 3: repaint on theme switch.
+    Theme.of(context);
     return Row(
       children: [
         Container(
@@ -131,6 +133,8 @@ class _CreateCourseOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // theme_rules Rule 3: repaint on theme switch.
+    Theme.of(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),

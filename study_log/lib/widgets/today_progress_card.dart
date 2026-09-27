@@ -63,7 +63,7 @@ class TodayProgressCard extends StatelessWidget {
             border: Border.all(color: AppTheme.borderColor(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
@@ -74,7 +74,7 @@ class TodayProgressCard extends StatelessWidget {
             children: [
               _StatItem(
                 icon: Icons.check_circle_rounded,
-                iconColor: const Color(0xFF10B981),
+                iconColor:  AppTheme.successColor,
                 value: '$completedToday',
                 label: 'Completed',
               ),
@@ -87,13 +87,13 @@ class TodayProgressCard extends StatelessWidget {
               ),
               _StatItem(
                 icon: Icons.calendar_today_rounded,
-                iconColor: const Color(0xFF3B82F6),
+                iconColor: AppTheme.pastelBlueText(context),
                 value: '$goalPercent%',
                 label: 'Daily Goal',
               ),
               _StatItem(
                 icon: Icons.local_fire_department_rounded,
-                iconColor: const Color(0xFFF97316),
+                iconColor: AppTheme.pastelOrangeText(context),
                 value: '$dayStreak',
                 label: 'Day Streak',
               ),

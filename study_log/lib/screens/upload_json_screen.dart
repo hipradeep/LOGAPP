@@ -351,9 +351,9 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0EEFF),
+        color: AppTheme.pastelPurple(context),
         borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        border: Border.all(color: const Color(0xFFE2DCFF)),
+        border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,14 +434,14 @@ class _SampleJsonCardState extends State<_SampleJsonCard> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.data_object_rounded,
-                    size: 16, color: Color(0xFF9CA3AF)),
+                 Icon(Icons.data_object_rounded,
+                    size: 16, color: AppTheme.textMutedColor(context)),
                 const HGapSm(),
-                const Text(
+                 Text(
                   'sample.json',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF9CA3AF),
+                    color: AppTheme.textMutedColor(context),
                     fontFamily: 'monospace',
                   ),
                 ),

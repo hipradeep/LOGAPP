@@ -161,13 +161,11 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     ? getIt<OngoingModulesController>()
                     : null;
                 // Derive module completion from real topic state rather than the
-                // Module's stored `status` string, which is never rewritten when
-                // topics are ticked off.
+                // Module's stored `status` string alone.
                 var completedCount = 0;
                 for (final s in modules) {
-                  final complete = ongoing != null
-                      ? ongoing.isModuleComplete(s.id)
-                      : s.status.toLowerCase() == 'completed';
+                  final complete = (ongoing != null && ongoing.isModuleComplete(s.id)) ||
+                      s.status.toLowerCase() == 'completed';
                   if (complete) completedCount++;
                 }
                 final totalCount = modules.length;
@@ -342,9 +340,9 @@ class _CourseTabsRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration:  BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Color(0xFFEEF0F5), width: 1.5),
+            bottom: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
           ),
         ),
         child: Row(
@@ -399,7 +397,7 @@ class _TabItem extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? AppTheme.primaryColor : const Color(0xFF6B7280),
+            color: isActive ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context),
           ),
         ),
       ),
@@ -472,6 +470,7 @@ class _CourseProgressHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isComplete = totalModules > 0 && completedModules >= totalModules;
     final percent = (progress * 100).toInt();
 
     return Column(
@@ -486,7 +485,9 @@ class _CourseProgressHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondaryColor(context),
+                color: isComplete
+                    ? AppTheme.successColor
+                    : AppTheme.textSecondaryColor(context),
               ),
             ),
             Text(
@@ -494,7 +495,9 @@ class _CourseProgressHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
+                color: isComplete
+                    ? AppTheme.successColor
+                    : AppTheme.textPrimaryColor(context),
               ),
             ),
           ],
@@ -506,7 +509,9 @@ class _CourseProgressHeader extends StatelessWidget {
             value: progress.clamp(0.0, 1.0),
             minHeight: 6,
             backgroundColor: const Color(0xFFECEEF6),
-            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isComplete ? AppTheme.successColor : AppTheme.primaryColor,
+            ),
           ),
         ),
       ],
@@ -530,7 +535,7 @@ class _CourseModulesListView extends StatelessWidget {
   });
 
   static const List<Color> _badgeColorCycle = [
-    Color(0xFF10B981),
+    AppTheme.successColor,
     Color(0xFF38BDF8),
     Color(0xFFFB923C),
     Color(0xFF818CF8),
@@ -616,15 +621,19 @@ class _CourseModulesListView extends StatelessWidget {
             final topicCount = ongoing?.topicCountForModule(module.id) ?? 0;
             final completedTopics =
                 ongoing?.completedTopicCountForModule(module.id) ?? 0;
-            final isComplete = topicCount > 0 && completedTopics >= topicCount;
+            final isComplete = (ongoing != null && ongoing.isModuleComplete(module.id)) ||
+                (topicCount > 0 && completedTopics >= topicCount) ||
+                module.status.toLowerCase() == 'completed';
+            final topicInfo = topicCount > 0
+                ? '$completedTopics / $topicCount topics'
+                : 'No topics yet';
+            final subtitle = module.description.isNotEmpty
+                ? '${module.description} • $topicInfo'
+                : topicInfo;
             return _ModuleListItem(
               number: index + 1,
               title: module.title,
-              subtitle: module.description.isNotEmpty
-                  ? module.description
-                  : topicCount > 0
-                      ? '$completedTopics / $topicCount topics'
-                      : 'No topics yet',
+              subtitle: subtitle,
               isComplete: isComplete,
               badgeColor: isComplete ? AppTheme.successColor : color,
               onTap: () => onModuleTap(module, index),
@@ -726,7 +735,7 @@ class _ModuleListItem extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                color:  AppTheme.successColor.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -734,7 +743,7 @@ class _ModuleListItem extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF10B981),
+                                  color: AppTheme.successColor,
                                   letterSpacing: 0.5,
                                 ),
                               ),
@@ -758,9 +767,9 @@ class _ModuleListItem extends StatelessWidget {
                   ),
                 ),
                 // Trailing Chevron
-                const Icon(
+                 Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                   size: 22,
                 ),
               ],

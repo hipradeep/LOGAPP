@@ -44,20 +44,25 @@ class CourseModuleProgress {
   final String courseId;
   final int completedModules;
   final int totalModules;
+  final bool isCourseMarkedComplete;
 
   const CourseModuleProgress({
     required this.courseId,
     required this.completedModules,
     required this.totalModules,
+    this.isCourseMarkedComplete = false,
   });
 
   bool get hasModules => totalModules > 0;
 
-  /// A course counts as complete only when it has modules and all are done.
-  bool get isComplete => hasModules && completedModules >= totalModules;
+  /// A course counts as complete when marked complete OR when it has modules and all are done.
+  bool get isComplete =>
+      isCourseMarkedComplete || (hasModules && completedModules >= totalModules);
 
-  double get ratio =>
-      hasModules ? (completedModules / totalModules).clamp(0.0, 1.0) : 0.0;
+  double get ratio {
+    if (isComplete) return 1.0;
+    return hasModules ? (completedModules / totalModules).clamp(0.0, 1.0) : 0.0;
+  }
 }
 
 /// Controller responsible for fetching and managing running and upcoming modules dynamically.
@@ -69,6 +74,7 @@ class OngoingModulesController extends ChangeNotifier {
   List<OngoingModuleItem> _ongoingItems = [];
   final Map<String, int> _topicCounts = {};
   final Map<String, int> _completedTopicCounts = {};
+  final Set<String> _completedModuleIds = {};
   final Map<String, CourseModuleProgress> _courseProgress =
       <String, CourseModuleProgress>{};
   int _totalTopicCount = 0;
@@ -96,8 +102,10 @@ class OngoingModulesController extends ChangeNotifier {
   int completedTopicCountForModule(String moduleId) =>
       _completedTopicCounts[moduleId] ?? 0;
 
-  /// True when the module has at least one topic and every one is completed.
+  /// True when the module has at least one topic and every one is completed,
+  /// or when it was marked complete.
   bool isModuleComplete(String moduleId) {
+    if (_completedModuleIds.contains(moduleId)) return true;
     final total = _topicCounts[moduleId] ?? 0;
     if (total <= 0) return false;
     return (_completedTopicCounts[moduleId] ?? 0) >= total;
@@ -138,10 +146,11 @@ class OngoingModulesController extends ChangeNotifier {
 
     try {
       final courses = _coursesController.courses;
-      // Filter out completed and archived courses
-      final activeCourses = courses.where((c) {
+      // Filter out archived courses; completed courses are still tracked for
+      // overall course completion, progress rollups, and statistics.
+      final nonArchivedCourses = courses.where((c) {
         final st = c.status.toLowerCase();
-        return st != 'completed' && st != 'archived';
+        return st != 'archived';
       }).toList();
 
       // Read the topic cache once per refresh instead of once per module.
@@ -151,16 +160,20 @@ class OngoingModulesController extends ChangeNotifier {
       final List<OngoingModuleItem> upcomingItems = [];
       final Map<String, int> topicCounts = <String, int>{};
       final Map<String, int> completedTopicCounts = <String, int>{};
+      final Set<String> completedModuleIds = <String>{};
       final Map<String, CourseModuleProgress> courseProgress =
           <String, CourseModuleProgress>{};
       final Set<DateTime> completionDays = <DateTime>{};
       int totalTopics = 0;
       int completedTopics = 0;
       int completedToday = 0;
-      int courseTotalModules = 0;
-      int courseCompletedModules = 0;
 
-      for (final course in activeCourses) {
+      for (final course in nonArchivedCourses) {
+        int courseTotalModules = 0;
+        int courseCompletedModules = 0;
+        final bool isCourseMarkedComplete =
+            course.status.toLowerCase() == 'completed';
+
         // 1. Fetch cached modules from local disk
         List<Module> modules = await LocalModuleStorage.loadModules(course.id);
 
@@ -228,6 +241,10 @@ class OngoingModulesController extends ChangeNotifier {
             }
           }
 
+          if (studyStatus == ModuleStudyStatus.completed) {
+            completedModuleIds.add(module.id);
+          }
+
           // Course-level rollup must happen before completed modules are skipped
           // below, otherwise a course whose modules are all done would report 0.
           courseTotalModules++;
@@ -235,8 +252,8 @@ class OngoingModulesController extends ChangeNotifier {
             courseCompletedModules++;
           }
 
-          // Exclude completed modules so user only sees running or upcoming modules
-          if (studyStatus == ModuleStudyStatus.completed) {
+          // Exclude completed courses and completed modules from ongoing study items
+          if (isCourseMarkedComplete || studyStatus == ModuleStudyStatus.completed) {
             continue;
           }
 
@@ -266,6 +283,7 @@ class OngoingModulesController extends ChangeNotifier {
           courseId: course.id,
           completedModules: courseCompletedModules,
           totalModules: courseTotalModules,
+          isCourseMarkedComplete: isCourseMarkedComplete,
         );
       }
 
@@ -280,6 +298,9 @@ class OngoingModulesController extends ChangeNotifier {
       _completedTopicCounts
         ..clear()
         ..addAll(completedTopicCounts);
+      _completedModuleIds
+        ..clear()
+        ..addAll(completedModuleIds);
       _courseProgress
         ..clear()
         ..addAll(courseProgress);

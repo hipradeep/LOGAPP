@@ -493,44 +493,11 @@ class _DueLevelSummaryCard extends StatelessWidget {
     required this.onTap,
   });
 
-  static Color _levelColor(int lvl) {
-    switch (lvl) {
-      case 1:
-        return const Color(0xFFEF4444);
-      case 2:
-        return const Color(0xFFF59E0B);
-      case 3:
-        return const Color(0xFF0284C7);
-      case 4:
-        return const Color(0xFF8B5CF6);
-      case 5:
-        return const Color(0xFF16A34A);
-      default:
-        return const Color(0xFF5B4DFB);
-    }
-  }
-
-  static Color _levelBg(int lvl) {
-    switch (lvl) {
-      case 1:
-        return const Color(0xFFFEF2F2);
-      case 2:
-        return const Color(0xFFFFFBEB);
-      case 3:
-        return const Color(0xFFF0F9FF);
-      case 4:
-        return const Color(0xFFFAF5FF);
-      case 5:
-        return const Color(0xFFF0FDF4);
-      default:
-        return const Color(0xFFEEF2FF);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = _levelColor(level);
-    final bg = _levelBg(level);
+    final colors = RevisionLevelPalette.of(context, level);
+    final color = colors.foreground;
+    final bg = colors.background;
 
     return Material(
       color: Colors.transparent,
@@ -544,7 +511,7 @@ class _DueLevelSummaryCard extends StatelessWidget {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -615,7 +582,7 @@ class _DayScheduleItemCard extends StatelessWidget {
             border: Border.all(color: const Color(0xFFF1F5F9)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -627,7 +594,7 @@ class _DayScheduleItemCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: event.bgTint,
+                  color: event.bgTint(context),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -635,7 +602,7 @@ class _DayScheduleItemCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: event.color,
+                    color: event.color(context),
                   ),
                 ),
               ),

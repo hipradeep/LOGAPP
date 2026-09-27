@@ -143,6 +143,8 @@ class _EditCourseSheetState extends State<EditCourseSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // theme_rules Rule 3: repaint on theme switch.
+    Theme.of(context);
     final viewInsets = MediaQuery.viewInsetsOf(context);
 
     return Container(

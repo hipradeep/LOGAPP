@@ -218,6 +218,7 @@ class _CoursesTopBar extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
+            color: AppTheme.surface(context),
             elevation: 6,
             onSelected: onMenuAction,
             itemBuilder: (ctx) => [
@@ -227,14 +228,14 @@ class _CoursesTopBar extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.delete_outline_rounded,
-                      color: Color(0xFFEF4444),
+                      color: AppTheme.errorColor,
                       size: 20,
                     ),
                     HGapMd(),
                     Text(
                       'Delete',
                       style: TextStyle(
-                        color: Color(0xFFEF4444),
+                        color: AppTheme.errorColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -285,7 +286,7 @@ class _CoursesSearchBar extends StatelessWidget {
         border: Border.all(color: AppTheme.borderColor(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: AppTheme.shadowColor(context),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -294,9 +295,9 @@ class _CoursesSearchBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Row(
         children: [
-          const Icon(
+           Icon(
             Icons.search_rounded,
-            color: Color(0xFF9CA3AF),
+            color: AppTheme.textMutedColor(context),
             size: 20,
           ),
           const HGapSm(),
@@ -307,11 +308,11 @@ class _CoursesSearchBar extends StatelessWidget {
                 fontSize: 14,
                 color: AppTheme.textPrimaryColor(context),
               ),
-              decoration: const InputDecoration(
+              decoration:  InputDecoration(
                 hintText: 'Search courses...',
                 hintStyle: TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                 ),
                 border: InputBorder.none,
                 isDense: true,
@@ -396,12 +397,18 @@ class _CoursesFilteredList extends StatelessWidget {
             final rollup = ongoing?.progressForCourse(course.id);
             final progress = rollup?.ratio ?? 0.0;
             final percent = (progress * 100).round();
+            final isComplete = rollup?.isComplete ??
+                (course.status.toLowerCase() == 'completed');
 
             final String subtitle;
-            if (course.description.isNotEmpty) {
+            if (rollup != null && rollup.hasModules) {
+              final moduleInfo =
+                  '${rollup.completedModules} / ${rollup.totalModules} modules';
+              subtitle = course.description.isNotEmpty
+                  ? '${course.description} • $moduleInfo'
+                  : moduleInfo;
+            } else if (course.description.isNotEmpty) {
               subtitle = course.description;
-            } else if (rollup != null && rollup.hasModules) {
-              subtitle = '${rollup.completedModules} / ${rollup.totalModules} modules';
             } else {
               subtitle = 'No modules yet';
             }
@@ -412,8 +419,9 @@ class _CoursesFilteredList extends StatelessWidget {
                 courseId: course.id,
                 title: course.title,
                 subtitle: subtitle,
-                progress: progress,
-                percentage: '$percent%',
+                progress: isComplete ? 1.0 : progress,
+                percentage: isComplete ? '100%' : '$percent%',
+                isComplete: isComplete,
                 onTap: () => onCourseTap(course),
                 onLongPress: () => onCourseLongPress(course),
               ),
@@ -498,6 +506,7 @@ class _CourseItemCard extends StatelessWidget {
   final String subtitle;
   final double progress;
   final String percentage;
+  final bool isComplete;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -507,6 +516,7 @@ class _CourseItemCard extends StatelessWidget {
     required this.subtitle,
     required this.progress,
     required this.percentage,
+    this.isComplete = false,
     this.onTap,
     this.onLongPress,
   });
@@ -515,7 +525,9 @@ class _CourseItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accentIndex =
         CourseIconChip.stableIndex(courseId, AppTheme.tintCount);
-    final accentColor = AppTheme.tintFor(context, accentIndex).$2;
+    final accentColor = isComplete
+        ? AppTheme.successColor
+        : AppTheme.tintFor(context, accentIndex).$2;
 
     return RepaintBoundary(
       child: Material(
@@ -529,10 +541,14 @@ class _CourseItemCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppTheme.surface(context),
               borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor(context)),
+              border: Border.all(
+                color: isComplete
+                    ? AppTheme.successColor.withValues(alpha: 0.25)
+                    : AppTheme.borderColor(context),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: AppTheme.shadowColor(context),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -553,22 +569,54 @@ class _CourseItemCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimaryColor(context),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimaryColor(context),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isComplete) ...[
+                            const HGapXs(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.successColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'COMPLETED',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.successColor,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const VGapXs(),
                       Text(
                         subtitle,
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.textSecondaryColor(context),
+                          color: isComplete
+                              ? AppTheme.successColor
+                              : AppTheme.textSecondaryColor(context),
+                          fontWeight:
+                              isComplete ? FontWeight.w600 : FontWeight.normal,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -593,7 +641,9 @@ class _CourseItemCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.textSecondaryColor(context),
+                              color: isComplete
+                                  ? AppTheme.successColor
+                                  : AppTheme.textSecondaryColor(context),
                             ),
                           ),
                         ],
@@ -603,9 +653,9 @@ class _CourseItemCard extends StatelessWidget {
                 ),
                 const HGapSm(),
                 // Trailing Chevron
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                   size: 22,
                 ),
               ],

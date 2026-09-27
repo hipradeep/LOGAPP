@@ -8,6 +8,8 @@ import '../widgets/topic_status_indicator.dart';
 import '../widgets/topic_status_label.dart';
 import '../models/topic.dart';
 import '../services/local_topic_storage.dart';
+import '../services/local_module_storage.dart';
+import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import 'add_topic_screen.dart';
@@ -54,6 +56,36 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _syncModuleCompletion() async {
+    if (widget.courseId.isEmpty || widget.moduleId.isEmpty) return;
+    try {
+      final modules = await LocalModuleStorage.loadModules(widget.courseId);
+      final idx = modules.indexWhere((m) => m.id == widget.moduleId);
+      if (idx != -1) {
+        final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
+        final newStatus = allDone ? 'completed' : 'active';
+        if (modules[idx].status.toLowerCase() != newStatus) {
+          final updatedModule = modules[idx].copyWith(
+            status: newStatus,
+            updatedAt: DateTime.now(),
+          );
+          modules[idx] = updatedModule;
+          await LocalModuleStorage.saveModulesForCourse(widget.courseId, modules);
+          if (getIt.isRegistered<FirestoreService>()) {
+            final fs = getIt<FirestoreService>();
+            if (fs.isAvailable) {
+              try {
+                await fs.updateModule(updatedModule);
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error syncing module completion: $e');
+    }
+  }
+
   Future<void> _openAddTopicScreen() async {
     final result = await Navigator.push<Topic>(
       context,
@@ -72,34 +104,49 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         _topics.add(result);
       });
       await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      await _syncModuleCompletion();
       if (getIt.isRegistered<OngoingModulesController>()) {
-        getIt<OngoingModulesController>().refresh();
+        await getIt<OngoingModulesController>().refresh();
       }
     }
   }
 
-  void _toggleTopicStatus(int index) {
+  Future<void> _toggleTopicStatus(int index) async {
+    final current = _topics[index];
+    final TopicStatus next;
+    switch (current.status) {
+      case TopicStatus.notStarted:
+        next = TopicStatus.inProgress;
+        break;
+      case TopicStatus.inProgress:
+        next = TopicStatus.completed;
+        break;
+      case TopicStatus.completed:
+        next = TopicStatus.notStarted;
+        break;
+    }
+    final updated = next == TopicStatus.completed
+        ? current.copyWith(status: next, completedAt: DateTime.now())
+        : current.copyWith(status: next, clearCompletedAt: true);
+
     setState(() {
-      final current = _topics[index];
-      final TopicStatus next;
-      switch (current.status) {
-        case TopicStatus.notStarted:
-          next = TopicStatus.inProgress;
-          break;
-        case TopicStatus.inProgress:
-          next = TopicStatus.completed;
-          break;
-        case TopicStatus.completed:
-          next = TopicStatus.notStarted;
-          break;
-      }
-      _topics[index] = next == TopicStatus.completed
-          ? current.copyWith(status: next, completedAt: DateTime.now())
-          : current.copyWith(status: next, clearCompletedAt: true);
+      _topics[index] = updated;
     });
-    LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+
+    await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+    await _syncModuleCompletion();
+
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable && updated.id.isNotEmpty) {
+        firestore.updateTopic(updated).catchError((e) {
+          debugPrint('Error updating topic in firestore: $e');
+        });
+      }
+    }
+
     if (getIt.isRegistered<OngoingModulesController>()) {
-      getIt<OngoingModulesController>().refresh();
+      await getIt<OngoingModulesController>().refresh();
     }
   }
 
@@ -115,8 +162,19 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         _topics.removeAt(index);
       });
       await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      await _syncModuleCompletion();
+
+      if (getIt.isRegistered<FirestoreService>()) {
+        final firestore = getIt<FirestoreService>();
+        if (firestore.isAvailable && sub.id.isNotEmpty) {
+          firestore.deleteTopic(sub.id).catchError((e) {
+            debugPrint('Error deleting topic in firestore: $e');
+          });
+        }
+      }
+
       if (getIt.isRegistered<OngoingModulesController>()) {
-        getIt<OngoingModulesController>().refresh();
+        await getIt<OngoingModulesController>().refresh();
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -401,9 +459,9 @@ class _TopicListItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(
+                 Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                   size: 24,
                 ),
               ],

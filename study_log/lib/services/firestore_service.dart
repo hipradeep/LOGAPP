@@ -147,6 +147,18 @@ class FirestoreService {
     await docRef.set(subToSave.toMap());
   }
 
+  Future<void> updateTopic(Topic topic) async {
+    final ref = _topicsRef;
+    if (ref == null || topic.id.isEmpty) return;
+    await ref.doc(topic.id).update(topic.toMap());
+  }
+
+  Future<void> deleteTopic(String topicId) async {
+    final ref = _topicsRef;
+    if (ref == null || topicId.isEmpty) return;
+    await ref.doc(topicId).delete();
+  }
+
   CollectionReference<Map<String, dynamic>>? get _revisionsRef =>
       _firestore?.collection('revisions');
 

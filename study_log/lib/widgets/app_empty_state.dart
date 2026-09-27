@@ -22,6 +22,8 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // theme_rules Rule 3: repaint on theme switch.
+    Theme.of(context);
     final themeColor = iconColor ?? AppTheme.primaryColor;
 
     return Center(
@@ -51,7 +53,7 @@ class AppEmptyState extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: AppTheme.shadowColor(context),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/revision_level_palette.dart';
 import '../app_spacers.dart';
 
 class _LegendItem {
@@ -13,24 +14,33 @@ class _LegendItem {
 class CalendarLegend extends StatelessWidget {
   const CalendarLegend({super.key});
 
-  static const List<_LegendItem> _items = [
-    _LegendItem('Completion', Color(0xFF10B981)),
-    _LegendItem('R1 (1 day)', Color(0xFFEF4444)),
-    _LegendItem('R2 (3 days)', Color(0xFFF59E0B)),
-    _LegendItem('R3 (7 days)', Color(0xFF0284C7)),
-    _LegendItem('R4 (14 days)', Color(0xFF8B5CF6)),
-    _LegendItem('R5 (30 days)', Color(0xFF16A34A)),
+  static const List<String> _labels = [
+    'Completion',
+    'R1 (1 day)',
+    'R2 (3 days)',
+    'R3 (7 days)',
+    'R4 (14 days)',
+    'R5 (30 days)',
   ];
 
   @override
   Widget build(BuildContext context) {
+    final items = <_LegendItem>[
+      _LegendItem(_labels[0], RevisionLevelPalette.completed(context).foreground),
+      for (var level = 1; level < _labels.length; level++)
+        _LegendItem(
+          _labels[level],
+          RevisionLevelPalette.of(context, level).foreground,
+        ),
+    ];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Wrap(
         spacing: 12,
         runSpacing: 8,
         alignment: WrapAlignment.center,
-        children: _items.map((item) => _LegendPill(item: item)).toList(),
+        children: items.map((item) => _LegendPill(item: item)).toList(),
       ),
     );
   }

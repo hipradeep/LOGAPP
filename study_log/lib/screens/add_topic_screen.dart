@@ -51,10 +51,10 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
 
   static const List<Color> _swatchColors = [
     Color(0xFF6366F1), // Purple (default)
-    Color(0xFF10B981), // Emerald Green
+    AppTheme.successColor, // Emerald Green
     Color(0xFF3B82F6), // Blue
-    Color(0xFFF59E0B), // Amber/Orange
-    Color(0xFFEF4444), // Red/Coral
+    AppTheme.warningColor, // Amber/Orange
+    AppTheme.errorColor, // Red/Coral
     Color(0xFF6B7280), // Slate/Gray
   ];
 
@@ -574,9 +574,9 @@ class _ModuleField extends StatelessWidget {
                     ),
                   )
                 else
-                  const Icon(
+                   Icon(
                     Icons.keyboard_arrow_down_rounded,
-                    color: Color(0xFF9CA3AF),
+                    color: AppTheme.textMutedColor(context),
                     size: 22,
                   ),
               ],
@@ -610,7 +610,7 @@ class _TopicNameField extends StatelessWidget {
               TextSpan(
                 text: '*',
                 style: TextStyle(
-                  color: Color(0xFFEF4444),
+                  color: AppTheme.errorColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -627,9 +627,9 @@ class _TopicNameField extends StatelessWidget {
           ),
           decoration: InputDecoration(
             hintText: 'Enter topic name',
-            hintStyle: const TextStyle(
+            hintStyle:  TextStyle(
               fontSize: 14,
-              color: Color(0xFF9CA3AF),
+              color: AppTheme.textMutedColor(context),
               fontWeight: FontWeight.normal,
             ),
             filled: true,
@@ -703,11 +703,11 @@ class _DescriptionField extends StatelessWidget {
                   maxLength,
                 }) =>
                     null,
-                decoration: const InputDecoration(
+                decoration:  InputDecoration(
                   hintText: 'Enter description',
                   hintStyle: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF9CA3AF),
+                    color: AppTheme.textMutedColor(context),
                     fontWeight: FontWeight.normal,
                   ),
                   isDense: true,
@@ -717,9 +717,9 @@ class _DescriptionField extends StatelessWidget {
               ),
               Text(
                 '$currentLength/500',
-                style: const TextStyle(
+                style:  TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -760,7 +760,7 @@ class _IconField extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
+                color: AppTheme.pastelIndigo(context),
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
@@ -885,16 +885,16 @@ class _OrderField extends StatelessWidget {
           ),
           decoration: InputDecoration(
             hintText: 'Enter order (e.g., 1, 2, 3)',
-            hintStyle: const TextStyle(
+            hintStyle:  TextStyle(
               fontSize: 14,
-              color: Color(0xFF9CA3AF),
+              color: AppTheme.textMutedColor(context),
               fontWeight: FontWeight.normal,
             ),
             filled: true,
             fillColor: AppTheme.surface(context),
-            suffixIcon: const Icon(
+            suffixIcon:  Icon(
               Icons.unfold_more_rounded,
-              color: Color(0xFF9CA3AF),
+              color: AppTheme.textMutedColor(context),
               size: 22,
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

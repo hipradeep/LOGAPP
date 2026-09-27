@@ -2,25 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../controllers/theme_controller.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_provider.dart';
-import '../widgets/app_spacers.dart';
+import 'app_provider.dart';
+import 'app_spacers.dart';
 
-/// Bottom sheet offering the three theme choices: Dark, Light and System.
+/// Bottom sheet offering the three theme choices: Light, Dark and System.
 ///
 /// Reads the mode with `AppProvider.watch` so selecting an option repaints the
-/// sheet immediately instead of waiting for a reopen.
+/// sheet immediately instead of waiting for a reopen. The provider is available
+/// here because it sits above `MaterialApp`, so sheet routes inherit it.
 class AppearanceSheet extends StatelessWidget {
   const AppearanceSheet({super.key});
 
   static Future<void> show(BuildContext context) {
-    final themeController = AppProvider.read<ThemeController>(context);
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => AppProvider<ThemeController>(
-        notifier: themeController,
-        child: const AppearanceSheet(),
-      ),
+      builder: (_) => const AppearanceSheet(),
     );
   }
 

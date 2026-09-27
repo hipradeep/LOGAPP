@@ -5,6 +5,7 @@ import '../models/revision.dart';
 import '../services/service_locator.dart';
 import 'revision_controller.dart';
 import 'courses_controller.dart';
+import 'ongoing_modules_controller.dart';
 
 /// Controller powering the StudyLog Calendar and all its views:
 /// - Month View, Week View, Agenda View
@@ -14,6 +15,7 @@ import 'courses_controller.dart';
 class CalendarController extends ChangeNotifier {
   final RevisionController _revisionController;
   final CoursesController _coursesController;
+  final OngoingModulesController _ongoingController;
 
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
@@ -26,10 +28,14 @@ class CalendarController extends ChangeNotifier {
   CalendarController({
     RevisionController? revisionController,
     CoursesController? coursesController,
+    OngoingModulesController? ongoingController,
   })  : _revisionController = revisionController ?? getIt<RevisionController>(),
-        _coursesController = coursesController ?? getIt<CoursesController>() {
+        _coursesController = coursesController ?? getIt<CoursesController>(),
+        _ongoingController =
+            ongoingController ?? getIt<OngoingModulesController>() {
     _revisionController.addListener(_onRevisionsChanged);
     _coursesController.addListener(_onCoursesChanged);
+    _ongoingController.addListener(_onOngoingChanged);
   }
 
   DateTime get selectedDate => _selectedDate;
@@ -47,10 +53,15 @@ class CalendarController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onOngoingChanged() {
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _revisionController.removeListener(_onRevisionsChanged);
     _coursesController.removeListener(_onCoursesChanged);
+    _ongoingController.removeListener(_onOngoingChanged);
     super.dispose();
   }
 
@@ -176,25 +187,67 @@ class CalendarController extends ChangeNotifier {
       }
 
       // 2. Completed Milestones (if enabled)
-      if (_showCompletions && r.completedAt != null) {
-        final c = r.completedAt!;
+      if (_showCompletions) {
+        // A. Module completion milestone (on the day user finished studying the module)
+        final created = r.createdAt;
         events.add(
           CalendarEvent(
-            id: '${r.id}_completed',
+            id: '${r.id}_module_completed',
             revisionId: r.id,
             topicTitle: r.moduleTitle,
             courseTitle: r.courseTitle,
             moduleTitle: r.moduleDescription.isNotEmpty ? r.moduleDescription : r.moduleTitle,
             courseId: r.courseId,
             moduleId: r.moduleId,
-            level: r.currentLevel,
-            date: DateTime(c.year, c.month, c.day),
+            level: 1,
+            date: DateTime(created.year, created.month, created.day),
             time: time,
             isCompleted: true,
-            completedAt: c,
-            notes: 'Completed milestone revision.',
+            completedAt: created,
+            notes: 'Module completed • Spaced repetition cycle active.',
           ),
         );
+
+        // B. Revisions completed
+        if (r.completedAt != null) {
+          final c = r.completedAt!;
+          events.add(
+            CalendarEvent(
+              id: '${r.id}_completed_ladder',
+              revisionId: r.id,
+              topicTitle: r.moduleTitle,
+              courseTitle: r.courseTitle,
+              moduleTitle: r.moduleDescription.isNotEmpty ? r.moduleDescription : r.moduleTitle,
+              courseId: r.courseId,
+              moduleId: r.moduleId,
+              level: r.currentLevel,
+              date: DateTime(c.year, c.month, c.day),
+              time: time,
+              isCompleted: true,
+              completedAt: c,
+              notes: 'Mastered all revision levels (R5 completed).',
+            ),
+          );
+        } else if (r.currentLevel > 1) {
+          final updated = r.updatedAt;
+          events.add(
+            CalendarEvent(
+              id: '${r.id}_completed_r${r.currentLevel - 1}',
+              revisionId: r.id,
+              topicTitle: r.moduleTitle,
+              courseTitle: r.courseTitle,
+              moduleTitle: r.moduleDescription.isNotEmpty ? r.moduleDescription : r.moduleTitle,
+              courseId: r.courseId,
+              moduleId: r.moduleId,
+              level: r.currentLevel - 1,
+              date: DateTime(updated.year, updated.month, updated.day),
+              time: time,
+              isCompleted: true,
+              completedAt: updated,
+              notes: 'Completed R${r.currentLevel - 1} revision milestone.',
+            ),
+          );
+        }
       }
     }
 

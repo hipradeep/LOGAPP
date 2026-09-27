@@ -116,9 +116,9 @@ class _TimelineStep extends StatelessWidget {
                 height: 28,
                 decoration: BoxDecoration(
                   color: isCompleted
-                      ? const Color(0xFF10B981)
+                      ?  AppTheme.successColor
                       : isCurrent
-                          ? const Color(0xFF5B4DFB)
+                          ?  AppTheme.primaryColor
                           : const Color(0xFFE2E8F0),
                   shape: BoxShape.circle,
                 ),
@@ -140,7 +140,7 @@ class _TimelineStep extends StatelessWidget {
                 Expanded(
                   child: Container(
                     width: 2,
-                    color: isCompleted ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                    color: isCompleted ?  AppTheme.successColor : const Color(0xFFE2E8F0),
                   ),
                 ),
             ],
@@ -168,7 +168,7 @@ class _TimelineStep extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: isCompleted
-                            ? const Color(0xFF10B981)
+                            ?  AppTheme.successColor
                             : isCurrent
                                 ? AppTheme.primaryColor
                                 : AppTheme.textSecondaryColor(context),
@@ -180,7 +180,7 @@ class _TimelineStep extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: isCompleted ? const Color(0xFF10B981) : AppTheme.textSecondaryColor(context),
+                        color: isCompleted ? AppTheme.successColor : AppTheme.textSecondaryColor(context),
                       ),
                     ),
                     const Spacer(),

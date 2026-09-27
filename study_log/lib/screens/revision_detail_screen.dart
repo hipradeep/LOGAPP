@@ -153,12 +153,12 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                 ListTile(
                   leading: const Icon(
                     Icons.delete_outline_rounded,
-                    color: Color(0xFFEF4444),
+                    color: AppTheme.errorColor,
                   ),
                   title: const Text(
                     'Remove from revision',
                     style: TextStyle(
-                      color: Color(0xFFEF4444),
+                      color: AppTheme.errorColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -534,9 +534,9 @@ class _RevisionTabsRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration:  BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Color(0xFFEEF0F5), width: 1.5),
+            bottom: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
           ),
         ),
         child: Row(
@@ -591,7 +591,7 @@ class _TabItem extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? AppTheme.primaryColor : const Color(0xFF6B7280),
+            color: isActive ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context),
           ),
         ),
       ),
@@ -780,9 +780,9 @@ class _TopicListItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(
+                 Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                   size: 24,
                 ),
               ],
@@ -874,7 +874,7 @@ class _TimelineRow extends StatelessWidget {
         ? AppTheme.successColor.withValues(alpha: 0.30)
         : isCurrent
             ? AppTheme.primaryColor.withValues(alpha: 0.25)
-            : const Color(0xFFEEF0F5);
+            : AppTheme.borderColor(context);
 
     return IntrinsicHeight(
       child: Row(
@@ -1042,7 +1042,7 @@ class _StatusBadge extends StatelessWidget {
       case _StepState.upcoming:
         label = 'Upcoming';
         bg = const Color(0xFFF3F4F6);
-        fg = const Color(0xFF6B7280);
+        fg = AppTheme.textSecondaryColor(context);
         break;
     }
 

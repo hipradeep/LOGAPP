@@ -31,62 +31,36 @@ class _RevisionLevelConfig {
   final int level;
   final String label;
   final String interval;
-  final Color color;
-  final Color bg;
-  final Color border;
+  final RevisionLevelColors colors;
 
   const _RevisionLevelConfig({
     required this.level,
     required this.label,
     required this.interval,
-    required this.color,
-    required this.bg,
-    required this.border,
+    required this.colors,
   });
 }
 
-const List<_RevisionLevelConfig> _kLevelConfigs = [
-  _RevisionLevelConfig(
-    level: 1,
-    label: 'R1',
-    interval: '1 day',
-    color: Color(0xFFEF4444),
-    bg: Color(0xFFFEF2F2),
-    border: Color(0xFFFEE2E2),
-  ),
-  _RevisionLevelConfig(
-    level: 2,
-    label: 'R2',
-    interval: '3 days',
-    color: Color(0xFFF59E0B),
-    bg: Color(0xFFFFFBEB),
-    border: Color(0xFFFEF3C7),
-  ),
-  _RevisionLevelConfig(
-    level: 3,
-    label: 'R3',
-    interval: '7 days',
-    color: Color(0xFF0284C7),
-    bg: Color(0xFFF0F9FF),
-    border: Color(0xFFE0F2FE),
-  ),
-  _RevisionLevelConfig(
-    level: 4,
-    label: 'R4',
-    interval: '14 days',
-    color: Color(0xFF8B5CF6),
-    bg: Color(0xFFFAF5FF),
-    border: Color(0xFFF3E8FF),
-  ),
-  _RevisionLevelConfig(
-    level: 5,
-    label: 'R5',
-    interval: '30 days',
-    color: Color(0xFF16A34A),
-    bg: Color(0xFFF0FDF4),
-    border: Color(0xFFDCFCE7),
-  ),
+const List<({int level, String label, String interval})> _kLevelMeta = [
+  (level: 1, label: 'R1', interval: '1 day'),
+  (level: 2, label: 'R2', interval: '3 days'),
+  (level: 3, label: 'R3', interval: '7 days'),
+  (level: 4, label: 'R4', interval: '14 days'),
+  (level: 5, label: 'R5', interval: '30 days'),
 ];
+
+/// Level metadata joined with the shared theme-aware level colours.
+List<_RevisionLevelConfig> _revisionLevelConfigs(BuildContext context) {
+  return [
+    for (final meta in _kLevelMeta)
+      _RevisionLevelConfig(
+        level: meta.level,
+        label: meta.label,
+        interval: meta.interval,
+        colors: RevisionLevelPalette.of(context, meta.level),
+      ),
+  ];
+}
 
 /// Revision screen — a tracking list for the R1 -> R5 spaced repetition ladder.
 ///
@@ -559,25 +533,26 @@ class _RevisionTopBar extends StatelessWidget {
           const HGapSm(),
           PopupMenuButton<String>(
             onSelected: onMenuAction,
+            color: AppTheme.surface(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
             elevation: 6,
-            itemBuilder: (ctx) => const [
+            itemBuilder: (ctx) => [
               PopupMenuItem<String>(
                 value: 'showFinished',
                 child: Row(
                   children: [
                     Icon(
                       Icons.check_circle_outline_rounded,
-                      color: Color(0xFF1E293B),
+                      color: AppTheme.textPrimaryColor(context),
                       size: 20,
                     ),
                     HGapMd(),
                     Text(
                       'Toggle finished',
                       style: TextStyle(
-                        color: Color(0xFF1E293B),
+                        color: AppTheme.textPrimaryColor(context),
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
@@ -622,7 +597,7 @@ class _RevisionSearchBar extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppTheme.shadowColor(context),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -690,7 +665,7 @@ class _RevisionLevelFilterRow extends StatelessWidget {
             count: totalCount,
             onTap: () => onSelected(null),
           ),
-          for (final config in _kLevelConfigs)
+          for (final config in _revisionLevelConfigs(context))
             _LevelTabCard(
               config: config,
               count: revisions.where((r) => r.currentLevel == config.level).length,
@@ -719,7 +694,7 @@ class _AllPillTab extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 10),
       child: Material(
-        color: isSelected ? const Color(0xFFEEF2FF) : Colors.white,
+        color: isSelected ? AppTheme.pastelIndigo(context) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
@@ -742,7 +717,7 @@ class _AllPillTab extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 color: isSelected
-                    ? const Color(0xFF4F46E5)
+                    ? AppTheme.pastelIndigoText(context)
                     : const Color(0xFF64748B),
               ),
             ),
@@ -771,7 +746,7 @@ class _LevelTabCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 10),
       child: Material(
-        color: config.bg,
+        color: config.colors.background,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
@@ -782,7 +757,7 @@ class _LevelTabCard extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSelected ? config.color : config.border,
+                color: isSelected ? config.colors.foreground : config.colors.border,
                 width: isSelected ? 1.6 : 1.0,
               ),
             ),
@@ -797,7 +772,7 @@ class _LevelTabCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.bold,
-                        color: config.color,
+                        color: config.colors.foreground,
                       ),
                     ),
                     const HGapXs(),
@@ -805,7 +780,7 @@ class _LevelTabCard extends StatelessWidget {
                       width: 18,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: config.color,
+                        color: config.colors.foreground,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -875,15 +850,15 @@ class _RevisionSectionHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF2FF),
+              color: AppTheme.pastelIndigo(context),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               '$count',
-              style: const TextStyle(
+              style:  TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF4F46E5),
+                color: AppTheme.pastelIndigoText(context),
               ),
             ),
           ),
@@ -892,6 +867,7 @@ class _RevisionSectionHeader extends StatelessWidget {
             initialValue: sortMode,
             onSelected: onSortChanged,
             position: PopupMenuPosition.under,
+            color: AppTheme.surface(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
@@ -935,7 +911,7 @@ class _RevisionSectionHeader extends StatelessWidget {
           const HGapSm(),
           Material(
             color: scope != RevisionScope.all
-                ? const Color(0xFFEEF2FF)
+                ? AppTheme.pastelIndigo(context)
                 : const Color(0xFFF1F5F9),
             shape: const CircleBorder(),
             child: InkWell(
@@ -956,7 +932,7 @@ class _RevisionSectionHeader extends StatelessWidget {
                 child: Icon(
                   Icons.tune_rounded,
                   color: scope != RevisionScope.all
-                      ? const Color(0xFF4F46E5)
+                      ? AppTheme.pastelIndigoText(context)
                       : const Color(0xFF475569),
                   size: 18,
                 ),
@@ -1009,7 +985,7 @@ class _RevisionItemCard extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: AppTheme.shadowColor(context),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -1067,7 +1043,7 @@ class _RevisionItemCard extends StatelessWidget {
                                 ? Icons.check_circle_rounded
                                 : Icons.access_time_rounded,
                             size: 15,
-                            color: isDue ? const Color(0xFFEF4444) : dueColor,
+                            color: isDue ?  AppTheme.errorColor : dueColor,
                           ),
                           const HGapXs(),
                           Flexible(
@@ -1077,7 +1053,7 @@ class _RevisionItemCard extends StatelessWidget {
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color:
-                                    isDue ? const Color(0xFFEF4444) : dueColor,
+                                    isDue ?  AppTheme.errorColor : dueColor,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1140,7 +1116,7 @@ class _RevisionIconBox extends StatelessWidget {
       return _buildBox(
         icon: Icons.coffee_rounded,
         bg: const Color(0xFFFFF1F2),
-        fg: const Color(0xFFEF4444),
+        fg:  AppTheme.errorColor,
         border: const Color(0xFFFEE2E2),
       );
     }
@@ -1169,9 +1145,9 @@ class _RevisionIconBox extends StatelessWidget {
         lower.contains('ios')) {
       return _buildBox(
         icon: Icons.flutter_dash_rounded,
-        bg: const Color(0xFFE0F2FE),
-        fg: const Color(0xFF0284C7),
-        border: const Color(0xFFBAE6FD),
+        bg: AppTheme.pastelSky(context),
+        fg: AppTheme.pastelSkyText(context),
+        border: AppTheme.pastelSkyBorder(context),
       );
     }
     if (lower.contains('database') ||
@@ -1256,24 +1232,25 @@ class _RevisionLevelPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = _kLevelConfigs.firstWhere(
+    final configs = _revisionLevelConfigs(context);
+    final config = configs.firstWhere(
       (c) => c.level == level,
-      orElse: () => _kLevelConfigs.first,
+      orElse: () => configs.first,
     );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: config.bg,
+        color: config.colors.background,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: config.border, width: 0.8),
+        border: Border.all(color: config.colors.border, width: 0.8),
       ),
       child: Text(
         config.label,
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.bold,
-          color: config.color,
+          color: config.colors.foreground,
         ),
       ),
     );

@@ -48,6 +48,10 @@ class _Palette {
   final Color indigoText;
   final Color indigoBorder;
 
+  final Color coralBg;
+  final Color coralText;
+  final Color coralBorder;
+
   const _Palette({
     required this.background,
     required this.surface,
@@ -77,6 +81,9 @@ class _Palette {
     required this.indigoBg,
     required this.indigoText,
     required this.indigoBorder,
+    required this.coralBg,
+    required this.coralText,
+    required this.coralBorder,
   });
 
   static const _Palette light = _Palette(
@@ -108,6 +115,9 @@ class _Palette {
     indigoBg: Color(0xFFEEF2FF),
     indigoText: Color(0xFF4F46E5),
     indigoBorder: Color(0xFFE0E7FF),
+    coralBg: Color(0xFFFEF2F2),
+    coralText: Color(0xFFEF4444),
+    coralBorder: Color(0xFFFEE2E2),
   );
 
   /// Pastels become deep, low-chroma tints in dark mode so that the lighter
@@ -141,6 +151,9 @@ class _Palette {
     indigoBg: Color(0xFF1E2145),
     indigoText: Color(0xFF9BA3F5),
     indigoBorder: Color(0xFF2F3465),
+    coralBg: Color(0xFF3B1D1D),
+    coralText: Color(0xFFF98A8A),
+    coralBorder: Color(0xFF5C2B2B),
   );
 }
 
@@ -228,6 +241,9 @@ class AppTheme {
   static Color pastelIndigo(BuildContext context) => _resolve(context).indigoBg;
   static Color pastelIndigoText(BuildContext context) => _resolve(context).indigoText;
   static Color pastelIndigoBorder(BuildContext context) => _resolve(context).indigoBorder;
+  static Color pastelCoral(BuildContext context) => _resolve(context).coralBg;
+  static Color pastelCoralText(BuildContext context) => _resolve(context).coralText;
+  static Color pastelCoralBorder(BuildContext context) => _resolve(context).coralBorder;
 
   /// Number of distinct tints available from [tintFor].
   static const int tintCount = 6;
@@ -249,53 +265,70 @@ class AppTheme {
     };
   }
 
-  /// Reads the palette for [context]'s brightness, falling back to [isDark]
-  /// when no [Theme] ancestor is available.
+  /// Reads the palette for [context]'s brightness.
+  ///
+  /// [Theme.maybeBrightnessOf] registers an inherited dependency, so the
+  /// calling widget rebuilds when the theme changes. Falls back to [_palette]
+  /// when neither a [Theme] ancestor nor a platform brightness is available.
   static _Palette _resolve(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return brightness == Brightness.dark ? _Palette.dark : _Palette.light;
+    final brightness = Theme.maybeBrightnessOf(context);
+    if (brightness != null) {
+      return brightness == Brightness.dark ? _Palette.dark : _Palette.light;
+    }
+    return _palette;
   }
 
-  // Typography. Colours resolve from [isDark] because these getters take no
-  // context; widgets using them must register a theme dependency in build.
-  static TextStyle get headingLarge => GoogleFonts.outfit(
+  // Typography. These getters take no context, so their colours resolve from
+  // [isDark]; every widget using them MUST call `Theme.of(context)` inside its
+  // build method so Flutter schedules a rebuild when the theme changes.
+  // [_buildThemeData] uses the palette-taking variants below so a ThemeData is
+  // never built with the opposite mode's text colours.
+  static TextStyle get headingLarge => _headingLarge(_palette);
+  static TextStyle get headingMedium => _headingMedium(_palette);
+  static TextStyle get headingSmall => _headingSmall(_palette);
+  static TextStyle get bodyLarge => _bodyLarge(_palette);
+  static TextStyle get bodyMedium => _bodyMedium(_palette);
+  static TextStyle get bodySmall => _bodySmall(_palette);
+  static TextStyle get actionText => _actionText(_palette);
+
+  static TextStyle _headingLarge(_Palette p) => GoogleFonts.outfit(
         fontSize: 28,
         fontWeight: FontWeight.bold,
-        color: _palette.textPrimary,
+        color: p.textPrimary,
         letterSpacing: -0.5,
       );
 
-  static TextStyle get headingMedium => GoogleFonts.outfit(
+  static TextStyle _headingMedium(_Palette p) => GoogleFonts.outfit(
         fontSize: 22,
         fontWeight: FontWeight.bold,
-        color: _palette.textPrimary,
+        color: p.textPrimary,
         letterSpacing: -0.3,
       );
 
-  static TextStyle get headingSmall => GoogleFonts.outfit(
+  static TextStyle _headingSmall(_Palette p) => GoogleFonts.outfit(
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: _palette.textPrimary,
+        color: p.textPrimary,
       );
 
-  static TextStyle get bodyLarge => GoogleFonts.inter(
+  static TextStyle _bodyLarge(_Palette p) => GoogleFonts.inter(
         fontSize: 15,
-        color: _palette.textPrimary,
+        color: p.textPrimary,
         height: 1.4,
       );
 
-  static TextStyle get bodyMedium => GoogleFonts.inter(
+  static TextStyle _bodyMedium(_Palette p) => GoogleFonts.inter(
         fontSize: 13,
-        color: _palette.textSecondary,
+        color: p.textSecondary,
         height: 1.4,
       );
 
-  static TextStyle get bodySmall => GoogleFonts.inter(
+  static TextStyle _bodySmall(_Palette p) => GoogleFonts.inter(
         fontSize: 11,
-        color: _palette.textSecondary,
+        color: p.textSecondary,
       );
 
-  static TextStyle get actionText => GoogleFonts.inter(
+  static TextStyle _actionText(_Palette p) => GoogleFonts.inter(
         fontSize: 13,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.5,
@@ -349,12 +382,12 @@ class AppTheme {
         onError: textOnDark,
       ),
       textTheme: GoogleFonts.interTextTheme().copyWith(
-        displayLarge: headingLarge,
-        displayMedium: headingMedium,
-        titleLarge: headingSmall,
-        bodyLarge: bodyLarge,
-        bodyMedium: bodyMedium,
-        bodySmall: bodySmall,
+        displayLarge: _headingLarge(palette),
+        displayMedium: _headingMedium(palette),
+        titleLarge: _headingSmall(palette),
+        bodyLarge: _bodyLarge(palette),
+        bodyMedium: _bodyMedium(palette),
+        bodySmall: _bodySmall(palette),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

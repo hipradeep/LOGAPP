@@ -49,11 +49,11 @@ class StudyConfirmationDialog extends StatelessWidget {
       barrierDismissible: true,
       builder: (ctx) => const StudyConfirmationDialog(
         icon: Icons.delete_outline_rounded,
-        iconColor: Color(0xFFEF4444),
+        iconColor: AppTheme.errorColor,
         title: 'Delete Course?',
         message: 'This action cannot be undone.',
         confirmText: 'Delete',
-        confirmColor: Color(0xFFEF4444),
+        confirmColor: AppTheme.errorColor,
       ),
     );
     return result ?? false;
@@ -66,11 +66,11 @@ class StudyConfirmationDialog extends StatelessWidget {
       barrierDismissible: true,
       builder: (ctx) => const StudyConfirmationDialog(
         icon: Icons.delete_outline_rounded,
-        iconColor: Color(0xFFEF4444),
+        iconColor: AppTheme.errorColor,
         title: 'Delete Module?',
         message: 'This action cannot be undone.',
         confirmText: 'Delete',
-        confirmColor: Color(0xFFEF4444),
+        confirmColor: AppTheme.errorColor,
       ),
     );
     return result ?? false;
@@ -83,11 +83,11 @@ class StudyConfirmationDialog extends StatelessWidget {
       barrierDismissible: true,
       builder: (ctx) => const StudyConfirmationDialog(
         icon: Icons.delete_outline_rounded,
-        iconColor: Color(0xFFEF4444),
+        iconColor: AppTheme.errorColor,
         title: 'Delete Topic?',
         message: 'This action cannot be undone.',
         confirmText: 'Delete',
-        confirmColor: Color(0xFFEF4444),
+        confirmColor: AppTheme.errorColor,
       ),
     );
     return result ?? false;
@@ -140,7 +140,7 @@ class StudyConfirmationDialog extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () => Navigator.pop(context, false),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEEF2FF),
+                        backgroundColor: AppTheme.pastelIndigo(context),
                         foregroundColor: AppTheme.primaryColor,
                         elevation: 0,
                         shape: RoundedRectangleBorder(

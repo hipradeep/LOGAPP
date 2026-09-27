@@ -198,7 +198,7 @@ class _CardPalette {
 
 List<_CardPalette> _cardPalettes(BuildContext context) {
   return [
-    for (var i = 0; i < 4; i++)
+    for (var i = 0; i < AppTheme.tintCount; i++)
       () {
         final tint = AppTheme.tintFor(context, i);
         return _CardPalette(tint.$1, tint.$3, tint.$2);
@@ -227,11 +227,11 @@ class _HeaderRow extends StatelessWidget {
           GestureDetector(
             onTap: onMoreTap,
             behavior: HitTestBehavior.opaque,
-            child: const Padding(
+            child:  Padding(
               padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               child: Icon(
                 Icons.chevron_right_rounded,
-                color: Color(0xFF9CA3AF),
+                color: AppTheme.textMutedColor(context),
                 size: 24,
               ),
             ),
@@ -463,7 +463,7 @@ class _CarouselIndicatorRow extends StatelessWidget {
             width: isActive ? 20 : 6,
             height: 4,
             decoration: BoxDecoration(
-              color: isActive ? AppTheme.primaryColor : const Color(0xFFD1D5DB),
+              color: isActive ? AppTheme.primaryColor :  AppTheme.textOnDarkSecondary,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

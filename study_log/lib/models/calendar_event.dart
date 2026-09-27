@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/revision_level_palette.dart';
+
 /// The view mode shown on the Calendar screen.
 enum CalendarViewMode {
   month('Month'),
@@ -56,41 +58,21 @@ class CalendarEvent {
   }
 
   /// Color associated with this revision level or completion
-  Color get color {
-    if (isCompleted) return const Color(0xFF10B981);
-    switch (level) {
-      case 1:
-        return const Color(0xFFEF4444);
-      case 2:
-        return const Color(0xFFF59E0B);
-      case 3:
-        return const Color(0xFF0284C7);
-      case 4:
-        return const Color(0xFF8B5CF6);
-      case 5:
-        return const Color(0xFF16A34A);
-      default:
-        return const Color(0xFF5B4DFB);
-    }
+  Color color(BuildContext context) {
+    if (isCompleted) return RevisionLevelPalette.completed(context).foreground;
+    return RevisionLevelPalette.of(context, level).foreground;
   }
 
   /// Background tint for the level pill
-  Color get bgTint {
-    if (isCompleted) return const Color(0xFFECFDF5);
-    switch (level) {
-      case 1:
-        return const Color(0xFFFEF2F2);
-      case 2:
-        return const Color(0xFFFFFBEB);
-      case 3:
-        return const Color(0xFFF0F9FF);
-      case 4:
-        return const Color(0xFFFAF5FF);
-      case 5:
-        return const Color(0xFFF0FDF4);
-      default:
-        return const Color(0xFFEEF2FF);
-    }
+  Color bgTint(BuildContext context) {
+    if (isCompleted) return RevisionLevelPalette.completed(context).background;
+    return RevisionLevelPalette.of(context, level).background;
+  }
+
+  /// Border tint for the level pill
+  Color borderTint(BuildContext context) {
+    if (isCompleted) return RevisionLevelPalette.completed(context).border;
+    return RevisionLevelPalette.of(context, level).border;
   }
 
   CalendarEvent copyWith({

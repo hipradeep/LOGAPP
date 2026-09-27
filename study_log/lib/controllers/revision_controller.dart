@@ -276,15 +276,15 @@ class RevisionController extends ChangeNotifier {
   List<Course> _activeCourses() {
     return _coursesController.courses.where((course) {
       final status = course.status.toLowerCase();
-      return status != 'completed' && status != 'archived';
+      return status != 'archived';
     }).toList();
   }
 
-  /// A module counts as complete only when it has at least one topic and every
-  /// one of them is completed. Lookups are id-first so a renamed module (or two
-  /// modules sharing a title) is still measured against its own topics.
+  /// A module counts as complete when its status is 'completed', or when it has
+  /// at least one topic and every one of them is completed.
   Future<bool> _isModuleComplete(Module module) async {
     if (module.id.isEmpty && module.title.isEmpty) return false;
+    if (module.status.toLowerCase() == 'completed') return true;
 
     final topics = await LocalTopicStorage.loadTopicsForModule(
       moduleId: module.id,

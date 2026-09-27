@@ -177,7 +177,7 @@ class _WeekDayRow extends StatelessWidget {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 6.0),
                       child: Material(
-                        color: event.bgTint,
+                        color: event.bgTint(context),
                         borderRadius: BorderRadius.circular(8),
                         child: InkWell(
                           onTap: () => onEventTap(event),
@@ -190,7 +190,7 @@ class _WeekDayRow extends StatelessWidget {
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    color: event.color,
+                                    color: event.color(context),
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -200,7 +200,7 @@ class _WeekDayRow extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: event.color,
+                                    color: event.color(context),
                                   ),
                                 ),
                                 Expanded(

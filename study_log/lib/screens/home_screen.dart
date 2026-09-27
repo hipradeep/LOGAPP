@@ -188,7 +188,7 @@ class _GreetingHeader extends StatelessWidget {
             border: Border.all(color: AppTheme.borderColor(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: AppTheme.shadowColor(context),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -211,7 +211,7 @@ class _GreetingHeader extends StatelessWidget {
                   height: 8,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Color(0xFFEF4444),
+                      color: AppTheme.errorColor,
                       shape: BoxShape.circle,
                     ),
                   ),

@@ -20,7 +20,7 @@ class TopicStatusIndicator extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: const BoxDecoration(
-            color: Color(0xFF10B981),
+            color: AppTheme.successColor,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,

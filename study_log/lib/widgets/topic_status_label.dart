@@ -17,7 +17,7 @@ class TopicStatusLabel extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF10B981),
+            color: AppTheme.successColor,
           ),
         );
       case TopicStatus.inProgress:
@@ -30,12 +30,12 @@ class TopicStatusLabel extends StatelessWidget {
           ),
         );
       case TopicStatus.notStarted:
-        return const Text(
+        return  Text(
           'Not started',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF9CA3AF),
+            color: AppTheme.textMutedColor(context),
           ),
         );
     }

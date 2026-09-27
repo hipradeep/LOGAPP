@@ -80,7 +80,7 @@ class StudyScheduleCard extends StatelessWidget {
               border: Border.all(color: AppTheme.borderColor(context)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: AppTheme.shadowColor(context),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -164,9 +164,9 @@ class StudyScheduleCard extends StatelessWidget {
                 ),
                 const HGapSm(),
                 // Trailing Chevron
-                const Icon(
+                 Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF9CA3AF),
+                  color: AppTheme.textMutedColor(context),
                   size: 22,
                 ),
               ],

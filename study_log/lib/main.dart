@@ -7,7 +7,6 @@ import 'controllers/theme_controller.dart';
 import 'services/service_locator.dart';
 import 'services/navigation_service.dart';
 import 'widgets/app_provider.dart';
-import 'screens/main_navigation_screen.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -71,8 +70,7 @@ class _StudyLogAppState extends State<StudyLogApp> {
               statusBarColor: Colors.transparent,
               statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
               statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-              systemNavigationBarColor:
-                  isDark ? const Color(0xFF0F0F14) : const Color(0xFFF8F9FE),
+              systemNavigationBarColor: AppTheme.background(context),
               systemNavigationBarIconBrightness:
                   isDark ? Brightness.light : Brightness.dark,
             ),
