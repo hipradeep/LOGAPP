@@ -4,8 +4,8 @@ import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
-import '../controllers/sections_controller.dart';
-import '../models/section.dart';
+import '../controllers/modules_controller.dart';
+import '../models/module.dart';
 
 /// Redesigned Standalone Add Module Screen matching the reference design:
 /// - Top bar with Back button, "Add Module" title, and purple "Save" button
@@ -16,27 +16,27 @@ import '../models/section.dart';
 /// - Color swatches row with checkmark indicator on selected color
 /// - Order (Optional) numeric input field with stepper icons
 /// - Strict compliance with optimize.md (build < 40 lines, named callbacks, const)
-class AddSectionScreen extends StatefulWidget {
+class AddModuleScreen extends StatefulWidget {
   final String courseId;
   final String courseTitle;
-  final SectionsController? sectionsController;
-  final Section? sectionToEdit;
+  final ModulesController? modulesController;
+  final Module? moduleToEdit;
 
-  const AddSectionScreen({
+  const AddModuleScreen({
     super.key,
     required this.courseId,
     required this.courseTitle,
-    this.sectionsController,
-    this.sectionToEdit,
+    this.modulesController,
+    this.moduleToEdit,
   });
 
-  bool get isEditing => sectionToEdit != null;
+  bool get isEditing => moduleToEdit != null;
 
   @override
-  State<AddSectionScreen> createState() => _AddSectionScreenState();
+  State<AddModuleScreen> createState() => _AddModuleScreenState();
 }
 
-class _AddSectionScreenState extends State<AddSectionScreen> {
+class _AddModuleScreenState extends State<AddModuleScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _orderController;
@@ -58,7 +58,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
     _selectedCourseTitle = widget.courseTitle;
     _selectedCourseId = widget.courseId;
 
-    final editing = widget.sectionToEdit;
+    final editing = widget.moduleToEdit;
     if (editing != null) {
       _titleController.text = editing.title;
       _descriptionController.text = editing.description;
@@ -274,12 +274,12 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final controller = widget.sectionsController ??
-          SectionsController(courseId: _selectedCourseId);
+      final controller = widget.modulesController ??
+          ModulesController(courseId: _selectedCourseId);
 
-      final editing = widget.sectionToEdit;
+      final editing = widget.moduleToEdit;
       if (editing != null) {
-        await controller.updateSection(
+        await controller.updateModule(
           editing.copyWith(
             title: title,
             description: description,
@@ -287,7 +287,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
           ),
         );
       } else {
-        await controller.addSection(
+        await controller.addModule(
           title: title,
           description: description,
           orderIndex: order,
@@ -337,7 +337,7 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _AddSectionTopBar(
+            _AddModuleTopBar(
               title: widget.isEditing ? 'Edit Module' : 'Add Module',
               onBack: _handleBack,
               onSave: _handleSubmit,
@@ -362,24 +362,24 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
                       ),
                       const VGapLg(),
                     ],
-                    _SectionNameField(controller: _titleController),
+                    _ModuleNameField(controller: _titleController),
                     const VGapLg(),
-                    _SectionDescriptionField(
+                    _ModuleDescriptionField(
                       controller: _descriptionController,
                       charCount: _descLength,
                     ),
                     const VGapLg(),
-                    _SectionIconSection(
+                    _ModuleIconModule(
                       selectedIcon: _selectedIcon,
                       onOpenPicker: _openIconPicker,
                     ),
                     const VGapLg(),
-                    _SectionColorSection(
+                    _ModuleColorModule(
                       selectedColor: _selectedColor,
                       onSelectColor: _selectColor,
                     ),
                     const VGapLg(),
-                    _SectionOrderField(controller: _orderController),
+                    _ModuleOrderField(controller: _orderController),
                   ],
                 ),
               ),
@@ -393,13 +393,13 @@ class _AddSectionScreenState extends State<AddSectionScreen> {
 
 // === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
 
-class _AddSectionTopBar extends StatelessWidget {
+class _AddModuleTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSave;
   final bool isSubmitting;
   final String title;
 
-  const _AddSectionTopBar({
+  const _AddModuleTopBar({
     required this.onBack,
     required this.onSave,
     required this.isSubmitting,
@@ -503,10 +503,10 @@ class _CourseSelectorField extends StatelessWidget {
   }
 }
 
-class _SectionNameField extends StatelessWidget {
+class _ModuleNameField extends StatelessWidget {
   final TextEditingController controller;
 
-  const _SectionNameField({required this.controller});
+  const _ModuleNameField({required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -565,11 +565,11 @@ class _SectionNameField extends StatelessWidget {
   }
 }
 
-class _SectionDescriptionField extends StatelessWidget {
+class _ModuleDescriptionField extends StatelessWidget {
   final TextEditingController controller;
   final int charCount;
 
-  const _SectionDescriptionField({
+  const _ModuleDescriptionField({
     required this.controller,
     required this.charCount,
   });
@@ -634,11 +634,11 @@ class _SectionDescriptionField extends StatelessWidget {
   }
 }
 
-class _SectionIconSection extends StatelessWidget {
+class _ModuleIconModule extends StatelessWidget {
   final IconData selectedIcon;
   final VoidCallback onOpenPicker;
 
-  const _SectionIconSection({
+  const _ModuleIconModule({
     required this.selectedIcon,
     required this.onOpenPicker,
   });
@@ -701,11 +701,11 @@ class _SectionIconSection extends StatelessWidget {
   }
 }
 
-class _SectionColorSection extends StatelessWidget {
+class _ModuleColorModule extends StatelessWidget {
   final Color selectedColor;
   final ValueChanged<Color> onSelectColor;
 
-  const _SectionColorSection({
+  const _ModuleColorModule({
     required this.selectedColor,
     required this.onSelectColor,
   });
@@ -762,10 +762,10 @@ class _SectionColorSection extends StatelessWidget {
   }
 }
 
-class _SectionOrderField extends StatelessWidget {
+class _ModuleOrderField extends StatelessWidget {
   final TextEditingController controller;
 
-  const _SectionOrderField({required this.controller});
+  const _ModuleOrderField({required this.controller});
 
   @override
   Widget build(BuildContext context) {

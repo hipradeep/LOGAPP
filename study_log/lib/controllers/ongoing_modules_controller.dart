@@ -1,33 +1,33 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/course.dart';
-import '../models/section.dart';
-import '../services/local_section_storage.dart';
-import '../services/local_subsection_storage.dart';
+import '../models/module.dart';
+import '../services/local_module_storage.dart';
+import '../services/local_topic_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 
-enum SectionStudyStatus {
+enum ModuleStudyStatus {
   running,
   upcoming,
   completed,
 }
 
-/// Represents an ongoing or upcoming section for study.
-/// Guarantees that only valid Section entities are represented (never Course).
-class OngoingSectionItem {
+/// Represents an ongoing or upcoming module for study.
+/// Guarantees that only valid Module entities are represented (never Course).
+class OngoingModuleItem {
   final Course course;
-  final Section section;
+  final Module module;
   final String title;
   final String breadcrumb;
   final String progressRatio;
   final double progress;
-  final SectionStudyStatus status;
+  final ModuleStudyStatus status;
 
-  const OngoingSectionItem({
+  const OngoingModuleItem({
     required this.course,
-    required this.section,
+    required this.module,
     required this.title,
     required this.breadcrumb,
     required this.progressRatio,
@@ -35,8 +35,8 @@ class OngoingSectionItem {
     required this.status,
   });
 
-  bool get isRunning => status == SectionStudyStatus.running;
-  bool get isUpcoming => status == SectionStudyStatus.upcoming;
+  bool get isRunning => status == ModuleStudyStatus.running;
+  bool get isUpcoming => status == ModuleStudyStatus.upcoming;
 }
 
 /// Rollup of a course's modules, derived from real topic completion.
@@ -60,13 +60,13 @@ class CourseModuleProgress {
       hasModules ? (completedModules / totalModules).clamp(0.0, 1.0) : 0.0;
 }
 
-/// Controller responsible for fetching and managing running and upcoming sections dynamically.
-/// Completely free of static/hardcoded sections or subsections.
-class OngoingSectionsController extends ChangeNotifier {
+/// Controller responsible for fetching and managing running and upcoming modules dynamically.
+/// Completely free of static/hardcoded modules or topics.
+class OngoingModulesController extends ChangeNotifier {
   final CoursesController _coursesController;
   final FirestoreService _firestoreService;
 
-  List<OngoingSectionItem> _ongoingItems = [];
+  List<OngoingModuleItem> _ongoingItems = [];
   final Map<String, int> _topicCounts = {};
   final Map<String, int> _completedTopicCounts = {};
   final Map<String, CourseModuleProgress> _courseProgress =
@@ -77,7 +77,7 @@ class OngoingSectionsController extends ChangeNotifier {
   int _dayStreak = 0;
   bool _isLoading = false;
 
-  OngoingSectionsController({
+  OngoingModulesController({
     CoursesController? coursesController,
     FirestoreService? firestoreService,
   })  : _coursesController = coursesController ?? getIt<CoursesController>(),
@@ -86,21 +86,21 @@ class OngoingSectionsController extends ChangeNotifier {
     refresh();
   }
 
-  List<OngoingSectionItem> get ongoingItems => List.unmodifiable(_ongoingItems);
+  List<OngoingModuleItem> get ongoingItems => List.unmodifiable(_ongoingItems);
   bool get isLoading => _isLoading;
 
-  /// Real number of topics stored for a section, keyed by section id.
-  int topicCountForSection(String sectionId) => _topicCounts[sectionId] ?? 0;
+  /// Real number of topics stored for a module, keyed by module id.
+  int topicCountForModule(String moduleId) => _topicCounts[moduleId] ?? 0;
 
-  /// Number of completed topics for a section, keyed by section id.
-  int completedTopicCountForSection(String sectionId) =>
-      _completedTopicCounts[sectionId] ?? 0;
+  /// Number of completed topics for a module, keyed by module id.
+  int completedTopicCountForModule(String moduleId) =>
+      _completedTopicCounts[moduleId] ?? 0;
 
-  /// True when the section has at least one topic and every one is completed.
-  bool isSectionComplete(String sectionId) {
-    final total = _topicCounts[sectionId] ?? 0;
+  /// True when the module has at least one topic and every one is completed.
+  bool isModuleComplete(String moduleId) {
+    final total = _topicCounts[moduleId] ?? 0;
     if (total <= 0) return false;
-    return (_completedTopicCounts[sectionId] ?? 0) >= total;
+    return (_completedTopicCounts[moduleId] ?? 0) >= total;
   }
 
   /// Module-level rollup for a course, or null when the course has no modules.
@@ -144,11 +144,11 @@ class OngoingSectionsController extends ChangeNotifier {
         return st != 'completed' && st != 'archived';
       }).toList();
 
-      // Read the topic cache once per refresh instead of once per section.
-      final topicBuckets = await LocalSubsectionStorage.loadAllBuckets();
+      // Read the topic cache once per refresh instead of once per module.
+      final topicBuckets = await LocalTopicStorage.loadAllBuckets();
 
-      final List<OngoingSectionItem> runningItems = [];
-      final List<OngoingSectionItem> upcomingItems = [];
+      final List<OngoingModuleItem> runningItems = [];
+      final List<OngoingModuleItem> upcomingItems = [];
       final Map<String, int> topicCounts = <String, int>{};
       final Map<String, int> completedTopicCounts = <String, int>{};
       final Map<String, CourseModuleProgress> courseProgress =
@@ -161,34 +161,34 @@ class OngoingSectionsController extends ChangeNotifier {
       int courseCompletedModules = 0;
 
       for (final course in activeCourses) {
-        // 1. Fetch cached sections from local disk
-        List<Section> sections = await LocalSectionStorage.loadSections(course.id);
+        // 1. Fetch cached modules from local disk
+        List<Module> modules = await LocalModuleStorage.loadModules(course.id);
 
         // 2. Fallback to Firestore if local cache is empty
-        if (sections.isEmpty && _firestoreService.isAvailable) {
+        if (modules.isEmpty && _firestoreService.isAvailable) {
           try {
-            sections = await _firestoreService
-                .streamSections(courseId: course.id)
+            modules = await _firestoreService
+                .streamModules(courseId: course.id)
                 .first
                 .timeout(const Duration(milliseconds: 1500), onTimeout: () => []);
           } catch (_) {
-            sections = [];
+            modules = [];
           }
         }
 
-        // 3. For each real section, compute its progress and status from actual subsections
-        for (final section in sections) {
-          final subsections = LocalSubsectionStorage.resolveForSection(
+        // 3. For each real module, compute its progress and status from actual topics
+        for (final module in modules) {
+          final topics = LocalTopicStorage.resolveForModule(
             topicBuckets,
-            sectionId: section.id,
-            fallbackTitle: section.title,
+            moduleId: module.id,
+            fallbackTitle: module.title,
           );
-          topicCounts[section.id] = subsections.length;
-          int sectionCompleted = 0;
-          totalTopics += subsections.length;
-          for (final sub in subsections) {
+          topicCounts[module.id] = topics.length;
+          int moduleCompleted = 0;
+          totalTopics += topics.length;
+          for (final sub in topics) {
             if (!sub.isCompleted) continue;
-            sectionCompleted++;
+            moduleCompleted++;
             completedTopics++;
             final doneAt = sub.completedAt;
             if (doneAt == null) continue;
@@ -198,57 +198,57 @@ class OngoingSectionsController extends ChangeNotifier {
           final int completedCount;
           final int totalCount;
           final double progress;
-          final SectionStudyStatus studyStatus;
+          final ModuleStudyStatus studyStatus;
 
-          if (subsections.isNotEmpty) {
-            completedTopicCounts[section.id] = sectionCompleted;
-            completedCount = sectionCompleted;
-            totalCount = subsections.length;
+          if (topics.isNotEmpty) {
+            completedTopicCounts[module.id] = moduleCompleted;
+            completedCount = moduleCompleted;
+            totalCount = topics.length;
             progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
 
             if (completedCount == totalCount && totalCount > 0) {
-              studyStatus = SectionStudyStatus.completed;
+              studyStatus = ModuleStudyStatus.completed;
             } else if (completedCount > 0) {
-              studyStatus = SectionStudyStatus.running;
+              studyStatus = ModuleStudyStatus.running;
             } else {
-              studyStatus = SectionStudyStatus.upcoming;
+              studyStatus = ModuleStudyStatus.upcoming;
             }
           } else {
-            // Real section with no subsections added yet
+            // Real module with no topics added yet
             completedCount = 0;
             totalCount = 0;
             progress = 0.0;
-            final st = section.status.toLowerCase();
+            final st = module.status.toLowerCase();
             if (st == 'completed') {
-              studyStatus = SectionStudyStatus.completed;
+              studyStatus = ModuleStudyStatus.completed;
             } else if (st == 'in_progress' || st == 'active') {
-              studyStatus = SectionStudyStatus.running;
+              studyStatus = ModuleStudyStatus.running;
             } else {
-              studyStatus = SectionStudyStatus.upcoming;
+              studyStatus = ModuleStudyStatus.upcoming;
             }
           }
 
           // Course-level rollup must happen before completed modules are skipped
           // below, otherwise a course whose modules are all done would report 0.
           courseTotalModules++;
-          if (studyStatus == SectionStudyStatus.completed) {
+          if (studyStatus == ModuleStudyStatus.completed) {
             courseCompletedModules++;
           }
 
-          // Exclude completed sections so user only sees running or upcoming sections
-          if (studyStatus == SectionStudyStatus.completed) {
+          // Exclude completed modules so user only sees running or upcoming modules
+          if (studyStatus == ModuleStudyStatus.completed) {
             continue;
           }
 
-          final isRunning = studyStatus == SectionStudyStatus.running;
+          final isRunning = studyStatus == ModuleStudyStatus.running;
           final progressRatio = totalCount > 0
-              ? '$completedCount / $totalCount subsections'
-              : '0 subsections';
+              ? '$completedCount / $totalCount topics'
+              : '0 topics';
 
-          final item = OngoingSectionItem(
+          final item = OngoingModuleItem(
             course: course,
-            section: section,
-            title: section.title,
+            module: module,
+            title: module.title,
             breadcrumb: '${course.title} • ${isRunning ? 'Running' : 'Upcoming'}',
             progressRatio: progressRatio,
             progress: progress,
@@ -269,9 +269,9 @@ class OngoingSectionsController extends ChangeNotifier {
         );
       }
 
-      // Sort: Running sections first, then upcoming sections
-      runningItems.sort((a, b) => a.section.orderIndex.compareTo(b.section.orderIndex));
-      upcomingItems.sort((a, b) => a.section.orderIndex.compareTo(b.section.orderIndex));
+      // Sort: Running modules first, then upcoming modules
+      runningItems.sort((a, b) => a.module.orderIndex.compareTo(b.module.orderIndex));
+      upcomingItems.sort((a, b) => a.module.orderIndex.compareTo(b.module.orderIndex));
 
       _ongoingItems = [...runningItems, ...upcomingItems];
       _topicCounts
@@ -288,7 +288,7 @@ class OngoingSectionsController extends ChangeNotifier {
       _completedTodayCount = completedToday;
       _dayStreak = _computeStreak(completionDays);
     } catch (e) {
-      debugPrint('Error fetching ongoing sections: $e');
+      debugPrint('Error fetching ongoing modules: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -333,31 +333,31 @@ class OngoingSectionsController extends ChangeNotifier {
     return streak;
   }
 
-  /// Deletes a section permanently from both local storage and Firestore.
-  Future<void> deleteSection(OngoingSectionItem item) async {
+  /// Deletes a module permanently from both local storage and Firestore.
+  Future<void> deleteModule(OngoingModuleItem item) async {
     try {
-      // 1. Remove from local sections for this course
-      final cached = await LocalSectionStorage.loadSections(item.course.id);
-      final updated = cached.where((s) => s.id != item.section.id && s.title != item.section.title).toList();
-      await LocalSectionStorage.saveSectionsForCourse(item.course.id, updated);
+      // 1. Remove from local modules for this course
+      final cached = await LocalModuleStorage.loadModules(item.course.id);
+      final updated = cached.where((s) => s.id != item.module.id && s.title != item.module.title).toList();
+      await LocalModuleStorage.saveModulesForCourse(item.course.id, updated);
 
       // 2. Remove from Firestore if available
-      if (_firestoreService.isAvailable && item.section.id.isNotEmpty) {
+      if (_firestoreService.isAvailable && item.module.id.isNotEmpty) {
         try {
-          await _firestoreService.deleteSection(item.section.id);
+          await _firestoreService.deleteModule(item.module.id);
         } catch (e) {
-          debugPrint('Error deleting section from firestore: $e');
+          debugPrint('Error deleting module from firestore: $e');
         }
       }
 
       // 3. Remove locally from _ongoingItems immediately for instant feedback
-      _ongoingItems.removeWhere((i) => i.section.id == item.section.id && i.section.title == item.section.title);
+      _ongoingItems.removeWhere((i) => i.module.id == item.module.id && i.module.title == item.module.title);
       notifyListeners();
 
       // 4. Trigger full refresh
       await refresh();
     } catch (e) {
-      debugPrint('Error deleting ongoing section: $e');
+      debugPrint('Error deleting ongoing module: $e');
     }
   }
 

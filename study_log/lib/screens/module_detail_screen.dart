@@ -3,117 +3,120 @@ import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/study_confirmation_dialog.dart';
-import '../models/subsection_item.dart';
-import '../services/local_subsection_storage.dart';
+import '../widgets/topic_progress_header.dart';
+import '../widgets/topic_status_indicator.dart';
+import '../widgets/topic_status_label.dart';
+import '../models/topic.dart';
+import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
-import '../controllers/ongoing_sections_controller.dart';
-import 'add_subsection_screen.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import 'add_topic_screen.dart';
 
-class SectionDetailScreen extends StatefulWidget {
-  final String sectionTitle;
+class ModuleDetailScreen extends StatefulWidget {
+  final String moduleTitle;
   final String courseTitle;
   final String courseId;
-  final String sectionId;
-  final int sectionOrderIndex;
+  final String moduleId;
+  final int moduleOrderIndex;
 
-  const SectionDetailScreen({
+  const ModuleDetailScreen({
     super.key,
-    required this.sectionTitle,
+    required this.moduleTitle,
     this.courseTitle = 'DSA',
     this.courseId = '',
-    this.sectionId = '',
-    this.sectionOrderIndex = 0,
+    this.moduleId = '',
+    this.moduleOrderIndex = 0,
   });
 
   @override
-  State<SectionDetailScreen> createState() => _SectionDetailScreenState();
+  State<ModuleDetailScreen> createState() => _ModuleDetailScreenState();
 }
 
-class _SectionDetailScreenState extends State<SectionDetailScreen> {
-  List<SubsectionItem> _subsections = [];
+class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
+  List<Topic> _topics = [];
 
   @override
   void initState() {
     super.initState();
-    _loadSubsections();
+    _loadTopics();
   }
 
-  Future<void> _loadSubsections() async {
-    final cached = await LocalSubsectionStorage.loadSubsectionsForSection(
-      sectionId: widget.sectionId,
-      fallbackTitle: widget.sectionTitle,
+  Future<void> _loadTopics() async {
+    final cached = await LocalTopicStorage.loadTopicsForModule(
+      moduleId: widget.moduleId,
+      fallbackTitle: widget.moduleTitle,
     );
     if (!mounted) return;
-    setState(() => _subsections = cached);
+    setState(() => _topics = cached);
   }
 
   void _handleBack() {
     Navigator.of(context).pop();
   }
 
-  Future<void> _openAddSubsectionScreen() async {
-    final result = await Navigator.push<SubsectionItem>(
+  Future<void> _openAddTopicScreen() async {
+    final result = await Navigator.push<Topic>(
       context,
       MaterialPageRoute(
-        builder: (_) => AddSubsectionScreen(
-          sectionTitle: widget.sectionTitle,
+        builder: (_) => AddTopicScreen(
+          moduleTitle: widget.moduleTitle,
           courseTitle: widget.courseTitle,
           courseId: widget.courseId,
-          sectionId: widget.sectionId,
+          moduleId: widget.moduleId,
         ),
       ),
     );
 
     if (result != null && mounted) {
       setState(() {
-        _subsections.add(result);
+        _topics.add(result);
       });
-      await LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
-      if (getIt.isRegistered<OngoingSectionsController>()) {
-        getIt<OngoingSectionsController>().refresh();
+      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      if (getIt.isRegistered<OngoingModulesController>()) {
+        getIt<OngoingModulesController>().refresh();
       }
     }
   }
 
-  void _toggleSubsectionStatus(int index) {
+  void _toggleTopicStatus(int index) {
     setState(() {
-      final current = _subsections[index];
-      final SubsectionStatus next;
+      final current = _topics[index];
+      final TopicStatus next;
       switch (current.status) {
-        case SubsectionStatus.notStarted:
-          next = SubsectionStatus.inProgress;
+        case TopicStatus.notStarted:
+          next = TopicStatus.inProgress;
           break;
-        case SubsectionStatus.inProgress:
-          next = SubsectionStatus.completed;
+        case TopicStatus.inProgress:
+          next = TopicStatus.completed;
           break;
-        case SubsectionStatus.completed:
-          next = SubsectionStatus.notStarted;
+        case TopicStatus.completed:
+          next = TopicStatus.notStarted;
           break;
       }
-      _subsections[index] = next == SubsectionStatus.completed
+      _topics[index] = next == TopicStatus.completed
           ? current.copyWith(status: next, completedAt: DateTime.now())
           : current.copyWith(status: next, clearCompletedAt: true);
     });
-    LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
-    if (getIt.isRegistered<OngoingSectionsController>()) {
-      getIt<OngoingSectionsController>().refresh();
+    LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      getIt<OngoingModulesController>().refresh();
     }
   }
 
-  Future<void> _handleDeleteSubsection(int index) async {
-    final sub = _subsections[index];
-    final confirmed = await StudyConfirmationDialog.showDeleteSubsection(
+  Future<void> _handleDeleteTopic(int index) async {
+    final sub = _topics[index];
+    final confirmed = await StudyConfirmationDialog.showDeleteTopic(
       context,
-      subsectionTitle: sub.title,
+      topicTitle: sub.title,
     );
 
     if (confirmed && mounted) {
       setState(() {
-        _subsections.removeAt(index);
+        _topics.removeAt(index);
       });
-      await LocalSubsectionStorage.saveSubsections(widget.sectionTitle, _subsections);
-      if (getIt.isRegistered<OngoingSectionsController>()) {
-        getIt<OngoingSectionsController>().refresh();
+      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      if (getIt.isRegistered<OngoingModulesController>()) {
+        getIt<OngoingModulesController>().refresh();
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -133,8 +136,8 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final completedCount = _subsections.where((s) => s.status == SubsectionStatus.completed).length;
-    final totalCount = _subsections.length;
+    final completedCount = _topics.where((s) => s.status == TopicStatus.completed).length;
+    final totalCount = _topics.length;
     final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
 
     return Scaffold(
@@ -142,9 +145,9 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _SectionDetailTopBar(
+            _ModuleDetailTopBar(
               onBack: _handleBack,
-              onAddSubsection: _openAddSubsectionScreen,
+              onAddTopic: _openAddTopicScreen,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
@@ -160,7 +163,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
                       border: Border.all(color: AppTheme.pastelPurpleBorder),
                     ),
                     child: Text(
-                      '${widget.sectionOrderIndex + 1}',
+                      '${widget.moduleOrderIndex + 1}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -171,7 +174,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
                   const HGapSm(),
                   Expanded(
                     child: Text(
-                      widget.sectionTitle,
+                      widget.moduleTitle,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
@@ -189,7 +192,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
             const VGapXs(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: _SubsectionsProgressHeader(
+              child: TopicProgressHeader(
                 completedCount: completedCount,
                 totalCount: totalCount,
                 progress: progress,
@@ -197,11 +200,11 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
             ),
             const VGapSm(),
             Expanded(
-              child: _SubsectionsListView(
-                subsections: _subsections,
-                onToggle: _toggleSubsectionStatus,
-                onDelete: _handleDeleteSubsection,
-                onAddSubsection: _openAddSubsectionScreen,
+              child: _TopicsListView(
+                topics: _topics,
+                onToggle: _toggleTopicStatus,
+                onDelete: _handleDeleteTopic,
+                onAddTopic: _openAddTopicScreen,
                 bottomPadding: bottomSafe + 24,
               ),
             ),
@@ -214,13 +217,13 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
 
 // === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
 
-class _SectionDetailTopBar extends StatelessWidget {
+class _ModuleDetailTopBar extends StatelessWidget {
   final VoidCallback onBack;
-  final VoidCallback onAddSubsection;
+  final VoidCallback onAddTopic;
 
-  const _SectionDetailTopBar({
+  const _ModuleDetailTopBar({
     required this.onBack,
-    required this.onAddSubsection,
+    required this.onAddTopic,
   });
 
   @override
@@ -258,7 +261,7 @@ class _SectionDetailTopBar extends StatelessWidget {
           ),
           AddPillButton(
             label: 'Add Topic',
-            onPressed: onAddSubsection,
+            onPressed: onAddTopic,
           ),
         ],
       ),
@@ -266,79 +269,24 @@ class _SectionDetailTopBar extends StatelessWidget {
   }
 }
 
-class _SubsectionsProgressHeader extends StatelessWidget {
-  final int completedCount;
-  final int totalCount;
-  final double progress;
-
-  const _SubsectionsProgressHeader({
-    required this.completedCount,
-    required this.totalCount,
-    required this.progress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final percent = (progress * 100).round();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '$completedCount / $totalCount topics',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            Text(
-              '$percent%',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            minHeight: 6,
-            backgroundColor: const Color(0xFFECEEF6),
-            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SubsectionsListView extends StatelessWidget {
-  final List<SubsectionItem> subsections;
+class _TopicsListView extends StatelessWidget {
+  final List<Topic> topics;
   final ValueChanged<int> onToggle;
   final ValueChanged<int> onDelete;
-  final VoidCallback onAddSubsection;
+  final VoidCallback onAddTopic;
   final double bottomPadding;
 
-  const _SubsectionsListView({
-    required this.subsections,
+  const _TopicsListView({
+    required this.topics,
     required this.onToggle,
     required this.onDelete,
-    required this.onAddSubsection,
+    required this.onAddTopic,
     required this.bottomPadding,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (subsections.isEmpty) {
+    if (topics.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
@@ -370,7 +318,7 @@ class _SubsectionsListView extends StatelessWidget {
               ),
               const VGapMd(),
               ElevatedButton.icon(
-                onPressed: onAddSubsection,
+                onPressed: onAddTopic,
                 icon: const Icon(Icons.add_rounded, size: 18),
                 label: const Text('Add Topic'),
                 style: ElevatedButton.styleFrom(
@@ -391,7 +339,7 @@ class _SubsectionsListView extends StatelessWidget {
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
-      itemCount: subsections.length,
+      itemCount: topics.length,
       separatorBuilder: (context, index) => const Divider(
         height: 1,
         indent: 64,
@@ -399,8 +347,8 @@ class _SubsectionsListView extends StatelessWidget {
         color: Color(0xFFF3F4F6),
       ),
       itemBuilder: (context, index) {
-        final item = subsections[index];
-        return _SubsectionListItem(
+        final item = topics[index];
+        return _TopicListItem(
           item: item,
           onTap: () => onToggle(index),
           onLongPress: () => onDelete(index),
@@ -410,12 +358,12 @@ class _SubsectionsListView extends StatelessWidget {
   }
 }
 
-class _SubsectionListItem extends StatelessWidget {
-  final SubsectionItem item;
+class _TopicListItem extends StatelessWidget {
+  final Topic item;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
-  const _SubsectionListItem({
+  const _TopicListItem({
     required this.item,
     required this.onTap,
     required this.onLongPress,
@@ -433,7 +381,7 @@ class _SubsectionListItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
               children: [
-                _StatusBadgeIcon(status: item.status),
+                TopicStatusIndicator(status: item.status),
                 const HGapMd(),
                 Expanded(
                   child: Column(
@@ -451,7 +399,7 @@ class _SubsectionListItem extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const VGapXs(),
-                      _StatusLabel(status: item.status),
+                      TopicStatusLabel(status: item.status),
                     ],
                   ),
                 ),
@@ -466,94 +414,5 @@ class _SubsectionListItem extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _StatusBadgeIcon extends StatelessWidget {
-  final SubsectionStatus status;
-
-  const _StatusBadgeIcon({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    switch (status) {
-      case SubsectionStatus.completed:
-        return Container(
-          width: 28,
-          height: 28,
-          decoration: const BoxDecoration(
-            color: Color(0xFF10B981),
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.check_rounded,
-            color: Colors.white,
-            size: 18,
-          ),
-        );
-      case SubsectionStatus.inProgress:
-        return const SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(
-            value: 0.72,
-            strokeWidth: 2.8,
-            color: AppTheme.primaryColor,
-            backgroundColor: Color(0xFFE8E5FF),
-          ),
-        );
-      case SubsectionStatus.notStarted:
-        return Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFFCBD5E1),
-              width: 2.0,
-            ),
-          ),
-        );
-    }
-  }
-}
-
-class _StatusLabel extends StatelessWidget {
-  final SubsectionStatus status;
-
-  const _StatusLabel({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    switch (status) {
-      case SubsectionStatus.completed:
-        return const Text(
-          'Completed',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF10B981),
-          ),
-        );
-      case SubsectionStatus.inProgress:
-        return const Text(
-          'In Progress',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppTheme.primaryColor,
-          ),
-        );
-      case SubsectionStatus.notStarted:
-        return const Text(
-          'Not started',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF9CA3AF),
-          ),
-        );
-    }
   }
 }

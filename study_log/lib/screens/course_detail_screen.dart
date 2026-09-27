@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/course.dart';
-import '../models/section.dart';
+import '../models/module.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_options_sheet.dart';
-import '../widgets/section_options_sheet.dart';
-import '../controllers/sections_controller.dart';
-import '../controllers/ongoing_sections_controller.dart';
+import '../widgets/module_options_sheet.dart';
+import '../controllers/modules_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
-import 'section_detail_screen.dart';
-import 'add_section_screen.dart';
+import 'module_detail_screen.dart';
+import 'add_module_screen.dart';
 
 /// Redesigned Course Detail (Modules) screen matching the reference design:
 /// - Top bar with back button, course title (e.g. "DSA"), "+ Add Module" button, and 3-dots options menu
@@ -18,7 +18,7 @@ import 'add_section_screen.dart';
 /// - "Modules (20)" and "Overview" tabs
 /// - Clean vertical list of syllabus modules with cycling pastel number badges
 ///   (Green, Cyan, Orange, Purple), titles, topics count, and trailing chevrons
-/// - Tapping "+ Add Module" opens the standalone AddSectionScreen
+/// - Tapping "+ Add Module" opens the standalone AddModuleScreen
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
 
@@ -32,18 +32,18 @@ class CourseDetailScreen extends StatefulWidget {
 }
 
 class _CourseDetailScreenState extends State<CourseDetailScreen> {
-  late final SectionsController _sectionsController;
+  late final ModulesController _modulesController;
   final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
-    _sectionsController = SectionsController(courseId: widget.course.id);
+    _modulesController = ModulesController(courseId: widget.course.id);
   }
 
   @override
   void dispose() {
-    _sectionsController.dispose();
+    _modulesController.dispose();
     _activeTab.dispose();
     super.dispose();
   }
@@ -52,29 +52,29 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     Navigator.of(context).pop();
   }
 
-  void _openSectionDetail(Section section, int orderIndex) {
+  void _openModuleDetail(Module module, int orderIndex) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SectionDetailScreen(
-          sectionTitle: section.title,
+        builder: (_) => ModuleDetailScreen(
+          moduleTitle: module.title,
           courseTitle: widget.course.title,
           courseId: widget.course.id,
-          sectionId: section.id,
-          sectionOrderIndex: orderIndex,
+          moduleId: module.id,
+          moduleOrderIndex: orderIndex,
         ),
       ),
     );
   }
 
-  void _openAddSectionScreen() {
+  void _openAddModuleScreen() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddSectionScreen(
+        builder: (_) => AddModuleScreen(
           courseId: widget.course.id,
           courseTitle: widget.course.title,
-          sectionsController: _sectionsController,
+          modulesController: _modulesController,
         ),
       ),
     );
@@ -115,7 +115,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   title: const Text('Add New Module', style: TextStyle(fontWeight: FontWeight.bold)),
                   onTap: () {
                     Navigator.pop(modalCtx);
-                    _openAddSectionScreen();
+                    _openAddModuleScreen();
                   },
                 ),
                 ListTile(
@@ -146,31 +146,31 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             _CourseDetailTopBar(
               title: widget.course.title,
               onBack: _handleBack,
-              onAddSection: _openAddSectionScreen,
+              onAddModule: _openAddModuleScreen,
               onOptions: _openOptionsMenu,
             ),
             ListenableBuilder(
               listenable: Listenable.merge([
-                _sectionsController,
-                if (getIt.isRegistered<OngoingSectionsController>())
-                  getIt<OngoingSectionsController>(),
+                _modulesController,
+                if (getIt.isRegistered<OngoingModulesController>())
+                  getIt<OngoingModulesController>(),
               ]),
               builder: (context, _) {
-                final sections = _sectionsController.sections;
-                final ongoing = getIt.isRegistered<OngoingSectionsController>()
-                    ? getIt<OngoingSectionsController>()
+                final modules = _modulesController.modules;
+                final ongoing = getIt.isRegistered<OngoingModulesController>()
+                    ? getIt<OngoingModulesController>()
                     : null;
                 // Derive module completion from real topic state rather than the
-                // Section's stored `status` string, which is never rewritten when
+                // Module's stored `status` string, which is never rewritten when
                 // topics are ticked off.
                 var completedCount = 0;
-                for (final s in sections) {
+                for (final s in modules) {
                   final complete = ongoing != null
-                      ? ongoing.isSectionComplete(s.id)
+                      ? ongoing.isModuleComplete(s.id)
                       : s.status.toLowerCase() == 'completed';
                   if (complete) completedCount++;
                 }
-                final totalCount = sections.length;
+                final totalCount = modules.length;
                 final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
 
                 return Column(
@@ -217,8 +217,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
                       child: _CourseProgressHeader(
-                        completedSections: completedCount,
-                        totalSections: totalCount,
+                        completedModules: completedCount,
+                        totalModules: totalCount,
                         progress: progress,
                       ),
                     ),
@@ -227,7 +227,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       builder: (context, activeIdx, _) {
                         return _CourseTabsRow(
                           activeIndex: activeIdx,
-                          sectionsCount: totalCount,
+                          modulesCount: totalCount,
                           onTabSelected: _handleTabSelected,
                         );
                       },
@@ -247,11 +247,11 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       bottomPadding: bottomSafe + 24,
                     );
                   }
-                  return _CourseSectionsListView(
+                  return _CourseModulesListView(
                     course: widget.course,
-                    sectionsController: _sectionsController,
-                    onSectionTap: _openSectionDetail,
-                    onAddSection: _openAddSectionScreen,
+                    modulesController: _modulesController,
+                    onModuleTap: _openModuleDetail,
+                    onAddModule: _openAddModuleScreen,
                     bottomPadding: bottomSafe + 24,
                   );
                 },
@@ -269,13 +269,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 class _CourseDetailTopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
-  final VoidCallback onAddSection;
+  final VoidCallback onAddModule;
   final VoidCallback onOptions;
 
   const _CourseDetailTopBar({
     required this.title,
     required this.onBack,
-    required this.onAddSection,
+    required this.onAddModule,
     required this.onOptions,
   });
 
@@ -310,7 +310,7 @@ class _CourseDetailTopBar extends StatelessWidget {
           ),
           AddPillButton(
             label: 'Add Module',
-            onPressed: onAddSection,
+            onPressed: onAddModule,
           ),
           const HGapSm(),
           IconButton(
@@ -330,12 +330,12 @@ class _CourseDetailTopBar extends StatelessWidget {
 
 class _CourseTabsRow extends StatelessWidget {
   final int activeIndex;
-  final int sectionsCount;
+  final int modulesCount;
   final ValueChanged<int> onTabSelected;
 
   const _CourseTabsRow({
     required this.activeIndex,
-    required this.sectionsCount,
+    required this.modulesCount,
     required this.onTabSelected,
   });
 
@@ -352,7 +352,7 @@ class _CourseTabsRow extends StatelessWidget {
         child: Row(
           children: [
             _TabItem(
-              label: 'Modules ($sectionsCount)',
+              label: 'Modules ($modulesCount)',
               isActive: activeIndex == 0,
               onTap: () => onTabSelected(0),
             ),
@@ -446,7 +446,7 @@ class _CourseOverviewView extends StatelessWidget {
               Text(
                 course.description.isNotEmpty
                     ? course.description
-                    : 'Comprehensive syllabus and curriculum tracking for ${course.title}. Progress through sections and subsections to complete your study goals.',
+                    : 'Comprehensive syllabus and curriculum tracking for ${course.title}. Progress through modules and topics to complete your study goals.',
                 style: const TextStyle(
                   fontSize: 14,
                   height: 1.4,
@@ -462,13 +462,13 @@ class _CourseOverviewView extends StatelessWidget {
 }
 
 class _CourseProgressHeader extends StatelessWidget {
-  final int completedSections;
-  final int totalSections;
+  final int completedModules;
+  final int totalModules;
   final double progress;
 
   const _CourseProgressHeader({
-    required this.completedSections,
-    required this.totalSections,
+    required this.completedModules,
+    required this.totalModules,
     required this.progress,
   });
 
@@ -484,7 +484,7 @@ class _CourseProgressHeader extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '$completedSections / $totalSections modules',
+              '$completedModules / $totalModules modules',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -516,18 +516,18 @@ class _CourseProgressHeader extends StatelessWidget {
   }
 }
 
-class _CourseSectionsListView extends StatelessWidget {
+class _CourseModulesListView extends StatelessWidget {
   final Course course;
-  final SectionsController sectionsController;
-  final void Function(Section, int) onSectionTap;
-  final VoidCallback onAddSection;
+  final ModulesController modulesController;
+  final void Function(Module, int) onModuleTap;
+  final VoidCallback onAddModule;
   final double bottomPadding;
 
-  const _CourseSectionsListView({
+  const _CourseModulesListView({
     required this.course,
-    required this.sectionsController,
-    required this.onSectionTap,
-    required this.onAddSection,
+    required this.modulesController,
+    required this.onModuleTap,
+    required this.onAddModule,
     required this.bottomPadding,
   });
 
@@ -542,17 +542,17 @@ class _CourseSectionsListView extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([
-        sectionsController,
-        if (getIt.isRegistered<OngoingSectionsController>())
-          getIt<OngoingSectionsController>(),
+        modulesController,
+        if (getIt.isRegistered<OngoingModulesController>())
+          getIt<OngoingModulesController>(),
       ]),
       builder: (context, _) {
-        final dynamicSections = sectionsController.sections;
-        final ongoing = getIt.isRegistered<OngoingSectionsController>()
-            ? getIt<OngoingSectionsController>()
+        final dynamicModules = modulesController.modules;
+        final ongoing = getIt.isRegistered<OngoingModulesController>()
+            ? getIt<OngoingModulesController>()
             : null;
 
-        if (dynamicSections.isEmpty) {
+        if (dynamicModules.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
@@ -584,7 +584,7 @@ class _CourseSectionsListView extends StatelessWidget {
                   ),
                   const VGapMd(),
                   ElevatedButton.icon(
-                    onPressed: onAddSection,
+                    onPressed: onAddModule,
                     icon: const Icon(Icons.add_rounded, size: 18),
                     label: const Text('Add Module'),
                     style: ElevatedButton.styleFrom(
@@ -605,7 +605,7 @@ class _CourseSectionsListView extends StatelessWidget {
         return ListView.separated(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
-          itemCount: dynamicSections.length,
+          itemCount: dynamicModules.length,
           separatorBuilder: (context, index) => const Divider(
             height: 1,
             indent: 72,
@@ -613,30 +613,30 @@ class _CourseSectionsListView extends StatelessWidget {
             color: Color(0xFFF3F4F6),
           ),
           itemBuilder: (context, index) {
-            final Section section = dynamicSections[index];
+            final Module module = dynamicModules[index];
             final color = _badgeColorCycle[index % _badgeColorCycle.length];
-            final topicCount = ongoing?.topicCountForSection(section.id) ?? 0;
+            final topicCount = ongoing?.topicCountForModule(module.id) ?? 0;
             final completedTopics =
-                ongoing?.completedTopicCountForSection(section.id) ?? 0;
+                ongoing?.completedTopicCountForModule(module.id) ?? 0;
             final isComplete = topicCount > 0 && completedTopics >= topicCount;
-            return _SectionListItem(
+            return _ModuleListItem(
               number: index + 1,
-              title: section.title,
-              subtitle: section.description.isNotEmpty
-                  ? section.description
+              title: module.title,
+              subtitle: module.description.isNotEmpty
+                  ? module.description
                   : topicCount > 0
                       ? '$completedTopics / $topicCount topics'
                       : 'No topics yet',
               isComplete: isComplete,
               badgeColor: isComplete ? AppTheme.successColor : color,
-              onTap: () => onSectionTap(section, index),
-              onLongPress: () => SectionOptionsSheet.show(
+              onTap: () => onModuleTap(module, index),
+              onLongPress: () => ModuleOptionsSheet.show(
                 context,
-                section: section,
+                module: module,
                 courseTitle: course.title,
-                sectionsController: sectionsController,
+                modulesController: modulesController,
               ),
-            );  
+            );
           },
         );
       },
@@ -644,7 +644,7 @@ class _CourseSectionsListView extends StatelessWidget {
   }
 }
 
-class _SectionListItem extends StatelessWidget {
+class _ModuleListItem extends StatelessWidget {
   final int number;
   final String title;
   final String subtitle;
@@ -653,7 +653,7 @@ class _SectionListItem extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  const _SectionListItem({
+  const _ModuleListItem({
     required this.number,
     required this.title,
     required this.subtitle,
@@ -700,7 +700,7 @@ class _SectionListItem extends StatelessWidget {
                         ),
                 ),
                 const HGapMd(),
-                // Title & Subsections Subtitle
+                // Title & Topics Subtitle
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

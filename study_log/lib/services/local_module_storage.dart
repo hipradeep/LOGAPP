@@ -2,24 +2,24 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/section.dart';
+import '../models/module.dart';
 
-/// Local disk cache for Section entities to guarantee persistent offline availability.
-class LocalSectionStorage {
-  static const String _fileName = 'study_sections_cache.json';
+/// Local disk cache for Module entities to guarantee persistent offline availability.
+class LocalModuleStorage {
+  static const String _fileName = 'study_modules_cache.json';
 
   static Future<File?> _getFile() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       return File('${dir.path}/$_fileName');
     } catch (e) {
-      debugPrint('LocalSectionStorage getFile error: $e');
+      debugPrint('LocalModuleStorage getFile error: $e');
       return null;
     }
   }
 
-  /// Loads all cached sections across all courses.
-  static Future<List<Section>> loadAllSections() async {
+  /// Loads all cached modules across all courses.
+  static Future<List<Module>> loadAllModules() async {
     try {
       final file = await _getFile();
       if (file == null || !await file.exists()) {
@@ -29,26 +29,26 @@ class LocalSectionStorage {
       if (jsonString.trim().isEmpty) return [];
 
       final List<dynamic> jsonList = jsonDecode(jsonString);
-      final List<Section> sections = [];
+      final List<Module> modules = [];
       for (final item in jsonList) {
         if (item is Map) {
           try {
-            sections.add(Section.fromMap(Map<String, dynamic>.from(item)));
+            modules.add(Module.fromMap(Map<String, dynamic>.from(item)));
           } catch (e) {
-            debugPrint('Error parsing cached section: $e');
+            debugPrint('Error parsing cached module: $e');
           }
         }
       }
-      sections.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-      return sections;
+      modules.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return modules;
     } catch (e) {
-      debugPrint('Error loading all cached sections: $e');
+      debugPrint('Error loading all cached modules: $e');
       return [];
     }
   }
 
-  /// Loads cached sections for a specific courseId.
-  static Future<List<Section>> loadSections(String courseId) async {
+  /// Loads cached modules for a specific courseId.
+  static Future<List<Module>> loadModules(String courseId) async {
     try {
       final file = await _getFile();
       if (file == null || !await file.exists()) {
@@ -58,29 +58,29 @@ class LocalSectionStorage {
       if (jsonString.trim().isEmpty) return [];
 
       final List<dynamic> jsonList = jsonDecode(jsonString);
-      final List<Section> sections = [];
+      final List<Module> modules = [];
       for (final item in jsonList) {
         if (item is Map) {
           try {
-            final section = Section.fromMap(Map<String, dynamic>.from(item));
-            if (section.courseId == courseId) {
-              sections.add(section);
+            final module = Module.fromMap(Map<String, dynamic>.from(item));
+            if (module.courseId == courseId) {
+              modules.add(module);
             }
           } catch (e) {
-            debugPrint('Error parsing cached section: $e');
+            debugPrint('Error parsing cached module: $e');
           }
         }
       }
-      sections.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-      return sections;
+      modules.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return modules;
     } catch (e) {
-      debugPrint('Error loading cached sections: $e');
+      debugPrint('Error loading cached modules: $e');
       return [];
     }
   }
 
-  /// Saves or updates sections for a specific courseId while preserving others.
-  static Future<void> saveSectionsForCourse(String courseId, List<Section> courseSections) async {
+  /// Saves or updates modules for a specific courseId while preserving others.
+  static Future<void> saveModulesForCourse(String courseId, List<Module> courseModules) async {
     try {
       final file = await _getFile();
       if (file == null) return;
@@ -97,7 +97,7 @@ class LocalSectionStorage {
         }
       }
 
-      // Filter out existing sections for this courseId
+      // Filter out existing modules for this courseId
       final remaining = allJson.where((item) {
         if (item is Map) {
           return item['courseId'] != courseId;
@@ -105,12 +105,12 @@ class LocalSectionStorage {
         return false;
       }).toList();
 
-      // Add new course sections
-      remaining.addAll(courseSections.map((s) => s.toMap(forLocalJson: true)));
+      // Add new course modules
+      remaining.addAll(courseModules.map((s) => s.toMap(forLocalJson: true)));
 
       await file.writeAsString(jsonEncode(remaining), flush: true);
     } catch (e) {
-      debugPrint('Error saving cached sections: $e');
+      debugPrint('Error saving cached modules: $e');
     }
   }
 }

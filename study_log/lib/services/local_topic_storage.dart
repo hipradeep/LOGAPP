@@ -2,24 +2,24 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/subsection_item.dart';
+import '../models/topic.dart';
 
-/// Local disk cache for Subsection entities to guarantee persistent offline availability.
-class LocalSubsectionStorage {
-  static const String _fileName = 'study_subsections_cache.json';
+/// Local disk cache for Topic entities to guarantee persistent offline availability.
+class LocalTopicStorage {
+  static const String _fileName = 'study_topics_cache.json';
 
   static Future<File?> _getFile() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       return File('${dir.path}/$_fileName');
     } catch (e) {
-      debugPrint('LocalSubsectionStorage getFile error: $e');
+      debugPrint('LocalTopicStorage getFile error: $e');
       return null;
     }
   }
 
-  /// Loads cached subsections for a specific section title or section key.
-  static Future<List<SubsectionItem>> loadSubsections(String sectionKey) async {
+  /// Loads cached topics for a specific module title or module key.
+  static Future<List<Topic>> loadTopics(String moduleKey) async {
     try {
       final file = await _getFile();
       if (file == null || !await file.exists()) {
@@ -29,20 +29,20 @@ class LocalSubsectionStorage {
       if (jsonString.trim().isEmpty) return [];
 
       final Map<String, dynamic> data = jsonDecode(jsonString);
-      final List<dynamic>? rawList = data[sectionKey] as List<dynamic>?;
+      final List<dynamic>? rawList = data[moduleKey] as List<dynamic>?;
       if (rawList == null || rawList.isEmpty) return [];
 
       return rawList
-          .map((item) => SubsectionItem.fromMap(Map<String, dynamic>.from(item as Map)))
+          .map((item) => Topic.fromMap(Map<String, dynamic>.from(item as Map)))
           .toList();
     } catch (e) {
-      debugPrint('Error loading cached subsections: $e');
+      debugPrint('Error loading cached topics: $e');
       return [];
     }
   }
 
   /// Reads every bucket from disk in a single pass.
-  static Future<Map<String, List<SubsectionItem>>> loadAllBuckets() async {
+  static Future<Map<String, List<Topic>>> loadAllBuckets() async {
     try {
       final file = await _getFile();
       if (file == null || !await file.exists()) {
@@ -54,16 +54,16 @@ class LocalSubsectionStorage {
       final decoded = jsonDecode(jsonString);
       if (decoded is! Map) return {};
 
-      final buckets = <String, List<SubsectionItem>>{};
+      final buckets = <String, List<Topic>>{};
       decoded.forEach((key, value) {
         if (value is! List) return;
-        final items = <SubsectionItem>[];
+        final items = <Topic>[];
         for (final entry in value) {
           if (entry is Map) {
             try {
-              items.add(SubsectionItem.fromMap(Map<String, dynamic>.from(entry)));
+              items.add(Topic.fromMap(Map<String, dynamic>.from(entry)));
             } catch (e) {
-              debugPrint('Error parsing cached subsection: $e');
+              debugPrint('Error parsing cached topic: $e');
             }
           }
         }
@@ -71,60 +71,60 @@ class LocalSubsectionStorage {
       });
       return buckets;
     } catch (e) {
-      debugPrint('Error loading cached subsection buckets: $e');
+      debugPrint('Error loading cached topic buckets: $e');
       return {};
     }
   }
 
-  /// Loads the topics belonging to a specific Section.
+  /// Loads the topics belonging to a specific Module.
   ///
-  /// Prefers records tagged with [sectionId], which stays correct when a
+  /// Prefers records tagged with [moduleId], which stays correct when a
   /// module is renamed or two modules share a title. Falls back to the bucket
   /// keyed by [fallbackTitle] for records written before ids were stored.
-  static Future<List<SubsectionItem>> loadSubsectionsForSection({
-    required String sectionId,
+  static Future<List<Topic>> loadTopicsForModule({
+    required String moduleId,
     String? fallbackTitle,
   }) async {
-    if (sectionId.isEmpty) {
+    if (moduleId.isEmpty) {
       return fallbackTitle == null
-          ? <SubsectionItem>[]
-          : loadSubsections(fallbackTitle);
+          ? <Topic>[]
+          : loadTopics(fallbackTitle);
     }
-    return resolveForSection(
+    return resolveForModule(
       await loadAllBuckets(),
-      sectionId: sectionId,
+      moduleId: moduleId,
       fallbackTitle: fallbackTitle,
     );
   }
 
-  /// Synchronous variant of [loadSubsectionsForSection] for callers that
-  /// already hold the buckets and must not re-read the file per section.
-  static List<SubsectionItem> resolveForSection(
-    Map<String, List<SubsectionItem>> buckets, {
-    required String sectionId,
+  /// Synchronous variant of [loadTopicsForModule] for callers that
+  /// already hold the buckets and must not re-read the file per module.
+  static List<Topic> resolveForModule(
+    Map<String, List<Topic>> buckets, {
+    required String moduleId,
     String? fallbackTitle,
   }) {
-    if (sectionId.isEmpty) {
-      return fallbackTitle == null ? <SubsectionItem>[] : buckets[fallbackTitle] ?? <SubsectionItem>[];
+    if (moduleId.isEmpty) {
+      return fallbackTitle == null ? <Topic>[] : buckets[fallbackTitle] ?? <Topic>[];
     }
 
-    final byId = <SubsectionItem>[];
+    final byId = <Topic>[];
     for (final items in buckets.values) {
       for (final item in items) {
-        if (item.sectionId == sectionId) byId.add(item);
+        if (item.moduleId == moduleId) byId.add(item);
       }
     }
     if (byId.isNotEmpty) return byId;
     if (fallbackTitle != null) {
-      return buckets[fallbackTitle] ?? <SubsectionItem>[];
+      return buckets[fallbackTitle] ?? <Topic>[];
     }
-    return <SubsectionItem>[];
+    return <Topic>[];
   }
 
-  /// Saves subsections for a specific sectionKey to local disk.
-  static Future<void> saveSubsections(
-    String sectionKey,
-    List<SubsectionItem> items,
+  /// Saves topics for a specific moduleKey to local disk.
+  static Future<void> saveTopics(
+    String moduleKey,
+    List<Topic> items,
   ) async {
     try {
       final file = await _getFile();
@@ -142,18 +142,18 @@ class LocalSubsectionStorage {
         }
       }
 
-      data[sectionKey] = items.map((i) => i.toMap()).toList();
+      data[moduleKey] = items.map((i) => i.toMap()).toList();
 
-      // Buckets are keyed by section title, so a renamed module would leave the
+      // Buckets are keyed by module title, so a renamed module would leave the
       // previous title's bucket behind holding the same records. Drop any bucket
-      // that duplicates the section id we just wrote, otherwise id-based reads
+      // that duplicates the module id we just wrote, otherwise id-based reads
       // would count those topics twice.
-      if (items.isNotEmpty && items.first.sectionId.isNotEmpty) {
-        final sectionId = items.first.sectionId;
+      if (items.isNotEmpty && items.first.moduleId.isNotEmpty) {
+        final moduleId = items.first.moduleId;
         data.removeWhere((key, value) {
-          if (key == sectionKey || value is! List) return false;
+          if (key == moduleKey || value is! List) return false;
           for (final entry in value) {
-            if (entry is Map && entry['sectionId'] == sectionId) return true;
+            if (entry is Map && entry['moduleId'] == moduleId) return true;
           }
           return false;
         });
@@ -161,11 +161,11 @@ class LocalSubsectionStorage {
 
       await file.writeAsString(jsonEncode(data), flush: true);
     } catch (e) {
-      debugPrint('Error saving cached subsections: $e');
+      debugPrint('Error saving cached topics: $e');
     }
   }
 
-  /// Clears all locally cached subsections from disk.
+  /// Clears all locally cached topics from disk.
   static Future<void> clearAll() async {
     try {
       final file = await _getFile();
@@ -173,7 +173,7 @@ class LocalSubsectionStorage {
         await file.delete();
       }
     } catch (e) {
-      debugPrint('Error clearing subsections cache: $e');
+      debugPrint('Error clearing topics cache: $e');
     }
   }
 }

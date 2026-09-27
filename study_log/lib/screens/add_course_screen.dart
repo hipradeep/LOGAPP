@@ -312,12 +312,12 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       charCount: _descLength,
                     ),
                     const VGapLg(),
-                    _CourseIconSection(
+                    _CourseIconModule(
                       selectedIcon: _selectedIcon,
                       onOpenPicker: _openIconPicker,
                     ),
                     const VGapLg(),
-                    _CourseColorSection(
+                    _CourseColorModule(
                       selectedColor: _selectedColor,
                       onSelectColor: _selectColor,
                     ),
@@ -522,11 +522,11 @@ class _CourseDescriptionField extends StatelessWidget {
   }
 }
 
-class _CourseIconSection extends StatelessWidget {
+class _CourseIconModule extends StatelessWidget {
   final IconData selectedIcon;
   final VoidCallback onOpenPicker;
 
-  const _CourseIconSection({
+  const _CourseIconModule({
     required this.selectedIcon,
     required this.onOpenPicker,
   });
@@ -589,11 +589,11 @@ class _CourseIconSection extends StatelessWidget {
   }
 }
 
-class _CourseColorSection extends StatelessWidget {
+class _CourseColorModule extends StatelessWidget {
   final Color selectedColor;
   final ValueChanged<Color> onSelectColor;
 
-  const _CourseColorSection({
+  const _CourseColorModule({
     required this.selectedColor,
     required this.onSelectColor,
   });

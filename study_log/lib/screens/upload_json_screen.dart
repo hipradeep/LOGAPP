@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/course.dart';
-import '../models/section.dart';
+import '../models/module.dart';
 import '../services/local_course_storage.dart';
-import '../services/local_section_storage.dart';
-import '../services/local_subsection_storage.dart';
-import '../models/subsection_item.dart';
+import '../services/local_module_storage.dart';
+import '../services/local_topic_storage.dart';
+import '../models/topic.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 
@@ -25,23 +25,23 @@ const String _kSampleJson = r'''
       "title": "Flutter Development",
       "description": "Complete Flutter & Dart course from basics to advanced.",
       "status": "active",
-      "sections": [
+      "modules": [
         {
-          "id": "section_001",
+          "id": "module_001",
           "title": "Dart Basics",
           "description": "Variables, functions, OOP in Dart.",
           "orderIndex": 0,
           "status": "active",
-          "subsections": [
+          "topics": [
             {
-              "id": "sub_001",
+              "id": "topic_001",
               "title": "Variables & Types",
               "description": "int, String, bool, dynamic.",
               "orderIndex": 0,
               "status": "notStarted"
             },
             {
-              "id": "sub_002",
+              "id": "topic_002",
               "title": "Functions & Lambdas",
               "description": "Named, anonymous, arrow functions.",
               "orderIndex": 1,
@@ -50,14 +50,14 @@ const String _kSampleJson = r'''
           ]
         },
         {
-          "id": "section_002",
+          "id": "module_002",
           "title": "Flutter Widgets",
           "description": "Stateless vs Stateful, layout widgets.",
           "orderIndex": 1,
           "status": "active",
-          "subsections": [
+          "topics": [
             {
-              "id": "sub_003",
+              "id": "topic_003",
               "title": "StatelessWidget",
               "description": "Immutable UI blocks.",
               "orderIndex": 0,
@@ -76,7 +76,7 @@ const String _kSampleJson = r'''
 // ──────────────────────────────────────────────────────────────
 
 /// Upload JSON Screen: lets the user pick a JSON file from their device and
-/// bulk-import Courses → Sections → Subsections into local cache.
+/// bulk-import Courses → Modules → Topics into local cache.
 /// Also displays a copyable sample JSON so the user knows the expected format.
 class UploadJsonScreen extends StatefulWidget {
   const UploadJsonScreen({super.key});
@@ -137,8 +137,8 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         _isSuccess = true;
         _resultMessage =
             'Imported ${stats['courses']} course(s), '
-            '${stats['sections']} section(s), '
-            '${stats['subsections']} subsection(s) successfully.';
+            '${stats['modules']} module(s), '
+            '${stats['topics']} topic(s) successfully.';
       });
     } catch (e) {
       setState(() {
@@ -152,7 +152,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
 
   // ── Core import logic ──────────────────────────────────────
   Future<Map<String, int>> _importData(Map<String, dynamic> data) async {
-    int courseCount = 0, sectionCount = 0, subsectionCount = 0;
+    int courseCount = 0, moduleCount = 0, topicCount = 0;
 
     final now = DateTime.now();
     final coursesList = data['courses'] as List<dynamic>? ?? [];
@@ -167,7 +167,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       if (rawCourse is! Map) continue;
       final courseMap = Map<String, dynamic>.from(rawCourse);
 
-      // Build Course entity (strip "sections" key — not part of Course model)
+      // Build Course entity (strip "modules" key — not part of Course model)
       final courseId = courseMap['id']?.toString() ??
           'course_${now.millisecondsSinceEpoch}_$courseCount';
       final course = Course(
@@ -185,73 +185,78 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       }
       courseCount++;
 
-      // ── Sections ─────────────────────────────────────────
-      final rawSections = courseMap['sections'] as List<dynamic>? ?? [];
-      final courseSections = <Section>[];
+      // ── Modules ─────────────────────────────────────────
+      // "sections" is the pre-rename key; still accepted so older exports import.
+      final rawModules = (courseMap['modules'] ?? courseMap['sections'])
+              as List<dynamic>? ??
+          [];
+      final courseModules = <Module>[];
 
       int sIdx = 0;
-      for (final rawSection in rawSections) {
-        if (rawSection is! Map) continue;
-        final sectionMap = Map<String, dynamic>.from(rawSection);
+      for (final rawModule in rawModules) {
+        if (rawModule is! Map) continue;
+        final moduleMap = Map<String, dynamic>.from(rawModule);
 
-        final sectionId = sectionMap['id']?.toString() ??
-            '${courseId}_section_$sIdx';
-        final section = Section(
-          id: sectionId,
+        final moduleId = moduleMap['id']?.toString() ??
+            '${courseId}_module_$sIdx';
+        final module = Module(
+          id: moduleId,
           courseId: courseId,
-          title: sectionMap['title']?.toString() ?? 'Untitled Section',
-          description: sectionMap['description']?.toString() ?? '',
-          orderIndex: (sectionMap['orderIndex'] as num?)?.toInt() ?? sIdx,
-          status: sectionMap['status']?.toString() ?? 'active',
+          title: moduleMap['title']?.toString() ?? 'Untitled Module',
+          description: moduleMap['description']?.toString() ?? '',
+          orderIndex: (moduleMap['orderIndex'] as num?)?.toInt() ?? sIdx,
+          status: moduleMap['status']?.toString() ?? 'active',
           createdAt: now,
           updatedAt: now,
         );
-        courseSections.add(section);
-        sectionCount++;
+        courseModules.add(module);
+        moduleCount++;
 
-        // ── Subsections ────────────────────────────────────
-        final rawSubsections =
-            sectionMap['subsections'] as List<dynamic>? ?? [];
-        final subsectionItems = <SubsectionItem>[];
+        // ── Topics ────────────────────────────────────
+        // "subsections" is the pre-rename key; still accepted.
+        final rawTopics = (moduleMap['topics'] ?? moduleMap['subsections'])
+                as List<dynamic>? ??
+            [];
+        final topicItems = <Topic>[];
 
         int ssIdx = 0;
-        for (final rawSub in rawSubsections) {
+        for (final rawSub in rawTopics) {
           if (rawSub is! Map) continue;
           final subMap = Map<String, dynamic>.from(rawSub);
 
-          SubsectionStatus status = SubsectionStatus.notStarted;
-          final statusStr = subMap['status']?.toString() ?? '';
-          if (statusStr == 'completed') {
-            status = SubsectionStatus.completed;
-          } else if (statusStr == 'inProgress') {
-            status = SubsectionStatus.inProgress;
-          }
-
-          final subItem = SubsectionItem(
-            id: subMap['id']?.toString() ?? '${sectionId}_sub_$ssIdx',
+          final subItem = Topic(
+            id: subMap['id']?.toString() ?? '${moduleId}_topic_$ssIdx',
             courseId: courseId,
-            sectionId: sectionId,
-            title: subMap['title']?.toString() ?? 'Untitled Subsection',
+            moduleId: moduleId,
+            title: subMap['title']?.toString() ?? 'Untitled Topic',
             description: subMap['description']?.toString() ?? '',
             orderIndex: (subMap['orderIndex'] as num?)?.toInt() ?? ssIdx,
-            status: status,
+            status: Topic.parseStatus(subMap['status']),
+            // A completed topic must carry a completion date, otherwise the
+            // activity feed silently skips it. Default to import time.
+            completedAt: Topic.parseStatus(subMap['status']) ==
+                    TopicStatus.completed
+                ? (Topic.parseDateTime(subMap['completedAt']) ?? now)
+                : null,
+            iconCodePoint: (subMap['iconCodePoint'] as num?)?.toInt(),
+            colorValue: (subMap['colorValue'] as num?)?.toInt(),
           );
-          subsectionItems.add(subItem);
-          subsectionCount++;
+          topicItems.add(subItem);
+          topicCount++;
           ssIdx++;
         }
 
-        if (subsectionItems.isNotEmpty) {
-          await LocalSubsectionStorage.saveSubsections(
-              sectionId, subsectionItems);
+        if (topicItems.isNotEmpty) {
+          await LocalTopicStorage.saveTopics(
+              moduleId, topicItems);
         }
 
         sIdx++;
       }
 
-      if (courseSections.isNotEmpty) {
-        await LocalSectionStorage.saveSectionsForCourse(
-            courseId, courseSections);
+      if (courseModules.isNotEmpty) {
+        await LocalModuleStorage.saveModulesForCourse(
+            courseId, courseModules);
       }
     }
 
@@ -259,8 +264,8 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
 
     return {
       'courses': courseCount,
-      'sections': sectionCount,
-      'subsections': subsectionCount,
+      'modules': moduleCount,
+      'topics': topicCount,
     };
   }
 
@@ -286,11 +291,11 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
               const VGapLg(),
               const _InfoCard(),
               const VGapLg(),
-              const _SectionLabel(label: 'Sample JSON Format'),
+              const _ModuleLabel(label: 'Sample JSON Format'),
               const VGapSm(),
               _SampleJsonCard(onCopy: _copySampleJson),
               const VGapLg(),
-              const _SectionLabel(label: 'Import from File'),
+              const _ModuleLabel(label: 'Import from File'),
               const VGapSm(),
               _ImportButton(
                 isImporting: _isImporting,
@@ -374,7 +379,7 @@ class _InfoCard extends StatelessWidget {
           HGapSm(),
           Expanded(
             child: Text(
-              'Upload a JSON file containing your courses, sections, and subsections. '
+              'Upload a JSON file containing your courses, modules, and topics. '
               'Existing courses with the same ID will not be duplicated.',
               style: TextStyle(
                 fontSize: 13,
@@ -389,10 +394,10 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
+class _ModuleLabel extends StatelessWidget {
   final String label;
 
-  const _SectionLabel({required this.label});
+  const _ModuleLabel({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -408,10 +413,19 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _SampleJsonCard extends StatelessWidget {
+class _SampleJsonCard extends StatefulWidget {
   final VoidCallback onCopy;
 
   const _SampleJsonCard({required this.onCopy});
+
+  @override
+  State<_SampleJsonCard> createState() => _SampleJsonCardState();
+}
+
+/// Collapsed by default so the card is just a bar with a Copy action; the caret
+/// on the right reveals the raw JSON without needing a horizontal scroll.
+class _SampleJsonCardState extends State<_SampleJsonCard> {
+  bool _isExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -424,7 +438,7 @@ class _SampleJsonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Top bar with Copy button ──
+          // ── Top bar with Copy + expand toggle ──
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -450,7 +464,7 @@ class _SampleJsonCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 GestureDetector(
-                  onTap: onCopy,
+                  onTap: widget.onCopy,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 6),
@@ -479,25 +493,45 @@ class _SampleJsonCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                const HGapXs(),
+                GestureDetector(
+                  onTap: () => setState(() => _isExpanded = !_isExpanded),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF322D4A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF3D3760)),
+                    ),
+                    child: Icon(
+                      _isExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: const Color(0xFFD4D0FF),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-          // ── JSON content ──
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Text(
-                _kSampleJson.trim(),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  color: Color(0xFFD4D0FF),
-                  height: 1.6,
+          // ── JSON content (only when expanded) ──
+          if (_isExpanded)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Text(
+                  _kSampleJson.trim(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: Color(0xFFD4D0FF),
+                    height: 1.6,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

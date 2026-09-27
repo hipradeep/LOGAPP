@@ -172,7 +172,7 @@ class _CreateCourseOptionTile extends StatelessWidget {
                   ),
                   const VGapXs(),
                   Text(
-                    'Add a new subject to track sections & study progress',
+                    'Add a new subject to track modules & study progress',
                     style: AppTheme.bodySmall.copyWith(
                       color: AppTheme.textSecondary,
                     ),

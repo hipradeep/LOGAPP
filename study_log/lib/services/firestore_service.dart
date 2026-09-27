@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/course.dart';
-import '../models/section.dart';
-import '../models/subsection.dart';
+import '../models/module.dart';
+import '../models/topic.dart';
 import '../models/revision.dart';
 
 /// Firebase Firestore Service with graceful fallbacks.
@@ -70,12 +70,12 @@ class FirestoreService {
     await ref.doc(courseId).delete();
   }
 
-  // === SECTIONS ===
-  CollectionReference<Map<String, dynamic>>? get _sectionsRef =>
-      _firestore?.collection('sections');
+  // === MODULES ===
+  CollectionReference<Map<String, dynamic>>? get _modulesRef =>
+      _firestore?.collection('modules');
 
-  Stream<List<Section>> streamSections({required String courseId}) {
-    final ref = _sectionsRef;
+  Stream<List<Module>> streamModules({required String courseId}) {
+    final ref = _modulesRef;
     if (ref == null) {
       return const Stream.empty();
     }
@@ -83,10 +83,10 @@ class FirestoreService {
         .where('courseId', isEqualTo: courseId)
         .snapshots()
         .map((snapshot) {
-      final list = <Section>[];
+      final list = <Module>[];
       for (final doc in snapshot.docs) {
         try {
-          list.add(Section.fromMap(doc.data(), documentId: doc.id));
+          list.add(Module.fromMap(doc.data(), documentId: doc.id));
         } catch (e) {
           // Skip corrupt document safely
         }
@@ -96,43 +96,43 @@ class FirestoreService {
     });
   }
 
-  Future<void> addSection(Section section) async {
-    final ref = _sectionsRef;
+  Future<void> addModule(Module module) async {
+    final ref = _modulesRef;
     if (ref == null) return;
-    final docRef = section.id.isEmpty ? ref.doc() : ref.doc(section.id);
-    final sectionToSave = section.id.isEmpty ? section.copyWith(id: docRef.id) : section;
-    await docRef.set(sectionToSave.toMap());
+    final docRef = module.id.isEmpty ? ref.doc() : ref.doc(module.id);
+    final moduleToSave = module.id.isEmpty ? module.copyWith(id: docRef.id) : module;
+    await docRef.set(moduleToSave.toMap());
   }
 
-  Future<void> updateSection(Section section) async {
-    final ref = _sectionsRef;
+  Future<void> updateModule(Module module) async {
+    final ref = _modulesRef;
     if (ref == null) return;
-    await ref.doc(section.id).update(section.toMap());
+    await ref.doc(module.id).update(module.toMap());
   }
 
-  Future<void> deleteSection(String sectionId) async {
-    final ref = _sectionsRef;
+  Future<void> deleteModule(String moduleId) async {
+    final ref = _modulesRef;
     if (ref == null) return;
-    await ref.doc(sectionId).delete();
+    await ref.doc(moduleId).delete();
   }
 
-  // === SUBSECTIONS ===
-  CollectionReference<Map<String, dynamic>>? get _subsectionsRef =>
-      _firestore?.collection('subsections');
+  // === TOPICS ===
+  CollectionReference<Map<String, dynamic>>? get _topicsRef =>
+      _firestore?.collection('topics');
 
-  Stream<List<Subsection>> streamSubsections({required String sectionId}) {
-    final ref = _subsectionsRef;
+  Stream<List<Topic>> streamTopics({required String moduleId}) {
+    final ref = _topicsRef;
     if (ref == null) {
       return const Stream.empty();
     }
     return ref
-        .where('sectionId', isEqualTo: sectionId)
+        .where('moduleId', isEqualTo: moduleId)
         .snapshots()
         .map((snapshot) {
-      final list = <Subsection>[];
+      final list = <Topic>[];
       for (final doc in snapshot.docs) {
         try {
-          list.add(Subsection.fromMap(doc.data(), documentId: doc.id));
+          list.add(Topic.fromMap(doc.data(), documentId: doc.id));
         } catch (e) {
           // Skip corrupt document safely
         }
@@ -142,11 +142,11 @@ class FirestoreService {
     });
   }
 
-  Future<void> addSubsection(Subsection subsection) async {
-    final ref = _subsectionsRef;
+  Future<void> addTopic(Topic topic) async {
+    final ref = _topicsRef;
     if (ref == null) return;
-    final docRef = subsection.id.isEmpty ? ref.doc() : ref.doc(subsection.id);
-    final subToSave = subsection.id.isEmpty ? subsection.copyWith(id: docRef.id) : subsection;
+    final docRef = topic.id.isEmpty ? ref.doc() : ref.doc(topic.id);
+    final subToSave = topic.id.isEmpty ? topic.copyWith(id: docRef.id) : topic;
     await docRef.set(subToSave.toMap());
   }
 

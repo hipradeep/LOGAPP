@@ -31,25 +31,25 @@ enum RevisionStatus {
   finished,
 }
 
-/// A spaced repetition record for a single completed Section.
+/// A spaced repetition record for a single completed Module.
 ///
 /// Firestore shape:
 /// ```
 /// revisions/{revisionId}
-///   id, courseId, sectionId, currentLevel, status,
+///   id, courseId, moduleId, currentLevel, status,
 ///   nextRevisionAt, completedAt, createdAt, updatedAt
 /// ```
 class Revision {
   final String id;
   final String courseId;
-  final String sectionId;
+  final String moduleId;
 
   /// Denormalised for display only; the ids above stay authoritative.
   final String courseTitle;
-  final String sectionTitle;
+  final String moduleTitle;
 
-  /// Short blurb shown under [sectionTitle] on the Revision list.
-  final String sectionDescription;
+  /// Short blurb shown under [moduleTitle] on the Revision list.
+  final String moduleDescription;
 
   /// 1-based level, R1 through R5.
   final int currentLevel;
@@ -66,10 +66,10 @@ class Revision {
   const Revision({
     required this.id,
     required this.courseId,
-    required this.sectionId,
+    required this.moduleId,
     this.courseTitle = '',
-    this.sectionTitle = '',
-    this.sectionDescription = '',
+    this.moduleTitle = '',
+    this.moduleDescription = '',
     required this.currentLevel,
     required this.status,
     required this.nextRevisionAt,
@@ -105,8 +105,14 @@ class Revision {
 
   /// Advances the ladder as of [at].
   ///
-  /// Finishing R5 marks the revision finished; otherwise the level moves on
-  /// and the next date is calculated from [at] using the new level's interval.
+  /// Finishing R5 marks the revision finished. Otherwise the level moves on and
+  /// the next date is anchored to [createdAt] — the original module completion
+  /// — rather than to [at], so the stored schedule always matches the R1-R5
+  /// timeline the UI renders.
+  ///
+  /// If a level is revised very late, its anchored date may already be past. In
+  /// that case the clock restarts from [at] instead, so a badly overdue ladder
+  /// cannot cascade into R2-R5 all being due at once.
   Revision advance(DateTime at) {
     if (isFinished) return this;
     if (currentLevel >= RevisionSchedule.maxLevel) {
@@ -117,9 +123,11 @@ class Revision {
       );
     }
     final nextLevel = currentLevel + 1;
+    final interval = RevisionSchedule.intervalFor(nextLevel);
+    final anchored = createdAt.add(interval);
     return copyWith(
       currentLevel: nextLevel,
-      nextRevisionAt: at.add(RevisionSchedule.intervalFor(nextLevel)),
+      nextRevisionAt: anchored.isAfter(at) ? anchored : at.add(interval),
       updatedAt: at,
     );
   }
@@ -127,10 +135,10 @@ class Revision {
   Revision copyWith({
     String? id,
     String? courseId,
-    String? sectionId,
+    String? moduleId,
     String? courseTitle,
-    String? sectionTitle,
-    String? sectionDescription,
+    String? moduleTitle,
+    String? moduleDescription,
     int? currentLevel,
     RevisionStatus? status,
     DateTime? nextRevisionAt,
@@ -142,10 +150,10 @@ class Revision {
     return Revision(
       id: id ?? this.id,
       courseId: courseId ?? this.courseId,
-      sectionId: sectionId ?? this.sectionId,
+      moduleId: moduleId ?? this.moduleId,
       courseTitle: courseTitle ?? this.courseTitle,
-      sectionTitle: sectionTitle ?? this.sectionTitle,
-      sectionDescription: sectionDescription ?? this.sectionDescription,
+      moduleTitle: moduleTitle ?? this.moduleTitle,
+      moduleDescription: moduleDescription ?? this.moduleDescription,
       currentLevel: currentLevel ?? this.currentLevel,
       status: status ?? this.status,
       nextRevisionAt: nextRevisionAt ?? this.nextRevisionAt,
@@ -159,10 +167,10 @@ class Revision {
     return {
       'id': id,
       'courseId': courseId,
-      'sectionId': sectionId,
+      'moduleId': moduleId,
       'courseTitle': courseTitle,
-      'sectionTitle': sectionTitle,
-      'sectionDescription': sectionDescription,
+      'moduleTitle': moduleTitle,
+      'moduleDescription': moduleDescription,
       'currentLevel': currentLevel,
       'status': status.name,
       'nextRevisionAt': forLocalJson
@@ -188,10 +196,10 @@ class Revision {
           ? documentId
           : (map['id']?.toString() ?? ''),
       courseId: map['courseId']?.toString() ?? '',
-      sectionId: map['sectionId']?.toString() ?? '',
+      moduleId: map['moduleId']?.toString() ?? '',
       courseTitle: map['courseTitle']?.toString() ?? '',
-      sectionTitle: map['sectionTitle']?.toString() ?? '',
-      sectionDescription: map['sectionDescription']?.toString() ?? '',
+      moduleTitle: map['moduleTitle']?.toString() ?? '',
+      moduleDescription: map['moduleDescription']?.toString() ?? '',
       currentLevel: ((map['currentLevel'] as num?)?.toInt() ?? 1)
           .clamp(1, RevisionSchedule.maxLevel),
       status: map['status']?.toString() == RevisionStatus.finished.name

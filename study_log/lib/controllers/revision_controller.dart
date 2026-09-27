@@ -2,30 +2,30 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/course.dart';
 import '../models/revision.dart';
-import '../models/section.dart';
+import '../models/module.dart';
 import '../services/firestore_service.dart';
 import '../services/local_revision_storage.dart';
-import '../services/local_section_storage.dart';
-import '../services/local_subsection_storage.dart';
+import '../services/local_module_storage.dart';
+import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
-import 'ongoing_sections_controller.dart';
+import 'ongoing_modules_controller.dart';
 
 /// Owns the R1 -> R5 spaced repetition ladder.
 ///
-/// A revision is created the moment every topic in a Section is completed
+/// A revision is created the moment every topic in a Module is completed
 /// (level R1, unlocking after 1 day). Each later level unlocks only after the
 /// previous level is completed *and* its date has arrived:
 ///
 ///   R1 -> +1 day, R2 -> +3 days, R3 -> +7 days, R4 -> +14 days, R5 -> +30 days
 ///
 /// Progression is automatic — there is no manual "mark done" step. Whenever a
-/// due level's Section is still fully completed, [reconcile] advances the
+/// due level's Module is still fully completed, [reconcile] advances the
 /// record and schedules the next date from the completion moment. Finishing R5
 /// flips the record to [RevisionStatus.finished].
 class RevisionController extends ChangeNotifier {
   final CoursesController _coursesController;
-  final OngoingSectionsController _ongoingController;
+  final OngoingModulesController _ongoingController;
   final FirestoreService _firestoreService;
 
   StreamSubscription<List<Revision>>? _revisionsSubscription;
@@ -36,14 +36,14 @@ class RevisionController extends ChangeNotifier {
 
   RevisionController({
     CoursesController? coursesController,
-    OngoingSectionsController? ongoingController,
+    OngoingModulesController? ongoingController,
     FirestoreService? firestoreService,
   })  : _coursesController = coursesController ?? getIt<CoursesController>(),
         _ongoingController =
-            ongoingController ?? getIt<OngoingSectionsController>(),
+            ongoingController ?? getIt<OngoingModulesController>(),
         _firestoreService = firestoreService ?? getIt<FirestoreService>() {
     _coursesController.addListener(_onCoursesChanged);
-    // OngoingSectionsController notifies on every course change and on every
+    // OngoingModulesController notifies on every course change and on every
     // topic toggle, add or delete, which is exactly when the ladder must be
     // re-evaluated.
     _ongoingController.addListener(_onOngoingChanged);
@@ -91,9 +91,9 @@ class RevisionController extends ChangeNotifier {
 
   /// Marks the current level as revised and moves the ladder on.
   ///
-  /// This is the explicit counterpart to the automatic pass in [reconcile];
-  /// it lets a user finish a level the moment they want rather than waiting
-  /// for the next reconciliation. Returns true when something changed.
+  /// This is the only path that advances a level, so a record stays due — and
+  /// keeps offering its "Start Rn" button — until the user acts. Returns true
+  /// when something changed.
   Future<bool> completeCurrentLevel(String revisionId, {DateTime? at}) async {
     final now = at ?? DateTime.now();
     final index = _revisions.indexWhere((r) => r.id == revisionId);
@@ -129,9 +129,9 @@ class RevisionController extends ChangeNotifier {
     await _pushToFirestore(reset, isNew: false);
   }
 
-  Revision? revisionForSection(String sectionId) {
+  Revision? revisionForModule(String moduleId) {
     for (final revision in _revisions) {
-      if (revision.sectionId == sectionId) return revision;
+      if (revision.moduleId == moduleId) return revision;
     }
     return null;
   }
@@ -191,66 +191,57 @@ class RevisionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Creates R1 for newly completed Sections and advances any level that is
-  /// both unlocked and still fully completed.
+  /// Creates R1 for newly completed Modules and keeps a record's mirrored
+  /// module description in sync.
   ///
-  /// Safe to call repeatedly: a single pass always settles, because advancing
-  /// always pushes [Revision.nextRevisionAt] into the future.
+  /// Progression is deliberately *not* done here. Levels only move forward when
+  /// the user taps "Start Rn" on the revision detail screen, via
+  /// [completeCurrentLevel]. Advancing automatically would consume the due
+  /// window before the UI ever renders, so the button would never appear.
   Future<void> reconcile() async {
     if (_isReconciling) return;
     _isReconciling = true;
 
     try {
       final now = DateTime.now();
-      final bySection = <String, Revision>{
-        for (final revision in _revisions) revision.sectionId: revision,
+      final byModule = <String, Revision>{
+        for (final revision in _revisions) revision.moduleId: revision,
       };
       final working = List<Revision>.of(_revisions);
       var changed = false;
 
       for (final course in _activeCourses()) {
-        final sections = await LocalSectionStorage.loadSections(course.id);
+        final modules = await LocalModuleStorage.loadModules(course.id);
 
-        for (final section in sections) {
-          final isComplete = await _isSectionComplete(section);
+        for (final module in modules) {
+          final isComplete = await _isModuleComplete(module);
           if (!isComplete) continue;
 
-          final existing = bySection[section.id];
+          final existing = byModule[module.id];
 
           if (existing == null) {
-            final created = _createRevision(course, section, now);
+            final created = _createRevision(course, module, now);
             working.add(created);
-            bySection[section.id] = created;
+            byModule[module.id] = created;
             changed = true;
             await _pushToFirestore(created, isNew: true);
             continue;
           }
 
-          if (existing.sectionDescription != section.description) {
+          if (existing.moduleDescription != module.description) {
             final index = working.indexWhere((r) => r.id == existing.id);
             if (index != -1) {
               final updated = existing.copyWith(
-                sectionDescription: section.description,
+                moduleDescription: module.description,
                 updatedAt: now,
               );
               working[index] = updated;
-              bySection[section.id] = updated;
+              byModule[module.id] = updated;
               changed = true;
               await _pushToFirestore(updated, isNew: false);
             }
             continue;
           }
-
-          if (existing.isFinished || !existing.isDueAt(now)) continue;
-
-          final index = working.indexWhere((r) => r.id == existing.id);
-          if (index == -1) continue;
-
-          final advanced = existing.advance(now);
-          working[index] = advanced;
-          bySection[section.id] = advanced;
-          changed = true;
-          await _pushToFirestore(advanced, isNew: false);
         }
       }
 
@@ -267,7 +258,7 @@ class RevisionController extends ChangeNotifier {
     }
   }
 
-  /// Deletes a revision record entirely (used when its Section disappears).
+  /// Deletes a revision record entirely (used when its Module disappears).
   Future<void> deleteRevision(String revisionId) async {
     _revisions = _revisions.where((r) => r.id != revisionId).toList();
     await LocalRevisionStorage.saveAll(_revisions);
@@ -292,25 +283,25 @@ class RevisionController extends ChangeNotifier {
   /// A module counts as complete only when it has at least one topic and every
   /// one of them is completed. Lookups are id-first so a renamed module (or two
   /// modules sharing a title) is still measured against its own topics.
-  Future<bool> _isSectionComplete(Section section) async {
-    if (section.id.isEmpty && section.title.isEmpty) return false;
+  Future<bool> _isModuleComplete(Module module) async {
+    if (module.id.isEmpty && module.title.isEmpty) return false;
 
-    final topics = await LocalSubsectionStorage.loadSubsectionsForSection(
-      sectionId: section.id,
-      fallbackTitle: section.title,
+    final topics = await LocalTopicStorage.loadTopicsForModule(
+      moduleId: module.id,
+      fallbackTitle: module.title,
     );
     if (topics.isEmpty) return false;
     return topics.every((topic) => topic.isCompleted);
   }
 
-  Revision _createRevision(Course course, Section section, DateTime now) {
+  Revision _createRevision(Course course, Module module, DateTime now) {
     return Revision(
-      id: 'revision_${section.id}_${now.millisecondsSinceEpoch}',
+      id: 'revision_${module.id}_${now.millisecondsSinceEpoch}',
       courseId: course.id,
-      sectionId: section.id,
+      moduleId: module.id,
       courseTitle: course.title,
-      sectionTitle: section.title,
-      sectionDescription: section.description,
+      moduleTitle: module.title,
+      moduleDescription: module.description,
       currentLevel: 1,
       status: RevisionStatus.active,
       nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),

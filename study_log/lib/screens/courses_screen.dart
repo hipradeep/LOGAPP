@@ -13,7 +13,7 @@ import 'course_detail_screen.dart';
 /// - Top bar with Back navigation, "Courses" title, circular "+", and 3-dots menu (Delete, Archive)
 /// - "Search courses..." rounded search bar
 /// - Pastel category cards (DSA, System Design, Gen AI, Android, Cloud Computing, DevOps)
-///   with completed section ratios, progress bars, and percentage indicators
+///   with completed module ratios, progress bars, and percentage indicators
 /// - Fully responsive with realtime search filter and tap-to-inspect navigation
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
@@ -344,7 +344,7 @@ class _CoursesFilteredList extends StatelessWidget {
   static final List<_PresetCourseData> _presetCourses = [
     const _PresetCourseData(
       title: 'DSA',
-      subtitle: '6 / 20 sections',
+      subtitle: '6 / 20 modules',
       progress: 0.30,
       percentage: '30%',
       icon: Icons.code_rounded,
@@ -354,7 +354,7 @@ class _CoursesFilteredList extends StatelessWidget {
     ),
     const _PresetCourseData(
       title: 'System Design',
-      subtitle: '3 / 15 sections',
+      subtitle: '3 / 15 modules',
       progress: 0.20,
       percentage: '20%',
       icon: Icons.settings_suggest_rounded,
@@ -364,7 +364,7 @@ class _CoursesFilteredList extends StatelessWidget {
     ),
     const _PresetCourseData(
       title: 'Gen AI',
-      subtitle: '1 / 10 sections',
+      subtitle: '1 / 10 modules',
       progress: 0.10,
       percentage: '10%',
       icon: Icons.smart_toy_rounded,
@@ -374,7 +374,7 @@ class _CoursesFilteredList extends StatelessWidget {
     ),
     const _PresetCourseData(
       title: 'Android',
-      subtitle: '0 / 8 sections',
+      subtitle: '0 / 8 modules',
       progress: 0.0,
       percentage: '0%',
       icon: Icons.android_rounded,
@@ -384,7 +384,7 @@ class _CoursesFilteredList extends StatelessWidget {
     ),
     const _PresetCourseData(
       title: 'Cloud Computing',
-      subtitle: '0 / 12 sections',
+      subtitle: '0 / 12 modules',
       progress: 0.0,
       percentage: '0%',
       icon: Icons.cloud_outlined,
@@ -394,7 +394,7 @@ class _CoursesFilteredList extends StatelessWidget {
     ),
     const _PresetCourseData(
       title: 'DevOps',
-      subtitle: '0 / 10 sections',
+      subtitle: '0 / 10 modules',
       progress: 0.0,
       percentage: '0%',
       icon: Icons.all_inclusive_rounded,
@@ -436,7 +436,7 @@ class _CoursesFilteredList extends StatelessWidget {
                   title: course.title,
                   subtitle: course.description.isNotEmpty
                       ? course.description
-                      : '2 / 6 sections',
+                      : '2 / 6 modules',
                   progress: progress,
                   percentage: '$percent%',
                   icon: theme.icon,

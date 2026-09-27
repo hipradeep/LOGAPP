@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../controllers/courses_controller.dart';
-import '../controllers/ongoing_sections_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
 import '../models/course.dart';
 import '../services/service_locator.dart';
 
@@ -65,8 +65,8 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
   @override
   Widget build(BuildContext context) {
     final controller = getIt<CoursesController>();
-    final ongoing = getIt.isRegistered<OngoingSectionsController>()
-        ? getIt<OngoingSectionsController>()
+    final ongoing = getIt.isRegistered<OngoingModulesController>()
+        ? getIt<OngoingModulesController>()
         : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

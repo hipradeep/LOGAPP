@@ -1,7 +1,7 @@
 import 'package:get_it/get_it.dart';
 import '../controllers/theme_controller.dart';
 import '../controllers/courses_controller.dart';
-import '../controllers/ongoing_sections_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import 'firestore_service.dart';
 
@@ -17,8 +17,8 @@ void setupLocator() {
   if (!getIt.isRegistered<CoursesController>()) {
     getIt.registerLazySingleton<CoursesController>(() => CoursesController());
   }
-  if (!getIt.isRegistered<OngoingSectionsController>()) {
-    getIt.registerLazySingleton<OngoingSectionsController>(() => OngoingSectionsController());
+  if (!getIt.isRegistered<OngoingModulesController>()) {
+    getIt.registerLazySingleton<OngoingModulesController>(() => OngoingModulesController());
   }
   if (!getIt.isRegistered<RevisionController>()) {
     getIt.registerLazySingleton<RevisionController>(() => RevisionController());

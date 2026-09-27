@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 
-/// Modern Course & Section Card matching the reference design:
+/// Modern Course & Module Card matching the reference design:
 /// - Rounded square icon container with rotating pastel accents
 /// - Bold course/topic title
 /// - Breadcrumb subtitle (e.g. "DSA › Basic Problems")

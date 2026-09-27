@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../services/local_course_storage.dart';
-import '../services/local_subsection_storage.dart';
+import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
@@ -16,6 +16,9 @@ import 'upload_json_screen.dart';
 /// - Full menu list (My Progress, Activity, Courses, Revision Settings,
 ///   Notifications, Appearance, Backup & Sync, Help & Support, About)
 /// - Only "Courses" is interactive and links to [CoursesScreen] as requested.
+///   It shares the plain row styling of the other live entries ("Upload JSON",
+///   "Clear Cache") so no item reads as selected; the remaining rows are
+///   placeholders and stay muted to show they are inactive.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -64,7 +67,7 @@ class ProfileScreen extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       await Future.wait([
         LocalCourseStorage.clearAll(),
-        LocalSubsectionStorage.clearAll(),
+        LocalTopicStorage.clearAll(),
         LocalRevisionStorage.clearAll(),
       ]);
       getIt<CoursesController>().refresh();
@@ -259,8 +262,12 @@ class _ProfileMenuList extends StatelessWidget {
           icon: Icons.code_rounded,
           title: 'Activity',
         ),
-        // "Courses" - Highlighted with purple stroke & only active link
-        _ProfileCoursesHighlightedItem(onTap: onCoursesTap),
+        // "Courses" - navigates to the course list
+        _ProfileTappableMenuItem(
+          icon: Icons.menu_book_outlined,
+          title: 'Courses',
+          onTap: onCoursesTap,
+        ),
         // "Upload JSON" - tappable import entry
         _ProfileTappableMenuItem(
           icon: Icons.upload_file_rounded,
@@ -299,59 +306,6 @@ class _ProfileMenuList extends StatelessWidget {
           title: 'About',
         ),
       ],
-    );
-  }
-}
-
-class _ProfileCoursesHighlightedItem extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _ProfileCoursesHighlightedItem({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F3FF),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.primaryColor, width: 1.5),
-            ),
-            child: const Row(
-              children: [
-                Icon(
-                  Icons.menu_book_outlined,
-                  color: AppTheme.primaryColor,
-                  size: 22,
-                ),
-                HGapMd(),
-                Expanded(
-                  child: Text(
-                    'Courses',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppTheme.primaryColor,
-                  size: 22,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

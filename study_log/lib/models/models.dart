@@ -1,3 +1,4 @@
 export 'course.dart';
-export 'section.dart';
-export 'subsection.dart';
+export 'module.dart';
+export 'topic.dart';
+export 'revision.dart';

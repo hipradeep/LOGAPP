@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class Section {
+class Module {
   final String id;
   final String courseId;
   final String title;
@@ -10,7 +10,7 @@ class Section {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  const Section({
+  const Module({
     required this.id,
     required this.courseId,
     required this.title,
@@ -34,13 +34,13 @@ class Section {
     };
   }
 
-  factory Section.fromMap(Map<String, dynamic> map, {String? documentId}) {
-    return Section(
+  factory Module.fromMap(Map<String, dynamic> map, {String? documentId}) {
+    return Module(
       id: (documentId != null && documentId.isNotEmpty)
           ? documentId
           : (map['id']?.toString() ?? ''),
       courseId: map['courseId']?.toString() ?? '',
-      title: map['title']?.toString() ?? 'Untitled Section',
+      title: map['title']?.toString() ?? 'Untitled Module',
       description: map['description']?.toString() ?? '',
       orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
       status: map['status']?.toString() ?? 'active',
@@ -49,7 +49,7 @@ class Section {
     );
   }
 
-  Section copyWith({
+  Module copyWith({
     String? id,
     String? courseId,
     String? title,
@@ -59,7 +59,7 @@ class Section {
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
-    return Section(
+    return Module(
       id: id ?? this.id,
       courseId: courseId ?? this.courseId,
       title: title ?? this.title,

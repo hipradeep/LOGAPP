@@ -6,20 +6,20 @@ import '../widgets/today_progress_card.dart';
 import '../widgets/your_courses_carousel.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
-import '../controllers/ongoing_sections_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../models/course.dart';
 import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 import 'courses_screen.dart';
-import 'section_detail_screen.dart';
+import 'module_detail_screen.dart';
 import '../widgets/study_confirmation_dialog.dart';
 
 /// Redesigned Home Screen matching the reference design:
 /// - "Hi, Pradeep 👋" greeting & notification bell with badge dot
 /// - "Your Courses" horizontal carousel with progress bars and indicator dots
 /// - "Today's Progress" with formatted date and 4 statistics
-/// - "Current Sections" fetching ongoing courses and active ongoing sections
+/// - "Current Modules" fetching ongoing courses and active ongoing modules
 /// - Passes all 24 rules of [optimize.md]
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     getIt<CoursesController>();
-    getIt<OngoingSectionsController>();
+    getIt<OngoingModulesController>();
     getIt<RevisionController>();
   }
 
@@ -44,22 +44,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openSectionDetail(
-    String sectionTitle,
+  void _openModuleDetail(
+    String moduleTitle,
     String courseTitle,
     String courseId,
-    String sectionId,
+    String moduleId,
     int orderIndex,
   ) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SectionDetailScreen(
-          sectionTitle: sectionTitle,
+        builder: (_) => ModuleDetailScreen(
+          moduleTitle: moduleTitle,
           courseTitle: courseTitle,
           courseId: courseId,
-          sectionId: sectionId,
-          sectionOrderIndex: orderIndex,
+          moduleId: moduleId,
+          moduleOrderIndex: orderIndex,
         ),
       ),
     );
@@ -109,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final ongoingController = getIt<OngoingSectionsController>();
+    final ongoingController = getIt<OngoingModulesController>();
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
@@ -121,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverPadding(
               padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
               sliver: SliverToBoxAdapter(
-                child: _HomeTopSection(
+                child: _HomeTopModule(
                   ongoingController: ongoingController,
                   onViewAll: _handleViewAll,
                   onCourseTap: _openCourseByTitle,
@@ -130,9 +130,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             SliverPadding(
               padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
-              sliver: _CurrentSectionsSliverList(
+              sliver: _CurrentModulesSliverList(
                 ongoingController: ongoingController,
-                onSectionTap: _openSectionDetail,
+                onModuleTap: _openModuleDetail,
                 onAddCourse: _openAddCourse,
                 onViewAll: _handleViewAll,
               ),
@@ -227,10 +227,10 @@ class _GreetingHeader extends StatelessWidget {
   }
 }
 
-class _CurrentSectionsHeader extends StatelessWidget {
+class _CurrentModulesHeader extends StatelessWidget {
   final VoidCallback onViewAll;
 
-  const _CurrentSectionsHeader({required this.onViewAll});
+  const _CurrentModulesHeader({required this.onViewAll});
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +239,7 @@ class _CurrentSectionsHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const Text(
-          'Current Sections',
+          'Current Modules',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -266,12 +266,12 @@ class _CurrentSectionsHeader extends StatelessWidget {
   }
 }
 
-class _HomeTopSection extends StatelessWidget {
-  final OngoingSectionsController ongoingController;
+class _HomeTopModule extends StatelessWidget {
+  final OngoingModulesController ongoingController;
   final VoidCallback onViewAll;
   final ValueChanged<String> onCourseTap;
 
-  const _HomeTopSection({
+  const _HomeTopModule({
     required this.ongoingController,
     required this.onViewAll,
     required this.onCourseTap,
@@ -303,22 +303,22 @@ class _HomeTopSection extends StatelessWidget {
           ),
         ),
         const VGapLg(),
-        _CurrentSectionsHeader(onViewAll: onViewAll),
+        _CurrentModulesHeader(onViewAll: onViewAll),
         const VGapSm(),
       ],
     );
   }
 }
 
-class _CurrentSectionsSliverList extends StatelessWidget {
-  final OngoingSectionsController ongoingController;
-  final void Function(String, String, String, String, int) onSectionTap;
+class _CurrentModulesSliverList extends StatelessWidget {
+  final OngoingModulesController ongoingController;
+  final void Function(String, String, String, String, int) onModuleTap;
   final void Function(BuildContext) onAddCourse;
   final VoidCallback onViewAll;
 
-  const _CurrentSectionsSliverList({
+  const _CurrentModulesSliverList({
     required this.ongoingController,
-    required this.onSectionTap,
+    required this.onModuleTap,
     required this.onAddCourse,
     required this.onViewAll,
   });
@@ -347,7 +347,7 @@ class _CurrentSectionsSliverList extends StatelessWidget {
 
         if (items.isEmpty) {
           return SliverToBoxAdapter(
-            child: _EmptyOngoingSectionsCard(onAddCourse: () => onAddCourse(context)),
+            child: _EmptyOngoingModulesCard(onAddCourse: () => onAddCourse(context)),
           );
         }
 
@@ -386,28 +386,28 @@ class _CurrentSectionsSliverList extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: StudyScheduleCard(
-                key: ValueKey(item.section.id),
+                key: ValueKey(item.module.id),
                 title: item.title,
                 subtitle: item.breadcrumb,
                 progressRatio: item.progressRatio,
                 index: index,
                 progress: item.progress,
                 onTap: () {
-                  onSectionTap(
-                    item.section.title,
+                  onModuleTap(
+                    item.module.title,
                     item.course.title,
                     item.course.id,
-                    item.section.id,
-                    item.section.orderIndex,
+                    item.module.id,
+                    item.module.orderIndex,
                   );
                 },
                 onLongPress: () async {
-                  final confirmed = await StudyConfirmationDialog.showDeleteSection(
+                  final confirmed = await StudyConfirmationDialog.showDeleteModule(
                     context,
-                    sectionTitle: item.title,
+                    moduleTitle: item.title,
                   );
                   if (confirmed && context.mounted) {
-                    await ongoingController.deleteSection(item);
+                    await ongoingController.deleteModule(item);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -431,10 +431,10 @@ class _CurrentSectionsSliverList extends StatelessWidget {
   }
 }
 
-class _EmptyOngoingSectionsCard extends StatelessWidget {
+class _EmptyOngoingModulesCard extends StatelessWidget {
   final VoidCallback onAddCourse;
 
-  const _EmptyOngoingSectionsCard({required this.onAddCourse});
+  const _EmptyOngoingModulesCard({required this.onAddCourse});
 
   @override
   Widget build(BuildContext context) {
@@ -454,7 +454,7 @@ class _EmptyOngoingSectionsCard extends StatelessWidget {
           ),
           const VGapMd(),
           const Text(
-            'No running or upcoming sections',
+            'No running or upcoming modules',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -463,7 +463,7 @@ class _EmptyOngoingSectionsCard extends StatelessWidget {
           ),
           const VGapXs(),
           const Text(
-            'Add sections to your courses to see your study schedule here.',
+            'Add modules to your courses to see your study schedule here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,

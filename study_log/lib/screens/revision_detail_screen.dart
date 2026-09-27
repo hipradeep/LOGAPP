@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/course_icon_chip.dart';
+import '../widgets/topic_progress_header.dart';
+import '../widgets/topic_status_indicator.dart';
+import '../widgets/topic_status_label.dart';
 import '../models/revision.dart';
-import '../models/subsection_item.dart';
-import '../services/local_subsection_storage.dart';
+import '../models/topic.dart';
+import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
-import 'section_detail_screen.dart';
+import 'module_detail_screen.dart';
 
-/// Revision detail screen — mirrors the Course Detail layout:
-///
-/// - Same top bar (back, "REVISION" eyebrow, overflow menu)
-/// - Same hero block (44px pastel rounded square + 24px module title)
-/// - Same progress banner, but tracking the R1 -> R5 ladder instead of modules
-/// - "Topics (n)" tab replaces the module list
-/// - "Progress" tab replaces "Overview" and shows the ladder vertically
-///
+
 /// Read-only by design: the ladder advances on its own, so there is no action
 /// button here — tapping a topic simply opens the module it belongs to.
 class RevisionDetailScreen extends StatefulWidget {
@@ -29,14 +26,14 @@ class RevisionDetailScreen extends StatefulWidget {
 
 class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
-  List<SubsectionItem> _topics = const [];
+  List<Topic> _topics = const [];
   bool _isLoadingTopics = true;
 
   RevisionController get _controller => getIt<RevisionController>();
 
   /// Always prefers the live record so the ladder reflects auto-progression.
   Revision get _revision =>
-      _controller.revisionForSection(widget.revision.sectionId) ??
+      _controller.revisionForModule(widget.revision.moduleId) ??
       widget.revision;
 
   @override
@@ -53,9 +50,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
   Future<void> _loadTopics() async {
     final revision = widget.revision;
-    final topics = await LocalSubsectionStorage.loadSubsectionsForSection(
-      sectionId: revision.sectionId,
-      fallbackTitle: revision.sectionTitle,
+    final topics = await LocalTopicStorage.loadTopicsForModule(
+      moduleId: revision.moduleId,
+      fallbackTitle: revision.moduleTitle,
     );
     if (!mounted) return;
     setState(() {
@@ -68,16 +65,37 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     Navigator.of(context).pop();
   }
 
+  /// Explicitly completes the level the user is on and moves the ladder on.
+  Future<void> _startCurrentLevel(Revision revision) async {
+    final level = revision.currentLevel;
+    final advanced = await _controller.completeCurrentLevel(revision.id);
+    if (!mounted || !advanced) return;
+
+    final isNowFinished = _revision.isFinished;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isNowFinished
+              ? 'R$level cleared — ladder complete'
+              : 'R$level cleared — now on R${_revision.currentLevel}',
+        ),
+        backgroundColor: AppTheme.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   void _openModule() {
     final revision = _revision;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SectionDetailScreen(
-          sectionTitle: revision.sectionTitle,
+        builder: (_) => ModuleDetailScreen(
+          moduleTitle: revision.moduleTitle,
           courseTitle: revision.courseTitle,
           courseId: revision.courseId,
-          sectionId: revision.sectionId,
+          moduleId: revision.moduleId,
         ),
       ),
     );
@@ -177,13 +195,18 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                   onOptions: _openOptionsMenu,
                 ),
                 _HeroBlock(
-                  icon: Icons.sync_rounded,
-                  title: revision.sectionTitle,
+                  title: revision.moduleTitle,
+                  courseTitle: revision.courseTitle,
+                  courseId: revision.courseId,
+                  levelLabel: revision.levelLabel,
+                  isDue: revision.isDueAt(DateTime.now()),
+                  isFinished: revision.isFinished,
+                  onStartRevision: () => _startCurrentLevel(revision),
                 ),
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                  child: _RevisionLadderHeader(revision: revision),
+                  child: _RevisionMetaStrip(revision: revision),
                 ),
                 ValueListenableBuilder<int>(
                   valueListenable: _activeTab,
@@ -206,16 +229,14 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                       if (activeIdx == 1) {
                         return _RevisionLadderView(
                           revision: revision,
-                          onStartRevision: () =>
-                              _startCurrentLevel(revision),
                           bottomPadding: bottomSafe + 24,
                         );
                       }
                       return _RevisionTopicsView(
                         topics: _topics,
                         isLoading: _isLoadingTopics,
-                        onTopicTap: _openModule,
                         bottomPadding: bottomSafe + 24,
+                        onTopicTap: _openModule,
                       );
                     },
                   ),
@@ -284,102 +305,218 @@ class _RevisionDetailTopBar extends StatelessWidget {
   }
 }
 
-/// Same hero block the course page uses: 44px pastel square + 24px title.
+/// Same hero block the course page uses: a 44px pastel square + 24px title,
+/// with the course name tucked under it. The square shows the course icon, not
+/// the module icon.
+///
+/// Nothing sits to the right of the module name until the current level comes
+/// due, at which point the "Start Rn" button appears there.
 class _HeroBlock extends StatelessWidget {
-  final IconData icon;
   final String title;
+  final String courseTitle;
+  final String courseId;
+  final String levelLabel;
+  final bool isDue;
+  final bool isFinished;
+  final VoidCallback onStartRevision;
 
-  const _HeroBlock({required this.icon, required this.title});
+  const _HeroBlock({
+    required this.title,
+    required this.courseTitle,
+    required this.courseId,
+    required this.levelLabel,
+    required this.isDue,
+    required this.isFinished,
+    required this.onStartRevision,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppTheme.pastelPurple,
-              borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-              border: Border.all(color: AppTheme.pastelPurpleBorder),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: AppTheme.pastelPurpleText, size: 22),
-          ),
+          CourseIconChip(courseId: courseId, size: 44, radius: 12),
           const HGapSm(),
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.5,
-                height: 1.15,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const VGapXs(),
+                Text(
+                  courseTitle.isEmpty ? 'No course' : courseTitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
+          const HGapSm(),
+          if (isDue && !isFinished)
+            ElevatedButton(
+              onPressed: onStartRevision,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(
+                'Start $levelLabel',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _RevisionLadderHeader extends StatelessWidget {
+/// Two-up strip under the hero: when the module was completed and when it was
+/// last revised.
+class _RevisionMetaStrip extends StatelessWidget {
   final Revision revision;
 
-  const _RevisionLadderHeader({required this.revision});
+  const _RevisionMetaStrip({required this.revision});
+
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _formatDate(DateTime value) =>
+      '${value.day} ${_months[value.month - 1]} ${value.year}';
 
   @override
   Widget build(BuildContext context) {
-    final cleared = revision.isFinished
-        ? RevisionSchedule.maxLevel
-        : revision.currentLevel - 1;
-    final total = RevisionSchedule.maxLevel;
-    final progress = cleared / total;
+    final lastRevision = revision.isFinished
+        ? (revision.completedAt ?? revision.updatedAt)
+        : revision.nextRevisionAt;
 
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _MetaItem(
+            icon: Icons.task_alt_rounded,
+            label: 'Completed',
+            value: _formatDate(revision.createdAt),
+          ),
+        ),
+        const _MetaDivider(),
+        Expanded(
+          child: _MetaItem(
+            icon: Icons.history_rounded,
+            label: 'Last revision',
+            value: _formatDate(lastRevision),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetaItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final Widget? leading;
+
+  const _MetaItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.leading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '$cleared / $total levels cleared',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            Text(
-              '${(progress * 100).toInt()}%',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+            if (leading != null) ...[
+              leading!,
+              const SizedBox(width: 6),
+            ] else ...[
+              Icon(icon, color: AppTheme.textSecondary, size: 12),
+              const HGapXs(),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 0.4,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
-        const VGapSm(),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            minHeight: 6,
-            backgroundColor: const Color(0xFFECEEF6),
-            valueColor: const AlwaysStoppedAnimation<Color>(
-              AppTheme.primaryColor,
-            ),
+        const VGapXs(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: valueColor ?? AppTheme.textPrimary,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
+    );
+  }
+}
+
+class _MetaDivider extends StatelessWidget {
+  const _MetaDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 30,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: AppTheme.borderColor,
     );
   }
 }
@@ -466,25 +603,22 @@ class _TabItem extends StatelessWidget {
 }
 
 /// Replaces the course page's module list with this module's topics.
+///
+/// Mirrors the module page: a pinned "N / M topics" bar above a divided list of
+/// status-aware rows. Read-only here — tapping a row opens the module the topic
+/// belongs to rather than changing its status.
 class _RevisionTopicsView extends StatelessWidget {
-  final List<SubsectionItem> topics;
+  final List<Topic> topics;
   final bool isLoading;
-  final VoidCallback onTopicTap;
   final double bottomPadding;
+  final VoidCallback onTopicTap;
 
   const _RevisionTopicsView({
     required this.topics,
     required this.isLoading,
-    required this.onTopicTap,
     required this.bottomPadding,
+    required this.onTopicTap,
   });
-
-  static const List<Color> _badgeColorCycle = [
-    Color(0xFF10B981),
-    Color(0xFF38BDF8),
-    Color(0xFFFB923C),
-    Color(0xFF818CF8),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -499,92 +633,122 @@ class _RevisionTopicsView extends StatelessWidget {
     }
 
     if (topics.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.playlist_add_rounded,
-                size: 48,
-                color: AppTheme.textSecondary,
-              ),
-              const VGapMd(),
-              const Text(
-                'No topics yet',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const VGapXs(),
-              const Text(
-                'Add topics to this module to start tracking its revision ladder.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _RevisionTopicsEmptyState(onOpenModule: onTopicTap);
     }
 
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      padding: EdgeInsets.only(left: 20, right: 20, top: 8, bottom: bottomPadding),
-      itemCount: topics.length,
-      itemBuilder: (context, index) {
-        final topic = topics[index];
-        final color = _badgeColorCycle[index % _badgeColorCycle.length];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _TopicListItem(
-            icon: topic.iconCodePoint != null
-                ? IconData(topic.iconCodePoint!, fontFamily: 'MaterialIcons')
-                : Icons.menu_book_rounded,
-            iconColor: color,
-            title: topic.title,
-            subtitle: topic.description,
-            isCompleted: topic.isCompleted,
-            completedAt: topic.completedAt,
-            onTap: onTopicTap,
+    final completedCount = topics.where((t) => t.isCompleted).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 6.0),
+          child: TopicProgressHeader(
+            completedCount: completedCount,
+            totalCount: topics.length,
+            progress: completedCount / topics.length,
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: EdgeInsets.only(bottom: bottomPadding),
+            itemCount: topics.length,
+            separatorBuilder: (context, index) => const Divider(
+              height: 1,
+              indent: 64,
+              endIndent: 20,
+              color: Color(0xFFF3F4F6),
+            ),
+            itemBuilder: (context, index) {
+              final topic = topics[index];
+              return _TopicListItem(
+                topic: topic,
+                onTap: onTopicTap,
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
+class _RevisionTopicsEmptyState extends StatelessWidget {
+  final VoidCallback onOpenModule;
+
+  const _RevisionTopicsEmptyState({required this.onOpenModule});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: AppTheme.pastelPurple,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.playlist_add_rounded,
+                size: 30,
+                color: AppTheme.pastelPurpleText,
+              ),
+            ),
+            const VGapMd(),
+            const Text(
+              'No topics yet',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const VGapXs(),
+            const Text(
+              'Add topics to this module to start tracking its revision ladder.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const VGapMd(),
+            ElevatedButton.icon(
+              onPressed: onOpenModule,
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Open Module'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Topic row: status ring on the left, title over its status label, chevron on
+/// the right to signal that tapping navigates to the module.
 class _TopicListItem extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool isCompleted;
-  final DateTime? completedAt;
+  final Topic topic;
   final VoidCallback onTap;
 
-  const _TopicListItem({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.isCompleted,
-    required this.completedAt,
-    required this.onTap,
-  });
-
-  static const List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
+  const _TopicListItem({required this.topic, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -593,28 +757,11 @@ class _TopicListItem extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(
-                      AppTheme.smallBorderRadius,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 18),
-                ),
+                TopicStatusIndicator(status: topic.status),
                 const HGapMd(),
                 Expanded(
                   child: Column(
@@ -622,7 +769,7 @@ class _TopicListItem extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        title,
+                        topic.title,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -632,40 +779,15 @@ class _TopicListItem extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const VGapXs(),
-                      Text(
-                        isCompleted && completedAt != null
-                            ? 'Completed ${_formatDate(completedAt!)}'
-                            : (subtitle.isNotEmpty
-                                ? subtitle
-                                : 'Not started'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isCompleted
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: isCompleted
-                              ? AppTheme.successColor
-                              : AppTheme.textSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      TopicStatusLabel(status: topic.status),
                     ],
                   ),
                 ),
-                const HGapSm(),
-                if (isCompleted)
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    color: AppTheme.successColor,
-                    size: 20,
-                  )
-                else
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Color(0xFF9CA3AF),
-                    size: 22,
-                  ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF9CA3AF),
+                  size: 24,
+                ),
               ],
             ),
           ),
@@ -673,21 +795,16 @@ class _TopicListItem extends StatelessWidget {
       ),
     );
   }
-
-  static String _formatDate(DateTime value) =>
-      '${value.day} ${_months[value.month - 1]}';
 }
 
-/// Replaces "Overview" with a compact "Revision Progress" card: a vertical
-/// R1 -> R5 timeline plus a single full-width action button.
+/// Bare R1 -> R5 timeline. No card wrapper, so it sits directly on the page
+/// background. The "Start Rn" action lives in the hero, not here.
 class _RevisionLadderView extends StatelessWidget {
   final Revision revision;
-  final VoidCallback onStartRevision;
   final double bottomPadding;
 
   const _RevisionLadderView({
     required this.revision,
-    required this.onStartRevision,
     required this.bottomPadding,
   });
 
@@ -706,58 +823,12 @@ class _RevisionLadderView extends StatelessWidget {
         bottom: bottomPadding,
       ),
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
-            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            border: Border.all(color: AppTheme.borderColor),
+        for (var level = 1; level <= maxLevel; level++)
+          _TimelineRow(
+            level: level,
+            revision: revision,
+            isLast: level == maxLevel,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Revision Progress',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const VGapMd(),
-              for (var level = 1; level <= maxLevel; level++)
-                _TimelineRow(
-                  level: level,
-                  revision: revision,
-                  isLast: level == maxLevel,
-                ),
-              if (!revision.isFinished) ...[
-                const VGapMd(),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: onStartRevision,
-                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: Text(
-                      'Start R${revision.currentLevel} Revision',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
       ],
     );
   }

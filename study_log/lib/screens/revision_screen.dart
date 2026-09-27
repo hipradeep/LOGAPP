@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/course_icon_chip.dart';
 import '../models/revision.dart';
 import '../controllers/revision_controller.dart';
 
@@ -90,8 +91,8 @@ class _RevisionScreenState extends State<RevisionScreen> {
 
     final filtered = items.where((r) {
       if (query.isNotEmpty) {
-        final matches = r.sectionTitle.toLowerCase().contains(query) ||
-            r.sectionDescription.toLowerCase().contains(query);
+        final matches = r.moduleTitle.toLowerCase().contains(query) ||
+            r.moduleDescription.toLowerCase().contains(query);
         if (!matches) return false;
       }
       switch (_scope) {
@@ -125,49 +126,13 @@ class _RevisionScreenState extends State<RevisionScreen> {
       case RevisionSortMode.name:
         filtered.sort((a, b) {
           if (a.isFinished != b.isFinished) return a.isFinished ? 1 : -1;
-          return a.sectionTitle.toLowerCase().compareTo(
-                b.sectionTitle.toLowerCase(),
+          return a.moduleTitle.toLowerCase().compareTo(
+                b.moduleTitle.toLowerCase(),
               );
         });
         break;
     }
     return filtered;
-  }
-
-  Future<void> _handleOverflow(String action, Revision revision) async {
-    switch (action) {
-      case 'open':
-        widget.onOpenRevision(revision);
-        break;
-      case 'reset':
-        await widget.revisionController.resetRevision(revision.id);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"${revision.sectionTitle}" reset to R1'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-        break;
-      case 'remove':
-        await widget.revisionController.deleteRevision(revision.id);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"${revision.sectionTitle}" removed from revision'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-        break;
-    }
   }
 
   @override
@@ -247,10 +212,12 @@ class _RevisionScreenState extends State<RevisionScreen> {
                       final revision = revisions[index];
                       return _RevisionItemCard(
                         revision: revision,
-                        palette: _cardPalettes[index % _cardPalettes.length],
+                        palette: _cardPalettes[
+                            CourseIconChip.stableIndex(
+                          revision.moduleId,
+                          _cardPalettes.length,
+                        )],
                         onTap: () => widget.onOpenRevision(revision),
-                        onOverflow: (action) =>
-                            _handleOverflow(action, revision),
                       );
                     },
                   );
@@ -412,19 +379,6 @@ const List<_CardPalette> _cardPalettes = [
     AppTheme.pastelOrangeText,
   ),
   _CardPalette(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF0284C7)),
-];
-
-const List<IconData> _topicIcons = [
-  Icons.menu_book_rounded,
-  Icons.article_rounded,
-  Icons.lightbulb_rounded,
-  Icons.psychology_rounded,
-  Icons.terminal_rounded,
-  Icons.functions_rounded,
-  Icons.storage_rounded,
-  Icons.cloud_rounded,
-  Icons.security_rounded,
-  Icons.schema_rounded,
 ];
 
 // === Subcomponents ===
@@ -771,13 +725,11 @@ class _RevisionItemCard extends StatelessWidget {
   final Revision revision;
   final _CardPalette palette;
   final VoidCallback onTap;
-  final ValueChanged<String> onOverflow;
 
   const _RevisionItemCard({
     required this.revision,
     required this.palette,
     required this.onTap,
-    required this.onOverflow,
   });
 
   @override
@@ -785,8 +737,7 @@ class _RevisionItemCard extends StatelessWidget {
     final now = DateTime.now();
     final days = revision.daysUntilDue(now);
     final isDue = revision.isDueAt(now);
-    final icon =
-        _topicIcons[revision.id.hashCode.abs() % _topicIcons.length];
+    final dueColor = _dueColor(days, isDue, revision);
 
     return RepaintBoundary(
       child: Material(
@@ -809,19 +760,15 @@ class _RevisionItemCard extends StatelessWidget {
               ],
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: palette.bg,
-                    borderRadius: BorderRadius.circular(
-                      AppTheme.smallBorderRadius,
-                    ),
-                    border: Border.all(color: palette.border, width: 1),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, color: palette.accent, size: 22),
+                CourseIconChip(
+                  courseId: revision.courseId,
+                  size: 44,
+                  radius: AppTheme.smallBorderRadius,
+                  background: palette.bg,
+                  foreground: palette.accent,
+                  borderColor: palette.border,
                 ),
                 const HGapMd(),
                 Expanded(
@@ -830,7 +777,7 @@ class _RevisionItemCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        revision.sectionTitle,
+                        revision.moduleTitle,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -841,9 +788,7 @@ class _RevisionItemCard extends StatelessWidget {
                       ),
                       const VGapXs(),
                       Text(
-                        revision.sectionDescription.isEmpty
-                            ? 'Revision ${revision.levelLabel}'
-                            : revision.sectionDescription,
+                        _subtitleFor(revision),
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppTheme.textSecondary,
@@ -854,41 +799,24 @@ class _RevisionItemCard extends StatelessWidget {
                       const VGapSm(),
                       Row(
                         children: [
-                          _LevelBadge(
-                            label: revision.levelLabel,
-                            isDue: isDue,
-                            isFinished: revision.isFinished,
+                          Icon(
+                            revision.isFinished
+                                ? Icons.check_circle_rounded
+                                : Icons.event_rounded,
+                            size: 13,
+                            color: dueColor,
                           ),
-                          const HGapSm(),
+                          const HGapXs(),
                           Flexible(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  revision.isFinished
-                                      ? Icons.check_circle_rounded
-                                      : Icons.event_rounded,
-                                  size: 13,
-                                  color: _dueColor(days, isDue, revision),
-                                ),
-                                const HGapXs(),
-                                Flexible(
-                                  child: Text(
-                                    _dueLabel(days, isDue),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: _dueColor(
-                                        days,
-                                        isDue,
-                                        revision,
-                                      ),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              _dueLabel(days, isDue),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: dueColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -896,9 +824,11 @@ class _RevisionItemCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _RevisionOverflowMenu(
-                  revision: revision,
-                  onSelected: onOverflow,
+                const HGapSm(),
+                _LevelBadge(
+                  label: revision.levelLabel,
+                  isDue: isDue,
+                  isFinished: revision.isFinished,
                 ),
               ],
             ),
@@ -908,16 +838,25 @@ class _RevisionItemCard extends StatelessWidget {
     );
   }
 
+  /// Course name leads, then the module description when there is one.
+  static String _subtitleFor(Revision revision) {
+    final course = revision.courseTitle.trim();
+    final description = revision.moduleDescription.trim();
+    if (course.isEmpty) return description;
+    if (description.isEmpty) return course;
+    return '$course · $description';
+  }
+
   static String _dueLabel(int days, bool isDue) {
-    if (isDue) return days <= 0 ? 'Today' : 'Overdue ${days.abs()}d';
-    if (days == 1) return 'Tomorrow';
+    if (isDue) return days < 0 ? 'Overdue ${days.abs()}d' : 'Due today';
+    if (days <= 0) return 'Due today';
+    if (days == 1) return 'Due tomorrow';
     return 'In ${days}d';
   }
 
   static Color _dueColor(int days, bool isDue, Revision revision) {
     if (revision.isFinished) return AppTheme.successColor;
-    if (isDue) return AppTheme.primaryColor;
-    if (days <= 2) return AppTheme.errorColor;
+    if (isDue) return days < 0 ? AppTheme.errorColor : AppTheme.primaryColor;
     return AppTheme.textSecondary;
   }
 }
@@ -958,98 +897,6 @@ class _LevelBadge extends StatelessWidget {
           letterSpacing: -0.2,
         ),
       ),
-    );
-  }
-}
-
-class _RevisionOverflowMenu extends StatelessWidget {
-  final Revision revision;
-  final ValueChanged<String> onSelected;
-
-  const _RevisionOverflowMenu({
-    required this.revision,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: const Icon(
-        Icons.more_vert_rounded,
-        color: Color(0xFF9CA3AF),
-        size: 20,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      elevation: 6,
-      onSelected: onSelected,
-      itemBuilder: (ctx) => [
-        const PopupMenuItem<String>(
-          value: 'open',
-          child: Row(
-            children: [
-              Icon(
-                Icons.open_in_new_rounded,
-                color: Color(0xFF1E293B),
-                size: 18,
-              ),
-              HGapMd(),
-              Text(
-                'Open details',
-                style: TextStyle(
-                  color: Color(0xFF1E293B),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Resetting is pointless once a record is already at R1.
-        if (revision.currentLevel > 1)
-          const PopupMenuItem<String>(
-            value: 'reset',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.restart_alt_rounded,
-                  color: Color(0xFF1E293B),
-                  size: 18,
-                ),
-                HGapMd(),
-                Text(
-                  'Reset to R1',
-                  style: TextStyle(
-                    color: Color(0xFF1E293B),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),        const PopupMenuItem<String>(
-          value: 'remove',
-          child: Row(
-            children: [
-              Icon(
-                Icons.delete_outline_rounded,
-                color: Color(0xFFEF4444),
-                size: 18,
-              ),
-              HGapMd(),
-              Text(
-                'Remove from revision',
-                style: TextStyle(
-                  color: Color(0xFFEF4444),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

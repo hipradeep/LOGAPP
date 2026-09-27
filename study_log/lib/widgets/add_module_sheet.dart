@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../controllers/sections_controller.dart';
+import '../controllers/modules_controller.dart';
 import 'app_spacers.dart';
 import 'pill_button.dart';
 
 /// Modal bottom sheet to create a new Module for a course.
-class AddSectionSheet extends StatefulWidget {
-  final SectionsController controller;
+class AddModuleSheet extends StatefulWidget {
+  final ModulesController controller;
   final String courseTitle;
 
-  const AddSectionSheet({
+  const AddModuleSheet({
     super.key,
     required this.controller,
     required this.courseTitle,
@@ -17,14 +17,14 @@ class AddSectionSheet extends StatefulWidget {
 
   static Future<void> show(
     BuildContext context, {
-    required SectionsController controller,
+    required ModulesController controller,
     required String courseTitle,
   }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddSectionSheet(
+      builder: (_) => AddModuleSheet(
         controller: controller,
         courseTitle: courseTitle,
       ),
@@ -32,10 +32,10 @@ class AddSectionSheet extends StatefulWidget {
   }
 
   @override
-  State<AddSectionSheet> createState() => _AddSectionSheetState();
+  State<AddModuleSheet> createState() => _AddModuleSheetState();
 }
 
-class _AddSectionSheetState extends State<AddSectionSheet> {
+class _AddModuleSheetState extends State<AddModuleSheet> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   String _selectedStatus = 'active';
@@ -73,7 +73,7 @@ class _AddSectionSheetState extends State<AddSectionSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-      await widget.controller.addSection(
+      await widget.controller.addModule(
         title: title,
         description: description,
         status: _selectedStatus,

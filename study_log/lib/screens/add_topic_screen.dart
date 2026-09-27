@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
-import '../services/local_subsection_storage.dart';
-import '../services/local_section_storage.dart';
+import '../services/local_topic_storage.dart';
+import '../services/local_module_storage.dart';
 import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
-import '../models/subsection.dart';
-import '../models/subsection_item.dart';
-import '../controllers/ongoing_sections_controller.dart';
+import '../models/topic.dart';
+import '../controllers/ongoing_modules_controller.dart';
 
 /// Screen 9: Add Topic Screen matching the reference design:
 /// - Top bar with Back arrow, "Add Topic" title, and solid purple "Save" button
@@ -19,36 +18,36 @@ import '../controllers/ongoing_sections_controller.dart';
 /// - Color palette picker with 6 swatches and checkmark indicator
 /// - Order (Optional) with numeric input and unfold-more stepper icon
 /// - Passes all 24 rules of [optimize.md]
-class AddSubsectionScreen extends StatefulWidget {
-  final String sectionTitle;
+class AddTopicScreen extends StatefulWidget {
+  final String moduleTitle;
   final String courseTitle;
   final String courseId;
-  final String sectionId;
-  final List<String> availableSections;
+  final String moduleId;
+  final List<String> availableModules;
 
-  const AddSubsectionScreen({
+  const AddTopicScreen({
     super.key,
-    required this.sectionTitle,
+    required this.moduleTitle,
     required this.courseId,
     this.courseTitle = 'DSA',
-    this.sectionId = '',
-    this.availableSections = const [],
+    this.moduleId = '',
+    this.availableModules = const [],
   });
 
   @override
-  State<AddSubsectionScreen> createState() => _AddSubsectionScreenState();
+  State<AddTopicScreen> createState() => _AddTopicScreenState();
 }
 
-class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
+class _AddTopicScreenState extends State<AddTopicScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _orderController;
 
-  late String _selectedSectionTitle;
+  late String _selectedModuleTitle;
   IconData _selectedIcon = Icons.format_list_bulleted_rounded;
   int _selectedColorIndex = 0;
   bool _isSaving = false;
-  bool _isPickingSection = false;
+  bool _isPickingModule = false;
 
   static const List<Color> _swatchColors = [
     Color(0xFF6366F1), // Purple (default)
@@ -80,7 +79,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
     _orderController = TextEditingController();
-    _selectedSectionTitle = widget.sectionTitle;
+    _selectedModuleTitle = widget.moduleTitle;
     _descriptionController.addListener(_onDescriptionChanged);
   }
 
@@ -110,19 +109,19 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
     setState(() => _selectedIcon = icon);
   }
 
-  Future<void> _openSectionPicker() async {
-    List<String> sections = List<String>.of(widget.availableSections);
+  Future<void> _openModulePicker() async {
+    List<String> modules = List<String>.of(widget.availableModules);
 
-    if (sections.isEmpty && widget.courseId.isNotEmpty) {
-      setState(() => _isPickingSection = true);
-      final stored = await LocalSectionStorage.loadSections(widget.courseId);
+    if (modules.isEmpty && widget.courseId.isNotEmpty) {
+      setState(() => _isPickingModule = true);
+      final stored = await LocalModuleStorage.loadModules(widget.courseId);
       if (!mounted) return;
-      setState(() => _isPickingSection = false);
-      sections = stored.map((s) => s.title).toList();
+      setState(() => _isPickingModule = false);
+      modules = stored.map((s) => s.title).toList();
     }
 
-    if (sections.isEmpty && widget.sectionTitle.isNotEmpty) {
-      sections = <String>[widget.sectionTitle];
+    if (modules.isEmpty && widget.moduleTitle.isNotEmpty) {
+      modules = <String>[widget.moduleTitle];
     }
 
     showModalBottomSheet<void>(
@@ -161,7 +160,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
                   ),
                 ),
                 const VGapMd(),
-                if (sections.isEmpty)
+                if (modules.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12.0),
                     child: Text(
@@ -173,23 +172,23 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
                     ),
                   )
                 else
-                  ...sections.map((sec) => ListTile(
+                  ...modules.map((sec) => ListTile(
                         title: Text(
                           sec,
                           style: TextStyle(
-                            fontWeight: sec == _selectedSectionTitle
+                            fontWeight: sec == _selectedModuleTitle
                                 ? FontWeight.bold
                                 : FontWeight.w500,
-                            color: sec == _selectedSectionTitle
+                            color: sec == _selectedModuleTitle
                                 ? AppTheme.primaryColor
                                 : AppTheme.textPrimary,
                           ),
                         ),
-                        trailing: sec == _selectedSectionTitle
+                        trailing: sec == _selectedModuleTitle
                             ? const Icon(Icons.check_rounded, color: AppTheme.primaryColor)
                             : null,
                         onTap: () {
-                          setState(() => _selectedSectionTitle = sec);
+                          setState(() => _selectedModuleTitle = sec);
                           Navigator.pop(ctx);
                         },
                       )),
@@ -287,7 +286,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
   }
 
   Future<void> _handleSave() async {
-    if (_selectedSectionTitle.isEmpty) {
+    if (_selectedModuleTitle.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Please select a module first'),
@@ -333,19 +332,19 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
       );
       return;
     }
-    final sectionId = widget.sectionId.trim();
+    final moduleId = widget.moduleId.trim();
     setState(() => _isSaving = true);
 
     try {
       final now = DateTime.now();
-      final newId = 'sub_${now.millisecondsSinceEpoch}';
+      final newId = 'topic_${now.millisecondsSinceEpoch}';
 
-      final newItem = SubsectionItem(
+      final newItem = Topic(
         id: newId,
         courseId: courseId,
-        sectionId: sectionId,
+        moduleId: moduleId,
         title: name,
-        status: SubsectionStatus.notStarted,
+        status: TopicStatus.notStarted,
         description: description,
         orderIndex: order,
         iconCodePoint: _selectedIcon.codePoint,
@@ -353,34 +352,24 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
       );
 
       // 1. Persist locally to storage cache
-      final existing = await LocalSubsectionStorage.loadSubsections(_selectedSectionTitle);
-      final updated = List<SubsectionItem>.from(existing)..add(newItem);
-      await LocalSubsectionStorage.saveSubsections(_selectedSectionTitle, updated);
+      final existing = await LocalTopicStorage.loadTopics(_selectedModuleTitle);
+      final updated = List<Topic>.from(existing)..add(newItem);
+      await LocalTopicStorage.saveTopics(_selectedModuleTitle, updated);
 
-      // 2. Optionally sync to Firestore if configured
+      // 2. Optionally sync the same record to Firestore if configured
       if (getIt.isRegistered<FirestoreService>()) {
         final firestore = getIt<FirestoreService>();
         if (firestore.isAvailable) {
           try {
-            await firestore.addSubsection(
-              Subsection(
-                id: newId,
-                courseId: courseId,
-                sectionId: sectionId,
-                title: name,
-                description: description,
-                orderIndex: order,
-                status: 'not_started',
-                createdAt: now,
-                updatedAt: now,
-              ),
-            ).timeout(const Duration(seconds: 3), onTimeout: () {});
+            await firestore
+                .addTopic(newItem)
+                .timeout(const Duration(seconds: 3), onTimeout: () {});
           } catch (_) {}
         }
       }
 
-      if (getIt.isRegistered<OngoingSectionsController>()) {
-        getIt<OngoingSectionsController>().refresh();
+      if (getIt.isRegistered<OngoingModulesController>()) {
+        getIt<OngoingModulesController>().refresh();
       }
 
       if (!mounted) return;
@@ -417,7 +406,7 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _AddSubsectionTopBar(
+            _AddTopicTopBar(
               onBack: _handleBack,
               onSave: _handleSave,
               isSaving: _isSaving,
@@ -434,13 +423,13 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SectionField(
-                      selectedTitle: _selectedSectionTitle,
-                      isLoading: _isPickingSection,
-                      onTap: _openSectionPicker,
+                    _ModuleField(
+                      selectedTitle: _selectedModuleTitle,
+                      isLoading: _isPickingModule,
+                      onTap: _openModulePicker,
                     ),
                     const VGapLg(),
-                    _SubsectionNameField(controller: _nameController),
+                    _TopicNameField(controller: _nameController),
                     const VGapLg(),
                     _DescriptionField(
                       controller: _descriptionController,
@@ -472,12 +461,12 @@ class _AddSubsectionScreenState extends State<AddSubsectionScreen> {
 
 // === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
 
-class _AddSubsectionTopBar extends StatelessWidget {
+class _AddTopicTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSave;
   final bool isSaving;
 
-  const _AddSubsectionTopBar({
+  const _AddTopicTopBar({
     required this.onBack,
     required this.onSave,
     required this.isSaving,
@@ -526,12 +515,12 @@ class _AddSubsectionTopBar extends StatelessWidget {
   }
 }
 
-class _SectionField extends StatelessWidget {
+class _ModuleField extends StatelessWidget {
   final String selectedTitle;
   final VoidCallback onTap;
   final bool isLoading;
 
-  const _SectionField({
+  const _ModuleField({
     required this.selectedTitle,
     required this.onTap,
     this.isLoading = false,
@@ -601,10 +590,10 @@ class _SectionField extends StatelessWidget {
   }
 }
 
-class _SubsectionNameField extends StatelessWidget {
+class _TopicNameField extends StatelessWidget {
   final TextEditingController controller;
 
-  const _SubsectionNameField({required this.controller});
+  const _TopicNameField({required this.controller});
 
   @override
   Widget build(BuildContext context) {

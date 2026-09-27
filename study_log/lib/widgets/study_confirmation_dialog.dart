@@ -60,7 +60,7 @@ class StudyConfirmationDialog extends StatelessWidget {
   }
 
   /// Displays the "Delete Module?" dialog (only delete, no archive)
-  static Future<bool> showDeleteSection(BuildContext context, {String sectionTitle = ''}) async {
+  static Future<bool> showDeleteModule(BuildContext context, {String moduleTitle = ''}) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
@@ -77,7 +77,7 @@ class StudyConfirmationDialog extends StatelessWidget {
   }
 
   /// Displays the "Delete Topic?" dialog (only delete, no archive)
-  static Future<bool> showDeleteSubsection(BuildContext context, {String subsectionTitle = ''}) async {
+  static Future<bool> showDeleteTopic(BuildContext context, {String topicTitle = ''}) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: true,

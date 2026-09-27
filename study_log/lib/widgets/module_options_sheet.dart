@@ -1,71 +1,71 @@
 import 'package:flutter/material.dart';
-import '../models/section.dart';
+import '../models/module.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
 import 'study_confirmation_dialog.dart';
-import '../controllers/sections_controller.dart';
-import '../screens/add_section_screen.dart';
+import '../controllers/modules_controller.dart';
+import '../screens/add_module_screen.dart';
 
-enum SectionOptionAction { edit, delete }
+enum ModuleOptionAction { edit, delete }
 
 /// Bottom action sheet presented when long-pressing a Module row.
 /// Presents Edit and Delete options matching the course options sheet.
-class SectionOptionsSheet extends StatelessWidget {
-  final Section section;
+class ModuleOptionsSheet extends StatelessWidget {
+  final Module module;
   final String courseTitle;
-  final SectionsController? sectionsController;
+  final ModulesController? modulesController;
 
-  const SectionOptionsSheet({
+  const ModuleOptionsSheet({
     super.key,
-    required this.section,
+    required this.module,
     required this.courseTitle,
-    this.sectionsController,
+    this.modulesController,
   });
 
   static Future<void> show(
     BuildContext context, {
-    required Section section,
+    required Module module,
     required String courseTitle,
-    SectionsController? sectionsController,
+    ModulesController? modulesController,
   }) async {
-    final action = await showModalBottomSheet<SectionOptionAction>(
+    final action = await showModalBottomSheet<ModuleOptionAction>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => SectionOptionsSheet(
-        section: section,
+      builder: (_) => ModuleOptionsSheet(
+        module: module,
         courseTitle: courseTitle,
-        sectionsController: sectionsController,
+        modulesController: modulesController,
       ),
     );
 
     if (!context.mounted || action == null) return;
 
     switch (action) {
-      case SectionOptionAction.edit:
+      case ModuleOptionAction.edit:
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => AddSectionScreen(
-              courseId: section.courseId,
+            builder: (_) => AddModuleScreen(
+              courseId: module.courseId,
               courseTitle: courseTitle,
-              sectionsController: sectionsController,
-              sectionToEdit: section,
+              modulesController: modulesController,
+              moduleToEdit: module,
             ),
           ),
         );
         break;
-      case SectionOptionAction.delete:
-        final confirmed = await StudyConfirmationDialog.showDeleteSection(
+      case ModuleOptionAction.delete:
+        final confirmed = await StudyConfirmationDialog.showDeleteModule(
           context,
-          sectionTitle: section.title,
+          moduleTitle: module.title,
         );
         if (confirmed && context.mounted) {
-          await sectionsController?.deleteSection(section.id);
+          await modulesController?.deleteModule(module.id);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Module "${section.title}" deleted'),
+                content: Text('Module "${module.title}" deleted'),
                 backgroundColor: AppTheme.primaryColor,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
@@ -102,26 +102,26 @@ class SectionOptionsSheet extends StatelessWidget {
         children: [
           const _HandleBar(),
           const VGapLg(),
-          _SectionHeader(section: section, courseTitle: courseTitle),
+          _ModuleHeader(module: module, courseTitle: courseTitle),
           const VGapMd(),
           Divider(
             color: AppTheme.borderColor.withValues(alpha: 0.6),
             height: 1,
           ),
           const VGapMd(),
-          _SectionOptionTile(
+          _ModuleOptionTile(
             icon: Icons.edit_outlined,
             title: 'Edit Module',
             subtitle: 'Change name, description, or order',
-            onTap: () => Navigator.pop(context, SectionOptionAction.edit),
+            onTap: () => Navigator.pop(context, ModuleOptionAction.edit),
           ),
           const VGapSm(),
-          _SectionOptionTile(
+          _ModuleOptionTile(
             icon: Icons.delete_outline_rounded,
             title: 'Delete Module',
             subtitle: 'Permanently remove this module',
             isDestructive: true,
-            onTap: () => Navigator.pop(context, SectionOptionAction.delete),
+            onTap: () => Navigator.pop(context, ModuleOptionAction.delete),
           ),
           const VGapSm(),
         ],
@@ -148,11 +148,11 @@ class _HandleBar extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final Section section;
+class _ModuleHeader extends StatelessWidget {
+  final Module module;
   final String courseTitle;
 
-  const _SectionHeader({required this.section, required this.courseTitle});
+  const _ModuleHeader({required this.module, required this.courseTitle});
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +168,7 @@ class _SectionHeader extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: Text(
-            '${section.orderIndex + 1}',
+            '${module.orderIndex + 1}',
             style: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
@@ -183,7 +183,7 @@ class _SectionHeader extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                section.title,
+                module.title,
                 style: AppTheme.headingSmall.copyWith(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
@@ -193,7 +193,7 @@ class _SectionHeader extends StatelessWidget {
               ),
               const VGapXs(),
               Text(
-                section.description.isEmpty ? courseTitle : section.description,
+                module.description.isEmpty ? courseTitle : module.description,
                 style: AppTheme.bodySmall.copyWith(
                   color: AppTheme.textSecondary,
                   fontSize: 13,
@@ -209,14 +209,14 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _SectionOptionTile extends StatelessWidget {
+class _ModuleOptionTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
   final bool isDestructive;
 
-  const _SectionOptionTile({
+  const _ModuleOptionTile({
     required this.icon,
     required this.title,
     required this.subtitle,
