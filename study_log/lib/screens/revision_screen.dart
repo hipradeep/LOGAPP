@@ -353,8 +353,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
   }
 }
 
-// === Palette cycle ===
-
 class _CardPalette {
   final Color bg;
   final Color border;
@@ -380,8 +378,6 @@ const List<_CardPalette> _cardPalettes = [
   ),
   _CardPalette(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF0284C7)),
 ];
-
-// === Subcomponents ===
 
 class _RevisionTopBar extends StatelessWidget {
   final VoidCallback onBack;

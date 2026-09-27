@@ -215,8 +215,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
-
 class _ModuleDetailTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onAddTopic;

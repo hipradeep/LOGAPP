@@ -144,8 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
-
 class _GreetingHeader extends StatelessWidget {
   const _GreetingHeader();
 

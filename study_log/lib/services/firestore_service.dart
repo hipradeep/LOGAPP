@@ -25,7 +25,6 @@ class FirestoreService {
 
   bool get isAvailable => _firestore != null;
 
-  // === COURSES ===
   CollectionReference<Map<String, dynamic>>? get _coursesRef =>
       _firestore?.collection('courses');
 
@@ -70,7 +69,6 @@ class FirestoreService {
     await ref.doc(courseId).delete();
   }
 
-  // === MODULES ===
   CollectionReference<Map<String, dynamic>>? get _modulesRef =>
       _firestore?.collection('modules');
 
@@ -116,7 +114,6 @@ class FirestoreService {
     await ref.doc(moduleId).delete();
   }
 
-  // === TOPICS ===
   CollectionReference<Map<String, dynamic>>? get _topicsRef =>
       _firestore?.collection('topics');
 
@@ -150,7 +147,6 @@ class FirestoreService {
     await docRef.set(subToSave.toMap());
   }
 
-  // === REVISIONS ===
   CollectionReference<Map<String, dynamic>>? get _revisionsRef =>
       _firestore?.collection('revisions');
 

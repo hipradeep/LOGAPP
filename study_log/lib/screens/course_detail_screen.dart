@@ -264,8 +264,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
-
 class _CourseDetailTopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
@@ -773,5 +771,3 @@ class _ModuleListItem extends StatelessWidget {
     );
   }
 }
-
-

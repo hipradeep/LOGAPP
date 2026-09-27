@@ -391,8 +391,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
   }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
-
 class _AddModuleTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSave;

@@ -11,8 +11,6 @@ class AppTheme {
   static const AppThemeType activeThemeType = AppThemeType.studyMinimalist;
   static bool isDark = false;
 
-  // === Core Palette (Modern Vibrant Violet / Pastel Learning App) ===
-  
   // Brand Primary (Vibrant Violet / Indigo)
   static const Color primaryColor = Color(0xFF5B4DFB);
   static const Color primaryLight = Color(0xFF7A6EFC);
@@ -72,7 +70,6 @@ class AppTheme {
   static const Color bnbInactiveColor = Color(0xFF9CA3AF);
   static const double bnbHeight = 72.0;
 
-  // === Layout Constants ===
   static const EdgeInsets defaultScreenPadding = EdgeInsets.symmetric(horizontal: 20.0);
   static const EdgeInsets defaultCardPadding = EdgeInsets.all(18.0);
   
@@ -100,7 +97,6 @@ class AppTheme {
   static Color getBorderColor(BuildContext context) => borderColor;
   static Color shadowColor(BuildContext context) => const Color(0x0C000000);
 
-  // === Typography ===
   static TextStyle get headingLarge => GoogleFonts.outfit(
     fontSize: 28,
     fontWeight: FontWeight.bold,
@@ -145,7 +141,6 @@ class AppTheme {
     color: primaryColor,
   );
 
-  // === ThemeData ===
   static ThemeData get themeData {
     return ThemeData(
       useMaterial3: true,

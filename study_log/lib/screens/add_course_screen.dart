@@ -338,8 +338,6 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
   }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
-
 class _AddCourseTopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;

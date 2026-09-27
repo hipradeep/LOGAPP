@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-// --- Vertical Spacers ---
-
 /// Vertical Gap: Extra Small (4.0 px)
 class VGapXs extends StatelessWidget {
   const VGapXs({super.key});
@@ -44,8 +42,6 @@ class VGapXxl extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const SizedBox(height: AppTheme.spacingXxl);
 }
-
-// --- Horizontal Spacers ---
 
 /// Horizontal Gap: Extra Small (4.0 px)
 class HGapXs extends StatelessWidget {

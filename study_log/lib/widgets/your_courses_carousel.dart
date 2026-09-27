@@ -189,7 +189,6 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
   }
 }
 
-// === Palette data class ===
 class _CardPalette {
   final Color bg;
   final Color border;
@@ -203,8 +202,6 @@ const List<_CardPalette> _cardPalettes = [
   _CardPalette(AppTheme.pastelOrange, AppTheme.pastelOrangeBorder, AppTheme.pastelOrangeText),
   _CardPalette(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF0284C7)),
 ];
-
-// === Subcomponents ===
 
 class _HeaderRow extends StatelessWidget {
   final VoidCallback? onMoreTap;

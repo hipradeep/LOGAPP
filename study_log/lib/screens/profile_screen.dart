@@ -124,8 +124,6 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-// === Subcomponents (Rule 2 & 23: Pure, extracted StatelessWidget classes) ===
-
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader();
 

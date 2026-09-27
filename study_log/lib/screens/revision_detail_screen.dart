@@ -12,7 +12,6 @@ import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
 import 'module_detail_screen.dart';
 
-
 /// Read-only by design: the ladder advances on its own, so there is no action
 /// button here — tapping a topic simply opens the module it belongs to.
 class RevisionDetailScreen extends StatefulWidget {
@@ -249,8 +248,6 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     );
   }
 }
-
-// === Subcomponents ===
 
 class _RevisionDetailTopBar extends StatelessWidget {
   final VoidCallback onBack;

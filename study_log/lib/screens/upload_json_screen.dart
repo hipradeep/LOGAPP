@@ -14,9 +14,7 @@ import '../models/topic.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 
-// ──────────────────────────────────────────────────────────────
 // Sample JSON shown on screen (copyable, not downloadable)
-// ──────────────────────────────────────────────────────────────
 const String _kSampleJson = r'''
 {
   "courses": [
@@ -71,9 +69,7 @@ const String _kSampleJson = r'''
 }
 ''';
 
-// ──────────────────────────────────────────────────────────────
 // Screen
-// ──────────────────────────────────────────────────────────────
 
 /// Upload JSON Screen: lets the user pick a JSON file from their device and
 /// bulk-import Courses → Modules → Topics into local cache.
@@ -90,7 +86,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
   String? _resultMessage;
   bool _isSuccess = false;
 
-  // ── Copy sample JSON ──────────────────────────────────────
   Future<void> _copySampleJson() async {
     await Clipboard.setData(const ClipboardData(text: _kSampleJson));
     if (!mounted) return;
@@ -106,7 +101,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     );
   }
 
-  // ── Pick & import JSON file ────────────────────────────────
   Future<void> _pickAndImport() async {
     setState(() {
       _isImporting = true;
@@ -150,7 +144,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     }
   }
 
-  // ── Core import logic ──────────────────────────────────────
   Future<Map<String, int>> _importData(Map<String, dynamic> data) async {
     int courseCount = 0, moduleCount = 0, topicCount = 0;
 
@@ -185,7 +178,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       }
       courseCount++;
 
-      // ── Modules ─────────────────────────────────────────
       // "sections" is the pre-rename key; still accepted so older exports import.
       final rawModules = (courseMap['modules'] ?? courseMap['sections'])
               as List<dynamic>? ??
@@ -212,7 +204,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         courseModules.add(module);
         moduleCount++;
 
-        // ── Topics ────────────────────────────────────
         // "subsections" is the pre-rename key; still accepted.
         final rawTopics = (moduleMap['topics'] ?? moduleMap['subsections'])
                 as List<dynamic>? ??
@@ -269,7 +260,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     };
   }
 
-  // ── Build ──────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -316,9 +306,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
   }
 }
 
-// ──────────────────────────────────────────────────────────────
 // Sub-components
-// ──────────────────────────────────────────────────────────────
 
 class _UploadHeader extends StatelessWidget {
   const _UploadHeader();
@@ -438,7 +426,6 @@ class _SampleJsonCardState extends State<_SampleJsonCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Top bar with Copy + expand toggle ──
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -515,7 +502,6 @@ class _SampleJsonCardState extends State<_SampleJsonCard> {
               ],
             ),
           ),
-          // ── JSON content (only when expanded) ──
           if (_isExpanded)
             Padding(
               padding: const EdgeInsets.all(16),
