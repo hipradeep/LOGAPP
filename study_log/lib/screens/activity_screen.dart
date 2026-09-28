@@ -1,2 +1,1 @@
-// Unused screen - bottom navigation removed as requested.
-export 'home_screen.dart';
+export 'my_progress_screen.dart';

@@ -13,6 +13,7 @@ import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 import 'courses_screen.dart';
 import 'module_detail_screen.dart';
+import 'my_progress_screen.dart';
 import '../widgets/study_confirmation_dialog.dart';
 
 /// Redesigned Home Screen matching the reference design:
@@ -32,9 +33,29 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    getIt<CoursesController>();
-    getIt<OngoingModulesController>();
-    getIt<RevisionController>();
+    _ensureDataLoaded();
+  }
+
+  void _ensureDataLoaded() {
+    final coursesCtrl = getIt<CoursesController>();
+    final ongoingCtrl = getIt<OngoingModulesController>();
+
+    if (coursesCtrl.courses.isEmpty) {
+      coursesCtrl.loadCourses().then((_) {
+        ongoingCtrl.refresh();
+      });
+    } else if (ongoingCtrl.ongoingItems.isEmpty ||
+        ongoingCtrl.ongoingItems.any((i) => i.progressRatio == '0 topics')) {
+      ongoingCtrl.refresh();
+    }
+  }
+
+  Future<void> _handleRefresh() async {
+    await Future.wait([
+      getIt<CoursesController>().loadCourses(),
+      getIt<OngoingModulesController>().refresh(),
+      getIt<RevisionController>().reconcile(),
+    ]);
   }
 
   void _openCourseDetail(BuildContext context, Course course) {
@@ -106,6 +127,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _openAllCourses(context);
   }
 
+  void _openMyProgress(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyProgressScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -115,29 +143,35 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
-              sliver: SliverToBoxAdapter(
-                child: _HomeTopModule(
-                  ongoingController: ongoingController,
-                  onViewAll: _handleViewAll,
-                  onCourseTap: _openCourseByTitle,
+        child: RefreshIndicator(
+          onRefresh: _handleRefresh,
+          color: AppTheme.primaryColor,
+          backgroundColor: AppTheme.surface(context),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
+                sliver: SliverToBoxAdapter(
+                  child: _HomeTopModule(
+                    ongoingController: ongoingController,
+                    onViewAll: _handleViewAll,
+                    onCourseTap: _openCourseByTitle,
+                    onProgressTap: () => _openMyProgress(context),
+                  ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
-              sliver: _CurrentModulesSliverList(
-                ongoingController: ongoingController,
-                onModuleTap: _openModuleDetail,
-                onAddCourse: _openAddCourse,
-                onViewAll: _handleViewAll,
+              SliverPadding(
+                padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
+                sliver: _CurrentModulesSliverList(
+                  ongoingController: ongoingController,
+                  onModuleTap: _openModuleDetail,
+                  onAddCourse: _openAddCourse,
+                  onViewAll: _handleViewAll,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -268,11 +302,13 @@ class _HomeTopModule extends StatelessWidget {
   final OngoingModulesController ongoingController;
   final VoidCallback onViewAll;
   final ValueChanged<String> onCourseTap;
+  final VoidCallback onProgressTap;
 
   const _HomeTopModule({
     required this.ongoingController,
     required this.onViewAll,
     required this.onCourseTap,
+    required this.onProgressTap,
   });
 
   @override
@@ -298,6 +334,7 @@ class _HomeTopModule extends StatelessWidget {
             pendingCount: getIt<RevisionController>().dueCount,
             dayStreak: ongoingController.dayStreakCount,
             goalProgress: ongoingController.goalProgress,
+            onTap: onProgressTap,
           ),
         ),
         const VGapLg(),
@@ -326,7 +363,11 @@ class _CurrentModulesSliverList extends StatelessWidget {
     return ListenableBuilder(
       listenable: ongoingController,
       builder: (context, _) {
-        final items = ongoingController.ongoingItems;
+        final items = ongoingController.ongoingItems
+            .where((i) =>
+                i.status == ModuleStudyStatus.running ||
+                i.status == ModuleStudyStatus.upcoming)
+            .toList();
 
         if (ongoingController.isLoading && items.isEmpty) {
           return const SliverToBoxAdapter(
@@ -349,8 +390,8 @@ class _CurrentModulesSliverList extends StatelessWidget {
           );
         }
 
-        final displayItems = items.length > 5 ? items.sublist(0, 5) : items;
-        final hasMore = items.length > 5;
+        final displayItems = items.length > 7 ? items.sublist(0, 7) : items;
+        final hasMore = items.length > 7;
 
         return SliverList.builder(
           itemCount: displayItems.length + (hasMore ? 1 : 0),
@@ -390,6 +431,7 @@ class _CurrentModulesSliverList extends StatelessWidget {
                 progressRatio: item.progressRatio,
                 index: index,
                 progress: item.progress,
+                inProgressRatio: item.inProgressRatio,
                 onTap: () {
                   onModuleTap(
                     item.module.title,

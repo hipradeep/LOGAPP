@@ -12,6 +12,7 @@ class TodayProgressCard extends StatelessWidget {
   final int pendingCount;
   final int dayStreak;
   final double goalProgress;
+  final VoidCallback? onTap;
 
   const TodayProgressCard({
     super.key,
@@ -19,6 +20,7 @@ class TodayProgressCard extends StatelessWidget {
     required this.pendingCount,
     required this.dayStreak,
     required this.goalProgress,
+    this.onTap,
   });
 
   static final DateFormat _dateFormat = DateFormat('EEE, d MMM yyyy');
@@ -36,12 +38,29 @@ class TodayProgressCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              "Today's Progress",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
+            GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Today's Progress",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor(context),
+                    ),
+                  ),
+                  if (onTap != null) ...[
+                    const HGapXs(),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ],
+                ],
               ),
             ),
             Text(
@@ -55,12 +74,15 @@ class TodayProgressCard extends StatelessWidget {
           ],
         ),
         const VGapMd(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            border: Border.all(color: AppTheme.borderColor(context)),
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppTheme.surface(context),
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+              border: Border.all(color: AppTheme.borderColor(context)),
             boxShadow: [
               BoxShadow(
                 color: AppTheme.shadowColor(context),
@@ -100,7 +122,8 @@ class TodayProgressCard extends StatelessWidget {
             ],
           ),
         ),
-      ],
+      ),
+    ],
     );
   }
 }

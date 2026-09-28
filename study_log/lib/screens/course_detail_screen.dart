@@ -4,7 +4,6 @@ import '../models/module.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/course_options_sheet.dart';
 import '../widgets/module_options_sheet.dart';
 import '../controllers/modules_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
@@ -13,7 +12,7 @@ import 'module_detail_screen.dart';
 import 'add_module_screen.dart';
 
 /// Redesigned Course Detail (Modules) screen matching the reference design:
-/// - Top bar with back button, course title (e.g. "DSA"), "+ Add Module" button, and 3-dots options menu
+/// - Top bar with back button, course title (e.g. "DSA"), and "+ Add Module" button
 /// - Top Progress banner: "6 / 20 modules", "30%", and full-width purple progress bar
 /// - "Modules (20)" and "Overview" tabs
 /// - Clean vertical list of syllabus modules with cycling pastel number badges
@@ -85,55 +84,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     _activeTab.value = index;
   }
 
-  void _openOptionsMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (modalCtx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const VGapMd(),
-                ListTile(
-                  leading: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryColor),
-                  title: const Text('Add New Module', style: TextStyle(fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    Navigator.pop(modalCtx);
-                    _openAddModuleScreen();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.edit_outlined, color: AppTheme.textPrimaryColor(context)),
-                  title: const Text('Edit Course Details'),
-                  onTap: () {
-                    Navigator.pop(modalCtx);
-                    CourseOptionsSheet.show(context, course: widget.course);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -147,7 +97,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               title: widget.course.title,
               onBack: _handleBack,
               onAddModule: _openAddModuleScreen,
-              onOptions: _openOptionsMenu,
             ),
             ListenableBuilder(
               listenable: Listenable.merge([
@@ -266,13 +215,11 @@ class _CourseDetailTopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
   final VoidCallback onAddModule;
-  final VoidCallback onOptions;
 
   const _CourseDetailTopBar({
     required this.title,
     required this.onBack,
     required this.onAddModule,
-    required this.onOptions,
   });
 
   static const String _eyebrow = 'Course';
@@ -280,7 +227,7 @@ class _CourseDetailTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      padding: const EdgeInsets.fromLTRB(12.0, 8.0, 16.0, 8.0),
       child: Row(
         children: [
           IconButton(
@@ -307,16 +254,6 @@ class _CourseDetailTopBar extends StatelessWidget {
           AddPillButton(
             label: 'Add Module',
             onPressed: onAddModule,
-          ),
-          const HGapSm(),
-          IconButton(
-            icon: Icon(
-              Icons.more_vert_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 24,
-            ),
-            onPressed: onOptions,
-            tooltip: 'Options',
           ),
         ],
       ),
@@ -641,7 +578,17 @@ class _CourseModulesListView extends StatelessWidget {
                 context,
                 module: module,
                 courseTitle: course.title,
+                courseId: course.id,
                 modulesController: modulesController,
+                isCompleted: isComplete,
+              ),
+              onOptionsTap: () => ModuleOptionsSheet.show(
+                context,
+                module: module,
+                courseTitle: course.title,
+                courseId: course.id,
+                modulesController: modulesController,
+                isCompleted: isComplete,
               ),
             );
           },
@@ -659,6 +606,7 @@ class _ModuleListItem extends StatelessWidget {
   final bool isComplete;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onOptionsTap;
 
   const _ModuleListItem({
     required this.number,
@@ -668,6 +616,7 @@ class _ModuleListItem extends StatelessWidget {
     this.isComplete = false,
     this.onTap,
     this.onLongPress,
+    this.onOptionsTap,
   });
 
   @override
@@ -767,10 +716,17 @@ class _ModuleListItem extends StatelessWidget {
                   ),
                 ),
                 // Trailing Chevron
-                 Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppTheme.textMutedColor(context),
-                  size: 22,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOptionsTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppTheme.textMutedColor(context),
+                      size: 22,
+                    ),
+                  ),
                 ),
               ],
             ),

@@ -82,6 +82,9 @@ class Revision {
 
   String get levelLabel => 'R$currentLevel';
 
+  /// When this module was last revised, or null if it has not undergone any revision yet.
+  DateTime? get lastRevisionAt => currentLevel > 1 ? (completedAt ?? updatedAt) : null;
+
   int get levelsRemaining =>
       isFinished ? 0 : (RevisionSchedule.maxLevel - currentLevel + 1);
 

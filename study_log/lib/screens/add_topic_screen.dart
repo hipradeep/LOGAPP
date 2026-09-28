@@ -3,7 +3,6 @@ import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../services/local_topic_storage.dart';
-import '../services/local_module_storage.dart';
 import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
 import '../models/topic.dart';
@@ -24,6 +23,7 @@ class AddTopicScreen extends StatefulWidget {
   final String courseId;
   final String moduleId;
   final List<String> availableModules;
+  final Topic? topicToEdit;
 
   const AddTopicScreen({
     super.key,
@@ -32,7 +32,10 @@ class AddTopicScreen extends StatefulWidget {
     required this.courseTitle,
     this.moduleId = '',
     this.availableModules = const [],
+    this.topicToEdit,
   });
+
+  bool get isEditing => topicToEdit != null;
 
   @override
   State<AddTopicScreen> createState() => _AddTopicScreenState();
@@ -44,34 +47,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
   late final TextEditingController _orderController;
 
   late String _selectedModuleTitle;
-  IconData _selectedIcon = Icons.format_list_bulleted_rounded;
-  int _selectedColorIndex = 0;
   bool _isSaving = false;
-  bool _isPickingModule = false;
-
-  static const List<Color> _swatchColors = [
-    Color(0xFF6366F1), // Purple (default)
-    AppTheme.successColor, // Emerald Green
-    Color(0xFF3B82F6), // Blue
-    AppTheme.warningColor, // Amber/Orange
-    AppTheme.errorColor, // Red/Coral
-    Color(0xFF6B7280), // Slate/Gray
-  ];
-
-  static const List<IconData> _pickerIcons = [
-    Icons.format_list_bulleted_rounded,
-    Icons.code_rounded,
-    Icons.functions_rounded,
-    Icons.data_object_rounded,
-    Icons.terminal_rounded,
-    Icons.hub_outlined,
-    Icons.account_tree_outlined,
-    Icons.menu_book_rounded,
-    Icons.psychology_rounded,
-    Icons.insights_rounded,
-    Icons.auto_stories_rounded,
-    Icons.bolt_rounded,
-  ];
 
   @override
   void initState() {
@@ -81,6 +57,13 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     _orderController = TextEditingController();
     _selectedModuleTitle = widget.moduleTitle;
     _descriptionController.addListener(_onDescriptionChanged);
+
+    final editing = widget.topicToEdit;
+    if (editing != null) {
+      _nameController.text = editing.title;
+      _descriptionController.text = editing.description;
+      _orderController.text = '${editing.orderIndex}';
+    }
   }
 
   @override
@@ -100,190 +83,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     Navigator.of(context).pop();
   }
 
-  void _selectColor(int index) {
-    if (_selectedColorIndex == index) return;
-    setState(() => _selectedColorIndex = index);
-  }
 
-  void _selectIcon(IconData icon) {
-    setState(() => _selectedIcon = icon);
-  }
-
-  Future<void> _openModulePicker() async {
-    List<String> modules = List<String>.of(widget.availableModules);
-
-    if (modules.isEmpty && widget.courseId.isNotEmpty) {
-      setState(() => _isPickingModule = true);
-      final stored = await LocalModuleStorage.loadModules(widget.courseId);
-      if (!mounted) return;
-      setState(() => _isPickingModule = false);
-      modules = stored.map((s) => s.title).toList();
-    }
-
-    if (modules.isEmpty && widget.moduleTitle.isNotEmpty) {
-      modules = <String>[widget.moduleTitle];
-    }
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const VGapMd(),
-                Text(
-                  'Select Module',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                const VGapMd(),
-                if (modules.isEmpty)
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Text(
-                      'No modules found for this course yet.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.textSecondaryColor(context),
-                      ),
-                    ),
-                  )
-                else
-                  ...modules.map((sec) => ListTile(
-                        title: Text(
-                          sec,
-                          style: TextStyle(
-                            fontWeight: sec == _selectedModuleTitle
-                                ? FontWeight.bold
-                                : FontWeight.w500,
-                            color: sec == _selectedModuleTitle
-                                ? AppTheme.primaryColor
-                                : AppTheme.textPrimaryColor(context),
-                          ),
-                        ),
-                        trailing: sec == _selectedModuleTitle
-                            ? const Icon(Icons.check_rounded, color: AppTheme.primaryColor)
-                            : null,
-                        onTap: () {
-                          setState(() => _selectedModuleTitle = sec);
-                          Navigator.pop(ctx);
-                        },
-                      )),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _openIconPicker() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const VGapMd(),
-                Text(
-                  'Choose Icon',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                const VGapMd(),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                  ),
-                  itemCount: _pickerIcons.length,
-                  itemBuilder: (context, index) {
-                    final icon = _pickerIcons[index];
-                    final isSelected = icon == _selectedIcon;
-                    return InkWell(
-                      onTap: () {
-                        _selectIcon(icon);
-                        Navigator.pop(ctx);
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppTheme.primaryColor.withValues(alpha: 0.12)
-                              : const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppTheme.primaryColor : const Color(0xFFE5E7EB),
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          icon,
-                          color: isSelected ? AppTheme.primaryColor : const Color(0xFF4B5563),
-                          size: 24,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const VGapMd(),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Future<void> _handleSave() async {
     if (_selectedModuleTitle.isEmpty) {
@@ -336,39 +136,70 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final now = DateTime.now();
-      final newId = 'topic_${now.millisecondsSinceEpoch}';
+      final editing = widget.topicToEdit;
+      final Topic savedTopic;
 
-      final newItem = Topic(
-        id: newId,
-        courseId: courseId,
-        moduleId: moduleId,
-        title: name,
-        status: TopicStatus.notStarted,
-        description: description,
-        orderIndex: order,
-        iconCodePoint: _selectedIcon.codePoint,
-        colorValue: _swatchColors[_selectedColorIndex].toARGB32(),
-      );
+      if (editing != null) {
+        savedTopic = editing.copyWith(
+          title: name,
+          description: description,
+          orderIndex: order,
+        );
 
-      // 1. Persist locally to storage cache
-      final existing = await LocalTopicStorage.loadTopicsForModule(
-        moduleId: moduleId,
-        fallbackTitle: _selectedModuleTitle,
-      );
-      final updated = List<Topic>.from(existing)..add(newItem);
-      final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
-      await LocalTopicStorage.saveTopics(key, updated);
+        final existing = await LocalTopicStorage.loadTopicsForModule(
+          moduleId: moduleId,
+          fallbackTitle: _selectedModuleTitle,
+        );
+        final updated = existing.map((t) => t.id == savedTopic.id ? savedTopic : t).toList();
+        final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
+        await LocalTopicStorage.saveTopics(key, updated);
 
-      // 2. Optionally sync the same record to Firestore if configured
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          try {
-            await firestore
-                .addTopic(newItem)
-                .timeout(const Duration(seconds: 3), onTimeout: () {});
-          } catch (_) {}
+        if (getIt.isRegistered<FirestoreService>()) {
+          final firestore = getIt<FirestoreService>();
+          if (firestore.isAvailable && savedTopic.id.isNotEmpty) {
+            try {
+              await firestore
+                  .updateTopic(savedTopic)
+                  .timeout(const Duration(seconds: 3), onTimeout: () {});
+            } catch (_) {}
+          }
+        }
+      } else {
+        final now = DateTime.now();
+        final newId = 'topic_${now.millisecondsSinceEpoch}';
+
+        savedTopic = Topic(
+          id: newId,
+          courseId: courseId,
+          moduleId: moduleId,
+          title: name,
+          status: TopicStatus.notStarted,
+          description: description,
+          orderIndex: order,
+        );
+
+        final existing = await LocalTopicStorage.loadTopicsForModule(
+          moduleId: moduleId,
+          fallbackTitle: _selectedModuleTitle,
+        );
+        final updated = existing
+            .where((t) =>
+                t.id != savedTopic.id &&
+                t.title.trim().toLowerCase() != savedTopic.title.trim().toLowerCase())
+            .toList()
+          ..add(savedTopic);
+        final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
+        await LocalTopicStorage.saveTopics(key, updated);
+
+        if (getIt.isRegistered<FirestoreService>()) {
+          final firestore = getIt<FirestoreService>();
+          if (firestore.isAvailable) {
+            try {
+              await firestore
+                  .addTopic(savedTopic)
+                  .timeout(const Duration(seconds: 3), onTimeout: () {});
+            } catch (_) {}
+          }
         }
       }
 
@@ -377,10 +208,14 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
       }
 
       if (!mounted) return;
-      Navigator.of(context).pop(newItem);
+      Navigator.of(context).pop(savedTopic);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Topic "$name" added successfully'),
+          content: Text(
+            editing != null
+                ? 'Topic "$name" updated successfully'
+                : 'Topic "$name" added successfully',
+          ),
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -411,10 +246,15 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
         child: Column(
           children: [
             _AddTopicTopBar(
+              title: widget.isEditing ? 'Edit Topic' : 'Add Topic',
               onBack: _handleBack,
               onSave: _handleSave,
               isSaving: _isSaving,
             ),
+            if ((_selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle).isNotEmpty)
+              _ModuleContextPill(
+                moduleTitle: _selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle,
+              ),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -427,28 +267,11 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ModuleField(
-                      selectedTitle: _selectedModuleTitle,
-                      isLoading: _isPickingModule,
-                      onTap: _openModulePicker,
-                    ),
-                    const VGapLg(),
                     _TopicNameField(controller: _nameController),
                     const VGapLg(),
                     _DescriptionField(
                       controller: _descriptionController,
                       currentLength: _descriptionController.text.length,
-                    ),
-                    const VGapLg(),
-                    _IconField(
-                      icon: _selectedIcon,
-                      onPickIcon: _openIconPicker,
-                    ),
-                    const VGapLg(),
-                    _ColorPaletteField(
-                      colors: _swatchColors,
-                      selectedIndex: _selectedColorIndex,
-                      onSelectColor: _selectColor,
                     ),
                     const VGapLg(),
                     _OrderField(controller: _orderController),
@@ -464,11 +287,13 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
 }
 
 class _AddTopicTopBar extends StatelessWidget {
+  final String title;
   final VoidCallback onBack;
   final VoidCallback onSave;
   final bool isSaving;
 
   const _AddTopicTopBar({
+    this.title = 'Add Topic',
     required this.onBack,
     required this.onSave,
     required this.isSaving,
@@ -495,7 +320,7 @@ class _AddTopicTopBar extends StatelessWidget {
               ),
               const HGapXs(),
               Text(
-                'Add Topic',
+                title,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -517,77 +342,50 @@ class _AddTopicTopBar extends StatelessWidget {
   }
 }
 
-class _ModuleField extends StatelessWidget {
-  final String selectedTitle;
-  final VoidCallback onTap;
-  final bool isLoading;
+class _ModuleContextPill extends StatelessWidget {
+  final String moduleTitle;
 
-  const _ModuleField({
-    required this.selectedTitle,
-    required this.onTap,
-    this.isLoading = false,
-  });
+  const _ModuleContextPill({required this.moduleTitle});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Module',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+          decoration: BoxDecoration(
+            color: AppTheme.pastelPurple(context),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
           ),
-        ),
-        const VGapSm(),
-        InkWell(
-          onTap: isLoading ? null : onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor(context)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    selectedTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textPrimaryColor(context),
-                    ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.auto_stories_rounded,
+                size: 14,
+                color: AppTheme.pastelPurpleText(context),
+              ),
+              const HGapXs(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Text(
+                  moduleTitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.pastelPurpleText(context),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                if (isLoading)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppTheme.primaryColor,
-                    ),
-                  )
-                else
-                   Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppTheme.textMutedColor(context),
-                    size: 22,
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -735,130 +533,7 @@ class _DescriptionField extends StatelessWidget {
   }
 }
 
-class _IconField extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onPickIcon;
 
-  const _IconField({
-    required this.icon,
-    required this.onPickIcon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Icon',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: AppTheme.pastelIndigo(context),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: AppTheme.primaryColor,
-                size: 26,
-              ),
-            ),
-            const HGapMd(),
-            InkWell(
-              onTap: onPickIcon,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'Change Icon',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ColorPaletteField extends StatelessWidget {
-  final List<Color> colors;
-  final int selectedIndex;
-  final ValueChanged<int> onSelectColor;
-
-  const _ColorPaletteField({
-    required this.colors,
-    required this.selectedIndex,
-    required this.onSelectColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Color',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          children: List.generate(colors.length, (index) {
-            final color = colors[index];
-            final isSelected = selectedIndex == index;
-            return Padding(
-              padding: const EdgeInsets.only(right: 12.0),
-              child: InkWell(
-                onTap: () => onSelectColor(index),
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: isSelected
-                      ? const Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        )
-                      : null,
-                ),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-}
 
 class _OrderField extends StatelessWidget {
   final TextEditingController controller;

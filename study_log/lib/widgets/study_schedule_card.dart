@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
@@ -14,6 +15,7 @@ class StudyScheduleCard extends StatelessWidget {
   final String? progressRatio;
   final int index;
   final double progress;
+  final double inProgressRatio;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -23,7 +25,8 @@ class StudyScheduleCard extends StatelessWidget {
     required this.subtitle,
     this.progressRatio,
     this.index = 0,
-    this.progress = 0.45,
+    this.progress = 0.0,
+    this.inProgressRatio = 0.0,
     this.onTap,
     this.onLongPress,
   });
@@ -136,14 +139,9 @@ class StudyScheduleCard extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(3),
-                              child: LinearProgressIndicator(
-                                value: progress.clamp(0.0, 1.0),
-                                minHeight: 5,
-                                backgroundColor: const Color(0xFFECEEF6),
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-                              ),
+                            child: _TwoColorProgressBar(
+                              completedRatio: progress.clamp(0.0, 1.0),
+                              inProgressRatio: inProgressRatio.clamp(0.0, 1.0),
                             ),
                           ),
                           if (progressRatio != null) ...[
@@ -191,3 +189,56 @@ class _PastelTheme {
     required this.icon,
   });
 }
+
+/// A stacked progress bar with two distinct color segments:
+/// - Green = completed ratio
+/// - Primary purple = in-progress ratio
+/// - Grey background = remaining
+class _TwoColorProgressBar extends StatelessWidget {
+  final double completedRatio;
+  final double inProgressRatio;
+
+  const _TwoColorProgressBar({
+    required this.completedRatio,
+    required this.inProgressRatio,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: SizedBox(
+        height: 5,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final completedW = width * completedRatio;
+            final inProgressW = (width * inProgressRatio).clamp(0.0, width - completedW);
+            return Stack(
+              children: [
+                // Background track
+                Container(
+                  width: width,
+                  color: const Color(0xFFECEEF6),
+                ),
+                // In-progress segment
+                if (inProgressW > 0)
+                  Container(
+                    width: completedW + inProgressW,
+                    color: AppTheme.primaryColor,
+                  ),
+                // Completed segment (on top, green)
+                if (completedW > 0)
+                  Container(
+                    width: completedW,
+                    color: AppTheme.successColor,
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+

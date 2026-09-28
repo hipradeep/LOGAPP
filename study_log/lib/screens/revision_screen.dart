@@ -6,6 +6,9 @@ import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
 import '../models/revision.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import '../services/service_locator.dart';
 
 /// How the continuous revision list is ordered.
 enum RevisionSortMode {
@@ -73,13 +76,13 @@ List<_RevisionLevelConfig> _revisionLevelConfigs(BuildContext context) {
 /// - Play revision button and three-dot list item menu removed as requested.
 class RevisionScreen extends StatefulWidget {
   final RevisionController revisionController;
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
   final void Function(Revision revision) onOpenRevision;
 
   const RevisionScreen({
     super.key,
     required this.revisionController,
-    required this.onBack,
+    this.onBack,
     required this.onOpenRevision,
   });
 
@@ -128,8 +131,16 @@ class _RevisionScreenState extends State<RevisionScreen> {
   List<Revision> _visibleRevisions(DateTime now) {
     final query = _searchQuery.value;
     final items = widget.revisionController.revisionsAtLevel(_levelFilter);
+    final ongoing = getIt.isRegistered<OngoingModulesController>()
+        ? getIt<OngoingModulesController>()
+        : null;
 
     final filtered = items.where((r) {
+      if (ongoing != null && r.moduleId.isNotEmpty) {
+        final total = ongoing.topicCountForModule(r.moduleId);
+        final done = ongoing.completedTopicCountForModule(r.moduleId);
+        if (total > 0 && done < total) return false;
+      }
       if (query.isNotEmpty) {
         final matches = r.moduleTitle.toLowerCase().contains(query) ||
             r.moduleDescription.toLowerCase().contains(query);
@@ -347,8 +358,8 @@ class _RevisionScreenState extends State<RevisionScreen> {
     }
     switch (_scope) {
       case RevisionScope.all:
-        return 'Finish every topic in a module and its revision ladder '
-            'starts automatically at R1.';
+        return 'Finish all tasks in a module and tap "Add to Revision" '
+            'to schedule spaced repetition here.';
       case RevisionScope.dueToday:
         return 'You are all caught up. Revisions appear here once their '
             'date arrives.';
@@ -453,13 +464,13 @@ class _RevisionScreenState extends State<RevisionScreen> {
 /// Top header matching the reference design:
 /// Circular back button, bold title, circular search, circular overflow menu.
 class _RevisionTopBar extends StatelessWidget {
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
   final VoidCallback onSearchTap;
   final bool isSearchActive;
   final ValueChanged<String> onMenuAction;
 
   const _RevisionTopBar({
-    required this.onBack,
+    this.onBack,
     required this.onSearchTap,
     required this.isSearchActive,
     required this.onMenuAction,
@@ -467,33 +478,36 @@ class _RevisionTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showBack = onBack != null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
         children: [
-          Material(
-            color: const Color(0xFFF1F5F9),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: onBack,
-              customBorder: const CircleBorder(),
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.chevron_left_rounded,
-                  color: AppTheme.textPrimaryColor(context),
-                  size: 26,
+          if (showBack) ...[
+            Material(
+              color: const Color(0xFFF1F5F9),
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: onBack,
+                customBorder: const CircleBorder(),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.chevron_left_rounded,
+                    color: AppTheme.textPrimaryColor(context),
+                    size: 26,
+                  ),
                 ),
               ),
             ),
-          ),
-          const HGapMd(),
+            const HGapMd(),
+          ],
           Text(
             'Revision',
             style: TextStyle(
@@ -1000,10 +1014,10 @@ class _RevisionItemCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _RevisionIconBox(
+                CourseIconChip(
                   courseId: revision.courseId,
-                  moduleTitle: revision.moduleTitle,
-                  courseTitle: revision.courseTitle,
+                  size: 48,
+                  radius: 14,
                 ),
                 const HGapMd(),
                 Expanded(
@@ -1032,7 +1046,7 @@ class _RevisionItemCard extends StatelessWidget {
                       ),
                       const VGapXs(),
                       Text(
-                        _subtitleFor(revision),
+                        _courseFor(revision),
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppTheme.textSecondaryColor(context),
@@ -1078,10 +1092,15 @@ class _RevisionItemCard extends StatelessWidget {
     );
   }
 
-  static String _subtitleFor(Revision revision) {
-    final description = revision.moduleDescription.trim();
-    if (description.isNotEmpty) return description;
-    return revision.courseTitle.trim();
+  static String _courseFor(Revision revision) {
+    final title = revision.courseTitle.trim();
+    if (title.isNotEmpty) return title;
+    if (getIt.isRegistered<CoursesController>()) {
+      for (final c in getIt<CoursesController>().courses) {
+        if (c.id == revision.courseId) return c.title;
+      }
+    }
+    return '';
   }
 
   static String _dueLabel(int days, bool isDue, Revision revision) {
@@ -1099,134 +1118,6 @@ class _RevisionItemCard extends StatelessWidget {
       return days < 0 ? const Color(0xFFDC2626) : AppTheme.errorColor;
     }
     return AppTheme.textSecondaryColor(context);
-  }
-}
-
-/// Rounded icon box for a module/course with tech-specific glyphs
-class _RevisionIconBox extends StatelessWidget {
-  final String courseId;
-  final String moduleTitle;
-  final String courseTitle;
-
-  const _RevisionIconBox({
-    required this.courseId,
-    required this.moduleTitle,
-    required this.courseTitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final lower = '${moduleTitle.toLowerCase()} ${courseTitle.toLowerCase()}';
-
-    if (lower.contains('java') || lower.contains('spring')) {
-      return _buildBox(
-        icon: Icons.coffee_rounded,
-        bg: const Color(0xFFFFF1F2),
-        fg:  AppTheme.errorColor,
-        border: const Color(0xFFFEE2E2),
-      );
-    }
-    if (lower.contains('docker') ||
-        lower.contains('container') ||
-        lower.contains('k8s') ||
-        lower.contains('kubernetes')) {
-      return _buildBox(
-        icon: Icons.directions_boat_rounded,
-        bg: const Color(0xFFEFF6FF),
-        fg: const Color(0xFF2563EB),
-        border: const Color(0xFFDBEAFE),
-      );
-    }
-    if (lower.contains('python')) {
-      return _buildBox(
-        icon: Icons.terminal_rounded,
-        bg: const Color(0xFFFEF9C3),
-        fg: const Color(0xFFCA8A04),
-        border: const Color(0xFFFEF08A),
-      );
-    }
-    if (lower.contains('flutter') ||
-        lower.contains('dart') ||
-        lower.contains('android') ||
-        lower.contains('ios')) {
-      return _buildBox(
-        icon: Icons.flutter_dash_rounded,
-        bg: AppTheme.pastelSky(context),
-        fg: AppTheme.pastelSkyText(context),
-        border: AppTheme.pastelSkyBorder(context),
-      );
-    }
-    if (lower.contains('database') ||
-        lower.contains('sql') ||
-        lower.contains('mongo') ||
-        lower.contains('postgres')) {
-      return _buildBox(
-        icon: Icons.dns_rounded,
-        bg: const Color(0xFFECFDF5),
-        fg: const Color(0xFF059669),
-        border: const Color(0xFFA7F3D0),
-      );
-    }
-    if (lower.contains('git')) {
-      return _buildBox(
-        icon: Icons.call_split_rounded,
-        bg: const Color(0xFFFFF7ED),
-        fg: const Color(0xFFEA580C),
-        border: const Color(0xFFFFEDD5),
-      );
-    }
-    if (lower.contains('dsa') ||
-        lower.contains('algo') ||
-        lower.contains('tree') ||
-        lower.contains('graph')) {
-      return _buildBox(
-        icon: Icons.account_tree_rounded,
-        bg: const Color(0xFFF5F3FF),
-        fg: const Color(0xFF6366F1),
-        border: const Color(0xFFDDD6FE),
-      );
-    }
-    if (lower.contains('react') ||
-        lower.contains('javascript') ||
-        lower.contains('js') ||
-        lower.contains('frontend') ||
-        lower.contains('web')) {
-      return _buildBox(
-        icon: Icons.code_rounded,
-        bg: const Color(0xFFFAF5FF),
-        fg: const Color(0xFF7C3AED),
-        border: const Color(0xFFF3E8FF),
-      );
-    }
-
-    return CourseIconChip(
-      courseId: courseId,
-      size: 52,
-      radius: 16,
-    );
-  }
-
-  Widget _buildBox({
-    required IconData icon,
-    required Color bg,
-    required Color fg,
-    required Color border,
-  }) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border, width: 1),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        icon,
-        color: fg,
-        size: 26,
-      ),
-    );
   }
 }
 

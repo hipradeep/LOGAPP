@@ -2,11 +2,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/course.dart';
 import '../models/module.dart';
+import '../models/topic.dart';
+import '../services/local_course_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_topic_storage.dart';
+import '../services/local_revision_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
+
 
 enum ModuleStudyStatus {
   running,
@@ -23,6 +27,7 @@ class OngoingModuleItem {
   final String breadcrumb;
   final String progressRatio;
   final double progress;
+  final double inProgressRatio;
   final ModuleStudyStatus status;
 
   const OngoingModuleItem({
@@ -32,6 +37,7 @@ class OngoingModuleItem {
     required this.breadcrumb,
     required this.progressRatio,
     required this.progress,
+    required this.inProgressRatio,
     required this.status,
   });
 
@@ -82,7 +88,7 @@ class OngoingModulesController extends ChangeNotifier {
   int _completedTodayCount = 0;
   int _dayStreak = 0;
   bool _isLoading = false;
-
+  int _refreshSeq = 0;
   OngoingModulesController({
     CoursesController? coursesController,
     FirestoreService? firestoreService,
@@ -141,11 +147,16 @@ class OngoingModulesController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    final currentSeq = ++_refreshSeq;
     _isLoading = true;
     notifyListeners();
 
     try {
-      final courses = _coursesController.courses;
+      List<Course> courses = _coursesController.courses;
+      // Fallback: If CoursesController hasn't hydrated yet, read directly from local disk cache
+      if (courses.isEmpty) {
+        courses = await LocalCourseStorage.loadCourses();
+      }
       // Filter out archived courses; completed courses are still tracked for
       // overall course completion, progress rollups, and statistics.
       final nonArchivedCourses = courses.where((c) {
@@ -155,6 +166,74 @@ class OngoingModulesController extends ChangeNotifier {
 
       // Read the topic cache once per refresh instead of once per module.
       final topicBuckets = await LocalTopicStorage.loadAllBuckets();
+
+      // Read all cached modules in 1 pass from local disk
+      final allCachedModules = await LocalModuleStorage.loadAllModules();
+      final Map<String, List<Module>> modulesByCourse = {};
+      for (final m in allCachedModules) {
+        modulesByCourse.putIfAbsent(m.courseId, () => []).add(m);
+      }
+
+      // If any active courses are missing modules in cache, fetch them concurrently from Firestore
+      final missingCourses = nonArchivedCourses
+          .where((c) => (modulesByCourse[c.id] ?? []).isEmpty)
+          .toList();
+      if (missingCourses.isNotEmpty && _firestoreService.isAvailable) {
+        await Future.wait(
+          missingCourses.map((c) async {
+            try {
+              final fetched = await _firestoreService.getModules(courseId: c.id);
+              if (fetched.isNotEmpty) {
+                modulesByCourse[c.id] = fetched;
+                await LocalModuleStorage.saveModulesForCourse(c.id, fetched);
+              }
+            } catch (_) {}
+          }),
+        );
+      }
+
+      // Check which modules have no cached topics in local disk, and fetch from Firestore
+      final allModulesList = <Module>[];
+      for (final course in nonArchivedCourses) {
+        final mods = modulesByCourse[course.id] ?? [];
+        allModulesList.addAll(mods);
+      }
+
+      final modulesMissingTopics = allModulesList.where((m) {
+        final local = LocalTopicStorage.resolveForModule(
+          topicBuckets,
+          moduleId: m.id,
+          fallbackTitle: m.title,
+        );
+        return local.isEmpty && m.id.isNotEmpty;
+      }).toList();
+
+      if (modulesMissingTopics.isNotEmpty && _firestoreService.isAvailable) {
+        await Future.wait(
+          modulesMissingTopics.map((m) async {
+            try {
+              final remoteTopics = await _firestoreService.getTopics(moduleId: m.id);
+              if (remoteTopics.isNotEmpty) {
+                topicBuckets[m.id] = remoteTopics;
+                if (m.title.isNotEmpty) {
+                  topicBuckets[m.title] = remoteTopics;
+                }
+                await LocalTopicStorage.saveTopics(m.id, remoteTopics);
+              }
+            } catch (_) {}
+          }),
+        );
+      }
+
+      final Set<String> revisionModuleIds = {};
+      final Set<String> revisionModuleTitles = {};
+      final cachedRevs = await LocalRevisionStorage.loadAll();
+      for (final r in cachedRevs) {
+        if (r.moduleId.isNotEmpty) revisionModuleIds.add(r.moduleId);
+        if (r.moduleTitle.isNotEmpty) {
+          revisionModuleTitles.add(r.moduleTitle.trim().toLowerCase());
+        }
+      }
 
       final List<OngoingModuleItem> runningItems = [];
       final List<OngoingModuleItem> upcomingItems = [];
@@ -174,23 +253,8 @@ class OngoingModulesController extends ChangeNotifier {
         final bool isCourseMarkedComplete =
             course.status.toLowerCase() == 'completed';
 
-        // 1. Fetch cached modules from local disk
-        List<Module> modules = await LocalModuleStorage.loadModules(course.id);
-
-        // 2. Fallback to Firestore if local cache is empty
-        if (modules.isEmpty && _firestoreService.isAvailable) {
-          try {
-            modules = await _firestoreService
-                .streamModules(courseId: course.id)
-                .first
-                .timeout(const Duration(milliseconds: 1500), onTimeout: () => []);
-            if (modules.isNotEmpty) {
-              await LocalModuleStorage.saveModulesForCourse(course.id, modules);
-            }
-          } catch (_) {
-            modules = [];
-          }
-        }
+        final List<Module> modules = modulesByCourse[course.id] ?? [];
+        modules.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
         // 3. For each real module, compute its progress and status from actual topics
         for (final module in modules) {
@@ -214,6 +278,7 @@ class OngoingModulesController extends ChangeNotifier {
           final int completedCount;
           final int totalCount;
           final double progress;
+          double inProgressRatio = 0.0;
           final ModuleStudyStatus studyStatus;
 
           if (topics.isNotEmpty) {
@@ -221,6 +286,12 @@ class OngoingModulesController extends ChangeNotifier {
             completedCount = moduleCompleted;
             totalCount = topics.length;
             progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
+
+            int moduleInProgress = 0;
+            for (final sub in topics) {
+              if (sub.status == TopicStatus.inProgress) moduleInProgress++;
+            }
+            inProgressRatio = totalCount > 0 ? (moduleInProgress / totalCount) : 0.0;
 
             if (completedCount == totalCount && totalCount > 0) {
               studyStatus = ModuleStudyStatus.completed;
@@ -255,7 +326,10 @@ class OngoingModulesController extends ChangeNotifier {
             courseCompletedModules++;
           }
 
-          // Exclude completed courses and completed modules from ongoing study items
+          final isMovedToRevision = revisionModuleIds.contains(module.id) ||
+              revisionModuleTitles.contains(module.title.trim().toLowerCase());
+
+          // Exclude completed courses, OR completed modules (only in-progress or not-started belong here)
           if (isCourseMarkedComplete || studyStatus == ModuleStudyStatus.completed) {
             continue;
           }
@@ -269,9 +343,10 @@ class OngoingModulesController extends ChangeNotifier {
             course: course,
             module: module,
             title: module.title,
-            breadcrumb: '${course.title} • ${isRunning ? 'Running' : 'Upcoming'}',
+            breadcrumb: '${course.title} • ${isRunning ? 'In Progress' : 'Not Started'}',
             progressRatio: progressRatio,
             progress: progress,
+            inProgressRatio: inProgressRatio,
             status: studyStatus,
           );
 
@@ -294,6 +369,10 @@ class OngoingModulesController extends ChangeNotifier {
       runningItems.sort((a, b) => a.module.orderIndex.compareTo(b.module.orderIndex));
       upcomingItems.sort((a, b) => a.module.orderIndex.compareTo(b.module.orderIndex));
 
+      if (currentSeq != _refreshSeq) {
+        return;
+      }
+
       _ongoingItems = [...runningItems, ...upcomingItems];
       _topicCounts
         ..clear()
@@ -314,8 +393,10 @@ class OngoingModulesController extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching ongoing modules: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (currentSeq == _refreshSeq) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 

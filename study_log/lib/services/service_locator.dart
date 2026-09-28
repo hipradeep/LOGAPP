@@ -1,9 +1,11 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import '../controllers/theme_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
-import '../controllers/calendar_controller.dart';
+import '../controllers/progress_controller.dart';
 import 'firestore_service.dart';
 
 final getIt = GetIt.instance;
@@ -24,7 +26,25 @@ void setupLocator() {
   if (!getIt.isRegistered<RevisionController>()) {
     getIt.registerLazySingleton<RevisionController>(() => RevisionController());
   }
-  if (!getIt.isRegistered<CalendarController>()) {
-    getIt.registerLazySingleton<CalendarController>(() => CalendarController());
+  if (!getIt.isRegistered<ProgressController>()) {
+    getIt.registerLazySingleton<ProgressController>(() => ProgressController());
+  }
+}
+
+/// Warms up all singleton controllers on app start so local storage is hydrated
+/// and Firestore streams are active before the user arrives on the home screen.
+Future<void> warmupControllers() async {
+  try {
+    final courses = getIt<CoursesController>();
+    final ongoing = getIt<OngoingModulesController>();
+    final revision = getIt<RevisionController>();
+    final progress = getIt<ProgressController>();
+
+    await courses.loadCourses();
+    await ongoing.refresh();
+    await revision.reconcile();
+    await progress.load();
+  } catch (e) {
+    debugPrint('warmupControllers error: $e');
   }
 }

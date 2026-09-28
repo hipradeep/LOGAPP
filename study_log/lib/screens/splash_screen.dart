@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../services/service_locator.dart';
 import 'main_navigation_screen.dart';
 
 /// Animated Splash Screen displaying the new app logo and branding.
@@ -28,6 +29,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    unawaited(warmupControllers());
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),

@@ -4,7 +4,6 @@ import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/course_options_sheet.dart';
-import '../widgets/study_confirmation_dialog.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
@@ -12,7 +11,7 @@ import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 
 /// Courses screen listing only the user's own courses:
-/// - Top bar with Back navigation, "Courses" title, circular "+", and 3-dots menu (Delete, Archive)
+/// - Top bar with Back navigation, "Courses" title, and circular "+"
 /// - "Search courses..." rounded search bar
 /// - One card per course showing real module completion, progress bar and percentage
 /// - Icon and pastel colours come from the course id, so a course keeps the same
@@ -70,48 +69,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
     CourseOptionsSheet.show(context, course: course);
   }
 
-  Future<void> _handleTopMenuAction(String action) async {
-    final coursesController = getIt<CoursesController>();
-    if (coursesController.courses.isEmpty) return;
-    final firstCourse = coursesController.courses.first;
-
-    if (action == 'delete') {
-      final confirmed = await StudyConfirmationDialog.showDeleteCourse(
-        context,
-        courseTitle: firstCourse.title,
-      );
-      if (confirmed && mounted) {
-        await coursesController.deleteCourse(firstCourse.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Course "${firstCourse.title}" deleted'),
-              backgroundColor: AppTheme.primaryColor,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    } else if (action == 'archive') {
-      final confirmed = await StudyConfirmationDialog.showArchiveCourse(
-        context,
-        courseTitle: firstCourse.title,
-      );
-      if (confirmed && mounted) {
-        await coursesController.updateCourse(firstCourse.copyWith(status: 'archived'));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Course "${firstCourse.title}" archived'),
-              backgroundColor: AppTheme.primaryColor,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -125,7 +82,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
             _CoursesTopBar(
               onBack: _handleBack,
               onAddCourse: _openAddCourse,
-              onMenuAction: _handleTopMenuAction,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -151,18 +107,16 @@ class _CoursesScreenState extends State<CoursesScreen> {
 class _CoursesTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onAddCourse;
-  final ValueChanged<String> onMenuAction;
 
   const _CoursesTopBar({
     required this.onBack,
     required this.onAddCourse,
-    required this.onMenuAction,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+      padding: const EdgeInsets.fromLTRB(12.0, 10.0, 16.0, 10.0),
       child: Row(
         children: [
           IconButton(
@@ -206,65 +160,6 @@ class _CoursesTopBar extends StatelessWidget {
                 size: 22,
               ),
             ),
-          ),
-          const HGapXs(),
-          // 3-dots popup menu with Delete & Archive matching reference screenshot
-          PopupMenuButton<String>(
-            icon: Icon(
-              Icons.more_vert_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 24,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            color: AppTheme.surface(context),
-            elevation: 6,
-            onSelected: onMenuAction,
-            itemBuilder: (ctx) => [
-              const PopupMenuItem<String>(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.delete_outline_rounded,
-                      color: AppTheme.errorColor,
-                      size: 20,
-                    ),
-                    HGapMd(),
-                    Text(
-                      'Delete',
-                      style: TextStyle(
-                        color: AppTheme.errorColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'archive',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      color: Color(0xFF1E293B),
-                      size: 19,
-                    ),
-                    HGapMd(),
-                    Text(
-                      'Archive',
-                      style: TextStyle(
-                        color: Color(0xFF1E293B),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -653,10 +548,17 @@ class _CourseItemCard extends StatelessWidget {
                 ),
                 const HGapSm(),
                 // Trailing Chevron
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppTheme.textMutedColor(context),
-                  size: 22,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onLongPress,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppTheme.textMutedColor(context),
+                      size: 22,
+                    ),
+                  ),
                 ),
               ],
             ),

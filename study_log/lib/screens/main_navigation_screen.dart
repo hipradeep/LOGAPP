@@ -6,13 +6,11 @@ import '../models/revision.dart';
 import 'home_screen.dart';
 import 'revision_screen.dart';
 import 'revision_detail_screen.dart';
-import 'calendar_screen.dart';
 import 'profile_screen.dart';
 
-/// Root navigation screen housing the 4 core tabs:
+/// Root navigation screen housing the 3 core tabs:
 /// - Home
 /// - Revision (R1 -> R5 spaced repetition ladder)
-/// - Calendar (empty)
 /// - Profile
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -33,10 +31,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const HomeScreen(),
       RevisionScreen(
         revisionController: getIt<RevisionController>(),
-        onBack: () => _onTabSelected(0),
         onOpenRevision: _openRevisionDetail,
       ),
-      const CalendarScreen(),
       const ProfileScreen(),
     ];
   }
@@ -144,14 +140,6 @@ class _StudyBottomNav extends StatelessWidget {
           ),
           _NavItem(
             index: 2,
-            currentIndex: currentIndex,
-            label: 'Calendar',
-            selectedIcon: Icons.calendar_today_rounded,
-            unselectedIcon: Icons.calendar_today_outlined,
-            onTap: onTap,
-          ),
-          _NavItem(
-            index: 3,
             currentIndex: currentIndex,
             label: 'Profile',
             selectedIcon: Icons.person_rounded,

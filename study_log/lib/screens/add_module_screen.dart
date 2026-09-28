@@ -3,7 +3,6 @@ import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
-import '../controllers/courses_controller.dart';
 import '../controllers/modules_controller.dart';
 import '../models/module.dart';
 
@@ -43,8 +42,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
   late String _selectedCourseTitle;
   late String _selectedCourseId;
 
-  IconData _selectedIcon = Icons.format_list_bulleted_rounded;
-  Color _selectedColor =  AppTheme.primaryColor;
   int _descLength = 0;
   bool _isSubmitting = false;
 
@@ -88,170 +85,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
     Navigator.of(context).pop();
   }
 
-  void _selectColor(Color color) {
-    if (_selectedColor == color) return;
-    setState(() => _selectedColor = color);
-  }
 
-  void _openCourseSelector() {
-    if (widget.isEditing) return;
-    final allCourses = getIt<CoursesController>().courses;
-    if (allCourses.isEmpty) return;
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const VGapMd(),
-                Text(
-                  'Select Course',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                const VGapMd(),
-                ...allCourses.map((c) => ListTile(
-                      title: Text(c.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      trailing: c.id == _selectedCourseId
-                          ? const Icon(Icons.check_rounded, color: AppTheme.primaryColor)
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedCourseId = c.id;
-                          _selectedCourseTitle = c.title;
-                        });
-                        Navigator.pop(ctx);
-                      },
-                    )),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _openIconPicker() {
-    final icons = [
-      Icons.format_list_bulleted_rounded,
-      Icons.code_rounded,
-      Icons.settings_suggest_rounded,
-      Icons.smart_toy_rounded,
-      Icons.android_rounded,
-      Icons.cloud_outlined,
-      Icons.hub_outlined,
-      Icons.menu_book_rounded,
-      Icons.terminal_rounded,
-      Icons.data_object_rounded,
-      Icons.psychology_rounded,
-      Icons.school_rounded,
-    ];
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const VGapMd(),
-                Text(
-                  'Select Module Icon',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                const VGapMd(),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: icons.length,
-                  itemBuilder: (context, index) {
-                    final icon = icons[index];
-                    final isSelected = icon == _selectedIcon;
-                    return InkWell(
-                      onTap: () {
-                        setState(() => _selectedIcon = icon);
-                        Navigator.pop(ctx);
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFF3F0FF) : const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor(context),
-                            width: isSelected ? 1.5 : 1.0,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          icon,
-                          color: isSelected ? AppTheme.primaryColor : const Color(0xFF4B5563),
-                          size: 24,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const VGapMd(),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   void _handleSubmit() async {
     final title = _titleController.text.trim();
@@ -343,6 +177,10 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
               onSave: _handleSubmit,
               isSubmitting: _isSubmitting,
             ),
+            if ((_selectedCourseTitle.isNotEmpty ? _selectedCourseTitle : widget.courseTitle).isNotEmpty)
+              _CourseContextPill(
+                courseTitle: _selectedCourseTitle.isNotEmpty ? _selectedCourseTitle : widget.courseTitle,
+              ),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -355,28 +193,11 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (!widget.isEditing) ...[
-                      _CourseSelectorField(
-                        courseTitle: _selectedCourseTitle,
-                        onTap: _openCourseSelector,
-                      ),
-                      const VGapLg(),
-                    ],
                     _ModuleNameField(controller: _titleController),
                     const VGapLg(),
                     _ModuleDescriptionField(
                       controller: _descriptionController,
                       charCount: _descLength,
-                    ),
-                    const VGapLg(),
-                    _ModuleIconModule(
-                      selectedIcon: _selectedIcon,
-                      onOpenPicker: _openIconPicker,
-                    ),
-                    const VGapLg(),
-                    _ModuleColorModule(
-                      selectedColor: _selectedColor,
-                      onSelectColor: _selectColor,
                     ),
                     const VGapLg(),
                     _ModuleOrderField(controller: _orderController),
@@ -442,61 +263,50 @@ class _AddModuleTopBar extends StatelessWidget {
   }
 }
 
-class _CourseSelectorField extends StatelessWidget {
+class _CourseContextPill extends StatelessWidget {
   final String courseTitle;
-  final VoidCallback onTap;
 
-  const _CourseSelectorField({
-    required this.courseTitle,
-    required this.onTap,
-  });
+  const _CourseContextPill({required this.courseTitle});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Course',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+          decoration: BoxDecoration(
+            color: AppTheme.pastelPurple(context),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
           ),
-        ),
-        const VGapSm(),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceVariant(context),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor(context)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.school_outlined,
+                size: 14,
+                color: AppTheme.pastelPurpleText(context),
+              ),
+              const HGapXs(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Text(
                   courseTitle,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimaryColor(context),
+                    color: AppTheme.pastelPurpleText(context),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                 Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.textSecondaryColor(context),
-                  size: 22,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -632,133 +442,7 @@ class _ModuleDescriptionField extends StatelessWidget {
   }
 }
 
-class _ModuleIconModule extends StatelessWidget {
-  final IconData selectedIcon;
-  final VoidCallback onOpenPicker;
 
-  const _ModuleIconModule({
-    required this.selectedIcon,
-    required this.onOpenPicker,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Icon',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F0FF),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                selectedIcon,
-                color: AppTheme.primaryColor,
-                size: 26,
-              ),
-            ),
-            const HGapMd(),
-            Material(
-              color: const Color(0xFFF5F3FF),
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                onTap: onOpenPicker,
-                borderRadius: BorderRadius.circular(10),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Text(
-                    'Change Icon',
-                    style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ModuleColorModule extends StatelessWidget {
-  final Color selectedColor;
-  final ValueChanged<Color> onSelectColor;
-
-  const _ModuleColorModule({
-    required this.selectedColor,
-    required this.onSelectColor,
-  });
-
-  static const List<Color> _availableColors = [
-    AppTheme.primaryColor,
-    AppTheme.successColor,
-    Color(0xFF3B82F6),
-    AppTheme.warningColor,
-    AppTheme.errorColor,
-    Color(0xFF6B7280),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Color',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Row(
-          children: _availableColors.map((color) {
-            final isSelected = color == selectedColor;
-            return GestureDetector(
-              onTap: () => onSelectColor(color),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12.0),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: isSelected
-                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 20)
-                      : null,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
 
 class _ModuleOrderField extends StatelessWidget {
   final TextEditingController controller;

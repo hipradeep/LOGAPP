@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,6 +36,9 @@ void main() async {
   // Resolve the saved theme before the first frame so the very first paint
   // already uses the right brightness.
   await getIt<ThemeController>().load();
+
+  // Pre-load data in background immediately on startup so it is ready on launch
+  unawaited(warmupControllers());
 
   runApp(const StudyLogApp());
 }

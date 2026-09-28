@@ -17,6 +17,7 @@ import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
+import '../widgets/topic_options_sheet.dart';
 import 'add_topic_screen.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
@@ -55,6 +56,60 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     super.dispose();
   }
 
+  List<Topic> _deduplicateTopics(List<Topic> topics) {
+    final seenIds = <String>{};
+    final seenTitles = <String>{};
+    final result = <Topic>[];
+
+    for (final topic in topics) {
+      final id = topic.id.trim();
+      final title = topic.title.trim().toLowerCase();
+
+      final idSeen = id.isNotEmpty && seenIds.contains(id);
+      final titleSeen = title.isNotEmpty && seenTitles.contains(title);
+
+      if (idSeen || titleSeen) {
+        continue;
+      }
+
+      if (id.isNotEmpty) seenIds.add(id);
+      if (title.isNotEmpty) seenTitles.add(title);
+      result.add(topic);
+    }
+    return result;
+  }
+
+  List<Topic> _mergeTopics(List<Topic> current, List<Topic> incoming) {
+    final map = <String, Topic>{};
+    final titleToKey = <String, String>{};
+
+    for (final t in current) {
+      final key = t.id.isNotEmpty ? t.id : t.title.trim().toLowerCase();
+      map[key] = t;
+      if (t.title.trim().isNotEmpty) {
+        titleToKey[t.title.trim().toLowerCase()] = key;
+      }
+    }
+
+    for (final t in incoming) {
+      final titleKey = t.title.trim().toLowerCase();
+      if (titleKey.isNotEmpty && titleToKey.containsKey(titleKey)) {
+        final existingKey = titleToKey[titleKey]!;
+        map[existingKey] = t;
+      } else {
+        final key = t.id.isNotEmpty ? t.id : titleKey;
+        map[key] = t;
+        if (titleKey.isNotEmpty) {
+          titleToKey[titleKey] = key;
+        }
+      }
+    }
+
+    final list = map.values.toList();
+    list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    return list;
+  }
+
   Future<void> _loadTopics() async {
     // 1. Immediately render local cached topics for zero-latency load
     final cached = await LocalTopicStorage.loadTopicsForModule(
@@ -63,8 +118,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     );
     if (!mounted) return;
     if (cached.isNotEmpty) {
-      setState(() => _topics = cached);
-      if (cached.every((t) => t.isCompleted)) {
+      final clean = _deduplicateTopics(cached);
+      setState(() => _topics = clean);
+      if (clean.every((t) => t.isCompleted)) {
         unawaited(_syncModuleCompletion());
       }
     }
@@ -79,12 +135,13 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             .listen((remoteTopics) async {
           if (!mounted) return;
           if (remoteTopics.isNotEmpty) {
-            setState(() => _topics = remoteTopics);
+            final merged = _mergeTopics(_topics, remoteTopics);
+            setState(() => _topics = merged);
             final key = widget.moduleId.isNotEmpty
                 ? widget.moduleId
                 : widget.moduleTitle;
-            await LocalTopicStorage.saveTopics(key, remoteTopics);
-            if (remoteTopics.every((t) => t.isCompleted)) {
+            await LocalTopicStorage.saveTopics(key, merged);
+            if (merged.every((t) => t.isCompleted)) {
               await _syncModuleCompletion();
             }
             if (getIt.isRegistered<OngoingModulesController>()) {
@@ -112,7 +169,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       final match = all.firstWhere(
         (m) => (moduleId.isNotEmpty && m.id == moduleId) ||
                (widget.moduleTitle.isNotEmpty && m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
-        orElse: () => Module(id: '', courseId: '', title: '', status: '', createdAt: DateTime.now(), updatedAt: DateTime.now()),
+        orElse: () => Module(id: '', courseId: '', title: '', description: '', orderIndex: 0, status: '', createdAt: DateTime.now(), updatedAt: DateTime.now()),
       );
       if (match.id.isNotEmpty) {
         if (courseId.isEmpty) courseId = match.courseId;
@@ -160,6 +217,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           id: moduleId.isNotEmpty ? moduleId : 'module_${now.millisecondsSinceEpoch}',
           courseId: courseId,
           title: widget.moduleTitle,
+          description: '',
           status: newStatus,
           orderIndex: widget.moduleOrderIndex,
           createdAt: now,
@@ -194,16 +252,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         }
       }
 
-      // Ensure R1 revision is created immediately for completed module
-      if (allDone && getIt.isRegistered<RevisionController>()) {
-        await getIt<RevisionController>().createOrEnsureRevision(
-          courseId: courseId,
-          moduleId: targetModule.id.isNotEmpty ? targetModule.id : moduleId,
-          courseTitle: widget.courseTitle,
-          moduleTitle: widget.moduleTitle,
-        );
-      }
-
       // Reconcile revision ladder so any pending state is updated
       if (getIt.isRegistered<RevisionController>()) {
         await getIt<RevisionController>().reconcile();
@@ -227,28 +275,16 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     );
 
     if (result != null && mounted) {
+      final merged = _mergeTopics(_topics, [result]);
       setState(() {
-        _topics.add(result);
+        _topics = merged;
       });
       final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      await LocalTopicStorage.saveTopics(key, _topics);
+      await LocalTopicStorage.saveTopics(key, merged);
       if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+        await LocalTopicStorage.saveTopics(widget.moduleTitle, merged);
       }
       await _syncModuleCompletion();
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable && result.id.isNotEmpty) {
-          try {
-            await firestore.addTopic(result).timeout(
-              const Duration(seconds: 4),
-              onTimeout: () {},
-            );
-          } catch (e) {
-            debugPrint('Error adding topic to firestore: $e');
-          }
-        }
-      }
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
       }
@@ -381,12 +417,100 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
   }
 
+  Future<void> _handleEditTopic(int index) async {
+    final topic = _topics[index];
+    final result = await Navigator.push<Topic>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddTopicScreen(
+          moduleTitle: widget.moduleTitle,
+          courseTitle: widget.courseTitle,
+          courseId: widget.courseId,
+          moduleId: widget.moduleId,
+          topicToEdit: topic,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _topics[index] = result;
+      });
+      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
+      await LocalTopicStorage.saveTopics(key, _topics);
+      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
+        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+      }
+      await _syncModuleCompletion();
+      if (getIt.isRegistered<OngoingModulesController>()) {
+        await getIt<OngoingModulesController>().refresh();
+      }
+    }
+  }
+
+  Future<void> _handleDuplicateTopic(int index) async {
+    final original = _topics[index];
+    final newId = 'topic_${DateTime.now().millisecondsSinceEpoch}';
+    final duplicated = original.copyWith(
+      id: newId,
+      title: '${original.title} (Copy)',
+      orderIndex: original.orderIndex + 1,
+    );
+
+    setState(() {
+      _topics.insert(index + 1, duplicated);
+    });
+
+    final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
+    await LocalTopicStorage.saveTopics(key, _topics);
+    if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
+      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
+    }
+    await _syncModuleCompletion();
+
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable) {
+        try {
+          await firestore.addTopic(duplicated).timeout(
+            const Duration(seconds: 4),
+            onTimeout: () {},
+          );
+        } catch (e) {
+          debugPrint('Error duplicating topic in firestore: $e');
+        }
+      }
+    }
+
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      await getIt<OngoingModulesController>().refresh();
+    }
+    if (getIt.isRegistered<RevisionController>()) {
+      await getIt<RevisionController>().reconcile();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Topic "${original.title}" duplicated'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
     final completedCount = _topics.where((s) => s.status == TopicStatus.completed).length;
+    final inProgressCount = _topics.where((s) => s.status == TopicStatus.inProgress).length;
     final totalCount = _topics.length;
     final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
+    final inProgressRatio = totalCount > 0 ? (inProgressCount / totalCount) : 0.0;
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
@@ -397,6 +521,8 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
               onBack: _handleBack,
               onAddTopic: _openAddTopicScreen,
             ),
+            if (widget.courseTitle.isNotEmpty)
+              _CourseContextPill(courseTitle: widget.courseTitle),
             Padding(
               padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
               child: Row(
@@ -444,13 +570,20 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 completedCount: completedCount,
                 totalCount: totalCount,
                 progress: progress,
+                inProgressRatio: inProgressRatio,
               ),
             ),
             const VGapSm(),
             Expanded(
               child: _TopicsListView(
                 topics: _topics,
+                moduleTitle: widget.moduleTitle,
+                courseTitle: widget.courseTitle,
+                courseId: widget.courseId,
+                moduleId: widget.moduleId,
                 onToggle: _toggleTopicStatus,
+                onEdit: _handleEditTopic,
+                onDuplicate: _handleDuplicateTopic,
                 onDelete: _handleDeleteTopic,
                 onAddTopic: _openAddTopicScreen,
                 bottomPadding: bottomSafe + 24,
@@ -515,16 +648,76 @@ class _ModuleDetailTopBar extends StatelessWidget {
   }
 }
 
+class _CourseContextPill extends StatelessWidget {
+  final String courseTitle;
+
+  const _CourseContextPill({required this.courseTitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+          decoration: BoxDecoration(
+            color: AppTheme.pastelPurple(context),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.school_outlined,
+                size: 13,
+                color: AppTheme.pastelPurpleText(context),
+              ),
+              const HGapXs(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Text(
+                  courseTitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.pastelPurpleText(context),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TopicsListView extends StatelessWidget {
   final List<Topic> topics;
+  final String moduleTitle;
+  final String courseTitle;
+  final String courseId;
+  final String moduleId;
   final ValueChanged<int> onToggle;
+  final ValueChanged<int> onEdit;
+  final ValueChanged<int> onDuplicate;
   final ValueChanged<int> onDelete;
   final VoidCallback onAddTopic;
   final double bottomPadding;
 
   const _TopicsListView({
     required this.topics,
+    required this.moduleTitle,
+    required this.courseTitle,
+    required this.courseId,
+    required this.moduleId,
     required this.onToggle,
+    required this.onEdit,
+    required this.onDuplicate,
     required this.onDelete,
     required this.onAddTopic,
     required this.bottomPadding,
@@ -582,22 +775,49 @@ class _TopicsListView extends StatelessWidget {
       );
     }
 
+    final isModuleCompleted = topics.isNotEmpty && topics.every((t) => t.isCompleted);
+
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
-      itemCount: topics.length,
-      separatorBuilder: (context, index) => const Divider(
-        height: 1,
-        indent: 64,
-        endIndent: 20,
-        color: Color(0xFFF3F4F6),
-      ),
+      itemCount: topics.length + (isModuleCompleted ? 1 : 0),
+      separatorBuilder: (context, index) => index < topics.length - 1
+          ? const Divider(
+              height: 1,
+              indent: 64,
+              endIndent: 20,
+              color: Color(0xFFF3F4F6),
+            )
+          : const SizedBox.shrink(),
       itemBuilder: (context, index) {
+        // "Add to Revision" footer button for completed modules
+        if (isModuleCompleted && index == topics.length) {
+          return _AddToRevisionFooter(
+            moduleTitle: moduleTitle,
+            courseTitle: courseTitle,
+            courseId: courseId,
+            moduleId: moduleId,
+          );
+        }
+
         final item = topics[index];
+        void openOptions() {
+          TopicOptionsSheet.show(
+            context,
+            topic: item,
+            moduleTitle: moduleTitle,
+            onEdit: () => onEdit(index),
+            onDuplicate: () => onDuplicate(index),
+            onDelete: () => onDelete(index),
+          );
+        }
+
         return _TopicListItem(
           item: item,
-          onTap: () => onToggle(index),
-          onLongPress: () => onDelete(index),
+          onCheckboxTap: () => onToggle(index),
+          onRowTap: openOptions,
+          onLongPress: openOptions,
+          onOptionsTap: openOptions,
         );
       },
     );
@@ -606,13 +826,17 @@ class _TopicsListView extends StatelessWidget {
 
 class _TopicListItem extends StatelessWidget {
   final Topic item;
-  final VoidCallback onTap;
+  final VoidCallback onCheckboxTap;
+  final VoidCallback onRowTap;
   final VoidCallback onLongPress;
+  final VoidCallback? onOptionsTap;
 
   const _TopicListItem({
     required this.item,
-    required this.onTap,
+    required this.onCheckboxTap,
+    required this.onRowTap,
     required this.onLongPress,
+    this.onOptionsTap,
   });
 
   @override
@@ -621,13 +845,17 @@ class _TopicListItem extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
+          onTap: onRowTap,
           onLongPress: onLongPress,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
               children: [
-                TopicStatusIndicator(status: item.status),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onCheckboxTap,
+                  child: TopicStatusIndicator(status: item.status),
+                ),
                 const HGapMd(),
                 Expanded(
                   child: Column(
@@ -649,16 +877,160 @@ class _TopicListItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                 Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppTheme.textMutedColor(context),
-                  size: 24,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOptionsTap ?? onLongPress,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppTheme.textMutedColor(context),
+                      size: 22,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Footer button shown at the bottom of a completed module's topic list.
+class _AddToRevisionFooter extends StatelessWidget {
+  final String moduleTitle;
+  final String courseTitle;
+  final String courseId;
+  final String moduleId;
+
+  const _AddToRevisionFooter({
+    required this.moduleTitle,
+    required this.courseTitle,
+    required this.courseId,
+    required this.moduleId,
+  });
+
+  Future<void> _handleTap(BuildContext context, bool isInRevision) async {
+    if (!getIt.isRegistered<RevisionController>()) return;
+    final revisionCtrl = getIt<RevisionController>();
+    if (isInRevision) {
+      final rev = revisionCtrl.revisionForModule(moduleId, moduleTitle: moduleTitle);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            rev != null
+                ? '"$moduleTitle" is in revision schedule (Level R${rev.currentLevel})'
+                : '"$moduleTitle" is already in revision schedule',
+          ),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final rev = await revisionCtrl.createOrEnsureRevision(
+        courseId: courseId,
+        moduleId: moduleId,
+        courseTitle: courseTitle,
+        moduleTitle: moduleTitle,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"$moduleTitle" added to revision schedule (Level R${rev.currentLevel})'),
+            backgroundColor: AppTheme.successColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add to revision: $e'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final revisionCtrl = getIt.isRegistered<RevisionController>()
+        ? getIt<RevisionController>()
+        : null;
+
+    if (revisionCtrl == null) return const SizedBox.shrink();
+
+    return ListenableBuilder(
+      listenable: revisionCtrl,
+      builder: (context, _) {
+        final existingRevision = revisionCtrl.revisionForModule(
+          moduleId,
+          moduleTitle: moduleTitle,
+        );
+        final isInRevision = existingRevision != null;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _handleTap(context, isInRevision),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: isInRevision
+                      ? AppTheme.successColor.withValues(alpha: 0.1)
+                      : AppTheme.primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isInRevision
+                        ? AppTheme.successColor.withValues(alpha: 0.4)
+                        : AppTheme.primaryColor.withValues(alpha: 0.35),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isInRevision ? Icons.check_circle_rounded : Icons.replay_rounded,
+                      color: isInRevision ? AppTheme.successColor : AppTheme.primaryColor,
+                      size: 20,
+                    ),
+                    const HGapSm(),
+                    Text(
+                      isInRevision
+                          ? 'In Revision Schedule (Level R${existingRevision.currentLevel})'
+                          : 'Add to Revision',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isInRevision ? AppTheme.successColor : AppTheme.primaryColor,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

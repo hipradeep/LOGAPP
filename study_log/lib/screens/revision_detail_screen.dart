@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../theme/revision_level_palette.dart';
+import '../utils/topic_icon_util.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
-import '../widgets/topic_progress_header.dart';
-import '../widgets/topic_status_indicator.dart';
-import '../widgets/topic_status_label.dart';
 import '../models/revision.dart';
 import '../models/topic.dart';
+import '../models/module.dart';
 import '../services/local_topic_storage.dart';
+import '../services/local_module_storage.dart';
+import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
 import 'module_detail_screen.dart';
@@ -49,15 +51,75 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
   Future<void> _loadTopics() async {
     final revision = widget.revision;
-    final topics = await LocalTopicStorage.loadTopicsForModule(
-      moduleId: revision.moduleId,
+    String targetModuleId = revision.moduleId;
+
+    // 1. If targetModuleId is empty, try resolving by module title from storage
+    if (targetModuleId.isEmpty && revision.moduleTitle.isNotEmpty) {
+      final allModules = await LocalModuleStorage.loadAllModules();
+      final match = allModules.firstWhere(
+        (m) => m.title.trim().toLowerCase() == revision.moduleTitle.trim().toLowerCase(),
+        orElse: () => Module(
+          id: '',
+          courseId: '',
+          title: '',
+          description: '',
+          orderIndex: 0,
+          status: '',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (match.id.isNotEmpty) {
+        targetModuleId = match.id;
+      }
+    }
+
+    // 2. Load from local cache
+    var topics = await LocalTopicStorage.loadTopicsForModule(
+      moduleId: targetModuleId,
       fallbackTitle: revision.moduleTitle,
     );
-    if (!mounted) return;
-    setState(() {
-      _topics = topics;
-      _isLoadingTopics = false;
-    });
+
+    // If still empty, check directly by title bucket
+    if (topics.isEmpty && revision.moduleTitle.isNotEmpty) {
+      topics = await LocalTopicStorage.loadTopics(revision.moduleTitle);
+    }
+
+    if (topics.isNotEmpty && mounted) {
+      setState(() {
+        _topics = topics;
+        _isLoadingTopics = false;
+      });
+    }
+
+    // 3. Fallback or sync from Firestore if empty
+    if (topics.isEmpty && getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable && targetModuleId.isNotEmpty) {
+        try {
+          final remoteTopics = await firestore.getTopics(moduleId: targetModuleId);
+          if (remoteTopics.isNotEmpty && mounted) {
+            setState(() {
+              _topics = remoteTopics;
+              _isLoadingTopics = false;
+            });
+            await LocalTopicStorage.saveTopics(targetModuleId, remoteTopics);
+            if (revision.moduleTitle.isNotEmpty) {
+              await LocalTopicStorage.saveTopics(revision.moduleTitle, remoteTopics);
+            }
+            return;
+          }
+        } catch (e) {
+          debugPrint('Error fetching topics from Firestore in RevisionDetailScreen: $e');
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingTopics = false;
+      });
+    }
   }
 
   void _handleBack() {
@@ -85,9 +147,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     );
   }
 
-  void _openModule() {
+  Future<void> _openModule() async {
     final revision = _revision;
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ModuleDetailScreen(
@@ -98,6 +160,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         ),
       ),
     );
+    if (mounted) {
+      _loadTopics();
+    }
   }
 
   void _openOptionsMenu() {
@@ -192,6 +257,8 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                 _RevisionDetailTopBar(
                   onBack: _handleBack,
                   onOptions: _openOptionsMenu,
+                  currentLevel: revision.currentLevel,
+                  isFinished: revision.isFinished,
                 ),
                 _HeroBlock(
                   title: revision.moduleTitle,
@@ -252,18 +319,25 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 class _RevisionDetailTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onOptions;
+  final int currentLevel;
+  final bool isFinished;
 
   const _RevisionDetailTopBar({
     required this.onBack,
     required this.onOptions,
+    required this.currentLevel,
+    required this.isFinished,
   });
-
-  static const String _eyebrow = 'Revision';
 
   @override
   Widget build(BuildContext context) {
+    final colors = isFinished
+        ? RevisionLevelPalette.completed(context)
+        : RevisionLevelPalette.of(context, currentLevel);
+    final label = isFinished ? 'Completed' : 'R$currentLevel';
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
         children: [
           IconButton(
@@ -274,19 +348,37 @@ class _RevisionDetailTopBar extends StatelessWidget {
             ),
             onPressed: onBack,
             tooltip: 'Back',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
-          const HGapXs(),
-          Expanded(
+          const HGapSm(),
+          Text(
+            'MODULE',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textSecondaryColor(context),
+              letterSpacing: 1.0,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: colors.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colors.border),
+            ),
             child: Text(
-              _eyebrow.toUpperCase(),
+              label,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondaryColor(context),
-                letterSpacing: 1.0,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: colors.foreground,
               ),
             ),
           ),
+          const HGapSm(),
           IconButton(
             icon: Icon(
               Icons.more_vert_rounded,
@@ -295,6 +387,8 @@ class _RevisionDetailTopBar extends StatelessWidget {
             ),
             onPressed: onOptions,
             tooltip: 'Options',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ],
       ),
@@ -416,9 +510,7 @@ class _RevisionMetaStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lastRevision = revision.isFinished
-        ? (revision.completedAt ?? revision.updatedAt)
-        : revision.nextRevisionAt;
+    final lastRevision = revision.lastRevisionAt;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,7 +527,7 @@ class _RevisionMetaStrip extends StatelessWidget {
           child: _MetaItem(
             icon: Icons.history_rounded,
             label: 'Last revision',
-            value: _formatDate(lastRevision),
+            value: lastRevision != null ? _formatDate(lastRevision) : '-',
           ),
         ),
       ],
@@ -601,9 +693,7 @@ class _TabItem extends StatelessWidget {
 
 /// Replaces the course page's module list with this module's topics.
 ///
-/// Mirrors the module page: a pinned "N / M topics" bar above a divided list of
-/// status-aware rows. Read-only here — tapping a row opens the module the topic
-/// belongs to rather than changing its status.
+/// Simple read-only list of topics.
 class _RevisionTopicsView extends StatelessWidget {
   final List<Topic> topics;
   final bool isLoading;
@@ -633,42 +723,17 @@ class _RevisionTopicsView extends StatelessWidget {
       return _RevisionTopicsEmptyState(onOpenModule: onTopicTap);
     }
 
-    final completedCount = topics.where((t) => t.isCompleted).length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 6.0),
-          child: TopicProgressHeader(
-            completedCount: completedCount,
-            totalCount: topics.length,
-            progress: completedCount / topics.length,
-          ),
-        ),
-        Expanded(
-          child: ListView.separated(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            padding: EdgeInsets.only(bottom: bottomPadding),
-            itemCount: topics.length,
-            separatorBuilder: (context, index) => const Divider(
-              height: 1,
-              indent: 64,
-              endIndent: 20,
-              color: Color(0xFFF3F4F6),
-            ),
-            itemBuilder: (context, index) {
-              final topic = topics[index];
-              return _TopicListItem(
-                topic: topic,
-                onTap: onTopicTap,
-              );
-            },
-          ),
-        ),
-      ],
+    return ListView.separated(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
+      itemCount: topics.length,
+      separatorBuilder: (context, index) => const VGapSm(),
+      itemBuilder: (context, index) {
+        final topic = topics[index];
+        return _TopicListItem(topic: topic);
+      },
     );
   }
 }
@@ -739,56 +804,74 @@ class _RevisionTopicsEmptyState extends StatelessWidget {
   }
 }
 
-/// Topic row: status ring on the left, title over its status label, chevron on
-/// the right to signal that tapping navigates to the module.
+/// Read-only topic card with pastel purple squircle document icon and title.
 class _TopicListItem extends StatelessWidget {
   final Topic topic;
-  final VoidCallback onTap;
 
-  const _TopicListItem({required this.topic, required this.onTap});
+  const _TopicListItem({required this.topic});
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Row(
+    final iconData = topicIconFrom(topic.iconCodePoint);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.borderColor(context),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppTheme.pastelPurple(context),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              iconData,
+              color: AppTheme.pastelPurpleText(context),
+              size: 20,
+            ),
+          ),
+          const HGapMd(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                TopicStatusIndicator(status: topic.status),
-                const HGapMd(),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        topic.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimaryColor(context),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapXs(),
-                      TopicStatusLabel(status: topic.status),
-                    ],
+                Text(
+                  topic.title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                 Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppTheme.textMutedColor(context),
-                  size: 24,
-                ),
+                if (topic.description.isNotEmpty) ...[
+                  const VGapXs(),
+                  Text(
+                    topic.description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1063,3 +1146,4 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
+

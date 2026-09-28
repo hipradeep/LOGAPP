@@ -10,6 +10,7 @@ import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
 import 'courses_screen.dart';
 import 'upload_json_screen.dart';
+import 'my_progress_screen.dart';
 
 /// Redesigned Profile Screen matching the reference design:
 /// - "Profile" header with settings gear icon
@@ -34,6 +35,13 @@ class ProfileScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
+    );
+  }
+
+  void _openMyProgress(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyProgressScreen()),
     );
   }
 
@@ -113,6 +121,7 @@ class ProfileScreen extends StatelessWidget {
               const _UserProfileCard(),
               const VGapLg(),
               _ProfileMenuList(
+                onMyProgressTap: () => _openMyProgress(context),
                 onCoursesTap: () => _openCourses(context),
                 onUploadJsonTap: () => _openUploadJson(context),
                 onClearCacheTap: () => _handleClearCache(context),
@@ -240,12 +249,14 @@ class _UserAvatar extends StatelessWidget {
 }
 
 class _ProfileMenuList extends StatelessWidget {
+  final VoidCallback onMyProgressTap;
   final VoidCallback onCoursesTap;
   final VoidCallback onUploadJsonTap;
   final VoidCallback onClearCacheTap;
   final VoidCallback onAppearanceTap;
 
   const _ProfileMenuList({
+    required this.onMyProgressTap,
     required this.onCoursesTap,
     required this.onUploadJsonTap,
     required this.onClearCacheTap,
@@ -256,9 +267,10 @@ class _ProfileMenuList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const _ProfileMenuItem(
+        _ProfileTappableMenuItem(
           icon: Icons.show_chart_rounded,
           title: 'My Progress',
+          onTap: onMyProgressTap,
         ),
         const _ProfileMenuItem(
           icon: Icons.code_rounded,

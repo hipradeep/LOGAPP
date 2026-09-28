@@ -75,7 +75,10 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
         _HeaderRow(onMoreTap: widget.onMoreTap),
         const VGapMd(),
         ListenableBuilder(
-          listenable: ongoing ?? controller,
+          listenable: Listenable.merge([
+            controller,
+            if (ongoing != null) ongoing,
+          ]),
           builder: (context, _) {
             if (controller.isLoading && controller.courses.isEmpty) {
               return const SizedBox(

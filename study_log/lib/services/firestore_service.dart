@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/course.dart';
@@ -5,9 +6,16 @@ import '../models/module.dart';
 import '../models/topic.dart';
 import '../models/revision.dart';
 
-/// Firebase Firestore Service with graceful fallbacks.
-/// If Firebase is unavailable or uninitialized on the current platform,
-/// it safely returns empty streams and logs warnings without crashing.
+/// Highly optimized Firebase Firestore Service with graceful fallbacks.
+/// 
+/// Key optimizations:
+/// - Offline persistence and unlimited local disk cache enabled.
+/// - Direct one-shot `get` methods with [Source.serverAndCache] to eliminate
+///   stream-spinup and teardown overhead (`.snapshots().first`).
+/// - Atomic [WriteBatch] support for bulk operations (e.g. JSON imports),
+///   reducing dozens of round-trip network requests to a single batch commit.
+/// - Cascading deletions for courses and modules to prevent orphaned documents.
+/// - Duplicate write event suppression via `includeMetadataChanges: false`.
 class FirestoreService {
   final FirebaseFirestore? _firestore;
 
@@ -16,7 +24,12 @@ class FirestoreService {
 
   static FirebaseFirestore? _getSafeInstance() {
     try {
-      return FirebaseFirestore.instance;
+      final instance = FirebaseFirestore.instance;
+      instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      return instance;
     } catch (e) {
       debugPrint('Firestore instance not available on current platform: $e');
       return null;
@@ -25,28 +38,54 @@ class FirestoreService {
 
   bool get isAvailable => _firestore != null;
 
+  // ===========================================================================
+  // Courses
+  // ===========================================================================
   CollectionReference<Map<String, dynamic>>? get _coursesRef =>
       _firestore?.collection('courses');
 
+  /// Real-time stream of courses with local metadata change suppression.
   Stream<List<Course>> streamCourses() {
     final ref = _coursesRef;
-    if (ref == null) {
-      return const Stream.empty();
-    }
-    return ref.snapshots().map((snapshot) {
+    if (ref == null) return const Stream.empty();
+
+    return ref.snapshots(includeMetadataChanges: false).map((snapshot) {
       final list = <Course>[];
       for (final doc in snapshot.docs) {
         try {
-          final data = doc.data();
-          list.add(Course.fromMap(data, documentId: doc.id));
-        } catch (e) {
-          // Ignore individual parsing failures safely
-        }
+          list.add(Course.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
       }
-      // Sort in-memory to prevent missing-index errors and support offline documents
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     });
+  }
+
+  /// High-speed one-shot fetch avoiding stream listener overhead.
+  Future<List<Course>> getCourses({
+    Source source = Source.serverAndCache,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final ref = _coursesRef;
+    if (ref == null) return [];
+
+    try {
+      final snapshot = await ref.get(GetOptions(source: source)).timeout(
+        timeout,
+        onTimeout: () => ref.get(const GetOptions(source: Source.cache)),
+      );
+      final list = <Course>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Course.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (e) {
+      debugPrint('Error getting courses from firestore: $e');
+      return [];
+    }
   }
 
   Future<void> addCourse(Course course) async {
@@ -65,35 +104,91 @@ class FirestoreService {
     await docRef.set(courseToSave.toMap(), SetOptions(merge: true));
   }
 
+  /// Deletes a course along with all associated modules and child topics in a single batch.
   Future<void> deleteCourse(String courseId) async {
     final ref = _coursesRef;
-    if (ref == null) return;
-    await ref.doc(courseId).delete();
+    if (ref == null || courseId.isEmpty) return;
+
+    final batch = _firestore?.batch();
+    if (batch != null) {
+      batch.delete(ref.doc(courseId));
+
+      final modulesRef = _modulesRef;
+      final topicsRef = _topicsRef;
+
+      if (modulesRef != null) {
+        try {
+          final moduleDocs = await modulesRef.where('courseId', isEqualTo: courseId).get();
+          for (final mDoc in moduleDocs.docs) {
+            batch.delete(mDoc.reference);
+            if (topicsRef != null) {
+              final topicDocs = await topicsRef.where('moduleId', isEqualTo: mDoc.id).get();
+              for (final tDoc in topicDocs.docs) {
+                batch.delete(tDoc.reference);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      await batch.commit();
+    } else {
+      await ref.doc(courseId).delete();
+    }
   }
 
+  // ===========================================================================
+  // Modules
+  // ===========================================================================
   CollectionReference<Map<String, dynamic>>? get _modulesRef =>
       _firestore?.collection('modules');
 
+  /// Real-time stream of modules for a course.
   Stream<List<Module>> streamModules({required String courseId}) {
     final ref = _modulesRef;
-    if (ref == null) {
-      return const Stream.empty();
-    }
+    if (ref == null) return const Stream.empty();
+
     return ref
         .where('courseId', isEqualTo: courseId)
-        .snapshots()
+        .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final list = <Module>[];
       for (final doc in snapshot.docs) {
         try {
           list.add(Module.fromMap(doc.data(), documentId: doc.id));
-        } catch (e) {
-          // Skip corrupt document safely
-        }
+        } catch (_) {}
       }
       list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
       return list;
     });
+  }
+
+  /// High-speed one-shot module query avoiding stream listener setup/teardown.
+  Future<List<Module>> getModules({
+    required String courseId,
+    Source source = Source.serverAndCache,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final ref = _modulesRef;
+    if (ref == null || courseId.isEmpty) return [];
+
+    try {
+      final query = ref.where('courseId', isEqualTo: courseId);
+      final snapshot = await query.get(GetOptions(source: source)).timeout(
+        timeout,
+        onTimeout: () => query.get(const GetOptions(source: Source.cache)),
+      );
+      final list = <Module>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Module.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return list;
+    } catch (e) {
+      debugPrint('Error getting modules for course $courseId: $e');
+      return [];
+    }
   }
 
   Future<void> addModule(Module module) async {
@@ -112,35 +207,83 @@ class FirestoreService {
     await docRef.set(moduleToSave.toMap(), SetOptions(merge: true));
   }
 
+  /// Deletes a module and cascades deletion to all child topics.
   Future<void> deleteModule(String moduleId) async {
     final ref = _modulesRef;
-    if (ref == null) return;
-    await ref.doc(moduleId).delete();
+    if (ref == null || moduleId.isEmpty) return;
+
+    final batch = _firestore?.batch();
+    if (batch != null) {
+      batch.delete(ref.doc(moduleId));
+
+      final topicsRef = _topicsRef;
+      if (topicsRef != null) {
+        try {
+          final topicDocs = await topicsRef.where('moduleId', isEqualTo: moduleId).get();
+          for (final tDoc in topicDocs.docs) {
+            batch.delete(tDoc.reference);
+          }
+        } catch (_) {}
+      }
+      await batch.commit();
+    } else {
+      await ref.doc(moduleId).delete();
+    }
   }
 
+  // ===========================================================================
+  // Topics
+  // ===========================================================================
   CollectionReference<Map<String, dynamic>>? get _topicsRef =>
       _firestore?.collection('topics');
 
+  /// Real-time stream of topics for a module.
   Stream<List<Topic>> streamTopics({required String moduleId}) {
     final ref = _topicsRef;
-    if (ref == null) {
-      return const Stream.empty();
-    }
+    if (ref == null) return const Stream.empty();
+
     return ref
         .where('moduleId', isEqualTo: moduleId)
-        .snapshots()
+        .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final list = <Topic>[];
       for (final doc in snapshot.docs) {
         try {
           list.add(Topic.fromMap(doc.data(), documentId: doc.id));
-        } catch (e) {
-          // Skip corrupt document safely
-        }
+        } catch (_) {}
       }
       list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
       return list;
     });
+  }
+
+  /// High-speed one-shot topics query without listener thrashing.
+  Future<List<Topic>> getTopics({
+    required String moduleId,
+    Source source = Source.serverAndCache,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final ref = _topicsRef;
+    if (ref == null || moduleId.isEmpty) return [];
+
+    try {
+      final query = ref.where('moduleId', isEqualTo: moduleId);
+      final snapshot = await query.get(GetOptions(source: source)).timeout(
+        timeout,
+        onTimeout: () => query.get(const GetOptions(source: Source.cache)),
+      );
+      final list = <Topic>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Topic.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return list;
+    } catch (e) {
+      debugPrint('Error getting topics for module $moduleId: $e');
+      return [];
+    }
   }
 
   Future<void> addTopic(Topic topic) async {
@@ -165,25 +308,50 @@ class FirestoreService {
     await ref.doc(topicId).delete();
   }
 
+  // ===========================================================================
+  // Revisions
+  // ===========================================================================
   CollectionReference<Map<String, dynamic>>? get _revisionsRef =>
       _firestore?.collection('revisions');
 
   Stream<List<Revision>> streamRevisions() {
     final ref = _revisionsRef;
-    if (ref == null) {
-      return const Stream.empty();
-    }
-    return ref.snapshots().map((snapshot) {
+    if (ref == null) return const Stream.empty();
+
+    return ref.snapshots(includeMetadataChanges: false).map((snapshot) {
       final list = <Revision>[];
       for (final doc in snapshot.docs) {
         try {
           list.add(Revision.fromMap(doc.data(), documentId: doc.id));
-        } catch (e) {
-          // Skip corrupt document safely
-        }
+        } catch (_) {}
       }
       return list;
     });
+  }
+
+  Future<List<Revision>> getRevisions({
+    Source source = Source.serverAndCache,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final ref = _revisionsRef;
+    if (ref == null) return [];
+
+    try {
+      final snapshot = await ref.get(GetOptions(source: source)).timeout(
+        timeout,
+        onTimeout: () => ref.get(const GetOptions(source: Source.cache)),
+      );
+      final list = <Revision>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(Revision.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      return list;
+    } catch (e) {
+      debugPrint('Error getting revisions: $e');
+      return [];
+    }
   }
 
   Future<void> addRevision(Revision revision) async {
@@ -204,7 +372,69 @@ class FirestoreService {
 
   Future<void> deleteRevision(String revisionId) async {
     final ref = _revisionsRef;
-    if (ref == null) return;
+    if (ref == null || revisionId.isEmpty) return;
     await ref.doc(revisionId).delete();
+  }
+
+  // ===========================================================================
+  // High-Performance Batch Writes (Chunked into <= 450 items)
+  // ===========================================================================
+  /// Batches multiple courses, modules, topics, and revisions into atomic commits.
+  /// Automatically chunks writes into blocks of 400 to respect Firestore's 500-op limit.
+  Future<void> batchSave({
+    List<Course>? courses,
+    List<Module>? modules,
+    List<Topic>? topics,
+    List<Revision>? revisions,
+  }) async {
+    final firestore = _firestore;
+    if (firestore == null) return;
+
+    final List<void Function(WriteBatch)> writeOperations = [];
+
+    if (courses != null && _coursesRef != null) {
+      for (final c in courses) {
+        final docRef = c.id.isEmpty ? _coursesRef!.doc() : _coursesRef!.doc(c.id);
+        final item = c.id.isEmpty ? c.copyWith(id: docRef.id) : c;
+        writeOperations.add((batch) => batch.set(docRef, item.toMap(), SetOptions(merge: true)));
+      }
+    }
+
+    if (modules != null && _modulesRef != null) {
+      for (final m in modules) {
+        final docRef = m.id.isEmpty ? _modulesRef!.doc() : _modulesRef!.doc(m.id);
+        final item = m.id.isEmpty ? m.copyWith(id: docRef.id) : m;
+        writeOperations.add((batch) => batch.set(docRef, item.toMap(), SetOptions(merge: true)));
+      }
+    }
+
+    if (topics != null && _topicsRef != null) {
+      for (final t in topics) {
+        final docRef = t.id.isEmpty ? _topicsRef!.doc() : _topicsRef!.doc(t.id);
+        final item = t.id.isEmpty ? t.copyWith(id: docRef.id) : t;
+        writeOperations.add((batch) => batch.set(docRef, item.toMap(), SetOptions(merge: true)));
+      }
+    }
+
+    if (revisions != null && _revisionsRef != null) {
+      for (final r in revisions) {
+        final docRef = r.id.isEmpty ? _revisionsRef!.doc() : _revisionsRef!.doc(r.id);
+        final item = r.id.isEmpty ? r.copyWith(id: docRef.id) : r;
+        writeOperations.add((batch) => batch.set(docRef, item.toMap(), SetOptions(merge: true)));
+      }
+    }
+
+    // Execute in batches of 400
+    const int batchSize = 400;
+    for (int i = 0; i < writeOperations.length; i += batchSize) {
+      final end = (i + batchSize < writeOperations.length) ? i + batchSize : writeOperations.length;
+      final currentChunk = writeOperations.sublist(i, end);
+
+      final batch = firestore.batch();
+      for (final op in currentChunk) {
+        op(batch);
+      }
+      await batch.commit();
+    }
   }
 }

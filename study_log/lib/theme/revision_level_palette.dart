@@ -26,18 +26,24 @@ class RevisionLevelColors {
 class RevisionLevelPalette {
   const RevisionLevelPalette._();
 
-  /// Colours for a 1-based revision level, where level 1 is the most urgent.
+  /// Colours for a 1-based revision level, resolved theme-aware from [AppTheme].
+  /// Matches the level scheme:
+  /// R1 (1 day)   -> Purple
+  /// R2 (3 days)  -> Blue
+  /// R3 (7 days)  -> Sky / Teal
+  /// R4 (14 days) -> Orange
+  /// R5 (30 days) -> Coral Red
   static RevisionLevelColors of(BuildContext context, int level) {
     return switch (level) {
       1 => RevisionLevelColors(
-          foreground: AppTheme.pastelCoralText(context),
-          background: AppTheme.pastelCoral(context),
-          border: AppTheme.pastelCoralBorder(context),
+          foreground: AppTheme.pastelPurpleText(context),
+          background: AppTheme.pastelPurple(context),
+          border: AppTheme.pastelPurpleBorder(context),
         ),
       2 => RevisionLevelColors(
-          foreground: AppTheme.pastelOrangeText(context),
-          background: AppTheme.pastelOrange(context),
-          border: AppTheme.pastelOrangeBorder(context),
+          foreground: AppTheme.pastelBlueText(context),
+          background: AppTheme.pastelBlue(context),
+          border: AppTheme.pastelBlueBorder(context),
         ),
       3 => RevisionLevelColors(
           foreground: AppTheme.pastelSkyText(context),
@@ -45,19 +51,19 @@ class RevisionLevelPalette {
           border: AppTheme.pastelSkyBorder(context),
         ),
       4 => RevisionLevelColors(
-          foreground: AppTheme.pastelPurpleText(context),
-          background: AppTheme.pastelPurple(context),
-          border: AppTheme.pastelPurpleBorder(context),
+          foreground: AppTheme.pastelOrangeText(context),
+          background: AppTheme.pastelOrange(context),
+          border: AppTheme.pastelOrangeBorder(context),
         ),
       _ => RevisionLevelColors(
-          foreground: AppTheme.pastelGreenText(context),
-          background: AppTheme.pastelGreen(context),
-          border: AppTheme.pastelGreenBorder(context),
+          foreground: AppTheme.pastelCoralText(context),
+          background: AppTheme.pastelCoral(context),
+          border: AppTheme.pastelCoralBorder(context),
         ),
     };
   }
 
-  /// Colours for a topic that has reached its target date.
+  /// Colours for a topic or module completion milestone -> Green
   static RevisionLevelColors completed(BuildContext context) {
     return RevisionLevelColors(
       foreground: AppTheme.pastelGreenText(context),

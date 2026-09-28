@@ -260,24 +260,18 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
 
     await LocalCourseStorage.saveCourses(newCourses);
 
-    // Sync imported course tree to Firestore if available
+    // Sync imported course tree to Firestore atomically via high-speed batch commit
     if (getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable) {
-        for (final c in newCourses) {
-          try {
-            await firestore.updateCourse(c);
-          } catch (_) {}
-        }
-        for (final m in allImportedModules) {
-          try {
-            await firestore.updateModule(m);
-          } catch (_) {}
-        }
-        for (final t in allImportedTopics) {
-          try {
-            await firestore.updateTopic(t);
-          } catch (_) {}
+        try {
+          await firestore.batchSave(
+            courses: newCourses,
+            modules: allImportedModules,
+            topics: allImportedTopics,
+          );
+        } catch (e) {
+          debugPrint('Error syncing imported data to Firestore: $e');
         }
       }
     }
