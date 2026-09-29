@@ -26,6 +26,19 @@ class RevisionLevelColors {
 class RevisionLevelPalette {
   const RevisionLevelPalette._();
 
+  /// Standard R1..R5 ladder levels.
+  static const List<int> levels = [1, 2, 3, 4, 5];
+
+  /// Standard spaced repetition intervals.
+  static String interval(int level) => switch (level) {
+        1 => '1 day',
+        2 => '3 days',
+        3 => '7 days',
+        4 => '14 days',
+        5 => '30 days',
+        _ => '',
+      };
+
   /// Colours for a 1-based revision level, resolved theme-aware from [AppTheme].
   /// Matches the level scheme:
   /// R1 (1 day)   -> Purple

@@ -7,6 +7,9 @@ import '../models/topic.dart';
 import '../models/revision.dart';
 import '../models/revision_topic.dart';
 import '../models/study_log.dart';
+import 'local_study_log_storage.dart';
+import 'local_topic_storage.dart';
+import 'local_revision_storage.dart';
 
 /// Highly optimized Firebase Firestore Service with graceful fallbacks.
 /// 
@@ -463,6 +466,7 @@ class FirestoreService {
     List<Module>? modules,
     List<Topic>? topics,
     List<Revision>? revisions,
+    List<StudyLog>? studyLogs,
   }) async {
     final firestore = _firestore;
     if (firestore == null) return;
@@ -501,6 +505,14 @@ class FirestoreService {
       }
     }
 
+    if (studyLogs != null && _studyLogsRef != null) {
+      for (final log in studyLogs) {
+        final docRef = log.id.isEmpty ? _studyLogsRef!.doc() : _studyLogsRef!.doc(log.id);
+        final item = log.id.isEmpty ? log.copyWith(id: docRef.id) : log;
+        writeOperations.add((batch) => batch.set(docRef, item.toMap(), SetOptions(merge: true)));
+      }
+    }
+
     // Execute in batches of 400
     const int batchSize = 400;
     for (int i = 0; i < writeOperations.length; i += batchSize) {
@@ -521,14 +533,109 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>>? get _studyLogsRef =>
       _firestore?.collection('study_logs');
 
-  /// Adds a new study log entry to Firestore.
+  /// Adds a new study log entry to Firestore with offline safety.
   Future<void> addStudyLog(StudyLog log) async {
     final ref = _studyLogsRef;
     if (ref == null) return;
 
-    final docRef = log.id.isEmpty ? ref.doc() : ref.doc(log.id);
-    final toSave = log.id.isEmpty ? log.copyWith(id: docRef.id) : log;
-    await docRef.set(toSave.toMap(), SetOptions(merge: true));
+    try {
+      final docRef = log.id.isEmpty ? ref.doc() : ref.doc(log.id);
+      final toSave = log.id.isEmpty ? log.copyWith(id: docRef.id) : log;
+      await docRef.set(toSave.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error adding study log to firestore: $e');
+    }
+  }
+
+  /// Adds multiple study logs to Firestore atomically in batches.
+  Future<void> addStudyLogs(List<StudyLog> logs) async {
+    if (logs.isEmpty) return;
+    await batchSave(studyLogs: logs);
+  }
+
+  /// Ensures all completed topics and revisions across local caches have matching
+  /// StudyLog entries and syncs them to Firestore's 'study_logs' collection.
+  Future<void> syncAllLocalStudyLogsToFirestore() async {
+    final ref = _studyLogsRef;
+    if (ref == null) return;
+
+    try {
+      final existingLogs = await LocalStudyLogStorage.loadAll();
+      final existingIds = existingLogs.map((e) => e.id).toSet();
+      final existingTopicIds = existingLogs
+          .where((e) => e.type == StudyLogType.topicCompleted && e.topicId != null)
+          .map((e) => e.topicId!)
+          .toSet();
+
+      final List<StudyLog> missingLogs = [];
+
+      // 1. Scan completed topics
+      final topicBuckets = await LocalTopicStorage.loadAllBuckets();
+      for (final topics in topicBuckets.values) {
+        for (final topic in topics) {
+          if (topic.isCompleted && !existingTopicIds.contains(topic.id)) {
+            final completedTime = topic.completedAt ?? DateTime.now();
+            final log = StudyLog(
+              id: '${topic.id}_${completedTime.millisecondsSinceEpoch}',
+              type: StudyLogType.topicCompleted,
+              courseId: topic.courseId,
+              courseTitle: '',
+              moduleId: topic.moduleId,
+              moduleTitle: '',
+              topicId: topic.id,
+              topicTitle: topic.title,
+              timestamp: completedTime,
+              createdAt: completedTime,
+            );
+            if (!existingIds.contains(log.id)) {
+              missingLogs.add(log);
+              existingIds.add(log.id);
+            }
+          }
+        }
+      }
+
+      // 2. Scan completed/advanced revisions
+      final revisions = await LocalRevisionStorage.loadAll();
+      final existingRevisionIds = existingLogs
+          .where((e) => e.type == StudyLogType.revisionCompleted)
+          .map((e) => e.moduleId)
+          .toSet();
+
+      for (final rev in revisions) {
+        if ((rev.currentLevel > 1 || rev.isFinished) && !existingRevisionIds.contains(rev.moduleId)) {
+          final revTime = rev.lastRevisionAt ?? rev.updatedAt;
+          final log = StudyLog(
+            id: 'rev_${rev.id}_${revTime.millisecondsSinceEpoch}',
+            type: StudyLogType.revisionCompleted,
+            courseId: rev.courseId,
+            courseTitle: rev.courseTitle,
+            moduleId: rev.moduleId,
+            moduleTitle: rev.moduleTitle,
+            revisionLevel: rev.currentLevel,
+            timestamp: revTime,
+            createdAt: revTime,
+          );
+          if (!existingIds.contains(log.id)) {
+            missingLogs.add(log);
+            existingIds.add(log.id);
+          }
+        }
+      }
+
+      // 3. Save any missing logs to local disk cache
+      if (missingLogs.isNotEmpty) {
+        await LocalStudyLogStorage.saveAll([...existingLogs, ...missingLogs]);
+      }
+
+      // 4. Batch push all study logs to Firestore
+      final allLogs = [...existingLogs, ...missingLogs];
+      if (allLogs.isNotEmpty) {
+        await batchSave(studyLogs: allLogs);
+      }
+    } catch (e) {
+      debugPrint('Error syncing all study logs to Firestore: $e');
+    }
   }
 
   /// Streams recent study logs ordered by timestamp descending.

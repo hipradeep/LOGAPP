@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/course.dart';
 import '../theme/app_theme.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/course_options_sheet.dart';
@@ -12,7 +13,7 @@ import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 
 /// Courses screen listing only the user's own courses:
-/// - Top bar with Back navigation, "Courses" title, and circular "+"
+/// - Top bar with Back navigation, "Courses" title, and Add Course pill button
 /// - "Search courses..." rounded search bar
 /// - One card per course showing real module completion, progress bar and percentage
 /// - Icon and pastel colours come from the course id, so a course keeps the same
@@ -140,27 +141,9 @@ class _CoursesTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // Circular "+" button matching reference screenshot
-          InkWell(
-            onTap: onAddCourse,
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppTheme.primaryColor,
-                  width: 2,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.add_rounded,
-                color: AppTheme.primaryColor,
-                size: 22,
-              ),
-            ),
+          AddPillButton(
+            label: 'Add Course',
+            onPressed: onAddCourse,
           ),
         ],
       ),

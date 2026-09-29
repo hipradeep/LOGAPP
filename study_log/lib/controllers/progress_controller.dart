@@ -6,6 +6,8 @@ import '../models/study_log.dart';
 import '../services/local_revision_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_study_log_storage.dart';
+import '../services/firestore_service.dart';
+import '../services/service_locator.dart';
 
 /// Activity level for strike heatmap visualization.
 enum StrikeActivityLevel {
@@ -59,6 +61,7 @@ class ProgressController extends ChangeNotifier {
 
   int _totalTopicsFinished = 0;
   int _totalTopicRevisions = 0;
+  int _totalActiveDays = 0;
 
   final Map<DateTime, int> _dailyTopicsFinished = {};
   final Map<DateTime, int> _dailyRevisions = {};
@@ -69,6 +72,7 @@ class ProgressController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   int get currentStreak => _currentStreak;
   int get longestStreak => _longestStreak;
+  int get totalActiveDays => _totalActiveDays;
   DateTime? get mostActiveDay => _mostActiveDay;
   int get mostActiveDayCount => _mostActiveDayCount;
   int get totalTopicsFinished => _totalTopicsFinished;
@@ -96,23 +100,35 @@ class ProgressController extends ChangeNotifier {
       _dailyTopicsFinished.clear();
       _dailyRevisions.clear();
 
-      // Fast-path parallelized queries directly bounded to the 3-month window
+      // Load all historical completion events for accurate all-time total active days and max streak
       final results = await Future.wait([
-        LocalTopicStorage.loadCompletedTopicDatesSince(cutoffDate),
-        LocalRevisionStorage.loadRevisionEventsSince(cutoffDate),
-        LocalStudyLogStorage.loadSince(cutoffDate),
+        LocalTopicStorage.loadCompletedTopicDatesSince(DateTime(2000)),
+        LocalRevisionStorage.loadRevisionEventsSince(DateTime(2000)),
+        LocalStudyLogStorage.loadAll(),
       ]);
 
       final completedTopicDates = results[0] as List<DateTime>;
       final recordedEvents = results[1] as List<DateTime>;
       final studyLogs = results[2] as List<StudyLog>;
 
+      if (getIt.isRegistered<FirestoreService>()) {
+        final firestore = getIt<FirestoreService>();
+        if (firestore.isAvailable) {
+          unawaited(firestore.syncAllLocalStudyLogsToFirestore());
+        }
+      }
+
+      final Set<DateTime> allActiveDates = <DateTime>{};
+
       int finishedTopicsCount = 0;
       for (final date in completedTopicDates) {
         final norm = normalizeDate(date);
         if (!norm.isAfter(today)) {
-          finishedTopicsCount++;
-          _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
+          allActiveDates.add(norm);
+          if (!norm.isBefore(cutoffDate)) {
+            finishedTopicsCount++;
+            _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
+          }
         }
       }
 
@@ -120,8 +136,11 @@ class ProgressController extends ChangeNotifier {
       for (final eventTime in recordedEvents) {
         final norm = normalizeDate(eventTime);
         if (!norm.isAfter(today)) {
-          _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
-          revisionsCount++;
+          allActiveDates.add(norm);
+          if (!norm.isBefore(cutoffDate)) {
+            _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
+            revisionsCount++;
+          }
         }
       }
 
@@ -129,15 +148,17 @@ class ProgressController extends ChangeNotifier {
       for (final log in studyLogs) {
         final norm = normalizeDate(log.timestamp);
         if (norm.isAfter(today)) continue;
-        if (log.type == StudyLogType.revisionCompleted && recordedEvents.isEmpty) {
-          _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
-          revisionsCount++;
-        } else if (log.type == StudyLogType.studySession) {
-          _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
-          finishedTopicsCount++;
+        allActiveDates.add(norm);
+        if (!norm.isBefore(cutoffDate)) {
+          if (log.type == StudyLogType.revisionCompleted && recordedEvents.isEmpty) {
+            _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
+            revisionsCount++;
+          } else if (log.type == StudyLogType.studySession) {
+            _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
+            finishedTopicsCount++;
+          }
         }
       }
-      _totalTopicsFinished = finishedTopicsCount;
 
       // Fallback: If no dedicated revision event logs exist, inspect cached revisions lazily
       if (revisionsCount == 0) {
@@ -146,17 +167,22 @@ class ProgressController extends ChangeNotifier {
           final timesRevised = r.isFinished ? RevisionSchedule.maxLevel : (r.currentLevel - 1);
           if (timesRevised > 0) {
             final d = normalizeDate(r.lastRevisionAt ?? r.updatedAt);
-            if (!d.isBefore(cutoffDate) && !d.isAfter(today)) {
-              revisionsCount += timesRevised;
-              _dailyRevisions[d] = (_dailyRevisions[d] ?? 0) + timesRevised;
+            if (!d.isAfter(today)) {
+              allActiveDates.add(d);
+              if (!d.isBefore(cutoffDate)) {
+                revisionsCount += timesRevised;
+                _dailyRevisions[d] = (_dailyRevisions[d] ?? 0) + timesRevised;
+              }
             }
           }
         }
       }
+      _totalTopicsFinished = finishedTopicsCount;
       _totalTopicRevisions = revisionsCount;
+      _totalActiveDays = allActiveDates.length;
 
-      // Compute streaks and highlights across the 3-month period
-      _computeStreaksAndHighlights(today);
+      // Compute streaks and highlights across all active dates
+      _computeStreaksAndHighlights(today, allActiveDates);
 
       // Generate 3-month daily activities (90 days exactly)
       final List<DailyProgressActivity> items = [];
@@ -185,19 +211,14 @@ class ProgressController extends ChangeNotifier {
       recents.sort((a, b) => b.date.compareTo(a.date));
       _recentActivities = recents;
     } catch (e) {
-      debugPrint('Error loading 3-month progress data: $e');
+      debugPrint('Error loading progress data: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  void _computeStreaksAndHighlights(DateTime today) {
-    final allDates = <DateTime>{
-      ..._dailyTopicsFinished.keys,
-      ..._dailyRevisions.keys,
-    };
-
+  void _computeStreaksAndHighlights(DateTime today, Set<DateTime> allDates) {
     if (allDates.isEmpty) {
       _currentStreak = 0;
       _longestStreak = 0;
@@ -206,11 +227,12 @@ class ProgressController extends ChangeNotifier {
       return;
     }
 
-    // Most active day calculation
+    // Most active day calculation (within recent range)
     DateTime? bestDay;
     int maxActivity = 0;
 
-    for (final date in allDates) {
+    final recentDates = _dailyTopicsFinished.keys.toSet()..addAll(_dailyRevisions.keys);
+    for (final date in recentDates) {
       final topics = _dailyTopicsFinished[date] ?? 0;
       final revisions = _dailyRevisions[date] ?? 0;
       final total = topics + revisions;
@@ -227,27 +249,18 @@ class ProgressController extends ChangeNotifier {
     int streak = 0;
     DateTime checkDate = today;
 
-    final todayActivity = (_dailyTopicsFinished[today] ?? 0) + (_dailyRevisions[today] ?? 0);
-    if (todayActivity == 0) {
+    if (!allDates.contains(today)) {
       checkDate = today.subtract(const Duration(days: 1));
     }
 
-    while (true) {
-      final act = (_dailyTopicsFinished[checkDate] ?? 0) + (_dailyRevisions[checkDate] ?? 0);
-      if (act > 0) {
-        streak++;
-        checkDate = checkDate.subtract(const Duration(days: 1));
-      } else {
-        break;
-      }
+    while (allDates.contains(checkDate)) {
+      streak++;
+      checkDate = checkDate.subtract(const Duration(days: 1));
     }
     _currentStreak = streak;
 
-    // Longest streak calculation
-    final sortedActiveDays = allDates.where((d) {
-      return ((_dailyTopicsFinished[d] ?? 0) + (_dailyRevisions[d] ?? 0)) > 0;
-    }).toList()
-      ..sort();
+    // Longest streak calculation across all historical active dates
+    final sortedActiveDays = allDates.toList()..sort();
 
     int longest = 0;
     int currentRun = 0;

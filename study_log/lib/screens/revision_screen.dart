@@ -33,40 +33,7 @@ enum RevisionScope {
   final String label;
 }
 
-class _RevisionLevelConfig {
-  final int level;
-  final String label;
-  final String interval;
-  final RevisionLevelColors colors;
 
-  const _RevisionLevelConfig({
-    required this.level,
-    required this.label,
-    required this.interval,
-    required this.colors,
-  });
-}
-
-const List<({int level, String label, String interval})> _kLevelMeta = [
-  (level: 1, label: 'R1', interval: '1 day'),
-  (level: 2, label: 'R2', interval: '3 days'),
-  (level: 3, label: 'R3', interval: '7 days'),
-  (level: 4, label: 'R4', interval: '14 days'),
-  (level: 5, label: 'R5', interval: '30 days'),
-];
-
-/// Level metadata joined with the shared theme-aware level colours.
-List<_RevisionLevelConfig> _revisionLevelConfigs(BuildContext context) {
-  return [
-    for (final meta in _kLevelMeta)
-      _RevisionLevelConfig(
-        level: meta.level,
-        label: meta.label,
-        interval: meta.interval,
-        colors: RevisionLevelPalette.of(context, meta.level),
-      ),
-  ];
-}
 
 /// Revision screen — a tracking list for the R1 -> R5 spaced repetition ladder.
 ///
@@ -621,7 +588,7 @@ class _RevisionSearchBar extends StatelessWidget {
   }
 }
 
-/// Horizontal category filter row: All (12), R1 (1 day), R2 (3 days), R3 (7 days), etc.
+/// Horizontal category filter row: All (12), R1 (Purple), R2 (Blue), R3 (Teal), R4 (Orange), R5 (Coral)
 class _RevisionLevelFilterRow extends StatelessWidget {
   final int? selectedLevel;
   final List<Revision> revisions;
@@ -635,26 +602,30 @@ class _RevisionLevelFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalCount = revisions.length;
+    // Single-pass count of revisions by level to optimize from O(5N) to O(N)
+    final counts = <int, int>{};
+    for (final r in revisions) {
+      counts[r.currentLevel] = (counts[r.currentLevel] ?? 0) + 1;
+    }
 
     return SizedBox(
-      height: 42,
+      height: 40,
       child: ListView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         children: [
           _AllPillTab(
             isSelected: selectedLevel == null,
-            count: totalCount,
+            count: revisions.length,
             onTap: () => onSelected(null),
           ),
-          for (final config in _revisionLevelConfigs(context))
+          for (final level in RevisionLevelPalette.levels)
             _LevelTabCard(
-              config: config,
-              count: revisions.where((r) => r.currentLevel == config.level).length,
-              isSelected: selectedLevel == config.level,
-              onTap: () => onSelected(config.level),
+              level: level,
+              count: counts[level] ?? 0,
+              isSelected: selectedLevel == level,
+              onTap: () => onSelected(level),
             ),
         ],
       ),
@@ -682,10 +653,12 @@ class _AllPillTab extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.pastelIndigo(context) : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            color: isSelected
+                ? AppTheme.pastelIndigo(context)
+                : AppTheme.surface(context),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isSelected
                   ? const Color(0xFFC7D2FE)
@@ -696,11 +669,11 @@ class _AllPillTab extends StatelessWidget {
           child: Text(
             'All $count',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               color: isSelected
-                  ? AppTheme.pastelIndigoText(context)
-                  : AppTheme.textSecondaryColor(context),
+                ? AppTheme.pastelIndigoText(context)
+                : AppTheme.textSecondaryColor(context),
             ),
           ),
         ),
@@ -710,13 +683,13 @@ class _AllPillTab extends StatelessWidget {
 }
 
 class _LevelTabCard extends StatelessWidget {
-  final _RevisionLevelConfig config;
+  final int level;
   final int count;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _LevelTabCard({
-    required this.config,
+    required this.level,
     required this.count,
     required this.isSelected,
     required this.onTap,
@@ -724,6 +697,8 @@ class _LevelTabCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = RevisionLevelPalette.of(context, level);
+
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: GestureDetector(
@@ -731,12 +706,14 @@ class _LevelTabCard extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
           decoration: BoxDecoration(
-            color: isSelected ? config.colors.background : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            color: isSelected
+                ? colors.background
+                : colors.background.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? config.colors.foreground : config.colors.border,
+              color: isSelected ? colors.foreground : colors.border,
               width: isSelected ? 1.5 : 1.0,
             ),
           ),
@@ -744,28 +721,28 @@ class _LevelTabCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                config.label,
+                'R$level',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.bold,
-                  color: config.colors.foreground,
+                  color: colors.foreground,
                 ),
               ),
               if (count > 0) ...[
                 const SizedBox(width: 5),
                 Container(
-                  height: 18,
-                  constraints: const BoxConstraints(minWidth: 18),
+                  height: 16,
+                  constraints: const BoxConstraints(minWidth: 16),
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: BoxDecoration(
-                    color: config.colors.foreground,
-                    borderRadius: BorderRadius.circular(9),
+                    color: colors.foreground,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     '$count',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -943,7 +920,10 @@ class _RevisionItemCard extends StatelessWidget {
         radius: 10,
       ),
       title: revision.moduleTitle,
-      titleBadge: _RevisionLevelPill(level: revision.currentLevel),
+      titleBadge: _RevisionLevelPill(
+        level: revision.currentLevel,
+        isFinished: revision.isFinished,
+      ),
       courseName: _courseFor(revision),
       bottom: Row(
         children: [
@@ -1002,33 +982,37 @@ class _RevisionItemCard extends StatelessWidget {
   }
 }
 
-/// Pill badge showing R1, R2, etc. next to the title
+/// Pill badge showing R1, R2, etc. next to the title with distinct color coding
 class _RevisionLevelPill extends StatelessWidget {
   final int level;
+  final bool isFinished;
 
-  const _RevisionLevelPill({required this.level});
+  const _RevisionLevelPill({
+    required this.level,
+    this.isFinished = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final configs = _revisionLevelConfigs(context);
-    final config = configs.firstWhere(
-      (c) => c.level == level,
-      orElse: () => configs.first,
-    );
+    final colors = isFinished
+        ? RevisionLevelPalette.completed(context)
+        : RevisionLevelPalette.of(context, level);
+
+    final label = isFinished ? 'Completed' : 'R$level';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: config.colors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: config.colors.border, width: 0.8),
+        color: colors.background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.border, width: 0.8),
       ),
       child: Text(
-        config.label,
+        label,
         style: TextStyle(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: FontWeight.bold,
-          color: config.colors.foreground,
+          color: colors.foreground,
         ),
       ),
     );

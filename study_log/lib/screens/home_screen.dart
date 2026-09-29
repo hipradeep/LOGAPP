@@ -183,75 +183,26 @@ class _GreetingHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Hi, Pradeep 👋',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
-                  letterSpacing: -0.3,
-                ),
-              ),
-              VGapXs(),
-              Text(
-                'Keep learning, keep growing!',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondaryColor(context),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+        Text(
+          'Hi, Pradeep 👋',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor(context),
+            letterSpacing: -0.3,
           ),
         ),
-        // Notification bell with red alert dot
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.borderColor(context)),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.shadowColor(context),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(
-                Icons.notifications_none_rounded,
-                color: AppTheme.textPrimaryColor(context),
-                size: 22,
-              ),
-              Positioned(
-                top: 0,
-                right: 0,
-                child: SizedBox(
-                  width: 8,
-                  height: 8,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AppTheme.errorColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        const VGapXs(),
+        Text(
+          'Keep learning, keep growing!',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppTheme.textSecondaryColor(context),
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

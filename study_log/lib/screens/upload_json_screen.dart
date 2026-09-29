@@ -9,8 +9,10 @@ import '../models/course.dart';
 import '../models/module.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_module_storage.dart';
-import '../services/local_topic_storage.dart';
 import '../models/topic.dart';
+import '../models/study_log.dart';
+import '../services/local_topic_storage.dart';
+import '../services/local_study_log_storage.dart';
 import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
 import '../controllers/courses_controller.dart';
@@ -260,7 +262,36 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
 
     await LocalCourseStorage.saveCourses(newCourses);
 
-    // Sync imported course tree to Firestore atomically via high-speed batch commit
+    // Create StudyLog entries for all completed topics in the import
+    final List<StudyLog> importedStudyLogs = [];
+    for (final t in allImportedTopics) {
+      if (t.isCompleted) {
+        final completedTime = t.completedAt ?? now;
+        importedStudyLogs.add(StudyLog(
+          id: '${t.id}_${completedTime.millisecondsSinceEpoch}',
+          type: StudyLogType.topicCompleted,
+          courseId: t.courseId,
+          courseTitle: '',
+          moduleId: t.moduleId,
+          moduleTitle: '',
+          topicId: t.id,
+          topicTitle: t.title,
+          timestamp: completedTime,
+          createdAt: completedTime,
+        ));
+      }
+    }
+
+    if (importedStudyLogs.isNotEmpty) {
+      final currentLogs = await LocalStudyLogStorage.loadAll();
+      final currentIds = currentLogs.map((e) => e.id).toSet();
+      final newLogs = importedStudyLogs.where((l) => !currentIds.contains(l.id)).toList();
+      if (newLogs.isNotEmpty) {
+        await LocalStudyLogStorage.saveAll([...currentLogs, ...newLogs]);
+      }
+    }
+
+    // Sync imported course tree and study logs to Firestore atomically via high-speed batch commit
     if (getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable) {
@@ -269,6 +300,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             courses: newCourses,
             modules: allImportedModules,
             topics: allImportedTopics,
+            studyLogs: importedStudyLogs.isNotEmpty ? importedStudyLogs : null,
           );
         } catch (e) {
           debugPrint('Error syncing imported data to Firestore: $e');

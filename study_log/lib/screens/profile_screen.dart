@@ -1,28 +1,54 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/appearance_sheet.dart';
-import '../services/local_course_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_revision_storage.dart';
-import '../services/local_study_log_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
-import '../controllers/theme_controller.dart';
-import 'courses_screen.dart';
-import 'upload_json_screen.dart';
 import 'my_progress_screen.dart';
+import 'activity_screen.dart';
+import 'courses_screen.dart';
+import 'settings_screen.dart';
 
-/// Redesigned Profile Screen:
-/// - 26px bold "Profile" header matching Home and Revision tabs
-/// - User Hero Card with gradient avatar, user role, and live learning stats (Courses, Streak, Revisions)
-/// - Modern grouped settings cards (Study & Progress, Preferences, Data & Storage, About)
-/// - Tinted icon containers and clear micro-typography
-/// - Strict compliance with aa-rules.md & optimize.md (build < 40 lines, const, zero-dep)
-class ProfileScreen extends StatelessWidget {
+/// Profile Screen:
+/// - 22px bold "Profile" header with gear (settings ⚙️) icon in top right
+/// - User Hero Card with avatar, user role, and live learning stats (Courses, Streak, Revisions)
+/// - Top highlights card (Total active days & Max streak)
+/// - Activity calendar strike heatmap card
+/// - Below the strike card: menu items for "Activity" (Volume, Breakdown, Recent) and "Courses"
+/// - Pull-to-refresh to sync all progress and learning metrics
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late final ProgressController _progressController;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressController = getIt<ProgressController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _progressController.refresh();
+    });
+  }
+
+  void _openSettings(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
+  }
+
+  void _openActivity(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ActivityScreen()),
+    );
+  }
 
   void _openCourses(BuildContext context) {
     Navigator.push(
@@ -31,179 +57,15 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _openUploadJson(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
-    );
-  }
-
-  void _openMyProgress(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyProgressScreen()),
-    );
-  }
-
-  Future<void> _handleClearCache(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Clear Cache?',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'This will delete all locally stored course, topic, and revision cache. '
-          'Your Firestore cloud data will remain safe.',
-          style: TextStyle(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
-            child: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      await Future.wait([
-        LocalCourseStorage.clearAll(),
-        LocalTopicStorage.clearAll(),
-        LocalRevisionStorage.clearAll(),
-        LocalStudyLogStorage.clearAll(),
-      ]);
+  Future<void> _handleRefresh() async {
+    if (getIt.isRegistered<CoursesController>()) {
       getIt<CoursesController>().refresh();
-      if (getIt.isRegistered<RevisionController>()) {
-        await getIt<RevisionController>().reconcile();
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Cache cleared successfully'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
     }
-  }
-
-  void _showRevisionInfo(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surface(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppTheme.borderColor(context),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const VGapMd(),
-              Text(
-                'Spaced Repetition Schedule',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
-                ),
-              ),
-              const VGapSm(),
-              Text(
-                'The study ladder uses 5 intervals to lock knowledge into long-term memory:',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondaryColor(context),
-                ),
-              ),
-              const VGapMd(),
-              const _IntervalRow(level: 'R1', interval: '1 day after completion'),
-              const _IntervalRow(level: 'R2', interval: '3 days after R1'),
-              const _IntervalRow(level: 'R3', interval: '7 days after R2'),
-              const _IntervalRow(level: 'R4', interval: '14 days after R3'),
-              const _IntervalRow(level: 'R5', interval: '30 days after R4 (Mastered)'),
-              const VGapMd(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAboutDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppTheme.pastelPurple(context),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.auto_stories_rounded,
-                color: AppTheme.pastelPurpleText(context),
-                size: 20,
-              ),
-            ),
-            const HGapSm(),
-            const Text(
-              'Study Log',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Text(
-          'An offline-first syllabus tracker and spaced repetition companion.\n\n'
-          'Version 1.0.0\n'
-          'Designed for focused daily learning.',
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.4,
-            color: AppTheme.textSecondaryColor(context),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+    await Future.wait([
+      _progressController.refresh(),
+      if (getIt.isRegistered<RevisionController>())
+        getIt<RevisionController>().reconcile(),
+    ]);
   }
 
   @override
@@ -213,31 +75,46 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: bottomSafe + 32,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _ProfileHeader(),
-              const VGapLg(),
-              const _UserProfileCard(),
-              const VGapLg(),
-              _ProfileSections(
-                onMyProgressTap: () => _openMyProgress(context),
-                onCoursesTap: () => _openCourses(context),
-                onUploadJsonTap: () => _openUploadJson(context),
-                onClearCacheTap: () => _handleClearCache(context),
-                onAppearanceTap: () => AppearanceSheet.show(context),
-                onRevisionInfoTap: () => _showRevisionInfo(context),
-                onAboutTap: () => _showAboutDialog(context),
-              ),
-            ],
+        child: RefreshIndicator(
+          onRefresh: _handleRefresh,
+          color: AppTheme.primaryColor,
+          backgroundColor: AppTheme.surface(context),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: bottomSafe + 24,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ProfileHeader(onSettingsTap: () => _openSettings(context)),
+                const VGapMd(),
+                const _UserProfileCard(),
+                const VGapMd(),
+                ListenableBuilder(
+                  listenable: _progressController,
+                  builder: (context, _) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        StreakHighlightsCard(controller: _progressController),
+                        const VGapMd(),
+                        StrikeHeatmapCard(controller: _progressController),
+                        const VGapMd(),
+                        const _SectionHeader(title: 'MENU'),
+                        _ProfileMenuCard(
+                          onActivityTap: () => _openActivity(context),
+                          onCoursesTap: () => _openCourses(context),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -246,7 +123,9 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader();
+  final VoidCallback onSettingsTap;
+
+  const _ProfileHeader({required this.onSettingsTap});
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +136,7 @@ class _ProfileHeader extends StatelessWidget {
         Text(
           'Profile',
           style: TextStyle(
-            fontSize: 26,
+            fontSize: 22,
             fontWeight: FontWeight.bold,
             color: AppTheme.textPrimaryColor(context),
             letterSpacing: -0.3,
@@ -265,12 +144,12 @@ class _ProfileHeader extends StatelessWidget {
         ),
         IconButton(
           icon: Icon(
-            Icons.tune_rounded,
+            Icons.settings_rounded,
             color: AppTheme.textPrimaryColor(context),
             size: 22,
           ),
-          onPressed: () => AppearanceSheet.show(context),
-          tooltip: 'Appearance Settings',
+          onPressed: onSettingsTap,
+          tooltip: 'Settings',
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
         ),
@@ -306,27 +185,28 @@ class _UserProfileCard extends StatelessWidget {
         final streak = progressCtrl?.currentStreak ?? 0;
 
         return Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
             border: Border.all(color: AppTheme.borderColor(context)),
             boxShadow: [
               BoxShadow(
                 color: AppTheme.shadowColor(context),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
                 child: Row(
                   children: [
                     Container(
-                      width: 58,
-                      height: 58,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: const LinearGradient(
@@ -334,15 +214,11 @@ class _UserProfileCard extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        border: Border.all(
-                          color: const Color(0xFFC4B5FD),
-                          width: 2,
-                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -350,7 +226,7 @@ class _UserProfileCard extends StatelessWidget {
                       child: const Text(
                         'P',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
@@ -368,19 +244,18 @@ class _UserProfileCard extends StatelessWidget {
                                 child: Text(
                                   'Pradeep Maurya',
                                   style: TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.bold,
                                     color: AppTheme.textPrimaryColor(context),
-                                    letterSpacing: -0.3,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const HGapXs(),
-                              Icon(
+                              const Icon(
                                 Icons.verified_rounded,
-                                size: 16,
+                                size: 14,
                                 color: AppTheme.primaryColor,
                               ),
                             ],
@@ -389,7 +264,7 @@ class _UserProfileCard extends StatelessWidget {
                           Text(
                             'Software Developer',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               color: AppTheme.textSecondaryColor(context),
                             ),
                           ),
@@ -401,11 +276,11 @@ class _UserProfileCard extends StatelessWidget {
               ),
               Divider(
                 height: 1,
-                thickness: 1,
+                thickness: 0.6,
                 color: AppTheme.borderColor(context),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
                 child: Row(
                   children: [
                     _MiniStat(
@@ -461,23 +336,22 @@ class _MiniStat extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
+              Icon(icon, size: 13, color: color),
+              const HGapXs(),
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimaryColor(context),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w500,
               color: AppTheme.textSecondaryColor(context),
             ),
@@ -493,155 +367,8 @@ class _StatDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 24,
+      height: 18,
       color: AppTheme.borderColor(context),
-    );
-  }
-}
-
-class _ProfileSections extends StatelessWidget {
-  final VoidCallback onMyProgressTap;
-  final VoidCallback onCoursesTap;
-  final VoidCallback onUploadJsonTap;
-  final VoidCallback onClearCacheTap;
-  final VoidCallback onAppearanceTap;
-  final VoidCallback onRevisionInfoTap;
-  final VoidCallback onAboutTap;
-
-  const _ProfileSections({
-    required this.onMyProgressTap,
-    required this.onCoursesTap,
-    required this.onUploadJsonTap,
-    required this.onClearCacheTap,
-    required this.onAppearanceTap,
-    required this.onRevisionInfoTap,
-    required this.onAboutTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final themeCtrl = getIt.isRegistered<ThemeController>()
-        ? getIt<ThemeController>()
-        : null;
-
-    final String themeLabel;
-    if (themeCtrl != null) {
-      themeLabel = switch (themeCtrl.themeMode) {
-        ThemeMode.light => 'Light',
-        ThemeMode.dark => 'Dark',
-        ThemeMode.system => 'System',
-      };
-    } else {
-      themeLabel = 'System';
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeader(title: 'STUDY & ANALYTICS'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.insights_rounded,
-              iconBgColor: const Color(0xFFDCFCE7),
-              iconColor: const Color(0xFF16A34A),
-              title: 'My Progress',
-              subtitle: 'Activity streaks & 90-day heatmap',
-              onTap: onMyProgressTap,
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.school_rounded,
-              iconBgColor: AppTheme.pastelPurple(context),
-              iconColor: AppTheme.pastelPurpleText(context),
-              title: 'Courses',
-              subtitle: 'Syllabus modules & topic tracking',
-              onTap: onCoursesTap,
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.tune_rounded,
-              iconBgColor: const Color(0xFFCFFAFE),
-              iconColor: const Color(0xFF0891B2),
-              title: 'Revision Intervals',
-              subtitle: 'Spaced repetition schedule (R1–R5)',
-              onTap: onRevisionInfoTap,
-            ),
-          ],
-        ),
-        const VGapLg(),
-        const _SectionHeader(title: 'PREFERENCES'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.palette_outlined,
-              iconBgColor: const Color(0xFFFFEDD5),
-              iconColor: const Color(0xFFEA580C),
-              title: 'Appearance',
-              subtitle: 'Theme preference',
-              badgeText: themeLabel,
-              onTap: onAppearanceTap,
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.notifications_none_rounded,
-              iconBgColor: const Color(0xFFE0E7FF),
-              iconColor: const Color(0xFF4F46E5),
-              title: 'Notifications',
-              subtitle: 'Daily study and review alerts',
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Notifications are active for daily reviews'),
-                    backgroundColor: AppTheme.primaryColor,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        const VGapLg(),
-        const _SectionHeader(title: 'DATA & STORAGE'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.upload_file_rounded,
-              iconBgColor: const Color(0xFFEDE9FE),
-              iconColor: const Color(0xFF7C3AED),
-              title: 'Import Curriculum (JSON)',
-              subtitle: 'Import structured courses & modules',
-              onTap: onUploadJsonTap,
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.cleaning_services_rounded,
-              iconBgColor: const Color(0xFFFEE2E2),
-              iconColor: AppTheme.errorColor,
-              title: 'Clear Local Cache',
-              subtitle: 'Free up local memory & reset caches',
-              isDestructive: true,
-              onTap: onClearCacheTap,
-            ),
-          ],
-        ),
-        const VGapLg(),
-        const _SectionHeader(title: 'ABOUT'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.info_outline_rounded,
-              iconBgColor: const Color(0xFFF1F5F9),
-              iconColor: const Color(0xFF475569),
-              title: 'About Study Log',
-              subtitle: 'Offline-first syllabus tracker',
-              badgeText: 'v1.0.0',
-              onTap: onAboutTap,
-            ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -654,13 +381,13 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
+      padding: const EdgeInsets.only(left: 4.0, bottom: 6.0),
       child: Text(
         title,
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: AppTheme.textSecondaryColor(context),
+          color: AppTheme.textMutedColor(context),
           letterSpacing: 0.8,
         ),
       ),
@@ -668,14 +395,19 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _SettingsCard extends StatelessWidget {
-  final List<Widget> children;
+class _ProfileMenuCard extends StatelessWidget {
+  final VoidCallback onActivityTap;
+  final VoidCallback onCoursesTap;
 
-  const _SettingsCard({required this.children});
+  const _ProfileMenuCard({
+    required this.onActivityTap,
+    required this.onCoursesTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -689,31 +421,48 @@ class _SettingsCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        children: children,
+        children: [
+          _MenuTile(
+            icon: Icons.insights_rounded,
+            iconColor: const Color(0xFF10B981),
+            iconBgColor: AppTheme.isDark
+                ? const Color(0xFF063321)
+                : const Color(0xFFE8F8F0),
+            title: 'Activity',
+            onTap: onActivityTap,
+          ),
+          Divider(
+            height: 1,
+            thickness: 0.6,
+            indent: 52,
+            color: AppTheme.borderColor(context),
+          ),
+          _MenuTile(
+            icon: Icons.school_rounded,
+            iconColor: AppTheme.pastelPurpleText(context),
+            iconBgColor: AppTheme.pastelPurple(context),
+            title: 'Courses',
+            onTap: onCoursesTap,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SettingsTile extends StatelessWidget {
+class _MenuTile extends StatelessWidget {
   final IconData icon;
-  final Color iconBgColor;
   final Color iconColor;
+  final Color iconBgColor;
   final String title;
-  final String subtitle;
-  final String? badgeText;
   final VoidCallback onTap;
-  final bool isDestructive;
 
-  const _SettingsTile({
+  const _MenuTile({
     required this.icon,
-    required this.iconBgColor,
     required this.iconColor,
+    required this.iconBgColor,
     required this.title,
-    required this.subtitle,
-    this.badgeText,
     required this.onTap,
-    this.isDestructive = false,
   });
 
   @override
@@ -724,137 +473,38 @@ class _SettingsTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
           child: Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: iconBgColor,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, color: iconColor, size: 20),
+                child: Icon(icon, color: iconColor, size: 17),
               ),
-              const HGapMd(),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: isDestructive
-                            ? AppTheme.errorColor
-                            : AppTheme.textPrimaryColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondaryColor(context),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (badgeText != null) ...[
-                const HGapSm(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceVariant(context),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppTheme.borderColor(context)),
-                  ),
-                  child: Text(
-                    badgeText!,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ),
-              ],
               const HGapSm(),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+              ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: isDestructive
-                    ? AppTheme.errorColor
-                    : AppTheme.textMutedColor(context),
-                size: 20,
+                color: AppTheme.textMutedColor(context),
+                size: 18,
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TileDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 68.0),
-      child: Divider(
-        height: 1,
-        thickness: 0.8,
-        color: AppTheme.borderColor(context),
-      ),
-    );
-  }
-}
-
-class _IntervalRow extends StatelessWidget {
-  final String level;
-  final String interval;
-
-  const _IntervalRow({required this.level, required this.interval});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 24,
-            decoration: BoxDecoration(
-              color: AppTheme.pastelPurple(context),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              level,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.pastelPurpleText(context),
-              ),
-            ),
-          ),
-          const HGapSm(),
-          Text(
-            interval,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-        ],
       ),
     );
   }

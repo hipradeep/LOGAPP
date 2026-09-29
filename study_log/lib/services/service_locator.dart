@@ -6,6 +6,7 @@ import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
+import '../controllers/notification_controller.dart';
 import 'firestore_service.dart';
 
 final getIt = GetIt.instance;
@@ -28,6 +29,9 @@ void setupLocator() {
   }
   if (!getIt.isRegistered<ProgressController>()) {
     getIt.registerLazySingleton<ProgressController>(() => ProgressController());
+  }
+  if (!getIt.isRegistered<NotificationController>()) {
+    getIt.registerLazySingleton<NotificationController>(() => NotificationController());
   }
 }
 

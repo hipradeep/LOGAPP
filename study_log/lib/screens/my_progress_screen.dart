@@ -6,13 +6,9 @@ import '../widgets/full_screen_page.dart';
 import '../services/service_locator.dart';
 import '../controllers/progress_controller.dart';
 
-/// "My Progress" screen matching the reference design:
-/// - Header with back navigation, screen title, and dynamic time range filter
-/// - Streak & Heatmap Strike activity card (Current streak, Longest streak, Most active day)
-///   with 5-tier green strike heatmap grid and month labels
-/// - Summary Stats card (Topics finished vs Topic revisions)
-/// - Activity Breakdown stacked bar chart (Topics Finished green + Topic Revisions purple)
-/// - Recent Activity card with day-by-day breakdown
+/// "My Progress" screen showing:
+/// - Top Card: Total active days and Max streak
+/// - Activity Card: Calendar heatmap grid of study & revision activity
 class MyProgressScreen extends StatefulWidget {
   const MyProgressScreen({super.key});
 
@@ -37,26 +33,6 @@ class _MyProgressScreenState extends State<MyProgressScreen> {
     return FullScreenPage(
       title: 'My Progress',
       showBackButton: true,
-      actions: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppTheme.pastelPurple(context),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppTheme.primaryColor.withValues(alpha: 0.15),
-            ),
-          ),
-          child: const Text(
-            'Last 3 Months',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
-            ),
-          ),
-        ),
-      ],
       children: [
         ListenableBuilder(
           listenable: _progressController,
@@ -75,15 +51,15 @@ class _MyProgressScreenState extends State<MyProgressScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const VGapSm(),
-                _StreakHighlightsCard(controller: _progressController),
+                StreakHighlightsCard(controller: _progressController),
                 const VGapMd(),
-                _StrikeHeatmapCard(controller: _progressController),
+                StrikeHeatmapCard(controller: _progressController),
                 const VGapMd(),
-                _SummaryStatsCard(controller: _progressController),
+                SummaryStatsCard(controller: _progressController),
                 const VGapMd(),
-                _ActivityBreakdownCard(controller: _progressController),
+                ActivityBreakdownCard(controller: _progressController),
                 const VGapMd(),
-                _RecentActivityCard(controller: _progressController),
+                RecentActivityCard(controller: _progressController),
               ],
             );
           },
@@ -93,25 +69,20 @@ class _MyProgressScreenState extends State<MyProgressScreen> {
   }
 }
 
-
 // =============================================================================
-// Card 1: Streak Highlights (Current Streak, Longest Streak, Most Active Day)
+// Top Card: Total Active Days and Max Streak
 // =============================================================================
-class _StreakHighlightsCard extends StatelessWidget {
+class StreakHighlightsCard extends StatelessWidget {
   final ProgressController controller;
 
-  const _StreakHighlightsCard({required this.controller});
-
-  static final DateFormat _dateFormat = DateFormat('d MMM yyyy');
+  const StreakHighlightsCard({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final mostActiveDate = controller.mostActiveDay != null
-        ? _dateFormat.format(controller.mostActiveDay!)
-        : 'Today';
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
@@ -126,48 +97,109 @@ class _StreakHighlightsCard extends StatelessWidget {
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: _StreakStatItem(
-              icon: Icons.local_fire_department_rounded,
-              iconColor: const Color(0xFF10B981),
-              iconBgColor: isDark ? const Color(0xFF063321) : const Color(0xFFE8F8F0),
-              value: '${controller.currentStreak}',
-              unit: 'days',
-              label: 'Current streak',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF063321) : const Color(0xFFE8F8F0),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.calendar_today_rounded,
+                    color: Color(0xFF10B981),
+                    size: 15,
+                  ),
+                ),
+                const HGapSm(),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Total active days: ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondaryColor(context),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: '${controller.totalActiveDays}',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimaryColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Container(
             width: 1,
-            height: 32,
+            height: 24,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             color: AppTheme.borderColor(context),
           ),
           Expanded(
-            child: _StreakStatItem(
-              icon: Icons.bolt_rounded,
-              iconColor: const Color(0xFF7A6EFC),
-              iconBgColor: isDark ? const Color(0xFF231E52) : const Color(0xFFF0EEFF),
-              value: '${controller.longestStreak}',
-              unit: 'days',
-              label: 'Longest streak',
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 32,
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            color: AppTheme.borderColor(context),
-          ),
-          Expanded(
-            child: _StreakStatItem(
-              icon: Icons.workspace_premium_rounded,
-              iconColor: const Color(0xFFF59E0B),
-              iconBgColor: isDark ? const Color(0xFF332306) : const Color(0xFFFEF3C7),
-              value: mostActiveDate,
-              unit: '',
-              label: 'Most active day',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF332306) : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.local_fire_department_rounded,
+                    color: Color(0xFFF59E0B),
+                    size: 16,
+                  ),
+                ),
+                const HGapSm(),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Max streak: ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondaryColor(context),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: '${controller.longestStreak}',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimaryColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -176,105 +208,18 @@ class _StreakHighlightsCard extends StatelessWidget {
   }
 }
 
-class _StreakStatItem extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBgColor;
-  final String value;
-  final String unit;
-  final String label;
-
-  const _StreakStatItem({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBgColor,
-    required this.value,
-    required this.unit,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 16,
-              ),
-            ),
-            const HGapXs(),
-            Flexible(
-              child: RichText(
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  text: value,
-                  style: TextStyle(
-                    fontSize: unit.isNotEmpty ? 15 : 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                  children: unit.isNotEmpty
-                      ? [
-                          TextSpan(
-                            text: ' $unit',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimaryColor(context),
-                            ),
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const VGapXs(),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 10,
-            color: AppTheme.textSecondaryColor(context),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // =============================================================================
-// Card 2: 3-Month Strike Activity Heatmap Grid
+// Activity Heatmap Card
 // =============================================================================
-class _StrikeHeatmapCard extends StatelessWidget {
+class StrikeHeatmapCard extends StatelessWidget {
   final ProgressController controller;
 
-  const _StrikeHeatmapCard({required this.controller});
+  const StrikeHeatmapCard({required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    final activeDaysCount = controller.activitiesInRange.where((a) => a.hasActivity).length;
-
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
@@ -291,39 +236,13 @@ class _StrikeHeatmapCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  '3-Month Strike Activity',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-              ),
-              const HGapSm(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$activeDaysCount active days',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF10B981),
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Activity',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryColor(context),
+            ),
           ),
           const VGapSm(),
           _HeatmapGrid(controller: controller),
@@ -334,205 +253,226 @@ class _StrikeHeatmapCard extends StatelessWidget {
 }
 
 // =============================================================================
-// Heatmap Grid Widget (7-row calendar week alignment for 3-month view)
+// Heatmap Grid Widget (Month Blocks matching reference design)
 // =============================================================================
+class _MonthData {
+  final DateTime monthDate;
+  final bool isCurrentMonth;
+  final List<List<DailyProgressActivity?>> columns;
+
+  const _MonthData({
+    required this.monthDate,
+    required this.isCurrentMonth,
+    required this.columns,
+  });
+}
+
 class _HeatmapGrid extends StatelessWidget {
   final ProgressController controller;
 
   const _HeatmapGrid({required this.controller});
 
-  static final DateFormat _monthFormat = DateFormat('MMM');
-
   Color _cellColor(BuildContext context, StrikeActivityLevel level) {
     final isDark = AppTheme.isDark;
     switch (level) {
       case StrikeActivityLevel.none:
-        return isDark ? const Color(0xFF232936) : const Color(0xFFEFF2F6);
+        return isDark ? const Color(0xFF232936) : const Color(0xFFF1F5F9);
       case StrikeActivityLevel.low:
-        return const Color(0xFFB7E4C7);
+        return const Color(0xFF9AE6B4); // Mint green
       case StrikeActivityLevel.medium:
-        return const Color(0xFF52B788);
+        return const Color(0xFF48BB78); // Fresh green
       case StrikeActivityLevel.high:
-        return const Color(0xFF1B8A5A);
+        return const Color(0xFF1E824C); // Rich green
       case StrikeActivityLevel.mostActive:
-        return const Color(0xFF0B4228); // Darkest green for most active day
+        return const Color(0xFF065F38); // Deep forest green
     }
+  }
+
+  static List<_MonthData> _buildMonthData(
+    List<DailyProgressActivity> items,
+    DateTime now,
+  ) {
+    final Map<DateTime, DailyProgressActivity> activityMap = {};
+    for (final a in items) {
+      activityMap[ProgressController.normalizeDate(a.date)] = a;
+    }
+
+    final List<_MonthData> result = [];
+
+    // 3 consecutive months: 2 months ago, 1 month ago, current month
+    for (int offset = 2; offset >= 0; offset--) {
+      final monthDate = DateTime(now.year, now.month - offset, 1);
+      final isCurrent = offset == 0;
+      final totalDays = DateTime(monthDate.year, monthDate.month + 1, 0).day;
+
+      final List<List<DailyProgressActivity?>> columns = [];
+      List<DailyProgressActivity?> currentCol = List.filled(7, null);
+
+      for (int day = 1; day <= totalDays; day++) {
+        final d = DateTime(monthDate.year, monthDate.month, day);
+        final weekdayIdx = d.weekday - 1; // 0=Mon ... 6=Sun
+
+        // Start a new column on Monday (except day 1 if day 1 is Monday)
+        if (weekdayIdx == 0 && day > 1) {
+          columns.add(currentCol);
+          currentCol = List.filled(7, null);
+        }
+
+        final normDate = ProgressController.normalizeDate(d);
+        currentCol[weekdayIdx] = activityMap[normDate] ??
+            DailyProgressActivity(
+              date: d,
+              topicsFinished: 0,
+              revisionsDone: 0,
+            );
+      }
+
+      if (currentCol.any((element) => element != null)) {
+        columns.add(currentCol);
+      }
+
+      result.add(_MonthData(
+        monthDate: monthDate,
+        isCurrentMonth: isCurrent,
+        columns: columns,
+      ));
+    }
+
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
     final items = controller.activitiesInRange;
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    const int rows = 7; // Mon - Sun
-    final firstDate = items.first.date;
-    // Weekday: Monday is 1, Sunday is 7 in DateTime
-    final int startPadding = firstDate.weekday - 1;
-
-    // Total cells in grid
-    final int totalCells = startPadding + items.length;
-    final int cols = (totalCells / rows).ceil();
+    final now = DateTime.now();
+    final months = _buildMonthData(items, now);
     final maxActivity = controller.mostActiveDayCount;
 
-    // Collect month label for each column
-    final Map<int, String> monthLabels = {};
-    String lastMonth = '';
-
-    for (int col = 0; col < cols; col++) {
-      for (int row = 0; row < rows; row++) {
-        final cellIdx = col * rows + row;
-        final itemIdx = cellIdx - startPadding;
-        if (itemIdx >= 0 && itemIdx < items.length) {
-          final m = _monthFormat.format(items[itemIdx].date);
-          if (m != lastMonth) {
-            monthLabels[col] = m;
-            lastMonth = m;
-          }
-          break;
-        }
-      }
-    }
-
-    const double cellSize = 13.5;
-    const double cellGap = 3.5;
-
-    final monthTextColor = AppTheme.isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Weekday labels: M, W, F — with blank spacer on top to align with month row
-          Padding(
-            padding: const EdgeInsets.only(right: 6.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 14), // spacer matching month label row
-                _weekdayLabel(context, 'M', cellSize),
-                const SizedBox(height: cellGap),
-                _weekdayPlaceholder(cellSize),
-                const SizedBox(height: cellGap),
-                _weekdayLabel(context, 'W', cellSize),
-                const SizedBox(height: cellGap),
-                _weekdayPlaceholder(cellSize),
-                const SizedBox(height: cellGap),
-                _weekdayLabel(context, 'F', cellSize),
-                const SizedBox(height: cellGap),
-                _weekdayPlaceholder(cellSize),
-                const SizedBox(height: cellGap),
-                _weekdayPlaceholder(cellSize),
-              ],
-            ),
-          ),
-
-          // Columns — month label above first col of each month
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(cols, (colIndex) {
-              final monthLabel = monthLabels[colIndex];
-
-              return Padding(
-                padding: const EdgeInsets.only(right: cellGap),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Month label row (14px tall) — text only on new month columns
-                    SizedBox(
-                      height: 14,
-                      child: monthLabel != null
-                          ? Text(
-                              monthLabel,
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: monthTextColor,
-                              ),
-                              overflow: TextOverflow.visible,
-                              softWrap: false,
-                            )
-                          : null,
-                    ),
-
-                    // 7-day cell column
-                    ...List.generate(rows, (rowIndex) {
-                      final cellIdx = colIndex * rows + rowIndex;
-                      final itemIdx = cellIdx - startPadding;
-
-                      if (itemIdx < 0 || itemIdx >= items.length) {
-                        return const SizedBox(
-                          width: cellSize,
-                          height: cellSize + cellGap,
-                        );
-                      }
-
-                      final activity = items[itemIdx];
-                      final level = activity.activityLevel(maxActivity);
-                      final color = _cellColor(context, level);
-
-                      return Tooltip(
-                        message:
-                            '${DateFormat('EEE, d MMM yyyy').format(activity.date)}\n'
-                            '${activity.topicsFinished} topics finished • ${activity.revisionsDone} revisions',
-                        child: Container(
-                          width: cellSize,
-                          height: cellSize,
-                          margin: const EdgeInsets.only(bottom: cellGap),
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(3.0),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-
-  Widget _weekdayLabel(BuildContext context, String text, double size) {
-    return SizedBox(
-      width: 14,
-      height: size,
-      child: Center(
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textSecondaryColor(context),
-          ),
+    return Center(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(months.length, (idx) {
+            final monthData = months[idx];
+            return Padding(
+              padding: EdgeInsets.only(
+                right: idx < months.length - 1 ? 20.0 : 0.0,
+              ),
+              child: _MonthBlock(
+                data: monthData,
+                maxActivity: maxActivity,
+                cellColor: _cellColor,
+              ),
+            );
+          }),
         ),
       ),
     );
   }
+}
 
-  Widget _weekdayPlaceholder(double size) {
-    return SizedBox(width: 14, height: size);
+class _MonthBlock extends StatelessWidget {
+  final _MonthData data;
+  final int maxActivity;
+  final Color Function(BuildContext, StrikeActivityLevel) cellColor;
+
+  const _MonthBlock({
+    required this.data,
+    required this.maxActivity,
+    required this.cellColor,
+  });
+
+  static final DateFormat _monthFormat = DateFormat('MMM');
+
+  @override
+  Widget build(BuildContext context) {
+    const double cellSize = 12.5;
+    const double cellGap = 2.5;
+
+    final monthName = _monthFormat.format(data.monthDate);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // 7-day columns
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(data.columns.length, (colIdx) {
+            final col = data.columns[colIdx];
+            return Padding(
+              padding: EdgeInsets.only(
+                right: colIdx < data.columns.length - 1 ? cellGap : 0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(7, (rowIdx) {
+                  final activity = col[rowIdx];
+                  if (activity == null) {
+                    return const SizedBox(
+                      width: cellSize,
+                      height: cellSize + cellGap,
+                    );
+                  }
+
+                  final level = activity.activityLevel(maxActivity);
+                  final color = cellColor(context, level);
+
+                  return Tooltip(
+                    message:
+                        '${DateFormat('EEE, d MMM yyyy').format(activity.date)}\n'
+                        '${activity.topicsFinished} topics finished • ${activity.revisionsDone} revisions',
+                    child: Container(
+                      width: cellSize,
+                      height: cellSize,
+                      margin: const EdgeInsets.only(bottom: cellGap),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(3.0),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            );
+          }),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Centered month name
+        SizedBox(
+          height: 22,
+          child: Center(
+            child: Text(
+              monthName,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF5B7A9C),
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
 // =============================================================================
 // Card 2: Summary Stats (Topics Finished vs Topic Revisions)
 // =============================================================================
-class _SummaryStatsCard extends StatelessWidget {
+class SummaryStatsCard extends StatelessWidget {
   final ProgressController controller;
 
-  const _SummaryStatsCard({required this.controller});
+  const SummaryStatsCard({required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -544,6 +484,7 @@ class _SummaryStatsCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
@@ -813,10 +754,10 @@ class _MetricTile extends StatelessWidget {
 // =============================================================================
 // Card 3: Activity Breakdown Stacked Bar Chart
 // =============================================================================
-class _ActivityBreakdownCard extends StatelessWidget {
+class ActivityBreakdownCard extends StatelessWidget {
   final ProgressController controller;
 
-  const _ActivityBreakdownCard({required this.controller});
+  const ActivityBreakdownCard({required this.controller});
 
   List<DailyProgressActivity> _aggregateActivities(List<DailyProgressActivity> raw) {
     if (raw.length <= 31) return raw;
@@ -846,6 +787,7 @@ class _ActivityBreakdownCard extends StatelessWidget {
     final chartActivities = _aggregateActivities(controller.activitiesInRange);
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
@@ -1058,16 +1000,16 @@ class _ActivityBreakdownPainter extends CustomPainter {
 // =============================================================================
 // Card 4: Recent Activity List
 // =============================================================================
-class _RecentActivityCard extends StatefulWidget {
+class RecentActivityCard extends StatefulWidget {
   final ProgressController controller;
 
-  const _RecentActivityCard({required this.controller});
+  const RecentActivityCard({required this.controller});
 
   @override
-  State<_RecentActivityCard> createState() => _RecentActivityCardState();
+  State<RecentActivityCard> createState() => RecentActivityCardState();
 }
 
-class _RecentActivityCardState extends State<_RecentActivityCard> {
+class RecentActivityCardState extends State<RecentActivityCard> {
   bool _showAll = false;
 
   static final DateFormat _dateFormat = DateFormat('d MMM yyyy');
@@ -1079,6 +1021,7 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
     final displayItems = _showAll ? allRecent : allRecent.take(4).toList();
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
