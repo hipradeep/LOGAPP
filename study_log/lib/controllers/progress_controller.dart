@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/revision.dart';
 import '../models/topic.dart';
+import '../models/study_log.dart';
 import '../services/local_revision_storage.dart';
 import '../services/local_topic_storage.dart';
+import '../services/local_study_log_storage.dart';
 
 /// Activity level for strike heatmap visualization.
 enum StrikeActivityLevel {
@@ -98,10 +100,12 @@ class ProgressController extends ChangeNotifier {
       final results = await Future.wait([
         LocalTopicStorage.loadCompletedTopicDatesSince(cutoffDate),
         LocalRevisionStorage.loadRevisionEventsSince(cutoffDate),
+        LocalStudyLogStorage.loadSince(cutoffDate),
       ]);
 
-      final completedTopicDates = results[0];
-      final recordedEvents = results[1];
+      final completedTopicDates = results[0] as List<DateTime>;
+      final recordedEvents = results[1] as List<DateTime>;
+      final studyLogs = results[2] as List<StudyLog>;
 
       int finishedTopicsCount = 0;
       for (final date in completedTopicDates) {
@@ -111,7 +115,6 @@ class ProgressController extends ChangeNotifier {
           _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
         }
       }
-      _totalTopicsFinished = finishedTopicsCount;
 
       int revisionsCount = 0;
       for (final eventTime in recordedEvents) {
@@ -121,6 +124,20 @@ class ProgressController extends ChangeNotifier {
           revisionsCount++;
         }
       }
+
+      // Also ensure all StudyLog entries are accounted for
+      for (final log in studyLogs) {
+        final norm = normalizeDate(log.timestamp);
+        if (norm.isAfter(today)) continue;
+        if (log.type == StudyLogType.revisionCompleted && recordedEvents.isEmpty) {
+          _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
+          revisionsCount++;
+        } else if (log.type == StudyLogType.studySession) {
+          _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
+          finishedTopicsCount++;
+        }
+      }
+      _totalTopicsFinished = finishedTopicsCount;
 
       // Fallback: If no dedicated revision event logs exist, inspect cached revisions lazily
       if (revisionsCount == 0) {

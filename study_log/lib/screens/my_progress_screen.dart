@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/full_screen_page.dart';
 import '../services/service_locator.dart';
 import '../controllers/progress_controller.dart';
 
@@ -12,121 +13,36 @@ import '../controllers/progress_controller.dart';
 /// - Summary Stats card (Topics finished vs Topic revisions)
 /// - Activity Breakdown stacked bar chart (Topics Finished green + Topic Revisions purple)
 /// - Recent Activity card with day-by-day breakdown
-class MyProgressScreen extends StatelessWidget {
+class MyProgressScreen extends StatefulWidget {
   const MyProgressScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final progressController = getIt<ProgressController>();
-
-    return Scaffold(
-      backgroundColor: AppTheme.background(context),
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: progressController.refresh,
-          color: AppTheme.primaryColor,
-          backgroundColor: AppTheme.surface(context),
-          child: ListenableBuilder(
-            listenable: progressController,
-            builder: (context, _) {
-              if (progressController.isLoading && progressController.activitiesInRange.isEmpty) {
-                return const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                );
-              }
-
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 16,
-                  bottom: bottomSafe + 32,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _MyProgressTopBar(),
-                    const VGapLg(),
-                    _StreakHighlightsCard(controller: progressController),
-                    const VGapLg(),
-                    _StrikeHeatmapCard(controller: progressController),
-                    const VGapLg(),
-                    _SummaryStatsCard(controller: progressController),
-                    const VGapLg(),
-                    _ActivityBreakdownCard(controller: progressController),
-                    const VGapLg(),
-                    _RecentActivityCard(controller: progressController),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
+  State<MyProgressScreen> createState() => _MyProgressScreenState();
 }
 
-// =============================================================================
-// Top Bar with Back Button and Scope Badge
-// =============================================================================
-class _MyProgressTopBar extends StatelessWidget {
-  const _MyProgressTopBar();
+class _MyProgressScreenState extends State<MyProgressScreen> {
+  late final ProgressController _progressController;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressController = getIt<ProgressController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _progressController.refresh();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.maybePop(context),
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface(context),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.borderColor(context)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.chevron_left_rounded,
-                    size: 26,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-              ),
-              const HGapSm(),
-              Expanded(
-                child: Text(
-                  'My Progress',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const HGapSm(),
+    return FullScreenPage(
+      title: 'My Progress',
+      showBackButton: true,
+      actions: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: AppTheme.pastelPurple(context),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: AppTheme.primaryColor.withValues(alpha: 0.15),
             ),
@@ -134,16 +50,49 @@ class _MyProgressTopBar extends StatelessWidget {
           child: const Text(
             'Last 3 Months',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: FontWeight.bold,
               color: AppTheme.primaryColor,
             ),
           ),
         ),
       ],
+      children: [
+        ListenableBuilder(
+          listenable: _progressController,
+          builder: (context, _) {
+            if (_progressController.isLoading &&
+                _progressController.totalTopicsFinished == 0 &&
+                _progressController.totalTopicRevisions == 0) {
+              return const SizedBox(
+                height: 300,
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const VGapSm(),
+                _StreakHighlightsCard(controller: _progressController),
+                const VGapMd(),
+                _StrikeHeatmapCard(controller: _progressController),
+                const VGapMd(),
+                _SummaryStatsCard(controller: _progressController),
+                const VGapMd(),
+                _ActivityBreakdownCard(controller: _progressController),
+                const VGapMd(),
+                _RecentActivityCard(controller: _progressController),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
+
 
 // =============================================================================
 // Card 1: Streak Highlights (Current Streak, Longest Streak, Most Active Day)
@@ -163,7 +112,7 @@ class _StreakHighlightsCard extends StatelessWidget {
         : 'Today';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -171,66 +120,51 @@ class _StreakHighlightsCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: AppTheme.shadowColor(context),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 1. Current streak
           Expanded(
             child: _StreakStatItem(
               icon: Icons.local_fire_department_rounded,
               iconColor: const Color(0xFF10B981),
-              iconBgColor: isDark
-                  ? const Color(0xFF063321)
-                  : const Color(0xFFE8F8F0),
+              iconBgColor: isDark ? const Color(0xFF063321) : const Color(0xFFE8F8F0),
               value: '${controller.currentStreak}',
               unit: 'days',
               label: 'Current streak',
             ),
           ),
-
-          // Divider 1
           Container(
             width: 1,
-            height: 36,
+            height: 32,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             color: AppTheme.borderColor(context),
           ),
-
-          // 2. Longest streak
           Expanded(
             child: _StreakStatItem(
               icon: Icons.bolt_rounded,
               iconColor: const Color(0xFF7A6EFC),
-              iconBgColor: isDark
-                  ? const Color(0xFF231E52)
-                  : const Color(0xFFF0EEFF),
+              iconBgColor: isDark ? const Color(0xFF231E52) : const Color(0xFFF0EEFF),
               value: '${controller.longestStreak}',
               unit: 'days',
               label: 'Longest streak',
             ),
           ),
-
-          // Divider 2
           Container(
             width: 1,
-            height: 36,
+            height: 32,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             color: AppTheme.borderColor(context),
           ),
-
-          // 3. Most active day
           Expanded(
             child: _StreakStatItem(
               icon: Icons.workspace_premium_rounded,
               iconColor: const Color(0xFFF59E0B),
-              iconBgColor: isDark
-                  ? const Color(0xFF332306)
-                  : const Color(0xFFFEF3C7),
+              iconBgColor: isDark ? const Color(0xFF332306) : const Color(0xFFFEF3C7),
               value: mostActiveDate,
               unit: '',
               label: 'Most active day',
@@ -341,7 +275,7 @@ class _StrikeHeatmapCard extends StatelessWidget {
     final activeDaysCount = controller.activitiesInRange.where((a) => a.hasActivity).length;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -349,8 +283,8 @@ class _StrikeHeatmapCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: AppTheme.shadowColor(context),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -367,7 +301,7 @@ class _StrikeHeatmapCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimaryColor(context),
                   ),
@@ -375,15 +309,15 @@ class _StrikeHeatmapCard extends StatelessWidget {
               ),
               const HGapSm(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '$activeDaysCount active days',
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF10B981),
                   ),
@@ -391,7 +325,7 @@ class _StrikeHeatmapCard extends StatelessWidget {
               ),
             ],
           ),
-          const VGapMd(),
+          const VGapSm(),
           _HeatmapGrid(controller: controller),
         ],
       ),
@@ -462,114 +396,113 @@ class _HeatmapGrid extends StatelessWidget {
     const double cellSize = 13.5;
     const double cellGap = 3.5;
 
+    final monthTextColor = AppTheme.isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Month labels row above columns
+          // Weekday labels: M, W, F — with blank spacer on top to align with month row
           Padding(
-            padding: const EdgeInsets.only(left: 20.0, bottom: 6.0),
-            child: Row(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(cols, (colIndex) {
-                final label = monthLabels[colIndex];
-                return SizedBox(
-                  width: cellSize + cellGap,
-                  child: label != null
-                      ? Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textSecondaryColor(context),
-                          ),
-                          overflow: TextOverflow.visible,
-                          softWrap: false,
-                        )
-                      : null,
-                );
-              }),
+              children: [
+                const SizedBox(height: 14), // spacer matching month label row
+                _weekdayLabel(context, 'M', cellSize),
+                const SizedBox(height: cellGap),
+                _weekdayPlaceholder(cellSize),
+                const SizedBox(height: cellGap),
+                _weekdayLabel(context, 'W', cellSize),
+                const SizedBox(height: cellGap),
+                _weekdayPlaceholder(cellSize),
+                const SizedBox(height: cellGap),
+                _weekdayLabel(context, 'F', cellSize),
+                const SizedBox(height: cellGap),
+                _weekdayPlaceholder(cellSize),
+                const SizedBox(height: cellGap),
+                _weekdayPlaceholder(cellSize),
+              ],
             ),
           ),
 
-          // Main Heatmap Grid with Weekday indicators
+          // Columns — month label above first col of each month
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: [
-              // Weekday labels: Mon, Wed, Fri
-              Padding(
-                padding: const EdgeInsets.only(right: 6.0),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(cols, (colIndex) {
+              final monthLabel = monthLabels[colIndex];
+
+              return Padding(
+                padding: const EdgeInsets.only(right: cellGap),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _weekdayLabel(context, 'M', cellSize),
-                    const SizedBox(height: cellGap),
-                    _weekdayPlaceholder(cellSize),
-                    const SizedBox(height: cellGap),
-                    _weekdayLabel(context, 'W', cellSize),
-                    const SizedBox(height: cellGap),
-                    _weekdayPlaceholder(cellSize),
-                    const SizedBox(height: cellGap),
-                    _weekdayLabel(context, 'F', cellSize),
-                    const SizedBox(height: cellGap),
-                    _weekdayPlaceholder(cellSize),
-                    const SizedBox(height: cellGap),
-                    _weekdayPlaceholder(cellSize),
+                    // Month label row (14px tall) — text only on new month columns
+                    SizedBox(
+                      height: 14,
+                      child: monthLabel != null
+                          ? Text(
+                              monthLabel,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: monthTextColor,
+                              ),
+                              overflow: TextOverflow.visible,
+                              softWrap: false,
+                            )
+                          : null,
+                    ),
+
+                    // 7-day cell column
+                    ...List.generate(rows, (rowIndex) {
+                      final cellIdx = colIndex * rows + rowIndex;
+                      final itemIdx = cellIdx - startPadding;
+
+                      if (itemIdx < 0 || itemIdx >= items.length) {
+                        return const SizedBox(
+                          width: cellSize,
+                          height: cellSize + cellGap,
+                        );
+                      }
+
+                      final activity = items[itemIdx];
+                      final level = activity.activityLevel(maxActivity);
+                      final color = _cellColor(context, level);
+
+                      return Tooltip(
+                        message:
+                            '${DateFormat('EEE, d MMM yyyy').format(activity.date)}\n'
+                            '${activity.topicsFinished} topics finished • ${activity.revisionsDone} revisions',
+                        child: Container(
+                          width: cellSize,
+                          height: cellSize,
+                          margin: const EdgeInsets.only(bottom: cellGap),
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(3.0),
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
-              ),
-
-              // Columns of 7 days each
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(cols, (colIndex) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: cellGap),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(rows, (rowIndex) {
-                        final cellIdx = colIndex * rows + rowIndex;
-                        final itemIdx = cellIdx - startPadding;
-
-                        if (itemIdx < 0 || itemIdx >= items.length) {
-                          return const SizedBox(
-                            width: cellSize,
-                            height: cellSize + cellGap,
-                          );
-                        }
-
-                        final activity = items[itemIdx];
-                        final level = activity.activityLevel(maxActivity);
-                        final color = _cellColor(context, level);
-
-                        return Tooltip(
-                          message:
-                              '${DateFormat('EEE, d MMM yyyy').format(activity.date)}\n'
-                              '${activity.topicsFinished} topics finished • ${activity.revisionsDone} revisions',
-                          child: Container(
-                            width: cellSize,
-                            height: cellSize,
-                            margin: const EdgeInsets.only(bottom: cellGap),
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(3.0),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  );
-                }),
-              ),
-            ],
+              );
+            }),
           ),
         ],
       ),
     );
   }
+
+
 
   Widget _weekdayLabel(BuildContext context, String text, double size) {
     return SizedBox(
@@ -611,7 +544,7 @@ class _SummaryStatsCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -619,15 +552,14 @@ class _SummaryStatsCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: AppTheme.shadowColor(context),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Section title + Total badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -638,7 +570,7 @@ class _SummaryStatsCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimaryColor(context),
                   ),
@@ -646,22 +578,18 @@ class _SummaryStatsCard extends StatelessWidget {
               ),
               const HGapSm(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF334155)
-                        : const Color(0xFFE2E8F0),
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                   ),
                 ),
                 child: Text(
                   '$totalActions actions',
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 10.5,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textSecondaryColor(context),
                   ),
@@ -669,12 +597,9 @@ class _SummaryStatsCard extends StatelessWidget {
               ),
             ],
           ),
-          const VGapMd(),
-
-          // Two side-by-side metric tiles
+          const VGapSm(),
           Row(
             children: [
-              // Left Tile: Topics Finished
               Expanded(
                 child: _MetricTile(
                   title: 'Topics finished',
@@ -682,18 +607,12 @@ class _SummaryStatsCard extends StatelessWidget {
                   count: finished,
                   icon: Icons.menu_book_rounded,
                   iconColor: const Color(0xFF10B981),
-                  iconBgColor: isDark
-                      ? const Color(0xFF063321)
-                      : const Color(0xFFE8F8F0),
-                  tileBgColor: isDark
-                      ? const Color(0xFF0F1F17)
-                      : const Color(0xFFF6FDF9),
+                  iconBgColor: isDark ? const Color(0xFF063321) : const Color(0xFFE8F8F0),
+                  tileBgColor: isDark ? const Color(0xFF0F1F17) : const Color(0xFFF6FDF9),
                   borderColor: const Color(0xFF10B981).withValues(alpha: isDark ? 0.25 : 0.18),
                 ),
               ),
-              const HGapMd(),
-
-              // Right Tile: Topic Revisions
+              const HGapSm(),
               Expanded(
                 child: _MetricTile(
                   title: 'Topic revisions',
@@ -701,25 +620,19 @@ class _SummaryStatsCard extends StatelessWidget {
                   count: revisions,
                   icon: Icons.sync_rounded,
                   iconColor: const Color(0xFF7A6EFC),
-                  iconBgColor: isDark
-                      ? const Color(0xFF231E52)
-                      : const Color(0xFFF0EEFF),
-                  tileBgColor: isDark
-                      ? const Color(0xFF161426)
-                      : const Color(0xFFF8F7FF),
+                  iconBgColor: isDark ? const Color(0xFF231E52) : const Color(0xFFF0EEFF),
+                  tileBgColor: isDark ? const Color(0xFF161426) : const Color(0xFFF8F7FF),
                   borderColor: const Color(0xFF7A6EFC).withValues(alpha: isDark ? 0.25 : 0.18),
                 ),
               ),
             ],
           ),
-
           if (totalActions > 0) ...[
-            const VGapLg(),
-            // Activity Distribution Split Bar
+            const VGapSm(),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: SizedBox(
-                height: 6,
+                height: 5,
                 child: Row(
                   children: [
                     if (finished > 0)
@@ -738,9 +651,7 @@ class _SummaryStatsCard extends StatelessWidget {
                 ),
               ),
             ),
-            const VGapSm(),
-
-            // Split Bar Footnote
+            const VGapXs(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -749,11 +660,9 @@ class _SummaryStatsCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 7,
-                        height: 7,
+                        width: 6, height: 6,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF10B981),
-                          shape: BoxShape.circle,
+                          color: Color(0xFF10B981), shape: BoxShape.circle,
                         ),
                       ),
                       const HGapXs(),
@@ -763,7 +672,7 @@ class _SummaryStatsCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: AppTheme.textSecondaryColor(context),
                           ),
@@ -778,11 +687,9 @@ class _SummaryStatsCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 7,
-                        height: 7,
+                        width: 6, height: 6,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF7A6EFC),
-                          shape: BoxShape.circle,
+                          color: Color(0xFF7A6EFC), shape: BoxShape.circle,
                         ),
                       ),
                       const HGapXs(),
@@ -792,7 +699,7 @@ class _SummaryStatsCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: AppTheme.textSecondaryColor(context),
                           ),
@@ -834,10 +741,10 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: tileBgColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
       ),
       child: Column(
@@ -845,22 +752,15 @@ class _MetricTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 26, height: 26,
                 decoration: BoxDecoration(
                   color: iconBgColor,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(7),
                 ),
                 alignment: Alignment.center,
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 18,
-                ),
+                child: Icon(icon, color: iconColor, size: 15),
               ),
               const HGapXs(),
               Flexible(
@@ -868,7 +768,7 @@ class _MetricTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
                     color: iconColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
                     subtitle,
@@ -884,23 +784,22 @@ class _MetricTile extends StatelessWidget {
               ),
             ],
           ),
-          const VGapSm(),
+          const VGapXs(),
           Text(
             '$count',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimaryColor(context),
               letterSpacing: -0.5,
             ),
           ),
-          const VGapXs(),
           Text(
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: AppTheme.textPrimaryColor(context),
             ),
@@ -947,7 +846,7 @@ class _ActivityBreakdownCard extends StatelessWidget {
     final chartActivities = _aggregateActivities(controller.activitiesInRange);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -955,8 +854,8 @@ class _ActivityBreakdownCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: AppTheme.shadowColor(context),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -966,17 +865,15 @@ class _ActivityBreakdownCard extends StatelessWidget {
           Text(
             'Activity Breakdown',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimaryColor(context),
             ),
           ),
-          const VGapLg(),
-
-          // Custom Painted Stacked Bar Chart
+          const VGapSm(),
           RepaintBoundary(
             child: SizedBox(
-              height: 180,
+              height: 140,
               width: double.infinity,
               child: CustomPaint(
                 painter: _ActivityBreakdownPainter(
@@ -1182,7 +1079,7 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
     final displayItems = _showAll ? allRecent : allRecent.take(4).toList();
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
@@ -1190,15 +1087,14 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
         boxShadow: [
           BoxShadow(
             color: AppTheme.shadowColor(context),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -1206,25 +1102,21 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
               Text(
                 'Recent Activity',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimaryColor(context),
                 ),
               ),
               if (allRecent.length > 4)
                 GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _showAll = !_showAll;
-                    });
-                  },
+                  onTap: () => setState(() => _showAll = !_showAll),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         _showAll ? 'Show Less' : 'View All',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.primaryColor,
                         ),
@@ -1232,7 +1124,7 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                       const HGapXs(),
                       const Icon(
                         Icons.chevron_right_rounded,
-                        size: 16,
+                        size: 14,
                         color: AppTheme.primaryColor,
                       ),
                     ],
@@ -1240,17 +1132,16 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                 ),
             ],
           ),
-          const VGapMd(),
-
+          const VGapSm(),
           if (displayItems.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: Text(
                   'No activity recorded yet in the last 3 months.\nComplete topics and revisions to build your streak!',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: AppTheme.textSecondaryColor(context),
                     height: 1.4,
                   ),
@@ -1265,16 +1156,16 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
               itemCount: displayItems.length,
               separatorBuilder: (context, _) => Divider(
                 color: AppTheme.borderColor(context),
-                height: 24,
+                height: 16,
               ),
               itemBuilder: (context, index) {
                 final item = displayItems[index];
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Date & Weekday Column
+                    // Date column: date + weekday inline
                     SizedBox(
-                      width: 82,
+                      width: 76,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -1282,16 +1173,15 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                           Text(
                             _dateFormat.format(item.date),
                             style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.textPrimaryColor(context),
                             ),
                           ),
-                          const VGapXs(),
                           Text(
                             _weekdayFormat.format(item.date),
                             style: TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 10,
                               color: AppTheme.textSecondaryColor(context),
                               fontWeight: FontWeight.w500,
                             ),
@@ -1299,24 +1189,22 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                         ],
                       ),
                     ),
-                    const HGapSm(),
-
-                    // Topics Finished Pill
+                    const HGapXs(),
+                    // Topics Finished
                     Expanded(
                       child: Row(
                         children: [
                           Container(
-                            width: 32,
-                            height: 32,
+                            width: 26, height: 26,
                             decoration: BoxDecoration(
                               color: const Color(0xFFE8F8F0),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(7),
                             ),
                             alignment: Alignment.center,
                             child: const Icon(
                               Icons.menu_book_rounded,
                               color: Color(0xFF10B981),
-                              size: 16,
+                              size: 14,
                             ),
                           ),
                           const HGapXs(),
@@ -1328,15 +1216,15 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                                 Text(
                                   '${item.topicsFinished}',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: AppTheme.textPrimaryColor(context),
                                   ),
                                 ),
                                 Text(
-                                  'Topics finished',
+                                  'Topics',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 9.5,
                                     color: AppTheme.textSecondaryColor(context),
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -1347,24 +1235,21 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                         ],
                       ),
                     ),
-                    const HGapXs(),
-
-                    // Topic Revisions Pill
+                    // Revisions
                     Expanded(
                       child: Row(
                         children: [
                           Container(
-                            width: 32,
-                            height: 32,
+                            width: 26, height: 26,
                             decoration: BoxDecoration(
                               color: const Color(0xFFF0EEFF),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(7),
                             ),
                             alignment: Alignment.center,
                             child: const Icon(
                               Icons.sync_rounded,
                               color: Color(0xFF7A6EFC),
-                              size: 16,
+                              size: 14,
                             ),
                           ),
                           const HGapXs(),
@@ -1376,15 +1261,15 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                                 Text(
                                   '${item.revisionsDone}',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: AppTheme.textPrimaryColor(context),
                                   ),
                                 ),
                                 Text(
-                                  'Topic revisions',
+                                  'Revisions',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 9.5,
                                     color: AppTheme.textSecondaryColor(context),
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -1395,11 +1280,9 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
                         ],
                       ),
                     ),
-
-                    // Trailing Chevron
                     Icon(
                       Icons.chevron_right_rounded,
-                      size: 20,
+                      size: 18,
                       color: AppTheme.textMutedColor(context),
                     ),
                   ],

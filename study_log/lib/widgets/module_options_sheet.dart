@@ -165,9 +165,7 @@ class ModuleOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = module.description.isNotEmpty
-        ? module.description
-        : courseTitle;
+    final subtitle = courseTitle;
 
     return SheetContainer(
       children: [

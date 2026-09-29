@@ -3,20 +3,23 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/module_context_pill.dart';
 import '../widgets/study_confirmation_dialog.dart';
-import '../widgets/topic_progress_header.dart';
-import '../widgets/topic_status_indicator.dart';
-import '../widgets/topic_status_label.dart';
+import '../widgets/topic_list_item.dart';
 import '../models/topic.dart';
 import '../models/course.dart';
 import '../models/module.dart';
+import '../models/study_log.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_module_storage.dart';
+import '../services/local_study_log_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/progress_controller.dart';
 import '../widgets/topic_options_sheet.dart';
 import 'add_topic_screen.dart';
 
@@ -340,6 +343,28 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
     await _syncModuleCompletion();
 
+    if (updated.isCompleted) {
+      final studyLog = StudyLog(
+        id: '${updated.id}_${DateTime.now().millisecondsSinceEpoch}',
+        type: StudyLogType.topicCompleted,
+        courseId: widget.courseId,
+        courseTitle: widget.courseTitle,
+        moduleId: widget.moduleId,
+        moduleTitle: widget.moduleTitle,
+        topicId: updated.id,
+        topicTitle: updated.title,
+        timestamp: updated.completedAt ?? DateTime.now(),
+        createdAt: DateTime.now(),
+      );
+      await LocalStudyLogStorage.addLog(studyLog);
+      if (getIt.isRegistered<FirestoreService>()) {
+        final firestore = getIt<FirestoreService>();
+        if (firestore.isAvailable) {
+          unawaited(firestore.addStudyLog(studyLog));
+        }
+      }
+    }
+
     if (getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable && updated.id.isNotEmpty) {
@@ -361,6 +386,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
     if (getIt.isRegistered<RevisionController>()) {
       await getIt<RevisionController>().reconcile();
+    }
+    if (getIt.isRegistered<ProgressController>()) {
+      unawaited(getIt<ProgressController>().refresh());
     }
   }
 
@@ -517,61 +545,22 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _ModuleDetailTopBar(
+            CustomAppBar(
+              title: widget.courseTitle.isNotEmpty ? widget.courseTitle : 'MODULE',
               onBack: _handleBack,
-              onAddTopic: _openAddTopicScreen,
+              actions: [
+                AddPillButton(
+                  label: 'Add Topic',
+                  onPressed: _openAddTopicScreen,
+                ),
+              ],
             ),
-            if (widget.courseTitle.isNotEmpty)
-              _CourseContextPill(courseTitle: widget.courseTitle),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppTheme.pastelPurple(context),
-                      borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                      border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-                    ),
-                    child: Text(
-                      '${widget.moduleOrderIndex + 1}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.pastelPurpleText(context),
-                      ),
-                    ),
-                  ),
-                  const HGapSm(),
-                  Expanded(
-                    child: Text(
-                      widget.moduleTitle,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimaryColor(context),
-                        letterSpacing: -0.5,
-                        height: 1.15,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const VGapXs(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: TopicProgressHeader(
-                completedCount: completedCount,
-                totalCount: totalCount,
-                progress: progress,
-                inProgressRatio: inProgressRatio,
-              ),
+            _CompactModuleHeader(
+              moduleTitle: widget.moduleTitle,
+              completedCount: completedCount,
+              totalCount: totalCount,
+              progress: progress,
+              inProgressRatio: inProgressRatio,
             ),
             const VGapSm(),
             Expanded(
@@ -596,51 +585,52 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   }
 }
 
-class _ModuleDetailTopBar extends StatelessWidget {
-  final VoidCallback onBack;
-  final VoidCallback onAddTopic;
 
-  const _ModuleDetailTopBar({
-    required this.onBack,
-    required this.onAddTopic,
+class _CompactModuleHeader extends StatelessWidget {
+  final String moduleTitle;
+  final int completedCount;
+  final int totalCount;
+  final double progress;
+  final double inProgressRatio;
+
+  const _CompactModuleHeader({
+    required this.moduleTitle,
+    required this.completedCount,
+    required this.totalCount,
+    required this.progress,
+    required this.inProgressRatio,
   });
 
   @override
   Widget build(BuildContext context) {
+    final percent = (progress * 100).round();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          ModuleContextPill(moduleTitle: moduleTitle),
+          const VGapSm(),
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: Icon(
-                  Icons.chevron_left_rounded,
-                  color: AppTheme.textPrimaryColor(context),
-                  size: 28,
-                ),
-                onPressed: onBack,
-                tooltip: 'Back',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-              const HGapSm(),
               Text(
-                'MODULE',
+                '$completedCount/$totalCount topics ($percent%)',
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.textSecondaryColor(context),
-                  letterSpacing: 1.0,
+                ),
+              ),
+              const HGapMd(),
+              Expanded(
+                child: _SlimProgressBar(
+                  completedRatio: progress.clamp(0.0, 1.0),
+                  inProgressRatio: inProgressRatio.clamp(0.0, 1.0),
                 ),
               ),
             ],
-          ),
-          AddPillButton(
-            label: 'Add Topic',
-            onPressed: onAddTopic,
           ),
         ],
       ),
@@ -648,48 +638,43 @@ class _ModuleDetailTopBar extends StatelessWidget {
   }
 }
 
-class _CourseContextPill extends StatelessWidget {
-  final String courseTitle;
+class _SlimProgressBar extends StatelessWidget {
+  final double completedRatio;
+  final double inProgressRatio;
 
-  const _CourseContextPill({required this.courseTitle});
+  const _SlimProgressBar({
+    required this.completedRatio,
+    required this.inProgressRatio,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
-          decoration: BoxDecoration(
-            color: AppTheme.pastelPurple(context),
-            borderRadius: BorderRadius.circular(8.0),
-            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.school_outlined,
-                size: 13,
-                color: AppTheme.pastelPurpleText(context),
-              ),
-              const HGapXs(),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: Text(
-                  courseTitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.pastelPurpleText(context),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(2),
+      child: SizedBox(
+        height: 3,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final completedW = width * completedRatio;
+            final inProgressW =
+                (width * inProgressRatio).clamp(0.0, width - completedW);
+            return Stack(
+              children: [
+                Container(width: width, color: const Color(0xFFECEEF6)),
+                if (inProgressW > 0)
+                  Container(
+                    width: completedW + inProgressW,
+                    color: AppTheme.primaryColor,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+                if (completedW > 0)
+                  Container(
+                    width: completedW,
+                    color: AppTheme.successColor,
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -779,14 +764,15 @@ class _TopicsListView extends StatelessWidget {
 
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
+      padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
       itemCount: topics.length + (isModuleCompleted ? 1 : 0),
       separatorBuilder: (context, index) => index < topics.length - 1
-          ? const Divider(
+          ? Divider(
               height: 1,
-              indent: 64,
-              endIndent: 20,
-              color: Color(0xFFF3F4F6),
+              thickness: 0.6,
+              indent: 52,
+              endIndent: 16,
+              color: AppTheme.borderColor(context),
             )
           : const SizedBox.shrink(),
       itemBuilder: (context, index) {
@@ -812,88 +798,14 @@ class _TopicsListView extends StatelessWidget {
           );
         }
 
-        return _TopicListItem(
-          item: item,
+        return TopicListItem(
+          topic: item,
           onCheckboxTap: () => onToggle(index),
-          onRowTap: openOptions,
+          onTap: openOptions,
           onLongPress: openOptions,
           onOptionsTap: openOptions,
         );
       },
-    );
-  }
-}
-
-class _TopicListItem extends StatelessWidget {
-  final Topic item;
-  final VoidCallback onCheckboxTap;
-  final VoidCallback onRowTap;
-  final VoidCallback onLongPress;
-  final VoidCallback? onOptionsTap;
-
-  const _TopicListItem({
-    required this.item,
-    required this.onCheckboxTap,
-    required this.onRowTap,
-    required this.onLongPress,
-    this.onOptionsTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onRowTap,
-          onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Row(
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onCheckboxTap,
-                  child: TopicStatusIndicator(status: item.status),
-                ),
-                const HGapMd(),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimaryColor(context),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapXs(),
-                      TopicStatusLabel(status: item.status),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onOptionsTap ?? onLongPress,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppTheme.textMutedColor(context),
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

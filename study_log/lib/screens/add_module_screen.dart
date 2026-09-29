@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/course_context_pill.dart';
+import '../widgets/study_text_fields.dart';
 import '../services/service_locator.dart';
 import '../controllers/modules_controller.dart';
 import '../models/module.dart';
@@ -171,15 +174,27 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _AddModuleTopBar(
+            CustomAppBar(
               title: widget.isEditing ? 'Edit Module' : 'Add Module',
               onBack: _handleBack,
-              onSave: _handleSubmit,
-              isSubmitting: _isSubmitting,
+              actions: [
+                AddPillButton(
+                  label: 'Save',
+                  icon: Icons.check_rounded,
+                  isLoading: _isSubmitting,
+                  onPressed: _handleSubmit,
+                ),
+              ],
             ),
             if ((_selectedCourseTitle.isNotEmpty ? _selectedCourseTitle : widget.courseTitle).isNotEmpty)
-              _CourseContextPill(
-                courseTitle: _selectedCourseTitle.isNotEmpty ? _selectedCourseTitle : widget.courseTitle,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: CourseContextPill(
+                    courseTitle: _selectedCourseTitle.isNotEmpty ? _selectedCourseTitle : widget.courseTitle,
+                  ),
+                ),
               ),
             Expanded(
               child: SingleChildScrollView(
@@ -193,14 +208,29 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ModuleNameField(controller: _titleController),
-                    const VGapLg(),
-                    _ModuleDescriptionField(
-                      controller: _descriptionController,
-                      charCount: _descLength,
+                    UnderlineInputField(
+                      label: 'Module Name',
+                      controller: _titleController,
+                      hintText: 'Enter module name',
+                      isRequired: true,
                     ),
                     const VGapLg(),
-                    _ModuleOrderField(controller: _orderController),
+                    BorderlessDescriptionField(
+                      controller: _descriptionController,
+                    ),
+                    const VGapLg(),
+                    UnderlineInputField(
+                      label: 'Order (Optional)',
+                      controller: _orderController,
+                      hintText: 'Enter order (e.g., 1, 2, 3)',
+                      keyboardType: TextInputType.number,
+                      fontSize: 16,
+                      suffixIcon: Icon(
+                        Icons.unfold_more_rounded,
+                        color: AppTheme.textMutedColor(context),
+                        size: 22,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -208,300 +238,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AddModuleTopBar extends StatelessWidget {
-  final VoidCallback onBack;
-  final VoidCallback onSave;
-  final bool isSubmitting;
-  final String title;
-
-  const _AddModuleTopBar({
-    required this.onBack,
-    required this.onSave,
-    required this.isSubmitting,
-    this.title = 'Add Module',
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.3,
-            ),
-          ),
-          const Spacer(),
-          AddPillButton(
-            label: 'Save',
-            icon: Icons.check_rounded,
-            isLoading: isSubmitting,
-            onPressed: onSave,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CourseContextPill extends StatelessWidget {
-  final String courseTitle;
-
-  const _CourseContextPill({required this.courseTitle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
-          decoration: BoxDecoration(
-            color: AppTheme.pastelPurple(context),
-            borderRadius: BorderRadius.circular(8.0),
-            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.school_outlined,
-                size: 14,
-                color: AppTheme.pastelPurpleText(context),
-              ),
-              const HGapXs(),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 280),
-                child: Text(
-                  courseTitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.pastelPurpleText(context),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ModuleNameField extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _ModuleNameField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Module Name ',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
-              ),
-            ),
-            Text(
-              '*',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.errorColor,
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor(context)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-          child: TextField(
-            controller: controller,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-            decoration:  InputDecoration(
-              hintText: 'Enter module name',
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: AppTheme.textMutedColor(context),
-              ),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ModuleDescriptionField extends StatelessWidget {
-  final TextEditingController controller;
-  final int charCount;
-
-  const _ModuleDescriptionField({
-    required this.controller,
-    required this.charCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Description (Optional)',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor(context)),
-          ),
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              TextField(
-                controller: controller,
-                maxLines: 4,
-                maxLength: 500,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textPrimaryColor(context),
-                ),
-                decoration:  InputDecoration(
-                  hintText: 'Enter description',
-                  hintStyle: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textMutedColor(context),
-                  ),
-                  border: InputBorder.none,
-                  counterText: '',
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              Text(
-                '$charCount/500',
-                style:  TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textMutedColor(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-
-
-class _ModuleOrderField extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _ModuleOrderField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Order (Optional)',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor(context)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                  decoration:  InputDecoration(
-                    hintText: 'Enter order (e.g., 1, 2, 3)',
-                    hintStyle: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textMutedColor(context),
-                    ),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-               Icon(
-                Icons.unfold_more_rounded,
-                color: AppTheme.textMutedColor(context),
-                size: 20,
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

@@ -5,6 +5,8 @@ import '../models/course.dart';
 import '../models/module.dart';
 import '../models/topic.dart';
 import '../models/revision.dart';
+import '../models/revision_topic.dart';
+import '../models/study_log.dart';
 
 /// Highly optimized Firebase Firestore Service with graceful fallbacks.
 /// 
@@ -377,6 +379,81 @@ class FirestoreService {
   }
 
   // ===========================================================================
+  // Revision Topics
+  // ===========================================================================
+  CollectionReference<Map<String, dynamic>>? get _revisionTopicsRef =>
+      _firestore?.collection('revision_topics');
+
+  /// Real-time stream of revision topics for a revision.
+  Stream<List<RevisionTopic>> streamRevisionTopics({required String revisionId}) {
+    final ref = _revisionTopicsRef;
+    if (ref == null || revisionId.isEmpty) return const Stream.empty();
+
+    return ref
+        .where('revisionId', isEqualTo: revisionId)
+        .snapshots(includeMetadataChanges: false)
+        .map((snapshot) {
+      final list = <RevisionTopic>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(RevisionTopic.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return list;
+    });
+  }
+
+  /// High-speed one-shot query for revision topics.
+  Future<List<RevisionTopic>> getRevisionTopics({
+    required String revisionId,
+    Source source = Source.serverAndCache,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final ref = _revisionTopicsRef;
+    if (ref == null || revisionId.isEmpty) return [];
+
+    try {
+      final query = ref.where('revisionId', isEqualTo: revisionId);
+      final snapshot = await query.get(GetOptions(source: source)).timeout(
+        timeout,
+        onTimeout: () => query.get(const GetOptions(source: Source.cache)),
+      );
+      final list = <RevisionTopic>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(RevisionTopic.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      list.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return list;
+    } catch (e) {
+      debugPrint('Error getting revision topics for revision $revisionId: $e');
+      return [];
+    }
+  }
+
+  Future<void> addRevisionTopic(RevisionTopic topic) async {
+    final ref = _revisionTopicsRef;
+    if (ref == null) return;
+    final docRef = topic.id.isEmpty ? ref.doc() : ref.doc(topic.id);
+    final toSave = topic.id.isEmpty ? topic.copyWith(id: docRef.id) : topic;
+    await docRef.set(toSave.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> updateRevisionTopic(RevisionTopic topic) async {
+    final ref = _revisionTopicsRef;
+    if (ref == null || topic.id.isEmpty) return;
+    await ref.doc(topic.id).set(topic.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteRevisionTopic(String topicId) async {
+    final ref = _revisionTopicsRef;
+    if (ref == null || topicId.isEmpty) return;
+    await ref.doc(topicId).delete();
+  }
+
+  // ===========================================================================
   // High-Performance Batch Writes (Chunked into <= 450 items)
   // ===========================================================================
   /// Batches multiple courses, modules, topics, and revisions into atomic commits.
@@ -435,6 +512,61 @@ class FirestoreService {
         op(batch);
       }
       await batch.commit();
+    }
+  }
+
+  // ===========================================================================
+  // Study Logs
+  // ===========================================================================
+  CollectionReference<Map<String, dynamic>>? get _studyLogsRef =>
+      _firestore?.collection('study_logs');
+
+  /// Adds a new study log entry to Firestore.
+  Future<void> addStudyLog(StudyLog log) async {
+    final ref = _studyLogsRef;
+    if (ref == null) return;
+
+    final docRef = log.id.isEmpty ? ref.doc() : ref.doc(log.id);
+    final toSave = log.id.isEmpty ? log.copyWith(id: docRef.id) : log;
+    await docRef.set(toSave.toMap(), SetOptions(merge: true));
+  }
+
+  /// Streams recent study logs ordered by timestamp descending.
+  Stream<List<StudyLog>> streamStudyLogs({int limit = 100}) {
+    final ref = _studyLogsRef;
+    if (ref == null) return const Stream.empty();
+
+    return ref
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .snapshots(includeMetadataChanges: false)
+        .map((snapshot) {
+      final list = <StudyLog>[];
+      for (final doc in snapshot.docs) {
+        try {
+          list.add(StudyLog.fromMap(doc.data(), documentId: doc.id));
+        } catch (_) {}
+      }
+      return list;
+    });
+  }
+
+  /// One-shot fetch for study logs.
+  Future<List<StudyLog>> getStudyLogs({int limit = 200}) async {
+    final ref = _studyLogsRef;
+    if (ref == null) return [];
+
+    try {
+      final snapshot = await ref
+          .orderBy('timestamp', descending: true)
+          .limit(limit)
+          .get(const GetOptions(source: Source.serverAndCache));
+      return snapshot.docs
+          .map((d) => StudyLog.fromMap(d.data(), documentId: d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting study logs: $e');
+      return [];
     }
   }
 }

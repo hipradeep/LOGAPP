@@ -3,10 +3,12 @@ import 'package:flutter/foundation.dart';
 import '../models/course.dart';
 import '../models/module.dart';
 import '../models/topic.dart';
+import '../models/study_log.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
+import '../services/local_study_log_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
@@ -343,7 +345,7 @@ class OngoingModulesController extends ChangeNotifier {
             course: course,
             module: module,
             title: module.title,
-            breadcrumb: '${course.title} • ${isRunning ? 'In Progress' : 'Not Started'}',
+            breadcrumb: isRunning ? '${course.title} • In Progress' : course.title,
             progressRatio: progressRatio,
             progress: progress,
             inProgressRatio: inProgressRatio,
@@ -363,6 +365,23 @@ class OngoingModulesController extends ChangeNotifier {
           totalModules: courseTotalModules,
           isCourseMarkedComplete: isCourseMarkedComplete,
         );
+      }
+
+      // Include study logs and revision completion events in streak tracking
+      final studyLogs = await LocalStudyLogStorage.loadAll();
+      for (final log in studyLogs) {
+        completionDays.add(_dayOnly(log.timestamp));
+        if (_isSameDay(log.timestamp, DateTime.now())) {
+          completedToday++;
+        }
+      }
+
+      final revisionEvents = await LocalRevisionStorage.loadRevisionEvents();
+      for (final event in revisionEvents) {
+        completionDays.add(_dayOnly(event));
+        if (_isSameDay(event, DateTime.now())) {
+          completedToday++;
+        }
       }
 
       // Sort: Running modules first, then upcoming modules

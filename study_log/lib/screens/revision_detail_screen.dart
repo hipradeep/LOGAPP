@@ -1,18 +1,29 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/revision_level_palette.dart';
-import '../utils/topic_icon_util.dart';
+import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/module_context_pill.dart';
 import '../widgets/course_icon_chip.dart';
+import '../widgets/topic_list_item.dart';
+import '../widgets/revision_completion_dialog.dart';
 import '../models/revision.dart';
 import '../models/topic.dart';
+import '../models/revision_topic.dart';
 import '../models/module.dart';
+import '../models/study_log.dart';
+import '../services/local_revision_topic_storage.dart';
+import '../services/local_revision_storage.dart';
+import '../services/local_study_log_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
-import 'module_detail_screen.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import '../controllers/progress_controller.dart';
 
 /// Read-only by design: the ladder advances on its own, so there is no action
 /// button here — tapping a topic simply opens the module it belongs to.
@@ -27,8 +38,11 @@ class RevisionDetailScreen extends StatefulWidget {
 
 class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
-  List<Topic> _topics = const [];
+  List<RevisionTopic> _revisionTopics = const [];
+  StreamSubscription<List<RevisionTopic>>? _topicsSubscription;
   bool _isLoadingTopics = true;
+
+  String _resolvedModuleId = '';
 
   RevisionController get _controller => getIt<RevisionController>();
 
@@ -45,15 +59,71 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
   @override
   void dispose() {
+    _topicsSubscription?.cancel();
     _activeTab.dispose();
     super.dispose();
   }
 
   Future<void> _loadTopics() async {
     final revision = widget.revision;
+
+    // 1. First load cached revision topics from LocalRevisionTopicStorage
+    var revTopics = await LocalRevisionTopicStorage.loadTopicsForRevision(revision.id);
+    if (revTopics.isNotEmpty && mounted) {
+      setState(() {
+        _revisionTopics = revTopics;
+        _isLoadingTopics = false;
+      });
+    }
+
+    // 2. Fetch or stream from Firestore if available
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable && revision.id.isNotEmpty) {
+        try {
+          final remoteRevTopics = await firestore.getRevisionTopics(revisionId: revision.id);
+          if (remoteRevTopics.isNotEmpty && mounted) {
+            setState(() {
+              _revisionTopics = remoteRevTopics;
+              _isLoadingTopics = false;
+            });
+            await LocalRevisionTopicStorage.saveTopics(revision.id, remoteRevTopics);
+            revTopics = remoteRevTopics;
+          }
+        } catch (e) {
+          debugPrint('Error fetching revision topics from Firestore: $e');
+        }
+
+        // Listen for real-time changes
+        _topicsSubscription?.cancel();
+        _topicsSubscription = firestore.streamRevisionTopics(revisionId: revision.id).listen(
+          (updatedList) {
+            if (mounted && updatedList.isNotEmpty) {
+              setState(() {
+                _revisionTopics = updatedList;
+              });
+              LocalRevisionTopicStorage.saveTopics(revision.id, updatedList);
+            }
+          },
+          onError: (_) {},
+        );
+      }
+    }
+
+    // 3. If no revision topics exist yet, auto-seed from base module topics!
+    if (revTopics.isEmpty) {
+      await _autoSeedTopicsFromModule();
+    } else if (mounted) {
+      setState(() {
+        _isLoadingTopics = false;
+      });
+    }
+  }
+
+  Future<void> _autoSeedTopicsFromModule() async {
+    final revision = widget.revision;
     String targetModuleId = revision.moduleId;
 
-    // 1. If targetModuleId is empty, try resolving by module title from storage
     if (targetModuleId.isEmpty && revision.moduleTitle.isNotEmpty) {
       final allModules = await LocalModuleStorage.loadAllModules();
       final match = allModules.firstWhere(
@@ -73,49 +143,57 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         targetModuleId = match.id;
       }
     }
+    _resolvedModuleId = targetModuleId;
 
-    // 2. Load from local cache
-    var topics = await LocalTopicStorage.loadTopicsForModule(
+    var baseTopics = await LocalTopicStorage.loadTopicsForModule(
       moduleId: targetModuleId,
       fallbackTitle: revision.moduleTitle,
     );
-
-    // If still empty, check directly by title bucket
-    if (topics.isEmpty && revision.moduleTitle.isNotEmpty) {
-      topics = await LocalTopicStorage.loadTopics(revision.moduleTitle);
+    if (baseTopics.isEmpty && revision.moduleTitle.isNotEmpty) {
+      baseTopics = await LocalTopicStorage.loadTopics(revision.moduleTitle);
     }
-
-    if (topics.isNotEmpty && mounted) {
-      setState(() {
-        _topics = topics;
-        _isLoadingTopics = false;
-      });
-    }
-
-    // 3. Fallback or sync from Firestore if empty
-    if (topics.isEmpty && getIt.isRegistered<FirestoreService>()) {
+    if (baseTopics.isEmpty && getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable && targetModuleId.isNotEmpty) {
         try {
-          final remoteTopics = await firestore.getTopics(moduleId: targetModuleId);
-          if (remoteTopics.isNotEmpty && mounted) {
-            setState(() {
-              _topics = remoteTopics;
-              _isLoadingTopics = false;
-            });
-            await LocalTopicStorage.saveTopics(targetModuleId, remoteTopics);
-            if (revision.moduleTitle.isNotEmpty) {
-              await LocalTopicStorage.saveTopics(revision.moduleTitle, remoteTopics);
-            }
-            return;
-          }
-        } catch (e) {
-          debugPrint('Error fetching topics from Firestore in RevisionDetailScreen: $e');
-        }
+          baseTopics = await firestore.getTopics(moduleId: targetModuleId);
+        } catch (_) {}
       }
     }
 
-    if (mounted) {
+    if (baseTopics.isNotEmpty) {
+      final now = DateTime.now();
+      final seeded = baseTopics.asMap().entries.map((entry) {
+        final t = entry.value;
+        return RevisionTopic(
+          id: 'rev_topic_${revision.id}_${entry.key}_${now.millisecondsSinceEpoch}',
+          revisionId: revision.id,
+          courseId: revision.courseId.isNotEmpty ? revision.courseId : t.courseId,
+          moduleId: targetModuleId.isNotEmpty ? targetModuleId : t.moduleId,
+          title: t.title,
+          status: TopicStatus.notStarted,
+          orderIndex: entry.key,
+          createdAt: now,
+          updatedAt: now,
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _revisionTopics = seeded;
+          _isLoadingTopics = false;
+        });
+      }
+      await LocalRevisionTopicStorage.saveTopics(revision.id, seeded);
+      if (getIt.isRegistered<FirestoreService>()) {
+        final firestore = getIt<FirestoreService>();
+        if (firestore.isAvailable) {
+          for (final t in seeded) {
+            firestore.addRevisionTopic(t);
+          }
+        }
+      }
+    } else if (mounted) {
       setState(() {
         _isLoadingTopics = false;
       });
@@ -126,11 +204,213 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _toggleTopicStatus(int index) async {
+    if (index >= _revisionTopics.length) return;
+    final current = _revisionTopics[index];
+    final TopicStatus next;
+    switch (current.status) {
+      case TopicStatus.notStarted:
+        next = TopicStatus.inProgress;
+        break;
+      case TopicStatus.inProgress:
+        next = TopicStatus.completed;
+        break;
+      case TopicStatus.completed:
+        next = TopicStatus.notStarted;
+        break;
+    }
+
+    final updated = current.copyWith(
+      status: next,
+      completedAt: next == TopicStatus.completed ? DateTime.now() : null,
+      clearCompletedAt: next != TopicStatus.completed,
+      updatedAt: DateTime.now(),
+    );
+
+    final updatedTopics = List<RevisionTopic>.from(_revisionTopics);
+    updatedTopics[index] = updated;
+    setState(() {
+      _revisionTopics = updatedTopics;
+    });
+
+    await LocalRevisionTopicStorage.saveTopics(widget.revision.id, updatedTopics);
+
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable && updated.id.isNotEmpty) {
+        try {
+          await firestore.updateRevisionTopic(updated).timeout(
+            const Duration(seconds: 4),
+            onTimeout: () {},
+          );
+        } catch (_) {}
+      }
+    }
+
+    final allTopicsCompleted = updatedTopics.isNotEmpty &&
+        updatedTopics.every((t) => t.status == TopicStatus.completed);
+
+    if (allTopicsCompleted && mounted) {
+      final revision = _revision;
+      final isDue = revision.isDueAt(DateTime.now());
+
+      if (isDue) {
+        // Scheduled revision date reached: show dialog and suggest moving to the next revision cycle.
+        await RevisionCompletionDialog.show(
+          context,
+          topicTitle: 'All Topics Completed',
+          courseTitle: revision.courseTitle,
+          moduleTitle: revision.moduleTitle,
+          currentLevel: revision.currentLevel,
+          isFinished: revision.isFinished,
+          completedAt: updated.completedAt ?? DateTime.now(),
+          onMoveToNextRevision: () async {
+            // Reset revision topics to notStarted for the new revision cycle
+            final resetTopics = updatedTopics.map((t) => t.copyWith(
+              status: TopicStatus.notStarted,
+              clearCompletedAt: true,
+              updatedAt: DateTime.now(),
+            )).toList();
+            setState(() {
+              _revisionTopics = resetTopics;
+            });
+            await LocalRevisionTopicStorage.saveTopics(revision.id, resetTopics);
+            if (getIt.isRegistered<FirestoreService>()) {
+              final firestore = getIt<FirestoreService>();
+              if (firestore.isAvailable) {
+                for (final t in resetTopics) {
+                  unawaited(firestore.updateRevisionTopic(t));
+                }
+              }
+            }
+            await _startCurrentLevel(revision, popOnComplete: true);
+          },
+        );
+      } else {
+        // Before revision date: show same dialog with button "Completed",
+        // and on click it goes back to revision module with revision again action!
+        await RevisionCompletionDialog.show(
+          context,
+          topicTitle: 'All Topics Completed',
+          courseTitle: revision.courseTitle,
+          moduleTitle: revision.moduleTitle,
+          currentLevel: revision.currentLevel,
+          isFinished: revision.isFinished,
+          completedAt: updated.completedAt ?? DateTime.now(),
+          actionButtonLabel: 'Completed',
+          onMoveToNextRevision: () async {
+            final now = DateTime.now();
+            final log = StudyLog(
+              id: 'rev_${revision.id}_${now.millisecondsSinceEpoch}',
+              type: StudyLogType.revisionCompleted,
+              courseId: revision.courseId,
+              courseTitle: revision.courseTitle,
+              moduleId: revision.moduleId,
+              moduleTitle: revision.moduleTitle,
+              revisionLevel: revision.currentLevel,
+              timestamp: now,
+              createdAt: now,
+            );
+            await LocalStudyLogStorage.addLog(log);
+            await LocalRevisionStorage.recordRevisionEvent(now);
+            if (getIt.isRegistered<FirestoreService>()) {
+              final firestore = getIt<FirestoreService>();
+              if (firestore.isAvailable) {
+                unawaited(firestore.addStudyLog(log));
+              }
+            }
+            if (getIt.isRegistered<OngoingModulesController>()) {
+              unawaited(getIt<OngoingModulesController>().refresh());
+            }
+            if (getIt.isRegistered<ProgressController>()) {
+              unawaited(getIt<ProgressController>().refresh());
+            }
+
+            // Reset topics so they are ready for the "revise again" action
+            final resetTopics = updatedTopics.map((t) => t.copyWith(
+              status: TopicStatus.notStarted,
+              clearCompletedAt: true,
+              updatedAt: DateTime.now(),
+            )).toList();
+            setState(() {
+              _revisionTopics = resetTopics;
+            });
+            await LocalRevisionTopicStorage.saveTopics(revision.id, resetTopics);
+            if (getIt.isRegistered<FirestoreService>()) {
+              final firestore = getIt<FirestoreService>();
+              if (firestore.isAvailable) {
+                for (final t in resetTopics) {
+                  unawaited(firestore.updateRevisionTopic(t));
+                }
+              }
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'R${revision.currentLevel} completed — ready to revise again on ${_formatDate(revision.nextRevisionAt)}.',
+                  ),
+                  backgroundColor: AppTheme.primaryColor,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+              Navigator.of(context).pop();
+            }
+          },
+        );
+      }
+    }
+  }
+
+  Future<void> _resetTopicsForCurrentLevel() async {
+    final resetTopics = _revisionTopics.map((t) => t.copyWith(
+      status: TopicStatus.notStarted,
+      clearCompletedAt: true,
+      updatedAt: DateTime.now(),
+    )).toList();
+    setState(() {
+      _revisionTopics = resetTopics;
+    });
+    await LocalRevisionTopicStorage.saveTopics(widget.revision.id, resetTopics);
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable) {
+        for (final t in resetTopics) {
+          unawaited(firestore.updateRevisionTopic(t));
+        }
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Topics reset — ready to revise again in R${_revision.currentLevel}'),
+        backgroundColor: AppTheme.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _formatDate(DateTime value) =>
+      '${value.day} ${_months[value.month - 1]} ${value.year}';
+
   /// Explicitly completes the level the user is on and moves the ladder on.
-  Future<void> _startCurrentLevel(Revision revision) async {
+  Future<void> _startCurrentLevel(Revision revision, {bool popOnComplete = false}) async {
     final level = revision.currentLevel;
     final advanced = await _controller.completeCurrentLevel(revision.id);
     if (!mounted || !advanced) return;
+
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      unawaited(getIt<OngoingModulesController>().refresh());
+    }
+    if (getIt.isRegistered<ProgressController>()) {
+      unawaited(getIt<ProgressController>().refresh());
+    }
 
     final isNowFinished = _revision.isFinished;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -145,23 +425,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
-  }
 
-  Future<void> _openModule() async {
-    final revision = _revision;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ModuleDetailScreen(
-          moduleTitle: revision.moduleTitle,
-          courseTitle: revision.courseTitle,
-          courseId: revision.courseId,
-          moduleId: revision.moduleId,
-        ),
-      ),
-    );
-    if (mounted) {
-      _loadTopics();
+    if (popOnComplete && mounted) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -173,7 +439,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         return Container(
           decoration: BoxDecoration(
             color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: SafeArea(
@@ -190,20 +456,6 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                   ),
                 ),
                 const VGapMd(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.open_in_new_rounded,
-                    color: AppTheme.primaryColor,
-                  ),
-                  title: const Text(
-                    'Open Module',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onTap: () {
-                    Navigator.pop(modalCtx);
-                    _openModule();
-                  },
-                ),
                 ListTile(
                   leading: Icon(
                     Icons.restart_alt_rounded,
@@ -254,20 +506,48 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
             final revision = _revision;
             return Column(
               children: [
-                _RevisionDetailTopBar(
+                CustomAppBar(
+                  title: revision.courseTitle.isNotEmpty ? revision.courseTitle : 'REVISION',
                   onBack: _handleBack,
-                  onOptions: _openOptionsMenu,
-                  currentLevel: revision.currentLevel,
-                  isFinished: revision.isFinished,
+                  actions: [
+                    _RevisionLevelChip(
+                      currentLevel: revision.currentLevel,
+                      isFinished: revision.isFinished,
+                    ),
+                    const HGapXs(),
+                    IconButton(
+                      icon: Icon(
+                        Icons.more_vert_rounded,
+                        color: AppTheme.textPrimaryColor(context),
+                        size: 22,
+                      ),
+                      onPressed: _openOptionsMenu,
+                      tooltip: 'Options',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    ),
+                  ],
                 ),
-                _HeroBlock(
-                  title: revision.moduleTitle,
-                  courseTitle: revision.courseTitle,
-                  courseId: revision.courseId,
-                  levelLabel: revision.levelLabel,
-                  isDue: revision.isDueAt(DateTime.now()),
-                  isFinished: revision.isFinished,
-                  onStartRevision: () => _startCurrentLevel(revision),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ModuleContextPill(moduleTitle: revision.moduleTitle),
+                        ),
+                      ),
+                      if (revision.isDueAt(DateTime.now()) && !revision.isFinished) ...[
+                        const HGapSm(),
+                        AddPillButton(
+                          label: 'Start ${revision.levelLabel}',
+                          icon: Icons.play_arrow_rounded,
+                          onPressed: () => _startCurrentLevel(revision),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 Padding(
                   padding:
@@ -279,7 +559,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                   builder: (context, activeIdx, _) {
                     return _RevisionTabsRow(
                       activeIndex: activeIdx,
-                      topicsCount: _topics.length,
+                      topicsCount: _revisionTopics.length,
                       onTabSelected: (index) {
                         if (_activeTab.value == index) return;
                         _activeTab.value = index;
@@ -299,10 +579,11 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                         );
                       }
                       return _RevisionTopicsView(
-                        topics: _topics,
+                        topics: _revisionTopics,
+                        revision: revision,
                         isLoading: _isLoadingTopics,
                         bottomPadding: bottomSafe + 24,
-                        onTopicTap: _openModule,
+                        onToggle: _toggleTopicStatus,
                       );
                     },
                   ),
@@ -316,15 +597,11 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   }
 }
 
-class _RevisionDetailTopBar extends StatelessWidget {
-  final VoidCallback onBack;
-  final VoidCallback onOptions;
+class _RevisionLevelChip extends StatelessWidget {
   final int currentLevel;
   final bool isFinished;
 
-  const _RevisionDetailTopBar({
-    required this.onBack,
-    required this.onOptions,
+  const _RevisionLevelChip({
     required this.currentLevel,
     required this.isFinished,
   });
@@ -336,158 +613,20 @@ class _RevisionDetailTopBar extends StatelessWidget {
         : RevisionLevelPalette.of(context, currentLevel);
     final label = isFinished ? 'Completed' : 'R$currentLevel';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          const HGapSm(),
-          Text(
-            'MODULE',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textSecondaryColor(context),
-              letterSpacing: 1.0,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: colors.border),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: colors.foreground,
-              ),
-            ),
-          ),
-          const HGapSm(),
-          IconButton(
-            icon: Icon(
-              Icons.more_vert_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 24,
-            ),
-            onPressed: onOptions,
-            tooltip: 'Options',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.border),
       ),
-    );
-  }
-}
-
-/// Same hero block the course page uses: a 44px pastel square + 24px title,
-/// with the course name tucked under it. The square shows the course icon, not
-/// the module icon.
-///
-/// Nothing sits to the right of the module name until the current level comes
-/// due, at which point the "Start Rn" button appears there.
-class _HeroBlock extends StatelessWidget {
-  final String title;
-  final String courseTitle;
-  final String courseId;
-  final String levelLabel;
-  final bool isDue;
-  final bool isFinished;
-  final VoidCallback onStartRevision;
-
-  const _HeroBlock({
-    required this.title,
-    required this.courseTitle,
-    required this.courseId,
-    required this.levelLabel,
-    required this.isDue,
-    required this.isFinished,
-    required this.onStartRevision,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          CourseIconChip(courseId: courseId, size: 44, radius: 12),
-          const HGapSm(),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimaryColor(context),
-                    letterSpacing: -0.5,
-                    height: 1.15,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const VGapXs(),
-                Text(
-                  courseTitle.isEmpty ? 'No course' : courseTitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondaryColor(context),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const HGapSm(),
-          if (isDue && !isFinished)
-            ElevatedButton(
-              onPressed: onStartRevision,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Text(
-                'Start $levelLabel',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-        ],
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: colors.foreground,
+        ),
       ),
     );
   }
@@ -626,7 +765,7 @@ class _RevisionTabsRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
-        decoration:  BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
           ),
@@ -691,20 +830,22 @@ class _TabItem extends StatelessWidget {
   }
 }
 
-/// Replaces the course page's module list with this module's topics.
+/// Replaces the course page's module list with this module's revision topics.
 ///
-/// Simple read-only list of topics.
+/// Completely decoupled from course modules.
 class _RevisionTopicsView extends StatelessWidget {
-  final List<Topic> topics;
+  final List<RevisionTopic> topics;
+  final Revision revision;
   final bool isLoading;
   final double bottomPadding;
-  final VoidCallback onTopicTap;
+  final ValueChanged<int> onToggle;
 
   const _RevisionTopicsView({
     required this.topics,
+    required this.revision,
     required this.isLoading,
     required this.bottomPadding,
-    required this.onTopicTap,
+    required this.onToggle,
   });
 
   @override
@@ -720,28 +861,133 @@ class _RevisionTopicsView extends StatelessWidget {
     }
 
     if (topics.isEmpty) {
-      return _RevisionTopicsEmptyState(onOpenModule: onTopicTap);
+      return const _RevisionTopicsEmptyState();
     }
 
-    return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
-      itemCount: topics.length,
-      separatorBuilder: (context, index) => const VGapSm(),
-      itemBuilder: (context, index) {
-        final topic = topics[index];
-        return _TopicListItem(topic: topic);
-      },
+    final showEarlyBanner = !revision.isDueAt(DateTime.now()) && !revision.isFinished;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showEarlyBanner)
+          _OngoingCycleBanner(
+            currentLevel: revision.currentLevel,
+            nextRevisionAt: revision.nextRevisionAt,
+          ),
+        Expanded(
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
+            itemCount: topics.length,
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              thickness: 0.6,
+              indent: 52,
+              endIndent: 16,
+              color: AppTheme.borderColor(context),
+            ),
+            itemBuilder: (context, index) {
+              final topic = topics[index];
+              return TopicListItem(
+                topic: topic.toTopic(),
+                showCheckbox: true,
+                showTrailing: false,
+                onCheckboxTap: () => onToggle(index),
+                onTap: () => onToggle(index),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _RevisionTopicsEmptyState extends StatelessWidget {
-  final VoidCallback onOpenModule;
+/// Shown on top before the topic list when revising before the scheduled revision date.
+class _OngoingCycleBanner extends StatelessWidget {
+  final int currentLevel;
+  final DateTime nextRevisionAt;
 
-  const _RevisionTopicsEmptyState({required this.onOpenModule});
+  const _OngoingCycleBanner({
+    required this.currentLevel,
+    required this.nextRevisionAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = RevisionLevelPalette.of(context, currentLevel);
+    final daysUntil = nextRevisionAt.difference(DateTime.now()).inDays;
+    final dueText = daysUntil > 0
+        ? 'in $daysUntil ${daysUntil == 1 ? 'day' : 'days'}'
+        : 'today';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: palette.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.border, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palette.foreground.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.replay_rounded,
+              size: 18,
+              color: palette.foreground,
+            ),
+          ),
+          const HGapSm(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Revise again in R$currentLevel',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: palette.foreground,
+                  ),
+                ),
+                const VGapXs(),
+                Text(
+                  'Scheduled for ${_formatDate(nextRevisionAt)} ($dueText)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondaryColor(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _formatDate(DateTime value) =>
+      '${value.day} ${_months[value.month - 1]} ${value.year}';
+}
+
+class _RevisionTopicsEmptyState extends StatelessWidget {
+  const _RevisionTopicsEmptyState();
 
   @override
   Widget build(BuildContext context) {
@@ -776,102 +1022,15 @@ class _RevisionTopicsEmptyState extends StatelessWidget {
             ),
             const VGapXs(),
             Text(
-              'Add topics to this module to start tracking its revision ladder.',
+              'No topics have been added to this module yet.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
                 color: AppTheme.textSecondaryColor(context),
               ),
             ),
-            const VGapMd(),
-            ElevatedButton.icon(
-              onPressed: onOpenModule,
-              icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              label: const Text('Open Module'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Read-only topic card with pastel purple squircle document icon and title.
-class _TopicListItem extends StatelessWidget {
-  final Topic topic;
-
-  const _TopicListItem({required this.topic});
-
-  @override
-  Widget build(BuildContext context) {
-    final iconData = topicIconFrom(topic.iconCodePoint);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.borderColor(context),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppTheme.pastelPurple(context),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              iconData,
-              color: AppTheme.pastelPurpleText(context),
-              size: 20,
-            ),
-          ),
-          const HGapMd(),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  topic.title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (topic.description.isNotEmpty) ...[
-                  const VGapXs(),
-                  Text(
-                    topic.description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

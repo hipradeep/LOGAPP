@@ -3,14 +3,17 @@ import 'package:flutter/foundation.dart';
 import '../models/course.dart';
 import '../models/revision.dart';
 import '../models/module.dart';
+import '../models/study_log.dart';
 import '../services/firestore_service.dart';
 import '../services/local_revision_storage.dart';
+import '../services/local_study_log_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 import 'ongoing_modules_controller.dart';
+import 'progress_controller.dart';
 
 /// Owns the R1 -> R5 spaced repetition ladder.
 ///
@@ -111,6 +114,32 @@ class RevisionController extends ChangeNotifier {
     _revisions = _sorted(List<Revision>.of(_revisions)..[index] = advanced);
     await LocalRevisionStorage.saveAll(_revisions);
     await LocalRevisionStorage.recordRevisionEvent(now);
+
+    final log = StudyLog(
+      id: 'rev_${current.id}_${now.millisecondsSinceEpoch}',
+      type: StudyLogType.revisionCompleted,
+      courseId: current.courseId,
+      courseTitle: current.courseTitle,
+      moduleId: current.moduleId,
+      moduleTitle: current.moduleTitle,
+      revisionLevel: current.currentLevel,
+      timestamp: now,
+      createdAt: now,
+    );
+    await LocalStudyLogStorage.addLog(log);
+    if (getIt.isRegistered<FirestoreService>()) {
+      final firestore = getIt<FirestoreService>();
+      if (firestore.isAvailable) {
+        unawaited(firestore.addStudyLog(log));
+      }
+    }
+
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      unawaited(getIt<OngoingModulesController>().refresh());
+    }
+    if (getIt.isRegistered<ProgressController>()) {
+      unawaited(getIt<ProgressController>().refresh());
+    }
     notifyListeners();
     await _pushToFirestore(advanced, isNew: false);
     return true;

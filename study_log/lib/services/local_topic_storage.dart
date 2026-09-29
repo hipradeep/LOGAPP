@@ -153,8 +153,11 @@ class LocalTopicStorage {
           if (entry is Map) {
             final statusStr = entry['status']?.toString();
             if (statusStr == 'completed') {
-              final dt = Topic.parseDateTime(entry['completedAt']);
-              if (dt != null && !dt.isBefore(cutoffDate)) {
+              final dt = Topic.parseDateTime(entry['completedAt']) ??
+                  Topic.parseDateTime(entry['updatedAt']) ??
+                  Topic.parseDateTime(entry['createdAt']) ??
+                  DateTime.now();
+              if (!dt.isBefore(cutoffDate)) {
                 completedDates.add(dt);
               }
             }

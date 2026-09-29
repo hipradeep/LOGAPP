@@ -40,11 +40,18 @@ Future<void> warmupControllers() async {
     final revision = getIt<RevisionController>();
     final progress = getIt<ProgressController>();
 
-    await courses.loadCourses();
-    await ongoing.refresh();
-    await revision.reconcile();
+    await Future.wait([
+      courses.loadCourses(),
+      ongoing.refresh(),
+      revision.reconcile(),
+    ]);
     await progress.load();
   } catch (e) {
     debugPrint('warmupControllers error: $e');
+    try {
+      if (getIt.isRegistered<ProgressController>()) {
+        await getIt<ProgressController>().load();
+      }
+    } catch (_) {}
   }
 }

@@ -194,7 +194,7 @@ class _GreetingHeader extends StatelessWidget {
               Text(
                 'Hi, Pradeep 👋',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimaryColor(context),
                   letterSpacing: -0.3,
@@ -390,19 +390,19 @@ class _CurrentModulesSliverList extends StatelessWidget {
           );
         }
 
-        final displayItems = items.length > 7 ? items.sublist(0, 7) : items;
-        final hasMore = items.length > 7;
+        final displayItems = items.length > 4 ? items.sublist(0, 4) : items;
+        final hasMore = items.length > 4;
 
         return SliverList.builder(
           itemCount: displayItems.length + (hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (hasMore && index == displayItems.length) {
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
+                padding: const EdgeInsets.only(bottom: 8.0),
                 child: GestureDetector(
                   onTap: onViewAll,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
                       color: AppTheme.surface(context),
                       borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
@@ -422,12 +422,16 @@ class _CurrentModulesSliverList extends StatelessWidget {
               );
             }
             final item = displayItems[index];
+            final cleanSubtitle = item.breadcrumb
+                .replaceAll(' • Not Started', '')
+                .replaceAll(' • Not started', '');
+
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
+              padding: const EdgeInsets.only(bottom: 8.0),
               child: StudyScheduleCard(
                 key: ValueKey(item.module.id),
                 title: item.title,
-                subtitle: item.breadcrumb,
+                subtitle: cleanSubtitle,
                 progressRatio: item.progressRatio,
                 index: index,
                 progress: item.progress,

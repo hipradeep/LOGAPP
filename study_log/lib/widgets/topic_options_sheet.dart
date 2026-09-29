@@ -72,9 +72,7 @@ class TopicOptionsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final iconData = topicIconFrom(topic.iconCodePoint);
 
-    final subtitle = topic.description.isNotEmpty
-        ? topic.description
-        : moduleTitle;
+    final subtitle = moduleTitle;
 
     return SheetContainer(
       children: [

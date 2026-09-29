@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/module_context_pill.dart';
+import '../widgets/study_text_fields.dart';
 import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
@@ -245,15 +248,27 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _AddTopicTopBar(
+            CustomAppBar(
               title: widget.isEditing ? 'Edit Topic' : 'Add Topic',
               onBack: _handleBack,
-              onSave: _handleSave,
-              isSaving: _isSaving,
+              actions: [
+                AddPillButton(
+                  label: 'Save',
+                  icon: Icons.check_rounded,
+                  isLoading: _isSaving,
+                  onPressed: _handleSave,
+                ),
+              ],
             ),
             if ((_selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle).isNotEmpty)
-              _ModuleContextPill(
-                moduleTitle: _selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ModuleContextPill(
+                    moduleTitle: _selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle,
+                  ),
+                ),
               ),
             Expanded(
               child: SingleChildScrollView(
@@ -267,14 +282,29 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _TopicNameField(controller: _nameController),
-                    const VGapLg(),
-                    _DescriptionField(
-                      controller: _descriptionController,
-                      currentLength: _descriptionController.text.length,
+                    UnderlineInputField(
+                      label: 'Topic Name',
+                      controller: _nameController,
+                      hintText: 'Enter topic name',
+                      isRequired: true,
                     ),
                     const VGapLg(),
-                    _OrderField(controller: _orderController),
+                    BorderlessDescriptionField(
+                      controller: _descriptionController,
+                    ),
+                    const VGapLg(),
+                    UnderlineInputField(
+                      label: 'Order (Optional)',
+                      controller: _orderController,
+                      hintText: 'Enter order (e.g., 1, 2, 3)',
+                      keyboardType: TextInputType.number,
+                      fontSize: 16,
+                      suffixIcon: Icon(
+                        Icons.unfold_more_rounded,
+                        color: AppTheme.textMutedColor(context),
+                        size: 22,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -282,316 +312,6 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AddTopicTopBar extends StatelessWidget {
-  final String title;
-  final VoidCallback onBack;
-  final VoidCallback onSave;
-  final bool isSaving;
-
-  const _AddTopicTopBar({
-    this.title = 'Add Topic',
-    required this.onBack,
-    required this.onSave,
-    required this.isSaving,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.chevron_left_rounded,
-                  color: AppTheme.textPrimaryColor(context),
-                  size: 28,
-                ),
-                onPressed: onBack,
-                tooltip: 'Back',
-              ),
-              const HGapXs(),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ],
-          ),
-          AddPillButton(
-            label: 'Save',
-            icon: Icons.check_rounded,
-            isLoading: isSaving,
-            onPressed: onSave,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModuleContextPill extends StatelessWidget {
-  final String moduleTitle;
-
-  const _ModuleContextPill({required this.moduleTitle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
-          decoration: BoxDecoration(
-            color: AppTheme.pastelPurple(context),
-            borderRadius: BorderRadius.circular(8.0),
-            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.auto_stories_rounded,
-                size: 14,
-                color: AppTheme.pastelPurpleText(context),
-              ),
-              const HGapXs(),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 280),
-                child: Text(
-                  moduleTitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.pastelPurpleText(context),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TopicNameField extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _TopicNameField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RichText(
-          text: TextSpan(
-            text: 'Topic Name ',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-            children: [
-              TextSpan(
-                text: '*',
-                style: TextStyle(
-                  color: AppTheme.errorColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const VGapSm(),
-        TextField(
-          controller: controller,
-          style: TextStyle(
-            fontSize: 14,
-            color: AppTheme.textPrimaryColor(context),
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Enter topic name',
-            hintStyle:  TextStyle(
-              fontSize: 14,
-              color: AppTheme.textMutedColor(context),
-              fontWeight: FontWeight.normal,
-            ),
-            filled: true,
-            fillColor: AppTheme.surface(context),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.borderColor(context)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.borderColor(context)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppTheme.primaryColor, width: 1.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DescriptionField extends StatelessWidget {
-  final TextEditingController controller;
-  final int currentLength;
-
-  const _DescriptionField({
-    required this.controller,
-    required this.currentLength,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Description (Optional)',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor(context)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              TextField(
-                controller: controller,
-                maxLines: 4,
-                maxLength: 500,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textPrimaryColor(context),
-                  fontWeight: FontWeight.w500,
-                ),
-                buildCounter: (
-                  _, {
-                  required currentLength,
-                  required isFocused,
-                  maxLength,
-                }) =>
-                    null,
-                decoration:  InputDecoration(
-                  hintText: 'Enter description',
-                  hintStyle: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textMutedColor(context),
-                    fontWeight: FontWeight.normal,
-                  ),
-                  isDense: true,
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              Text(
-                '$currentLength/500',
-                style:  TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textMutedColor(context),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-
-
-class _OrderField extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _OrderField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Order (Optional)',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          style: TextStyle(
-            fontSize: 14,
-            color: AppTheme.textPrimaryColor(context),
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Enter order (e.g., 1, 2, 3)',
-            hintStyle:  TextStyle(
-              fontSize: 14,
-              color: AppTheme.textMutedColor(context),
-              fontWeight: FontWeight.normal,
-            ),
-            filled: true,
-            fillColor: AppTheme.surface(context),
-            suffixIcon:  Icon(
-              Icons.unfold_more_rounded,
-              color: AppTheme.textMutedColor(context),
-              size: 22,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.borderColor(context)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.borderColor(context)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppTheme.primaryColor, width: 1.5),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

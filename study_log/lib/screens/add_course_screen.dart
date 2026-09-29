@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/study_text_fields.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 
@@ -321,11 +322,15 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _CourseNameField(controller: _titleController),
+                    UnderlineInputField(
+                      label: 'Course Name',
+                      controller: _titleController,
+                      hintText: 'Enter course name',
+                      isRequired: true,
+                    ),
                     const VGapLg(),
-                    _CourseDescriptionField(
+                    BorderlessDescriptionField(
                       controller: _descriptionController,
-                      charCount: _descLength,
                     ),
                     const VGapLg(),
                     _CourseIconAndColorRow(
@@ -398,137 +403,6 @@ class _AddCourseTopBar extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _CourseNameField extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _CourseNameField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Course Name ',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
-              ),
-            ),
-            Text(
-              '*',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.errorColor,
-              ),
-            ),
-          ],
-        ),
-        const VGapSm(),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor(context)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-          child: TextField(
-            controller: controller,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-            decoration:  InputDecoration(
-              hintText: 'Enter course name',
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: AppTheme.textMutedColor(context),
-              ),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CourseDescriptionField extends StatelessWidget {
-  final TextEditingController controller;
-  final int charCount;
-
-  const _CourseDescriptionField({
-    required this.controller,
-    required this.charCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Description (Optional)',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapSm(),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderColor(context)),
-          ),
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              TextField(
-                controller: controller,
-                maxLines: 4,
-                maxLength: 500,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textPrimaryColor(context),
-                ),
-                decoration:  InputDecoration(
-                  hintText: 'Enter description',
-                  hintStyle: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textMutedColor(context),
-                  ),
-                  border: InputBorder.none,
-                  counterText: '',
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              Text(
-                '$charCount/500',
-                style:  TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textMutedColor(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -720,14 +594,16 @@ class _CourseDeadlineField extends StatelessWidget {
         const VGapSm(),
         InkWell(
           onTap: onPickDate,
-          borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor(context)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppTheme.borderColor(context),
+                  width: 1.0,
+                ),
+              ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               children: [
                 const Icon(
@@ -742,7 +618,7 @@ class _CourseDeadlineField extends StatelessWidget {
                         ? _dateFormat.format(selectedDeadline!)
                         : 'Select deadline',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       color: selectedDeadline != null
                           ? AppTheme.textPrimaryColor(context)
                           : AppTheme.textMutedColor(context),
@@ -755,14 +631,14 @@ class _CourseDeadlineField extends StatelessWidget {
                 if (selectedDeadline != null)
                   GestureDetector(
                     onTap: onClearDate,
-                    child:  Icon(
+                    child: Icon(
                       Icons.close_rounded,
                       color: AppTheme.textMutedColor(context),
                       size: 20,
                     ),
                   )
                 else
-                   Icon(
+                  Icon(
                     Icons.chevron_right_rounded,
                     color: AppTheme.textMutedColor(context),
                     size: 22,

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import 'compact_list_item.dart';
 
 /// Modern Course & Module Card matching the reference design:
 /// - Rounded square icon container with rotating pastel accents
@@ -68,110 +69,48 @@ class StudyScheduleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = _getTheme(context, index);
 
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor(context)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.shadowColor(context),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Pastel rounded square icon
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: theme.bg,
-                    borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                    border: Border.all(color: theme.border, width: 1),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    theme.icon,
-                    color: theme.accent,
-                    size: 24,
-                  ),
-                ),
-                const HGapMd(),
-                // Title, Subtitle & Progress Bar
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimaryColor(context),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapXs(),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondaryColor(context),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapSm(),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _TwoColorProgressBar(
-                              completedRatio: progress.clamp(0.0, 1.0),
-                              inProgressRatio: inProgressRatio.clamp(0.0, 1.0),
-                            ),
-                          ),
-                          if (progressRatio != null) ...[
-                            const HGapSm(),
-                            Text(
-                              progressRatio!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textSecondaryColor(context),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const HGapSm(),
-                // Trailing Chevron
-                 Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppTheme.textMutedColor(context),
-                  size: 22,
-                ),
-              ],
-            ),
-          ),
+    return CompactListItem(
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: theme.bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: theme.border, width: 1),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          theme.icon,
+          color: theme.accent,
+          size: 20,
         ),
       ),
+      title: title,
+      subtitle: subtitle,
+      margin: EdgeInsets.zero,
+      bottom: Row(
+        children: [
+          Expanded(
+            child: _TwoColorProgressBar(
+              completedRatio: progress.clamp(0.0, 1.0),
+              inProgressRatio: inProgressRatio.clamp(0.0, 1.0),
+            ),
+          ),
+          if (progressRatio != null) ...[
+            const HGapSm(),
+            Text(
+              progressRatio!,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondaryColor(context),
+              ),
+            ),
+          ],
+        ],
+      ),
+      onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 }
@@ -206,9 +145,9 @@ class _TwoColorProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: BorderRadius.circular(2),
       child: SizedBox(
-        height: 5,
+        height: 4,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;

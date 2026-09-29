@@ -3,7 +3,9 @@ import '../theme/app_theme.dart';
 import '../theme/revision_level_palette.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
 import '../widgets/course_icon_chip.dart';
+import '../widgets/compact_list_item.dart';
 import '../models/revision.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/courses_controller.dart';
@@ -208,11 +210,12 @@ class _RevisionScreenState extends State<RevisionScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _RevisionTopBar(
+            _RevisionHeader(
               onBack: widget.onBack,
-              isSearchActive: _isSearchVisible,
+              isSearchVisible: _isSearchVisible,
               onSearchTap: _toggleSearch,
               onMenuAction: _handleTopMenuAction,
+              scope: _scope,
             ),
             if (_isSearchVisible)
               Padding(
@@ -461,96 +464,63 @@ class _RevisionScreenState extends State<RevisionScreen> {
   }
 }
 
-/// Top header matching the reference design:
-/// Circular back button, bold title, circular search, circular overflow menu.
-class _RevisionTopBar extends StatelessWidget {
+class _RevisionHeader extends StatelessWidget {
   final VoidCallback? onBack;
+  final bool isSearchVisible;
   final VoidCallback onSearchTap;
-  final bool isSearchActive;
   final ValueChanged<String> onMenuAction;
+  final RevisionScope scope;
 
-  const _RevisionTopBar({
+  const _RevisionHeader({
     this.onBack,
+    required this.isSearchVisible,
     required this.onSearchTap,
-    required this.isSearchActive,
     required this.onMenuAction,
+    required this.scope,
   });
 
   @override
   Widget build(BuildContext context) {
-    final showBack = onBack != null;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      padding: EdgeInsets.fromLTRB(
+        onBack != null ? 8.0 : 20.0,
+        16.0,
+        20.0,
+        8.0,
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (showBack) ...[
-            Material(
-              color: const Color(0xFFF1F5F9),
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: onBack,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.chevron_left_rounded,
-                    color: AppTheme.textPrimaryColor(context),
-                    size: 26,
-                  ),
-                ),
-              ),
-            ),
-            const HGapMd(),
+          if (onBack != null) ...[
+            AppBackButton(onPressed: onBack),
+            const HGapXs(),
           ],
           Text(
             'Revision',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 26,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.4,
+              letterSpacing: -0.3,
             ),
           ),
           const Spacer(),
-          Material(
-            color: isSearchActive
-                ? AppTheme.primaryColor.withValues(alpha: 0.1)
-                : const Color(0xFFF1F5F9),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: onSearchTap,
-              customBorder: const CircleBorder(),
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSearchActive
-                        ? AppTheme.primaryColor
-                        : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  isSearchActive
-                      ? Icons.close_rounded
-                      : Icons.search_rounded,
-                  color: isSearchActive
-                      ? AppTheme.primaryColor
-                      : const Color(0xFF334155),
-                  size: 20,
-                ),
-              ),
+          IconButton(
+            icon: Icon(
+              isSearchVisible
+                  ? Icons.close_rounded
+                  : Icons.search_rounded,
+              color: isSearchVisible
+                  ? AppTheme.primaryColor
+                  : AppTheme.textPrimaryColor(context),
+              size: 24,
             ),
+            onPressed: onSearchTap,
+            tooltip: isSearchVisible ? 'Close' : 'Search',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
-          const HGapSm(),
+          const HGapXs(),
           PopupMenuButton<String>(
             onSelected: onMenuAction,
             color: AppTheme.surface(context),
@@ -558,6 +528,13 @@ class _RevisionTopBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             elevation: 6,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            icon: Icon(
+              Icons.more_vert_rounded,
+              color: AppTheme.textPrimaryColor(context),
+              size: 24,
+            ),
             itemBuilder: (ctx) => [
               PopupMenuItem<String>(
                 value: 'showFinished',
@@ -568,9 +545,11 @@ class _RevisionTopBar extends StatelessWidget {
                       color: AppTheme.textPrimaryColor(context),
                       size: 20,
                     ),
-                    HGapMd(),
+                    const HGapSm(),
                     Text(
-                      'Toggle finished',
+                      scope == RevisionScope.finished
+                          ? 'Show All Revisions'
+                          : 'Show Finished Revisions',
                       style: TextStyle(
                         color: AppTheme.textPrimaryColor(context),
                         fontWeight: FontWeight.w600,
@@ -581,21 +560,6 @@ class _RevisionTopBar extends StatelessWidget {
                 ),
               ),
             ],
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.more_vert_rounded,
-                color: Color(0xFF334155),
-                size: 20,
-              ),
-            ),
           ),
         ],
       ),
@@ -674,11 +638,11 @@ class _RevisionLevelFilterRow extends StatelessWidget {
     final totalCount = revisions.length;
 
     return SizedBox(
-      height: 60,
+      height: 42,
       child: ListView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
         children: [
           _AllPillTab(
             isSelected: selectedLevel == null,
@@ -712,34 +676,31 @@ class _AllPillTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 10),
-      child: Material(
-        color: isSelected ? AppTheme.pastelIndigo(context) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFFC7D2FE)
-                    : const Color(0xFFE2E8F0),
-                width: isSelected ? 1.4 : 1.0,
-              ),
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.pastelIndigo(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFC7D2FE)
+                  : AppTheme.borderColor(context),
+              width: isSelected ? 1.5 : 1.0,
             ),
-            child: Text(
-              'All ($count)',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected
-                    ? AppTheme.pastelIndigoText(context)
-                    : const Color(0xFF64748B),
-              ),
+          ),
+          child: Text(
+            'All $count',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected
+                  ? AppTheme.pastelIndigoText(context)
+                  : AppTheme.textSecondaryColor(context),
             ),
           ),
         ),
@@ -764,68 +725,54 @@ class _LevelTabCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 10),
-      child: Material(
-        color: config.colors.background,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 74,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected ? config.colors.foreground : config.colors.border,
-                width: isSelected ? 1.6 : 1.0,
-              ),
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? config.colors.background : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? config.colors.foreground : config.colors.border,
+              width: isSelected ? 1.5 : 1.0,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      config.label,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                        color: config.colors.foreground,
-                      ),
-                    ),
-                    const HGapXs(),
-                    Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        color: config.colors.foreground,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$count',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                config.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: config.colors.foreground,
                 ),
-                const VGapXs(),
-                Text(
-                  config.interval,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  height: 18,
+                  constraints: const BoxConstraints(minWidth: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: config.colors.foreground,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
       ),
@@ -988,107 +935,41 @@ class _RevisionItemCard extends StatelessWidget {
     final isDue = revision.isDueAt(now);
     final dueColor = _dueColor(context, days, isDue, revision);
 
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFFF1F5F9),
-                width: 1.2,
+    return CompactListItem(
+      margin: EdgeInsets.zero,
+      leading: CourseIconChip(
+        courseId: revision.courseId,
+        size: 38,
+        radius: 10,
+      ),
+      title: revision.moduleTitle,
+      titleBadge: _RevisionLevelPill(level: revision.currentLevel),
+      courseName: _courseFor(revision),
+      bottom: Row(
+        children: [
+          Icon(
+            revision.isFinished
+                ? Icons.check_circle_rounded
+                : Icons.access_time_rounded,
+            size: 13,
+            color: isDue ? AppTheme.errorColor : dueColor,
+          ),
+          const HGapXs(),
+          Flexible(
+            child: Text(
+              _dueLabel(days, isDue, revision),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isDue ? AppTheme.errorColor : dueColor,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.shadowColor(context),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                CourseIconChip(
-                  courseId: revision.courseId,
-                  size: 48,
-                  radius: 14,
-                ),
-                const HGapMd(),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              revision.moduleTitle,
-                              style: TextStyle(
-                                fontSize: 15.5,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimaryColor(context),
-                                letterSpacing: -0.2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const HGapSm(),
-                          _RevisionLevelPill(level: revision.currentLevel),
-                        ],
-                      ),
-                      const VGapXs(),
-                      Text(
-                        _courseFor(revision),
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppTheme.textSecondaryColor(context),
-                          fontWeight: FontWeight.w400,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapSm(),
-                      Row(
-                        children: [
-                          Icon(
-                            revision.isFinished
-                                ? Icons.check_circle_rounded
-                                : Icons.access_time_rounded,
-                            size: 15,
-                            color: isDue ?  AppTheme.errorColor : dueColor,
-                          ),
-                          const HGapXs(),
-                          Flexible(
-                            child: Text(
-                              _dueLabel(days, isDue, revision),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    isDue ?  AppTheme.errorColor : dueColor,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-        ),
+        ],
       ),
+      onTap: onTap,
     );
   }
 

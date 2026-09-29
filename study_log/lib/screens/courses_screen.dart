@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/course_options_sheet.dart';
+import '../widgets/compact_list_item.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
@@ -297,19 +298,14 @@ class _CoursesFilteredList extends StatelessWidget {
 
             final String subtitle;
             if (rollup != null && rollup.hasModules) {
-              final moduleInfo =
+              subtitle =
                   '${rollup.completedModules} / ${rollup.totalModules} modules';
-              subtitle = course.description.isNotEmpty
-                  ? '${course.description} • $moduleInfo'
-                  : moduleInfo;
-            } else if (course.description.isNotEmpty) {
-              subtitle = course.description;
             } else {
               subtitle = 'No modules yet';
             }
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
+              padding: const EdgeInsets.only(bottom: 8.0),
               child: _CourseItemCard(
                 courseId: course.id,
                 title: course.title,
@@ -424,147 +420,65 @@ class _CourseItemCard extends StatelessWidget {
         ? AppTheme.successColor
         : AppTheme.tintFor(context, accentIndex).$2;
 
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(
-                color: isComplete
-                    ? AppTheme.successColor.withValues(alpha: 0.25)
-                    : AppTheme.borderColor(context),
+    return CompactListItem(
+      margin: EdgeInsets.zero,
+      isCompleted: isComplete,
+      leading: CourseIconChip(
+        courseId: courseId,
+        size: 38,
+        radius: 10,
+      ),
+      title: title,
+      titleBadge: isComplete
+          ? Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 1.5,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.shadowColor(context),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+              decoration: BoxDecoration(
+                color: AppTheme.successColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'COMPLETED',
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.successColor,
+                  letterSpacing: 0.4,
                 ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                CourseIconChip(
-                  courseId: courseId,
-                  size: 48,
-                  radius: AppTheme.smallBorderRadius,
-                ),
-                const HGapMd(),
-                // Title, Subtitle, Progress Bar & Percentage
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimaryColor(context),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (isComplete) ...[
-                            const HGapXs(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.successColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'COMPLETED',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppTheme.successColor,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const VGapXs(),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isComplete
-                              ? AppTheme.successColor
-                              : AppTheme.textSecondaryColor(context),
-                          fontWeight:
-                              isComplete ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapSm(),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(3),
-                              child: LinearProgressIndicator(
-                                value: progress.clamp(0.0, 1.0),
-                                minHeight: 5,
-                                backgroundColor: const Color(0xFFECEEF6),
-                                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                              ),
-                            ),
-                          ),
-                          const HGapSm(),
-                          Text(
-                            percentage,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isComplete
-                                  ? AppTheme.successColor
-                                  : AppTheme.textSecondaryColor(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const HGapSm(),
-                // Trailing Chevron
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onLongPress,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppTheme.textMutedColor(context),
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ],
+              ),
+            )
+          : null,
+      subtitle: subtitle,
+      bottom: Row(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 4,
+                backgroundColor: const Color(0xFFECEEF6),
+                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+              ),
             ),
           ),
-        ),
+          const HGapSm(),
+          Text(
+            percentage,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: isComplete
+                  ? AppTheme.successColor
+                  : AppTheme.textSecondaryColor(context),
+            ),
+          ),
+        ],
       ),
+      onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 }

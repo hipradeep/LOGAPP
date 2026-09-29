@@ -4,7 +4,10 @@ import '../models/module.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
+import '../widgets/course_context_pill.dart';
 import '../widgets/module_options_sheet.dart';
+import '../widgets/compact_list_item.dart';
 import '../controllers/modules_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
@@ -93,10 +96,15 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _CourseDetailTopBar(
-              title: widget.course.title,
+            CustomAppBar(
+              title: 'COURSE',
               onBack: _handleBack,
-              onAddModule: _openAddModuleScreen,
+              actions: [
+                AddPillButton(
+                  label: 'Add Module',
+                  onPressed: _openAddModuleScreen,
+                ),
+              ],
             ),
             ListenableBuilder(
               listenable: Listenable.merge([
@@ -124,51 +132,21 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 4.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: AppTheme.pastelPurple(context),
-                              borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                              border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.school_rounded,
-                              color: AppTheme.pastelPurpleText(context),
-                              size: 22,
-                            ),
-                          ),
-                          const HGapSm(),
-                          Expanded(
-                            child: Text(
-                              widget.course.title,
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.textPrimaryColor(context),
-                                letterSpacing: -0.5,
-                                height: 1.15,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: CourseContextPill(courseTitle: widget.course.title),
                       ),
                     ),
-                    const VGapXs(),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
                       child: _CourseProgressHeader(
                         completedModules: completedCount,
                         totalModules: totalCount,
                         progress: progress,
                       ),
                     ),
+                    const VGapXs(),
                     ValueListenableBuilder<int>(
                       valueListenable: _activeTab,
                       builder: (context, activeIdx, _) {
@@ -211,55 +189,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 }
 
-class _CourseDetailTopBar extends StatelessWidget {
-  final String title;
-  final VoidCallback onBack;
-  final VoidCallback onAddModule;
-
-  const _CourseDetailTopBar({
-    required this.title,
-    required this.onBack,
-    required this.onAddModule,
-  });
-
-  static const String _eyebrow = 'Course';
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12.0, 8.0, 16.0, 8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Expanded(
-            child: Text(
-              _eyebrow.toUpperCase(),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondaryColor(context),
-                letterSpacing: 1.0,
-              ),
-            ),
-          ),
-          AddPillButton(
-            label: 'Add Module',
-            onPressed: onAddModule,
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CourseTabsRow extends StatelessWidget {
   final int activeIndex;
@@ -544,13 +473,14 @@ class _CourseModulesListView extends StatelessWidget {
 
         return ListView.separated(
           physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.only(top: 8, bottom: bottomPadding),
+          padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
           itemCount: dynamicModules.length,
-          separatorBuilder: (context, index) => const Divider(
+          separatorBuilder: (context, index) => Divider(
             height: 1,
-            indent: 72,
-            endIndent: 20,
-            color: Color(0xFFF3F4F6),
+            thickness: 0.6,
+            indent: 52,
+            endIndent: 16,
+            color: AppTheme.borderColor(context),
           ),
           itemBuilder: (context, index) {
             final Module module = dynamicModules[index];
@@ -564,9 +494,7 @@ class _CourseModulesListView extends StatelessWidget {
             final topicInfo = topicCount > 0
                 ? '$completedTopics / $topicCount topics'
                 : 'No topics yet';
-            final subtitle = module.description.isNotEmpty
-                ? '${module.description} • $topicInfo'
-                : topicInfo;
+            final subtitle = topicInfo;
             return _ModuleListItem(
               number: index + 1,
               title: module.title,
@@ -621,118 +549,36 @@ class _ModuleListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Row(
-              children: [
-                // Circular numbered badge
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: isComplete
-                      ? const Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        )
-                      : Text(
-                          '$number',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                ),
-                const HGapMd(),
-                // Title & Topics Subtitle
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: isComplete
-                              ? AppTheme.textSecondaryColor(context)
-                              : AppTheme.textPrimaryColor(context),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const VGapXs(),
-                      Row(
-                        children: [
-                          if (isComplete) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color:  AppTheme.successColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'COMPLETED',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppTheme.successColor,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                            const HGapXs(),
-                          ],
-                          Expanded(
-                            child: Text(
-                              subtitle,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.textSecondaryColor(context),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Trailing Chevron
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onOptionsTap,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppTheme.textMutedColor(context),
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return CompactListItem(
+      isCard: false,
+      isCompleted: isComplete,
+      leading: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: badgeColor,
+          shape: BoxShape.circle,
         ),
+        alignment: Alignment.center,
+        child: isComplete
+            ? const Icon(
+                Icons.check_rounded,
+                color: Colors.white,
+                size: 16,
+              )
+            : Text(
+                '$number',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
       ),
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 }
