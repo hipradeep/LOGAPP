@@ -3,9 +3,11 @@ import 'package:flutter/foundation.dart';
 import '../models/revision.dart';
 import '../models/topic.dart';
 import '../models/study_log.dart';
+import '../models/user_profile.dart';
 import '../services/local_revision_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_study_log_storage.dart';
+import '../services/local_user_profile_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 
@@ -62,6 +64,8 @@ class ProgressController extends ChangeNotifier {
   int _totalTopicsFinished = 0;
   int _totalTopicRevisions = 0;
   int _totalActiveDays = 0;
+  int _totalStudyMinutes = 0;
+  UserProfile? _userProfile;
 
   final Map<DateTime, int> _dailyTopicsFinished = {};
   final Map<DateTime, int> _dailyRevisions = {};
@@ -73,15 +77,80 @@ class ProgressController extends ChangeNotifier {
   int get currentStreak => _currentStreak;
   int get longestStreak => _longestStreak;
   int get totalActiveDays => _totalActiveDays;
+  int get totalStudyMinutes => _totalStudyMinutes;
+  double get totalStudyHours => _totalStudyMinutes / 60.0;
   DateTime? get mostActiveDay => _mostActiveDay;
   int get mostActiveDayCount => _mostActiveDayCount;
   int get totalTopicsFinished => _totalTopicsFinished;
   int get totalTopicRevisions => _totalTopicRevisions;
+  UserProfile? get userProfile => _userProfile;
+  String get userName => _userProfile?.name ?? 'Pradeep Maurya';
+  String get userHeadline => _userProfile?.headline ?? 'Software Developer';
+  String get userInitial => _userProfile?.initial ?? 'P';
+
+  /// Compact study hours string (e.g. "0h", "1.5h", "12h").
+  String get formattedStudyHours {
+    if (_totalStudyMinutes <= 0) return '0h';
+    final hours = _totalStudyMinutes / 60.0;
+    if (hours < 1.0) {
+      return '${_totalStudyMinutes}m';
+    }
+    if (hours == hours.truncateToDouble()) {
+      return '${hours.toInt()}h';
+    }
+    return '${hours.toStringAsFixed(1)}h';
+  }
+
+  /// Detailed duration string (e.g. "45m", "2h", "2h 30m").
+  String get formattedStudyDuration {
+    if (_totalStudyMinutes <= 0) return '0h';
+    final hours = _totalStudyMinutes ~/ 60;
+    final mins = _totalStudyMinutes % 60;
+    if (hours == 0) return '${mins}m';
+    if (mins == 0) return '${hours}h';
+    return '${hours}h ${mins}m';
+  }
+
   List<DailyProgressActivity> get activitiesInRange => List.unmodifiable(_activitiesInRange);
   List<DailyProgressActivity> get recentActivities => List.unmodifiable(_recentActivities);
 
+  StreamSubscription<UserProfile?>? _profileSub;
+
   ProgressController() {
+    _initProfileStream();
     load();
+  }
+
+  void _initProfileStream() {
+    if (getIt.isRegistered<FirestoreService>()) {
+      final fs = getIt<FirestoreService>();
+      if (fs.isAvailable) {
+        _profileSub = fs.streamUserProfile().listen((profile) {
+          if (profile != null) {
+            _userProfile = profile;
+            if (_totalStudyMinutes == 0 && profile.totalStudyMinutes > 0) {
+              _totalStudyMinutes = profile.totalStudyMinutes;
+            }
+            if (_currentStreak == 0 && profile.currentStreak > 0) {
+              _currentStreak = profile.currentStreak;
+            }
+            if (_longestStreak == 0 && profile.longestStreak > 0) {
+              _longestStreak = profile.longestStreak;
+            }
+            if (_totalActiveDays == 0 && profile.totalActiveDays > 0) {
+              _totalActiveDays = profile.totalActiveDays;
+            }
+            notifyListeners();
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _profileSub?.cancel();
+    super.dispose();
   }
 
   static DateTime normalizeDate(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
@@ -93,6 +162,17 @@ class ProgressController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // 0. Fast local hydration: display cached user profile stats immediately without waiting
+      final cachedProfile = await LocalUserProfileStorage.loadProfile();
+      if (cachedProfile != null) {
+        _userProfile = cachedProfile;
+        if (_totalStudyMinutes == 0) _totalStudyMinutes = cachedProfile.totalStudyMinutes;
+        if (_currentStreak == 0) _currentStreak = cachedProfile.currentStreak;
+        if (_longestStreak == 0) _longestStreak = cachedProfile.longestStreak;
+        if (_totalActiveDays == 0) _totalActiveDays = cachedProfile.totalActiveDays;
+        notifyListeners();
+      }
+
       final now = DateTime.now();
       final today = normalizeDate(now);
       final cutoffDate = today.subtract(const Duration(days: threeMonthsDays - 1));
@@ -144,8 +224,12 @@ class ProgressController extends ChangeNotifier {
         }
       }
 
-      // Also ensure all StudyLog entries are accounted for
+      // Also ensure all StudyLog entries are accounted for and sum session minutes
+      int totalMinutes = 0;
       for (final log in studyLogs) {
+        if (log.durationMinutes != null && log.durationMinutes! > 0) {
+          totalMinutes += log.durationMinutes!;
+        }
         final norm = normalizeDate(log.timestamp);
         if (norm.isAfter(today)) continue;
         allActiveDates.add(norm);
@@ -159,6 +243,7 @@ class ProgressController extends ChangeNotifier {
           }
         }
       }
+      _totalStudyMinutes = totalMinutes;
 
       // Fallback: If no dedicated revision event logs exist, inspect cached revisions lazily
       if (revisionsCount == 0) {
@@ -183,6 +268,54 @@ class ProgressController extends ChangeNotifier {
 
       // Compute streaks and highlights across all active dates
       _computeStreaksAndHighlights(today, allActiveDates);
+
+      // Sync or restore UserProfile document (profile details, streaks, total session hours)
+      var profile = await LocalUserProfileStorage.loadProfile();
+      if (profile == null && getIt.isRegistered<FirestoreService>()) {
+        final fs = getIt<FirestoreService>();
+        if (fs.isAvailable) {
+          profile = await fs.getUserProfile();
+        }
+      }
+
+      if (allActiveDates.isEmpty && _totalStudyMinutes == 0 && profile != null) {
+        // Fresh install / data cleared: restore stats from cloud profile
+        _currentStreak = profile.currentStreak;
+        _longestStreak = profile.longestStreak;
+        _totalActiveDays = profile.totalActiveDays;
+        _totalStudyMinutes = profile.totalStudyMinutes;
+        _totalTopicsFinished = profile.totalTopicsFinished;
+        _totalTopicRevisions = profile.totalTopicRevisions;
+        _userProfile = profile;
+        unawaited(LocalUserProfileStorage.saveProfile(profile));
+      } else {
+        DateTime? lastActive;
+        if (allActiveDates.isNotEmpty) {
+          final sorted = allActiveDates.toList()..sort();
+          lastActive = sorted.last;
+        }
+
+        final nowTime = DateTime.now();
+        final updatedProfile = (profile ?? UserProfile(createdAt: nowTime, updatedAt: nowTime)).copyWith(
+          currentStreak: _currentStreak,
+          longestStreak: _longestStreak,
+          totalActiveDays: _totalActiveDays,
+          totalStudyMinutes: _totalStudyMinutes,
+          totalTopicsFinished: _totalTopicsFinished,
+          totalTopicRevisions: _totalTopicRevisions,
+          lastActiveDate: lastActive,
+          updatedAt: nowTime,
+        );
+        _userProfile = updatedProfile;
+
+        unawaited(LocalUserProfileStorage.saveProfile(updatedProfile));
+        if (getIt.isRegistered<FirestoreService>()) {
+          final fs = getIt<FirestoreService>();
+          if (fs.isAvailable) {
+            unawaited(fs.saveUserProfile(updatedProfile));
+          }
+        }
+      }
 
       // Generate 3-month daily activities (90 days exactly)
       final List<DailyProgressActivity> items = [];
@@ -215,6 +348,33 @@ class ProgressController extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Updates user identity details (name, headline, email, avatarUrl) and saves locally & to Firestore.
+  Future<void> updateProfileDetails({
+    required String name,
+    required String headline,
+    String? email,
+    String? avatarUrl,
+  }) async {
+    final nowTime = DateTime.now();
+    final current = _userProfile ?? UserProfile(createdAt: nowTime, updatedAt: nowTime);
+    final updated = current.copyWith(
+      name: name,
+      headline: headline,
+      email: email,
+      avatarUrl: avatarUrl,
+      updatedAt: nowTime,
+    );
+    _userProfile = updated;
+    notifyListeners();
+    await LocalUserProfileStorage.saveProfile(updated);
+    if (getIt.isRegistered<FirestoreService>()) {
+      final fs = getIt<FirestoreService>();
+      if (fs.isAvailable) {
+        await fs.saveUserProfile(updated);
+      }
     }
   }
 

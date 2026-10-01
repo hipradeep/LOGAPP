@@ -4,6 +4,7 @@ import '../models/course.dart';
 import '../services/firestore_service.dart';
 import '../services/local_course_storage.dart';
 import '../services/service_locator.dart';
+import 'revision_controller.dart';
 
 class CoursesController extends ChangeNotifier {
   final FirestoreService _firestoreService;
@@ -20,7 +21,29 @@ class CoursesController extends ChangeNotifier {
     _init();
   }
 
-  List<Course> get courses => List.unmodifiable(_courses);
+  /// Active and completed courses (non-archived).
+  List<Course> get courses =>
+      List.unmodifiable(_courses.where((c) => !c.isArchived));
+
+  /// Alias for non-archived courses.
+  List<Course> get activeCourses => courses;
+
+  /// Courses moved to archive.
+  List<Course> get archivedCourses =>
+      List.unmodifiable(_courses.where((c) => c.isArchived));
+
+  /// All courses including archived.
+  List<Course> get allCourses => List.unmodifiable(_courses);
+
+  /// Look up any course by id (active or archived).
+  Course? getCourseById(String id) {
+    if (id.isEmpty) return null;
+    for (final c in _courses) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -117,6 +140,8 @@ class CoursesController extends ChangeNotifier {
     required String title,
     required String description,
     DateTime? deadline,
+    int? iconCodePoint,
+    int? colorValue,
     String status = 'active',
   }) async {
     final now = DateTime.now();
@@ -127,6 +152,8 @@ class CoursesController extends ChangeNotifier {
       description: description,
       status: status,
       deadline: deadline,
+      iconCodePoint: iconCodePoint,
+      colorValue: colorValue,
       createdAt: now,
       updatedAt: now,
     );
@@ -171,6 +198,27 @@ class CoursesController extends ChangeNotifier {
       );
     } catch (e) {
       debugPrint('Firestore update error (saved locally): $e');
+    }
+  }
+
+  /// Archives a course without deleting its study logs or streak history.
+  Future<void> archiveCourse(String courseId) async {
+    final course = getCourseById(courseId);
+    if (course == null) return;
+    await updateCourse(course.copyWith(status: 'archived'));
+    if (getIt.isRegistered<RevisionController>()) {
+      await getIt<RevisionController>().removeRevisionsForCourse(courseId);
+    }
+  }
+
+  /// Restores an archived course back to active.
+  /// Old revisions are cleared so when modules are added to revision, they get a new revision ID.
+  Future<void> unarchiveCourse(String courseId) async {
+    final course = getCourseById(courseId);
+    if (course == null) return;
+    await updateCourse(course.copyWith(status: 'active'));
+    if (getIt.isRegistered<RevisionController>()) {
+      await getIt<RevisionController>().removeRevisionsForCourse(courseId);
     }
   }
 

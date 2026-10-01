@@ -7,9 +7,11 @@ import '../models/topic.dart';
 import '../models/revision.dart';
 import '../models/revision_topic.dart';
 import '../models/study_log.dart';
+import '../models/user_profile.dart';
 import 'local_study_log_storage.dart';
 import 'local_topic_storage.dart';
 import 'local_revision_storage.dart';
+import 'local_user_profile_storage.dart';
 
 /// Highly optimized Firebase Firestore Service with graceful fallbacks.
 /// 
@@ -674,6 +676,62 @@ class FirestoreService {
     } catch (e) {
       debugPrint('Error getting study logs: $e');
       return [];
+    }
+  }
+
+  // ===========================================================================
+  // User Profile Document (Profile Details, Streaks & Total Session Hours)
+  // ===========================================================================
+  DocumentReference<Map<String, dynamic>>? get _userProfileDoc =>
+      _firestore?.collection('user_profile').doc('profile');
+
+  /// Fetches the user profile document from Firestore with offline cache fallback.
+  Future<UserProfile?> getUserProfile({
+    Source source = Source.serverAndCache,
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final ref = _userProfileDoc;
+    if (ref == null) return null;
+
+    try {
+      final snapshot = await ref.get(GetOptions(source: source)).timeout(
+        timeout,
+        onTimeout: () => ref.get(const GetOptions(source: Source.cache)),
+      );
+      if (!snapshot.exists || snapshot.data() == null) return null;
+      return UserProfile.fromMap(snapshot.data()!, documentId: snapshot.id);
+    } catch (e) {
+      debugPrint('Error getting user profile from firestore: $e');
+      return null;
+    }
+  }
+
+  /// Real-time stream of the user profile document.
+  Stream<UserProfile?> streamUserProfile() {
+    final ref = _userProfileDoc;
+    if (ref == null) return const Stream.empty();
+
+    return ref.snapshots(includeMetadataChanges: false).map((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) return null;
+      try {
+        return UserProfile.fromMap(snapshot.data()!, documentId: snapshot.id);
+      } catch (e) {
+        debugPrint('Error parsing streamUserProfile: $e');
+        return null;
+      }
+    });
+  }
+
+  /// Saves or updates the user profile document in Firestore and mirrors to local cache.
+  Future<void> saveUserProfile(UserProfile profile) async {
+    final ref = _userProfileDoc;
+    if (ref == null) return;
+
+    try {
+      await ref.set(profile.toMap(), SetOptions(merge: true));
+      await LocalUserProfileStorage.saveProfile(profile);
+    } catch (e) {
+      debugPrint('Error saving user profile to firestore: $e');
     }
   }
 }

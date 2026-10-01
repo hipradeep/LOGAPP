@@ -19,6 +19,7 @@ class TopicListItem extends StatelessWidget {
   final bool isCard;
   final bool showCheckbox;
   final bool showTrailing;
+  final int? titleMaxLines;
 
   const TopicListItem({
     super.key,
@@ -30,6 +31,7 @@ class TopicListItem extends StatelessWidget {
     this.isCard = false,
     this.showCheckbox = true,
     this.showTrailing = true,
+    this.titleMaxLines,
   });
 
   @override
@@ -54,6 +56,8 @@ class TopicListItem extends StatelessWidget {
       showTrailingChevron: showTrailing,
       onTap: onTap,
       onLongPress: onLongPress,
+      onOptionsTap: onOptionsTap,
+      titleMaxLines: titleMaxLines,
     );
   }
 }

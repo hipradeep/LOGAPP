@@ -267,6 +267,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                   alignment: Alignment.centerLeft,
                   child: ModuleContextPill(
                     moduleTitle: _selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle,
+                    courseId: widget.courseId,
                   ),
                 ),
               ),
@@ -287,6 +288,9 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                       controller: _nameController,
                       hintText: 'Enter topic name',
                       isRequired: true,
+                      minLines: 1,
+                      maxLines: 4,
+                      keyboardType: TextInputType.multiline,
                     ),
                     const VGapLg(),
                     BorderlessDescriptionField(

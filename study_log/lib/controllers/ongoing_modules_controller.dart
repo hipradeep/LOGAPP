@@ -345,7 +345,7 @@ class OngoingModulesController extends ChangeNotifier {
             course: course,
             module: module,
             title: module.title,
-            breadcrumb: isRunning ? '${course.title} • In Progress' : course.title,
+            breadcrumb: course.title,
             progressRatio: progressRatio,
             progress: progress,
             inProgressRatio: inProgressRatio,

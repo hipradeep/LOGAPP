@@ -7,14 +7,9 @@ import '../widgets/study_text_fields.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 
-/// Redesigned Add Course Screen matching the reference design:
-/// - Top bar with Back button, "Add Course" title, and purple "Save" button
-/// - Course Name * required field
-/// - Description (Optional) with 0/500 live character counter
-/// - Icon preview with soft lavender squircle container and "Change Icon" button
-/// - Color picker row with checkmark indicator on selected circular swatch
-/// - Deadline field with date picker and clear button as explicitly requested
 import '../models/course.dart';
+import '../utils/course_icon_util.dart';
+import 'upload_json_screen.dart';
 
 /// Redesigned Add Course Screen matching the reference design:
 /// - Top bar with Back button, "Add Course" / "Edit Course" title, and purple "Save" button
@@ -23,6 +18,7 @@ import '../models/course.dart';
 /// - Icon preview with soft lavender squircle container and "Change Icon" button
 /// - Color picker row with checkmark indicator on selected circular swatch
 /// - Deadline field with date picker and clear button as explicitly requested
+/// - Upload Course Content (JSON) row to bulk-import syllabus
 /// - Strict compliance with optimize.md (build < 40 lines, named callbacks, const)
 class AddCourseScreen extends StatefulWidget {
   final Course? courseToEdit;
@@ -49,6 +45,12 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     _titleController = TextEditingController(text: widget.courseToEdit?.title ?? '');
     _descriptionController = TextEditingController(text: widget.courseToEdit?.description ?? '');
     _selectedDeadline = widget.courseToEdit?.deadline;
+    if (widget.courseToEdit?.iconCodePoint != null) {
+      _selectedIcon = courseIconFrom(widget.courseToEdit!.iconCodePoint!);
+    }
+    if (widget.courseToEdit?.colorValue != null) {
+      _selectedColor = Color(widget.courseToEdit!.colorValue!);
+    }
     _descLength = _descriptionController.text.length;
     _descriptionController.addListener(_onDescChanged);
   }
@@ -103,33 +105,23 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
     setState(() => _selectedDeadline = null);
   }
 
+  void _openUploadJson() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => UploadJsonScreen(
+          targetCourseId: widget.courseToEdit?.id,
+          targetCourseTitle: widget.courseToEdit?.title ??
+              (_titleController.text.trim().isNotEmpty
+                  ? _titleController.text.trim()
+                  : null),
+        ),
+      ),
+    );
+  }
+
   void _openIconPicker() {
-    final icons = [
-      Icons.format_list_bulleted_rounded,
-      Icons.code_rounded,
-      Icons.terminal_rounded,
-      Icons.data_object_rounded,
-      Icons.settings_suggest_rounded,
-      Icons.smart_toy_rounded,
-      Icons.android_rounded,
-      Icons.flutter_dash_rounded,
-      Icons.cloud_outlined,
-      Icons.hub_outlined,
-      Icons.menu_book_rounded,
-      Icons.school_rounded,
-      Icons.psychology_rounded,
-      Icons.storage_rounded,
-      Icons.dns_rounded,
-      Icons.coffee_rounded,
-      Icons.directions_boat_rounded,
-      Icons.account_tree_rounded,
-      Icons.science_rounded,
-      Icons.calculate_rounded,
-      Icons.palette_rounded,
-      Icons.laptop_chromebook_rounded,
-      Icons.biotech_rounded,
-      Icons.architecture_rounded,
-    ];
+    final icons = kCourseIcons;
 
     showModalBottomSheet<void>(
       context: context,
@@ -246,6 +238,8 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
           title: title,
           description: description,
           deadline: _selectedDeadline,
+          iconCodePoint: _selectedIcon.codePoint,
+          colorValue: _selectedColor.toARGB32(),
         );
         await getIt<CoursesController>().updateCourse(updated);
         if (!mounted) return;
@@ -267,6 +261,8 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
         title: title,
         description: description,
         deadline: _selectedDeadline,
+        iconCodePoint: _selectedIcon.codePoint,
+        colorValue: _selectedColor.toARGB32(),
         status: 'active',
       );
 
@@ -327,6 +323,9 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       controller: _titleController,
                       hintText: 'Enter course name',
                       isRequired: true,
+                      minLines: 1,
+                      maxLines: 4,
+                      keyboardType: TextInputType.multiline,
                     ),
                     const VGapLg(),
                     BorderlessDescriptionField(
@@ -345,6 +344,12 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       onPickDate: _pickDate,
                       onClearDate: _clearDate,
                     ),
+                    if (widget.courseToEdit == null) ...[
+                      const VGapLg(),
+                      _UploadJsonRow(
+                        onUpload: _openUploadJson,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -648,6 +653,59 @@ class _CourseDeadlineField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _UploadJsonRow extends StatelessWidget {
+  final VoidCallback onUpload;
+
+  const _UploadJsonRow({required this.onUpload});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
+        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        border: Border.all(color: AppTheme.borderColor(context)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Upload Course Content (JSON)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+                const VGapXs(),
+                Text(
+                  'Bulk import modules and topics from JSON file',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondaryColor(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const HGapSm(),
+          AddPillButton(
+            label: 'Upload',
+            icon: Icons.upload_file_rounded,
+            onPressed: onUpload,
+          ),
+        ],
+      ),
     );
   }
 }

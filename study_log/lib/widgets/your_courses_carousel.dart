@@ -4,6 +4,7 @@ import '../widgets/app_spacers.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../models/course.dart';
+import '../utils/course_icon_util.dart';
 import '../services/service_locator.dart';
 
 /// "Your Courses" horizontal carousel — dynamic from CoursesController.
@@ -136,6 +137,26 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
                   final palette = _cardPalettes(context)[index % AppTheme.tintCount];
                   final progress = ongoing?.progressForCourse(course.id);
                   final isComplete = progress?.isComplete ?? false;
+
+                  final Color cardBg;
+                  final Color cardBorder;
+                  final Color cardAccent;
+                  if (course.colorValue != null) {
+                    final baseColor = Color(course.colorValue!);
+                    cardBg = baseColor.withValues(alpha: 0.10);
+                    cardBorder = baseColor.withValues(alpha: 0.30);
+                    cardAccent = isComplete ? AppTheme.successColor : baseColor;
+                  } else {
+                    cardBg = palette.bg;
+                    cardBorder = palette.border;
+                    cardAccent = isComplete ? AppTheme.successColor : palette.accent;
+                  }
+
+                  final IconData cardIcon = courseIconFrom(
+                    course.iconCodePoint,
+                    fallback: _iconFor(index),
+                  );
+
                   return _YourCourseCard(
                     title: course.title,
                     subtitle: _subtitleFor(course, progress),
@@ -144,10 +165,10 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
                         ? '0%'
                         : '${(progress.ratio * 100).round()}%',
                     isComplete: isComplete,
-                    icon: _iconFor(index),
-                    bgColor: palette.bg,
-                    borderColor: palette.border,
-                    accentColor: isComplete ? AppTheme.successColor : palette.accent,
+                    icon: cardIcon,
+                    bgColor: cardBg,
+                    borderColor: cardBorder,
+                    accentColor: cardAccent,
                     onTap: () => widget.onCourseTap?.call(course.title),
                   );
                 },

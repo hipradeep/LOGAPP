@@ -25,17 +25,36 @@ class StudyConfirmationDialog extends StatelessWidget {
     required this.confirmColor,
   });
 
-  /// Displays the "Archive Course?" dialog matching Image 2
+  /// Displays the "Archive Course?" dialog with explicit warning matching requirements
   static Future<bool> showArchiveCourse(BuildContext context, {String courseTitle = ''}) async {
+    final title = courseTitle.isNotEmpty ? 'Archive "$courseTitle"?' : 'Archive Course?';
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => const StudyConfirmationDialog(
-        icon: Icons.calendar_today_outlined,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.archive_outlined,
         iconColor: AppTheme.primaryColor,
-        title: 'Archive Course?',
-        message: 'This course will be moved to archive.\nYou can restore it later.',
+        title: title,
+        message: 'Warning: This course will be moved to archive and hidden from your active courses and revision schedule.\n\nAll study logs and streak records are safely preserved and will not be removed.\n\nYou can view and restore it anytime.',
         confirmText: 'Archive',
+        confirmColor: AppTheme.primaryColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Restore Course?" dialog
+  static Future<bool> showRestoreCourse(BuildContext context, {String courseTitle = ''}) async {
+    final title = courseTitle.isNotEmpty ? 'Restore "$courseTitle"?' : 'Restore Course?';
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.unarchive_outlined,
+        iconColor: AppTheme.primaryColor,
+        title: title,
+        message: 'This course will be restored back to your active courses and revision schedule.',
+        confirmText: 'Restore',
         confirmColor: AppTheme.primaryColor,
       ),
     );

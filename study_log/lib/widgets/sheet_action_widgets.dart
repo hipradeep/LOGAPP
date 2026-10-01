@@ -21,7 +21,7 @@ class SheetHandleBar extends StatelessWidget {
   }
 }
 
-/// 48x48 Squircle badge container for bottom sheet headers.
+/// 42x42 Squircle badge container for bottom sheet headers.
 class SheetHeaderBadge extends StatelessWidget {
   final Widget child;
   final Color? backgroundColor;
@@ -35,11 +35,11 @@ class SheetHeaderBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 42,
+      height: 42,
       decoration: BoxDecoration(
         color: backgroundColor ?? AppTheme.pastelBlue(context),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       alignment: Alignment.center,
       child: child,
@@ -63,9 +63,10 @@ class SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         badge,
-        const HGapMd(),
+        const HGapSm(),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,20 +74,20 @@ class SheetHeader extends StatelessWidget {
             children: [
               Text(
                 title,
+                softWrap: true,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 15.5,
+                  height: 1.2,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimaryColor(context),
                   letterSpacing: -0.2,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-              const VGapXs(),
+              const SizedBox(height: 2),
               Text(
                 subtitle,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: AppTheme.textSecondaryColor(context),
                 ),
                 maxLines: 1,
@@ -117,14 +118,14 @@ class SheetActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 11.0),
+        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 6.0),
         child: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: AppTheme.surfaceVariant(context),
                 shape: BoxShape.circle,
@@ -133,15 +134,15 @@ class SheetActionRow extends StatelessWidget {
               child: Icon(
                 icon,
                 color: AppTheme.textPrimaryColor(context),
-                size: 18,
+                size: 16,
               ),
             ),
-            const HGapMd(),
+            const HGapSm(),
             Expanded(
               child: Text(
                 title,
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimaryColor(context),
                   letterSpacing: -0.2,
@@ -151,7 +152,7 @@ class SheetActionRow extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               color: AppTheme.textSecondaryColor(context),
-              size: 20,
+              size: 18,
             ),
           ],
         ),
@@ -177,19 +178,19 @@ class SheetDestructiveButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: AppTheme.errorColor.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: AppTheme.errorColor.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
@@ -198,14 +199,14 @@ class SheetDestructiveButton extends StatelessWidget {
               child: Icon(
                 icon,
                 color: AppTheme.errorColor,
-                size: 18,
+                size: 16,
               ),
             ),
-            const HGapMd(),
+            const HGapSm(),
             Text(
               title,
               style: const TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.errorColor,
                 letterSpacing: -0.2,
@@ -228,19 +229,19 @@ class SheetCancelButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap ?? () => Navigator.pop(context),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         width: double.infinity,
-        height: 50,
+        height: 42,
         decoration: BoxDecoration(
           color: AppTheme.surfaceVariant(context),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
         child: Text(
           'Cancel',
           style: TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimaryColor(context),
           ),
@@ -261,11 +262,11 @@ class SheetContainer extends StatelessWidget {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding + 16),
+      padding: EdgeInsets.fromLTRB(18, 10, 18, bottomPadding + 12),
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24),
+          top: Radius.circular(20),
         ),
       ),
       child: Column(

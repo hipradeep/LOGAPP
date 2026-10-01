@@ -13,8 +13,6 @@ import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 import 'courses_screen.dart';
 import 'module_detail_screen.dart';
-import 'my_progress_screen.dart';
-import '../widgets/study_confirmation_dialog.dart';
 
 /// Redesigned Home Screen matching the reference design:
 /// - "Hi, Pradeep 👋" greeting & notification bell with badge dot
@@ -127,13 +125,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _openAllCourses(context);
   }
 
-  void _openMyProgress(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyProgressScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -157,7 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ongoingController: ongoingController,
                     onViewAll: _handleViewAll,
                     onCourseTap: _openCourseByTitle,
-                    onProgressTap: () => _openMyProgress(context),
                   ),
                 ),
               ),
@@ -253,13 +243,11 @@ class _HomeTopModule extends StatelessWidget {
   final OngoingModulesController ongoingController;
   final VoidCallback onViewAll;
   final ValueChanged<String> onCourseTap;
-  final VoidCallback onProgressTap;
 
   const _HomeTopModule({
     required this.ongoingController,
     required this.onViewAll,
     required this.onCourseTap,
-    required this.onProgressTap,
   });
 
   @override
@@ -285,7 +273,6 @@ class _HomeTopModule extends StatelessWidget {
             pendingCount: getIt<RevisionController>().dueCount,
             dayStreak: ongoingController.dayStreakCount,
             goalProgress: ongoingController.goalProgress,
-            onTap: onProgressTap,
           ),
         ),
         const VGapLg(),
@@ -373,14 +360,13 @@ class _CurrentModulesSliverList extends StatelessWidget {
               );
             }
             final item = displayItems[index];
-            final cleanSubtitle = item.breadcrumb
-                .replaceAll(' • Not Started', '')
-                .replaceAll(' • Not started', '');
+            final cleanSubtitle = item.course.title;
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: StudyScheduleCard(
                 key: ValueKey(item.module.id),
+                course: item.course,
                 title: item.title,
                 subtitle: cleanSubtitle,
                 progressRatio: item.progressRatio,
@@ -395,27 +381,6 @@ class _CurrentModulesSliverList extends StatelessWidget {
                     item.module.id,
                     item.module.orderIndex,
                   );
-                },
-                onLongPress: () async {
-                  final confirmed = await StudyConfirmationDialog.showDeleteModule(
-                    context,
-                    moduleTitle: item.title,
-                  );
-                  if (confirmed && context.mounted) {
-                    await ongoingController.deleteModule(item);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Module "${item.title}" deleted'),
-                          backgroundColor: AppTheme.primaryColor,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-                          ),
-                        ),
-                      );
-                    }
-                  }
                 },
               ),
             );

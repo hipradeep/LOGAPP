@@ -7,7 +7,9 @@ import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/course_context_pill.dart';
 import '../widgets/module_options_sheet.dart';
+import '../widgets/course_options_sheet.dart';
 import '../widgets/compact_list_item.dart';
+import '../controllers/courses_controller.dart';
 import '../controllers/modules_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
@@ -104,6 +106,22 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   label: 'Add Module',
                   onPressed: _openAddModuleScreen,
                 ),
+                IconButton(
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                  tooltip: 'Course options',
+                  onPressed: () async {
+                    await CourseOptionsSheet.show(context, course: widget.course);
+                    if (context.mounted) {
+                      final updated = getIt<CoursesController>().getCourseById(widget.course.id);
+                      if (updated == null || updated.isArchived) {
+                        Navigator.of(context).pop();
+                      }
+                    }
+                  },
+                ),
               ],
             ),
             ListenableBuilder(
@@ -135,7 +153,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: CourseContextPill(courseTitle: widget.course.title),
+                        child: CourseContextPill(
+                          courseTitle: widget.course.title,
+                          courseId: widget.course.id,
+                        ),
                       ),
                     ),
                     Padding(
@@ -579,6 +600,7 @@ class _ModuleListItem extends StatelessWidget {
       subtitle: subtitle,
       onTap: onTap,
       onLongPress: onLongPress,
+      onOptionsTap: onOptionsTap,
     );
   }
 }

@@ -27,6 +27,8 @@ class CompactListItem extends StatelessWidget {
   final Color? accentColor;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onOptionsTap;
+  final int? titleMaxLines;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
 
@@ -46,6 +48,8 @@ class CompactListItem extends StatelessWidget {
     this.accentColor,
     this.onTap,
     this.onLongPress,
+    this.onOptionsTap,
+    this.titleMaxLines,
     this.padding,
     this.margin,
   });
@@ -90,85 +94,136 @@ class CompactListItem extends StatelessWidget {
                     ],
                   )
                 : null,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (leading != null) ...[
-                  leading!,
-                  const HGapSm(),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Context breadcrumb (course / module name) if present
-                      if (_hasContextLabel) ...[
-                        _buildContextRow(context),
-                        const SizedBox(height: 2),
-                      ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool hasExtraRows = _hasContextLabel ||
+                    (subtitle != null && subtitle!.trim().isNotEmpty) ||
+                    bottom != null;
 
-                      // Title row with optional badge
-                      Row(
+                bool isMultiline = hasExtraRows;
+
+                if (!isMultiline && constraints.maxWidth.isFinite) {
+                  // Reserve space for leading, trailing and badge
+                  final leadingWidth = (leading != null) ? 36.0 : 0.0;
+                  final trailingWidth = _hasTrailing ? 32.0 : 0.0;
+                  final badgeWidth = (titleBadge != null) ? 40.0 : 0.0;
+                  final availableWidth = constraints.maxWidth -
+                      leadingWidth -
+                      trailingWidth -
+                      badgeWidth;
+
+                  if (availableWidth > 0) {
+                    final textPainter = TextPainter(
+                      text: TextSpan(
+                        text: title,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.25,
+                        ),
+                      ),
+                      textDirection: Directionality.of(context),
+                      maxLines: 1,
+                    )..layout(maxWidth: availableWidth);
+
+                    isMultiline = textPainter.didExceedMaxLines;
+                  }
+                }
+
+                final crossAlignment = isMultiline
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center;
+                final topOffset = isMultiline ? 2.0 : 0.0;
+
+                return Row(
+                  crossAxisAlignment: crossAlignment,
+                  children: [
+                    if (leading != null) ...[
+                      Padding(
+                        padding: EdgeInsets.only(top: topOffset),
+                        child: leading!,
+                      ),
+                      const HGapSm(),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: Text(
-                              title,
+                          // Context breadcrumb (course / module name) if present
+                          if (_hasContextLabel) ...[
+                            _buildContextRow(context),
+                            const SizedBox(height: 2),
+                          ],
+
+                          // Title row with optional badge
+                          Row(
+                            crossAxisAlignment: isMultiline
+                                ? CrossAxisAlignment.start
+                                : CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  softWrap: true,
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.25,
+                                    color: isCompleted
+                                        ? AppTheme.textSecondaryColor(context)
+                                        : AppTheme.textPrimaryColor(context),
+                                  ),
+                                  maxLines: titleMaxLines,
+                                  overflow: titleMaxLines != null
+                                      ? TextOverflow.ellipsis
+                                      : TextOverflow.visible,
+                                ),
+                              ),
+                              if (titleBadge != null) ...[
+                                const HGapXs(),
+                                titleBadge!,
+                              ],
+                            ],
+                          ),
+
+                          // Subtitle / Description if present
+                          if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle!,
                               style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 11.5,
                                 color: isCompleted
-                                    ? AppTheme.textSecondaryColor(context)
-                                    : AppTheme.textPrimaryColor(context),
+                                    ? AppTheme.successColor
+                                    : AppTheme.textSecondaryColor(context),
+                                fontWeight: isCompleted
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          if (titleBadge != null) ...[
-                            const HGapXs(),
-                            titleBadge!,
+                          ],
+
+                          // Bottom custom slot (progress bar, due chip, tags)
+                          if (bottom != null) ...[
+                            const SizedBox(height: 6),
+                            bottom!,
                           ],
                         ],
                       ),
-
-                      // Subtitle / Description if present
-                      if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle!,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: isCompleted
-                                ? AppTheme.successColor
-                                : AppTheme.textSecondaryColor(context),
-                            fontWeight: isCompleted
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-
-                      // Bottom custom slot (progress bar, due chip, tags)
-                      if (bottom != null) ...[
-                        const SizedBox(height: 6),
-                        bottom!,
-                      ],
-                    ],
-                  ),
-                ),
-                if (_hasTrailing) ...[
-                  const HGapSm(),
-                  trailing ??
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppTheme.textMutedColor(context),
-                        size: 20,
+                    ),
+                    if (_hasTrailing) ...[
+                      const HGapSm(),
+                      Padding(
+                        padding: EdgeInsets.only(top: topOffset),
+                        child: _buildTrailing(context),
                       ),
-                ],
-              ],
+                    ],
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -211,5 +266,35 @@ class CompactListItem extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
+  }
+
+  Widget _buildTrailing(BuildContext context) {
+    if (trailing != null) {
+      return trailing!;
+    }
+    final chevron = Icon(
+      Icons.chevron_right_rounded,
+      color: AppTheme.textMutedColor(context),
+      size: 20,
+    );
+    final effectiveOptions = onOptionsTap ?? onLongPress;
+    if (effectiveOptions != null) {
+      return Semantics(
+        button: true,
+        label: 'Options',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: effectiveOptions,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(6.0),
+              child: chevron,
+            ),
+          ),
+        ),
+      );
+    }
+    return chevron;
   }
 }

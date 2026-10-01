@@ -58,13 +58,22 @@ class RevisionController extends ChangeNotifier {
     _load();
   }
 
-  List<Revision> get revisions => List.unmodifiable(_revisions);
+  bool _isCourseArchived(String courseId) {
+    if (courseId.isEmpty) return false;
+    final c = _coursesController.getCourseById(courseId);
+    return c != null && c.isArchived;
+  }
+
+  List<Revision> get _activeRevisions =>
+      _revisions.where((r) => !_isCourseArchived(r.courseId)).toList();
+
+  List<Revision> get revisions => List.unmodifiable(_activeRevisions);
   bool get isLoading => _isLoading;
 
   /// Revisions whose current level has unlocked, soonest first.
   List<Revision> get dueRevisions {
     final now = DateTime.now();
-    final due = _revisions.where((r) => r.isDueAt(now)).toList()
+    final due = _activeRevisions.where((r) => r.isDueAt(now)).toList()
       ..sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
     return due;
   }
@@ -72,14 +81,14 @@ class RevisionController extends ChangeNotifier {
   /// Revisions still counting down to their next level.
   List<Revision> get upcomingRevisions {
     final now = DateTime.now();
-    final upcoming = _revisions.where((r) => !r.isFinished && !r.isDueAt(now)).toList()
+    final upcoming = _activeRevisions.where((r) => !r.isFinished && !r.isDueAt(now)).toList()
       ..sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
     return upcoming;
   }
 
   /// Revisions that have cleared R5.
   List<Revision> get finishedRevisions {
-    final done = _revisions.where((r) => r.isFinished).toList()
+    final done = _activeRevisions.where((r) => r.isFinished).toList()
       ..sort((a, b) => (b.completedAt ?? b.updatedAt)
           .compareTo(a.completedAt ?? a.updatedAt));
     return done;
@@ -89,7 +98,7 @@ class RevisionController extends ChangeNotifier {
 
   /// Every record in one continuous list, most urgent due date first.
   /// Finished records sink to the bottom because they have nothing left due.
-  List<Revision> get scheduledRevisions => _sorted(List<Revision>.of(_revisions));
+  List<Revision> get scheduledRevisions => _sorted(List<Revision>.of(_activeRevisions));
 
   /// Records matching a level filter, or all of them when [level] is null.
   List<Revision> revisionsAtLevel(int? level) {
@@ -396,7 +405,7 @@ class RevisionController extends ChangeNotifier {
 
     // Build course map for fast lookup and fallback to local disk if needed
     final coursesMap = <String, Course>{};
-    for (final c in _coursesController.courses) {
+    for (final c in _coursesController.allCourses) {
       coursesMap[c.id] = c;
     }
     if (coursesMap.isEmpty) {
@@ -519,6 +528,41 @@ class RevisionController extends ChangeNotifier {
         await _firestoreService.deleteRevision(revisionId);
       } catch (e) {
         debugPrint('Error deleting revision from firestore: $e');
+      }
+    }
+  }
+
+  /// Removes all existing revision records for a course.
+  /// Used when a course is archived, and ensuring restored courses start
+  /// fresh with a new revision ID when added to revision later.
+  Future<void> removeRevisionsForCourse(String courseId) async {
+    if (courseId.isEmpty) return;
+    final toRemove = _revisions.where((r) => r.courseId == courseId).toList();
+    if (toRemove.isEmpty) return;
+
+    _revisions = _revisions.where((r) => r.courseId != courseId).toList();
+    await LocalRevisionStorage.saveAll(_revisions);
+
+    for (final r in toRemove) {
+      if (r.moduleId.isNotEmpty) {
+        _suppressedModuleIds.remove(r.moduleId);
+      }
+      if (r.moduleTitle.isNotEmpty) {
+        _suppressedModuleIds.remove(r.moduleTitle.trim().toLowerCase());
+      }
+    }
+    await LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds);
+
+    notifyListeners();
+    unawaited(_ongoingController.refresh());
+
+    if (_firestoreService.isAvailable) {
+      for (final r in toRemove) {
+        try {
+          await _firestoreService.deleteRevision(r.id);
+        } catch (e) {
+          debugPrint('Error deleting revision for course $courseId: $e');
+        }
       }
     }
   }

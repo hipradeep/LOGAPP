@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/courses_controller.dart';
+import '../controllers/progress_controller.dart';
 import '../models/revision.dart';
 import 'home_screen.dart';
 import 'revision_screen.dart';
@@ -56,12 +58,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (_currentIndex.value == index) {
       if (index == 1 && getIt.isRegistered<RevisionController>()) {
         getIt<RevisionController>().reconcile();
+      } else if (index == 2 && getIt.isRegistered<ProgressController>()) {
+        getIt<ProgressController>().refresh();
       }
       return;
     }
     _currentIndex.value = index;
     if (index == 1 && getIt.isRegistered<RevisionController>()) {
       getIt<RevisionController>().reconcile();
+    } else if (index == 2) {
+      if (getIt.isRegistered<CoursesController>()) {
+        getIt<CoursesController>().refresh();
+      }
+      if (getIt.isRegistered<RevisionController>()) {
+        getIt<RevisionController>().reconcile();
+      }
+      if (getIt.isRegistered<ProgressController>()) {
+        getIt<ProgressController>().refresh();
+      }
     }
   }
 

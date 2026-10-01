@@ -6,6 +6,8 @@ class Course {
   final String description;
   final String status;
   final DateTime? deadline;
+  final int? iconCodePoint;
+  final int? colorValue;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -15,9 +17,15 @@ class Course {
     required this.description,
     required this.status,
     this.deadline,
+    this.iconCodePoint,
+    this.colorValue,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  bool get isArchived => status.toLowerCase() == 'archived';
+  bool get isActive => status.toLowerCase() == 'active';
+  bool get isCompleted => status.toLowerCase() == 'completed';
 
   Map<String, dynamic> toMap({bool forLocalJson = false}) {
     return {
@@ -28,6 +36,8 @@ class Course {
       'deadline': deadline != null
           ? (forLocalJson ? deadline!.toIso8601String() : Timestamp.fromDate(deadline!))
           : null,
+      'iconCodePoint': iconCodePoint,
+      'colorValue': colorValue,
       'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
       'updatedAt': forLocalJson ? updatedAt.toIso8601String() : Timestamp.fromDate(updatedAt),
     };
@@ -42,6 +52,8 @@ class Course {
       description: map['description']?.toString() ?? '',
       status: map['status']?.toString() ?? 'active',
       deadline: _parseDateTime(map['deadline']),
+      iconCodePoint: (map['iconCodePoint'] as num?)?.toInt(),
+      colorValue: (map['colorValue'] as num?)?.toInt(),
       createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
     );
@@ -53,6 +65,8 @@ class Course {
     String? description,
     String? status,
     DateTime? deadline,
+    int? iconCodePoint,
+    int? colorValue,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -62,6 +76,8 @@ class Course {
       description: description ?? this.description,
       status: status ?? this.status,
       deadline: deadline ?? this.deadline,
+      iconCodePoint: iconCodePoint ?? this.iconCodePoint,
+      colorValue: colorValue ?? this.colorValue,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -172,6 +172,9 @@ class _AddModuleSheetState extends State<AddModuleSheet> {
             TextField(
               controller: _titleController,
               autofocus: true,
+              minLines: 1,
+              maxLines: 3,
+              keyboardType: TextInputType.multiline,
               style: TextStyle(fontSize: 15, color: AppTheme.textPrimaryColor(context)),
               decoration: InputDecoration(
                 labelText: 'Module Title',

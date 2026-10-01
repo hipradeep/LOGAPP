@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
@@ -22,6 +23,7 @@ import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../widgets/topic_options_sheet.dart';
 import 'add_topic_screen.dart';
+import 'session_setup_screen.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
   final String moduleTitle;
@@ -46,11 +48,14 @@ class ModuleDetailScreen extends StatefulWidget {
 class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   List<Topic> _topics = [];
   StreamSubscription<List<Topic>>? _topicsSubscription;
+  DateTime? _lastUpdatedAt;
+  int _totalMinutesExpended = 0;
 
   @override
   void initState() {
     super.initState();
     _loadTopics();
+    _loadModuleStats();
   }
 
   @override
@@ -123,6 +128,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     if (cached.isNotEmpty) {
       final clean = _deduplicateTopics(cached);
       setState(() => _topics = clean);
+      unawaited(_loadModuleStats());
       if (clean.every((t) => t.isCompleted)) {
         unawaited(_syncModuleCompletion());
       }
@@ -140,6 +146,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           if (remoteTopics.isNotEmpty) {
             final merged = _mergeTopics(_topics, remoteTopics);
             setState(() => _topics = merged);
+            unawaited(_loadModuleStats());
             final key = widget.moduleId.isNotEmpty
                 ? widget.moduleId
                 : widget.moduleTitle;
@@ -155,6 +162,67 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           debugPrint('Error streaming topics from Firestore: $e');
         });
       }
+    }
+  }
+
+  Future<void> _loadModuleStats() async {
+    try {
+      DateTime? latestDate;
+      int totalMinutes = 0;
+
+      final logs = await LocalStudyLogStorage.loadAll();
+      for (final log in logs) {
+        final matches = (widget.moduleId.isNotEmpty && log.moduleId == widget.moduleId) ||
+            (widget.moduleTitle.isNotEmpty &&
+                log.moduleTitle.toLowerCase() == widget.moduleTitle.toLowerCase());
+        if (matches) {
+          totalMinutes += (log.durationMinutes ?? 0);
+          final logDate = log.timestamp;
+          if (latestDate == null || logDate.isAfter(latestDate)) {
+            latestDate = logDate;
+          }
+        }
+      }
+
+      for (final t in _topics) {
+        if (t.completedAt != null) {
+          if (latestDate == null || t.completedAt!.isAfter(latestDate)) {
+            latestDate = t.completedAt;
+          }
+        }
+      }
+
+      if (latestDate == null) {
+        final allModules = await LocalModuleStorage.loadAllModules();
+        final match = allModules.firstWhere(
+          (m) =>
+              (widget.moduleId.isNotEmpty && m.id == widget.moduleId) ||
+              (widget.moduleTitle.isNotEmpty &&
+                  m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
+          orElse: () => Module(
+            id: '',
+            courseId: '',
+            title: '',
+            description: '',
+            orderIndex: 0,
+            status: '',
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        if (match.id.isNotEmpty) {
+          latestDate = match.updatedAt;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _lastUpdatedAt = latestDate ?? DateTime.now();
+          _totalMinutesExpended = totalMinutes;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading module stats: $e');
     }
   }
 
@@ -363,6 +431,13 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           unawaited(firestore.addStudyLog(studyLog));
         }
       }
+      if (getIt.isRegistered<ProgressController>()) {
+        unawaited(getIt<ProgressController>().refresh());
+      }
+    } else {
+      if (getIt.isRegistered<ProgressController>()) {
+        unawaited(getIt<ProgressController>().refresh());
+      }
     }
 
     if (getIt.isRegistered<FirestoreService>()) {
@@ -390,6 +465,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     if (getIt.isRegistered<ProgressController>()) {
       unawaited(getIt<ProgressController>().refresh());
     }
+    unawaited(_loadModuleStats());
   }
 
   Future<void> _handleDeleteTopic(int index) async {
@@ -409,6 +485,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
       }
       await _syncModuleCompletion();
+      unawaited(_loadModuleStats());
 
       if (getIt.isRegistered<FirestoreService>()) {
         final firestore = getIt<FirestoreService>();
@@ -535,15 +612,39 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
     final completedCount = _topics.where((s) => s.status == TopicStatus.completed).length;
-    final inProgressCount = _topics.where((s) => s.status == TopicStatus.inProgress).length;
     final totalCount = _topics.length;
     final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
-    final inProgressRatio = totalCount > 0 ? (inProgressCount / totalCount) : 0.0;
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
+      floatingActionButton: _topics.isNotEmpty
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SessionSetupScreen(
+                      courseTitle: widget.courseTitle,
+                      courseId: widget.courseId,
+                      moduleTitle: widget.moduleTitle,
+                      moduleId: widget.moduleId,
+                      topics: _topics,
+                      isRevision: progress >= 1.0,
+                    ),
+                  ),
+                );
+              },
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shape: const CircleBorder(),
+              tooltip: progress >= 1.0 ? 'Start Revision Session' : 'Start Study Session',
+              child: const Icon(Icons.play_arrow_rounded, size: 28),
+            )
+          : null,
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CustomAppBar(
               title: widget.courseTitle.isNotEmpty ? widget.courseTitle : 'MODULE',
@@ -557,12 +658,21 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             ),
             _CompactModuleHeader(
               moduleTitle: widget.moduleTitle,
+              courseId: widget.courseId,
+              courseTitle: widget.courseTitle,
               completedCount: completedCount,
               totalCount: totalCount,
               progress: progress,
-              inProgressRatio: inProgressRatio,
+              lastUpdatedAt: _lastUpdatedAt ?? DateTime.now(),
+              totalMinutesExpended: _totalMinutesExpended,
             ),
-            const VGapSm(),
+            const VGapXs(),
+            Divider(
+              height: 12,
+              thickness: 1.0,
+              color: AppTheme.borderColor(context),
+            ),
+            const VGapXs(),
             Expanded(
               child: _TopicsListView(
                 topics: _topics,
@@ -575,7 +685,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 onDuplicate: _handleDuplicateTopic,
                 onDelete: _handleDeleteTopic,
                 onAddTopic: _openAddTopicScreen,
-                bottomPadding: bottomSafe + 24,
+                bottomPadding: bottomSafe + 84,
               ),
             ),
           ],
@@ -588,96 +698,139 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
 class _CompactModuleHeader extends StatelessWidget {
   final String moduleTitle;
+  final String courseId;
+  final String courseTitle;
   final int completedCount;
   final int totalCount;
   final double progress;
-  final double inProgressRatio;
+  final DateTime lastUpdatedAt;
+  final int totalMinutesExpended;
+
+  static final DateFormat _dateFormat = DateFormat('d MMM, yyyy');
 
   const _CompactModuleHeader({
     required this.moduleTitle,
+    required this.courseId,
+    required this.courseTitle,
     required this.completedCount,
     required this.totalCount,
     required this.progress,
-    required this.inProgressRatio,
+    required this.lastUpdatedAt,
+    required this.totalMinutesExpended,
   });
+
+  static String _formatDuration(int minutes) {
+    if (minutes <= 0) return '0h';
+    final hours = minutes / 60.0;
+    if (minutes % 60 == 0) {
+      return '${hours.toInt()}h';
+    } else if (hours < 1.0) {
+      return '${minutes}m';
+    } else {
+      return '${hours.toStringAsFixed(1).replaceAll('.0', '')}h';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final percent = (progress * 100).round();
+    final isComplete = totalCount > 0 && completedCount >= totalCount;
+    final dateStr = _dateFormat.format(lastUpdatedAt);
+    final hoursStr = _formatDuration(totalMinutesExpended);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ModuleContextPill(moduleTitle: moduleTitle),
-          const VGapSm(),
-          Row(
+          ModuleContextPill(
+            moduleTitle: moduleTitle,
+            courseId: courseId,
+            courseTitle: courseTitle,
+          ),
+          const VGapXs(),
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                '$completedCount/$totalCount topics ($percent%)',
+                '$completedCount/$totalCount topics',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textSecondaryColor(context),
                 ),
               ),
-              const HGapMd(),
-              Expanded(
-                child: _SlimProgressBar(
-                  completedRatio: progress.clamp(0.0, 1.0),
-                  inProgressRatio: inProgressRatio.clamp(0.0, 1.0),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today_rounded,
+                    size: 12,
+                    color: AppTheme.textMutedColor(context),
+                  ),
+                  const HGapXs(),
+                  Text(
+                    dateStr,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.schedule_rounded,
+                    size: 13,
+                    color: AppTheme.textMutedColor(context),
+                  ),
+                  const HGapXs(),
+                  Text(
+                    hoursStr,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: isComplete
+                      ? AppTheme.successColor.withValues(alpha: 0.12)
+                      : AppTheme.pastelPurple(context),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isComplete
+                        ? AppTheme.successColor.withValues(alpha: 0.25)
+                        : AppTheme.pastelPurpleBorder(context),
+                  ),
+                ),
+                child: Text(
+                  isComplete ? 'Completed' : 'In Progress',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: isComplete
+                        ? AppTheme.successColor
+                        : AppTheme.pastelPurpleText(context),
+                    letterSpacing: 0.2,
+                  ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SlimProgressBar extends StatelessWidget {
-  final double completedRatio;
-  final double inProgressRatio;
-
-  const _SlimProgressBar({
-    required this.completedRatio,
-    required this.inProgressRatio,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: SizedBox(
-        height: 3,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final completedW = width * completedRatio;
-            final inProgressW =
-                (width * inProgressRatio).clamp(0.0, width - completedW);
-            return Stack(
-              children: [
-                Container(width: width, color: const Color(0xFFECEEF6)),
-                if (inProgressW > 0)
-                  Container(
-                    width: completedW + inProgressW,
-                    color: AppTheme.primaryColor,
-                  ),
-                if (completedW > 0)
-                  Container(
-                    width: completedW,
-                    color: AppTheme.successColor,
-                  ),
-              ],
-            );
-          },
+          ],
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -762,19 +915,10 @@ class _TopicsListView extends StatelessWidget {
 
     final isModuleCompleted = topics.isNotEmpty && topics.every((t) => t.isCompleted);
 
-    return ListView.separated(
+    return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
+      padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
       itemCount: topics.length + (isModuleCompleted ? 1 : 0),
-      separatorBuilder: (context, index) => index < topics.length - 1
-          ? Divider(
-              height: 1,
-              thickness: 0.6,
-              indent: 52,
-              endIndent: 16,
-              color: AppTheme.borderColor(context),
-            )
-          : const SizedBox.shrink(),
       itemBuilder: (context, index) {
         // "Add to Revision" footer button for completed modules
         if (isModuleCompleted && index == topics.length) {
@@ -801,7 +945,7 @@ class _TopicsListView extends StatelessWidget {
         return TopicListItem(
           topic: item,
           onCheckboxTap: () => onToggle(index),
-          onTap: openOptions,
+          onTap: () => onToggle(index),
           onLongPress: openOptions,
           onOptionsTap: openOptions,
         );
@@ -946,3 +1090,5 @@ class _AddToRevisionFooter extends StatelessWidget {
     );
   }
 }
+
+

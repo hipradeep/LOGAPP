@@ -24,6 +24,7 @@ import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/progress_controller.dart';
+import 'session_setup_screen.dart';
 
 /// Read-only by design: the ladder advances on its own, so there is no action
 /// button here — tapping a topic simply opens the module it belongs to.
@@ -499,6 +500,39 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
+      floatingActionButton: ValueListenableBuilder<int>(
+        valueListenable: _activeTab,
+        builder: (context, activeIdx, _) {
+          if (activeIdx != 0 || _revisionTopics.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          final revision = _revision;
+          return FloatingActionButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SessionSetupScreen(
+                    courseTitle: revision.courseTitle,
+                    courseId: revision.courseId,
+                    moduleTitle: revision.moduleTitle,
+                    moduleId: revision.moduleId,
+                    revisionTopics: _revisionTopics,
+                    revisionId: revision.id,
+                    isRevision: true,
+                  ),
+                ),
+              );
+            },
+            backgroundColor: AppTheme.primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            shape: const CircleBorder(),
+            tooltip: 'Start Revision Session',
+            child: const Icon(Icons.play_arrow_rounded, size: 28),
+          );
+        },
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _controller,
@@ -535,7 +569,10 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                       Expanded(
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: ModuleContextPill(moduleTitle: revision.moduleTitle),
+                          child: ModuleContextPill(
+                            moduleTitle: revision.moduleTitle,
+                            courseId: revision.courseId,
+                          ),
                         ),
                       ),
                       if (revision.isDueAt(DateTime.now()) && !revision.isFinished) ...[
@@ -582,7 +619,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                         topics: _revisionTopics,
                         revision: revision,
                         isLoading: _isLoadingTopics,
-                        bottomPadding: bottomSafe + 24,
+                        bottomPadding: bottomSafe + 84,
                         onToggle: _toggleTopicStatus,
                       );
                     },
@@ -875,19 +912,12 @@ class _RevisionTopicsView extends StatelessWidget {
             nextRevisionAt: revision.nextRevisionAt,
           ),
         Expanded(
-          child: ListView.separated(
+          child: ListView.builder(
             physics: const BouncingScrollPhysics(
               parent: AlwaysScrollableScrollPhysics(),
             ),
-            padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
+            padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
             itemCount: topics.length,
-            separatorBuilder: (context, index) => Divider(
-              height: 1,
-              thickness: 0.6,
-              indent: 52,
-              endIndent: 16,
-              color: AppTheme.borderColor(context),
-            ),
             itemBuilder: (context, index) {
               final topic = topics[index];
               return TopicListItem(
@@ -1305,4 +1335,5 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
+
 

@@ -10,6 +10,7 @@ import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
 import 'add_course_screen.dart';
+import 'archived_courses_screen.dart';
 import 'course_detail_screen.dart';
 
 /// Courses screen listing only the user's own courses:
@@ -71,6 +72,13 @@ class _CoursesScreenState extends State<CoursesScreen> {
     CourseOptionsSheet.show(context, course: course);
   }
 
+  void _openArchivedCourses() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ArchivedCoursesScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -96,6 +104,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 onCourseTap: _openCourseDetail,
                 onCourseLongPress: _openCourseOptions,
                 onAddCourse: _openAddCourse,
+                onOpenArchived: _openArchivedCourses,
                 bottomPadding: bottomSafe + 24,
               ),
             ),
@@ -211,6 +220,7 @@ class _CoursesFilteredList extends StatelessWidget {
   final ValueChanged<Course> onCourseTap;
   final ValueChanged<Course> onCourseLongPress;
   final VoidCallback onAddCourse;
+  final VoidCallback onOpenArchived;
   final double bottomPadding;
 
   const _CoursesFilteredList({
@@ -219,6 +229,7 @@ class _CoursesFilteredList extends StatelessWidget {
     required this.onCourseTap,
     required this.onCourseLongPress,
     required this.onAddCourse,
+    required this.onOpenArchived,
     required this.bottomPadding,
   });
 
@@ -234,6 +245,7 @@ class _CoursesFilteredList extends StatelessWidget {
       builder: (context, _) {
         final query = searchQueryNotifier.value;
         final userCourses = coursesController.courses;
+        final archivedCount = coursesController.archivedCourses.length;
 
         final filtered = userCourses.where((c) {
           if (query.isEmpty) return true;
@@ -245,6 +257,8 @@ class _CoursesFilteredList extends StatelessWidget {
           return _CoursesEmptyState(
             bottomPadding: bottomPadding,
             onAddCourse: onAddCourse,
+            archivedCount: archivedCount,
+            onOpenArchived: onOpenArchived,
           );
         }
 
@@ -263,6 +277,11 @@ class _CoursesFilteredList extends StatelessWidget {
                   ),
                 ),
               ),
+              const VGapLg(),
+              _ArchivedCoursesButton(
+                count: archivedCount,
+                onTap: onOpenArchived,
+              ),
             ],
           );
         }
@@ -270,12 +289,20 @@ class _CoursesFilteredList extends StatelessWidget {
         return ListView.builder(
           physics: const BouncingScrollPhysics(),
           padding: EdgeInsets.only(left: 16, right: 16, top: 8, bottom: bottomPadding),
-          itemCount: filtered.length,
+          itemCount: filtered.length + 1,
           itemBuilder: (context, index) {
+            if (index == filtered.length) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 12.0),
+                child: _ArchivedCoursesButton(
+                  count: archivedCount,
+                  onTap: onOpenArchived,
+                ),
+              );
+            }
+
             final Course course = filtered[index];
             final rollup = ongoing?.progressForCourse(course.id);
-            final progress = rollup?.ratio ?? 0.0;
-            final percent = (progress * 100).round();
             final isComplete = rollup?.isComplete ??
                 (course.status.toLowerCase() == 'completed');
 
@@ -293,11 +320,10 @@ class _CoursesFilteredList extends StatelessWidget {
                 courseId: course.id,
                 title: course.title,
                 subtitle: subtitle,
-                progress: isComplete ? 1.0 : progress,
-                percentage: isComplete ? '100%' : '$percent%',
                 isComplete: isComplete,
                 onTap: () => onCourseTap(course),
                 onLongPress: () => onCourseLongPress(course),
+                onOptionsTap: () => onCourseLongPress(course),
               ),
             );
           },
@@ -309,10 +335,14 @@ class _CoursesFilteredList extends StatelessWidget {
 
 class _CoursesEmptyState extends StatelessWidget {
   final VoidCallback onAddCourse;
+  final VoidCallback onOpenArchived;
+  final int archivedCount;
   final double bottomPadding;
 
   const _CoursesEmptyState({
     required this.onAddCourse,
+    required this.onOpenArchived,
+    required this.archivedCount,
     required this.bottomPadding,
   });
 
@@ -369,7 +399,104 @@ class _CoursesEmptyState extends StatelessWidget {
             ),
           ),
         ),
+        if (archivedCount > 0) ...[
+          const VGapLg(),
+          _ArchivedCoursesButton(
+            count: archivedCount,
+            onTap: onOpenArchived,
+          ),
+        ],
       ],
+    );
+  }
+}
+
+class _ArchivedCoursesButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _ArchivedCoursesButton({
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
+        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        border: Border.all(color: AppTheme.borderColor(context)),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.shadowColor(context),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppTheme.pastelPurple(context),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppTheme.pastelPurpleBorder(context),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.archive_outlined,
+                    color: AppTheme.pastelPurpleText(context),
+                    size: 20,
+                  ),
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Archived Courses',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor(context),
+                        ),
+                      ),
+                      const VGapXs(),
+                      Text(
+                        count > 0
+                            ? '$count ${count == 1 ? "course" : "courses"} archived'
+                            : 'View archived courses',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondaryColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppTheme.textMutedColor(context),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -378,31 +505,23 @@ class _CourseItemCard extends StatelessWidget {
   final String courseId;
   final String title;
   final String subtitle;
-  final double progress;
-  final String percentage;
   final bool isComplete;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onOptionsTap;
 
   const _CourseItemCard({
     required this.courseId,
     required this.title,
     required this.subtitle,
-    required this.progress,
-    required this.percentage,
     this.isComplete = false,
     this.onTap,
     this.onLongPress,
+    this.onOptionsTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final accentIndex =
-        CourseIconChip.stableIndex(courseId, AppTheme.tintCount);
-    final accentColor = isComplete
-        ? AppTheme.successColor
-        : AppTheme.tintFor(context, accentIndex).$2;
-
     return CompactListItem(
       margin: EdgeInsets.zero,
       isCompleted: isComplete,
@@ -434,34 +553,9 @@ class _CourseItemCard extends StatelessWidget {
             )
           : null,
       subtitle: subtitle,
-      bottom: Row(
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                minHeight: 4,
-                backgroundColor: const Color(0xFFECEEF6),
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-              ),
-            ),
-          ),
-          const HGapSm(),
-          Text(
-            percentage,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: isComplete
-                  ? AppTheme.successColor
-                  : AppTheme.textSecondaryColor(context),
-            ),
-          ),
-        ],
-      ),
       onTap: onTap,
       onLongPress: onLongPress,
+      onOptionsTap: onOptionsTap,
     );
   }
 }

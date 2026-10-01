@@ -57,17 +57,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _handleRefresh() async {
-    if (getIt.isRegistered<CoursesController>()) {
-      getIt<CoursesController>().refresh();
-    }
-    await Future.wait([
-      _progressController.refresh(),
-      if (getIt.isRegistered<RevisionController>())
-        getIt<RevisionController>().reconcile(),
-    ]);
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -75,46 +64,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _handleRefresh,
-          color: AppTheme.primaryColor,
-          backgroundColor: AppTheme.surface(context),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 12,
-              bottom: bottomSafe + 24,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ProfileHeader(onSettingsTap: () => _openSettings(context)),
-                const VGapMd(),
-                const _UserProfileCard(),
-                const VGapMd(),
-                ListenableBuilder(
-                  listenable: _progressController,
-                  builder: (context, _) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        StreakHighlightsCard(controller: _progressController),
-                        const VGapMd(),
-                        StrikeHeatmapCard(controller: _progressController),
-                        const VGapMd(),
-                        const _SectionHeader(title: 'MENU'),
-                        _ProfileMenuCard(
-                          onActivityTap: () => _openActivity(context),
-                          onCoursesTap: () => _openCourses(context),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: bottomSafe + 24,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ProfileHeader(onSettingsTap: () => _openSettings(context)),
+              const VGapMd(),
+              const _UserProfileCard(),
+              const VGapMd(),
+              ListenableBuilder(
+                listenable: _progressController,
+                builder: (context, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      StreakHighlightsCard(controller: _progressController),
+                      const VGapMd(),
+                      StrikeHeatmapCard(controller: _progressController),
+                      const VGapMd(),
+                      const _SectionHeader(title: 'MENU'),
+                      _ProfileMenuCard(
+                        onActivityTap: () => _openActivity(context),
+                        onCoursesTap: () => _openCourses(context),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -223,9 +207,9 @@ class _UserProfileCard extends StatelessWidget {
                         ],
                       ),
                       alignment: Alignment.center,
-                      child: const Text(
-                        'P',
-                        style: TextStyle(
+                      child: Text(
+                        progressCtrl?.userInitial ?? 'P',
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -242,7 +226,7 @@ class _UserProfileCard extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  'Pradeep Maurya',
+                                  progressCtrl?.userName ?? 'Pradeep Maurya',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -262,7 +246,7 @@ class _UserProfileCard extends StatelessWidget {
                           ),
                           const VGapXs(),
                           Text(
-                            'Software Developer',
+                            progressCtrl?.userHeadline ?? 'Software Developer',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.textSecondaryColor(context),
@@ -280,7 +264,7 @@ class _UserProfileCard extends StatelessWidget {
                 color: AppTheme.borderColor(context),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
                 child: Row(
                   children: [
                     _MiniStat(
@@ -295,6 +279,13 @@ class _UserProfileCard extends StatelessWidget {
                       label: 'Streak',
                       icon: Icons.local_fire_department_rounded,
                       color: const Color(0xFFF97316),
+                    ),
+                    _StatDivider(),
+                    _MiniStat(
+                      value: progressCtrl?.formattedStudyHours ?? '0h',
+                      label: 'Hours',
+                      icon: Icons.access_time_rounded,
+                      color: const Color(0xFF10B981),
                     ),
                     _StatDivider(),
                     _MiniStat(
@@ -333,21 +324,25 @@ class _MiniStat extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 13, color: color),
-              const HGapXs(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 12.5, color: color),
+                const HGapXs(),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const VGapXs(),
           Text(
             label,
             style: TextStyle(

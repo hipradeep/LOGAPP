@@ -77,20 +77,20 @@ class TopicOptionsSheet extends StatelessWidget {
     return SheetContainer(
       children: [
         const SheetHandleBar(),
-        const VGapMd(),
+        const VGapSm(),
         SheetHeader(
           badge: SheetHeaderBadge(
             backgroundColor: AppTheme.pastelBlue(context),
             child: Icon(
               iconData,
               color: AppTheme.pastelBlueText(context),
-              size: 24,
+              size: 22,
             ),
           ),
           title: topic.title,
           subtitle: subtitle,
         ),
-        const VGapMd(),
+        const VGapSm(),
         SheetActionRow(
           icon: Icons.edit_outlined,
           title: 'Edit Topic',
@@ -106,12 +106,12 @@ class TopicOptionsSheet extends StatelessWidget {
           title: 'Move Topic',
           onTap: () => Navigator.pop(context, TopicOptionAction.move),
         ),
-        const VGapSm(),
+        const VGapXs(),
         SheetDestructiveButton(
           title: 'Delete Topic',
           onTap: () => Navigator.pop(context, TopicOptionAction.delete),
         ),
-        const VGapMd(),
+        const VGapSm(),
         const SheetCancelButton(),
       ],
     );

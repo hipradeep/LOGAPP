@@ -193,6 +193,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                   alignment: Alignment.centerLeft,
                   child: CourseContextPill(
                     courseTitle: _selectedCourseTitle.isNotEmpty ? _selectedCourseTitle : widget.courseTitle,
+                    courseId: widget.courseId,
                   ),
                 ),
               ),
@@ -213,6 +214,9 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                       controller: _titleController,
                       hintText: 'Enter module name',
                       isRequired: true,
+                      minLines: 1,
+                      maxLines: 4,
+                      keyboardType: TextInputType.multiline,
                     ),
                     const VGapLg(),
                     BorderlessDescriptionField(

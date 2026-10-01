@@ -18,6 +18,8 @@ class UnderlineInputField extends StatelessWidget {
   final double fontSize;
   final FontWeight fontWeight;
   final ValueChanged<String>? onChanged;
+  final int? minLines;
+  final int? maxLines;
 
   const UnderlineInputField({
     super.key,
@@ -30,6 +32,8 @@ class UnderlineInputField extends StatelessWidget {
     this.fontSize = 18.0,
     this.fontWeight = FontWeight.w600,
     this.onChanged,
+    this.minLines,
+    this.maxLines = 1,
   });
 
   @override
@@ -71,6 +75,8 @@ class UnderlineInputField extends StatelessWidget {
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          minLines: minLines,
+          maxLines: maxLines,
           onChanged: onChanged,
           style: TextStyle(
             fontSize: fontSize,

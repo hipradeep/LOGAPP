@@ -381,6 +381,8 @@ class _RevisionScreenState extends State<RevisionScreen> {
             const VGapSm(),
             for (final scope in RevisionScope.values)
               ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
                 onTap: () => Navigator.pop(ctx, scope),
                 leading: Icon(
                   _scopeIconFor(scope),

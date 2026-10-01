@@ -6,6 +6,7 @@ import '../controllers/courses_controller.dart';
 import 'app_spacers.dart';
 import 'study_confirmation_dialog.dart';
 import '../screens/add_course_screen.dart';
+import 'course_icon_chip.dart';
 import 'sheet_action_widgets.dart';
 
 enum CourseOptionAction { edit, duplicate, archive, delete }
@@ -44,6 +45,8 @@ class CourseOptionsSheet extends StatelessWidget {
           title: '${course.title} (Copy)',
           description: course.description,
           deadline: course.deadline,
+          iconCodePoint: course.iconCodePoint,
+          colorValue: course.colorValue,
         );
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -64,7 +67,7 @@ class CourseOptionsSheet extends StatelessWidget {
           courseTitle: course.title,
         );
         if (confirmed && context.mounted) {
-          await getIt<CoursesController>().updateCourse(course.copyWith(status: 'archived'));
+          await getIt<CoursesController>().archiveCourse(course.id);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -112,19 +115,21 @@ class CourseOptionsSheet extends StatelessWidget {
     return SheetContainer(
       children: [
         const SheetHandleBar(),
-        const VGapMd(),
+        const VGapSm(),
         SheetHeader(
           badge: SheetHeaderBadge(
-            child: Icon(
-              Icons.auto_stories_outlined,
-              color: AppTheme.pastelBlueText(context),
-              size: 24,
+            child: CourseIconChip(
+              courseId: course.id,
+              iconCodePoint: course.iconCodePoint,
+              colorValue: course.colorValue,
+              size: 38,
+              radius: 10,
             ),
           ),
           title: course.title,
           subtitle: subtitle,
         ),
-        const VGapMd(),
+        const VGapSm(),
         SheetActionRow(
           icon: Icons.edit_outlined,
           title: 'Edit Course',
@@ -140,12 +145,12 @@ class CourseOptionsSheet extends StatelessWidget {
           title: 'Archive Course',
           onTap: () => Navigator.pop(context, CourseOptionAction.archive),
         ),
-        const VGapSm(),
+        const VGapXs(),
         SheetDestructiveButton(
           title: 'Delete Course',
           onTap: () => Navigator.pop(context, CourseOptionAction.delete),
         ),
-        const VGapMd(),
+        const VGapSm(),
         const SheetCancelButton(),
       ],
     );

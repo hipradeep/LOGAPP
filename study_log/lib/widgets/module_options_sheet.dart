@@ -170,14 +170,14 @@ class ModuleOptionsSheet extends StatelessWidget {
     return SheetContainer(
       children: [
         const SheetHandleBar(),
-        const VGapMd(),
+        const VGapSm(),
         SheetHeader(
           badge: SheetHeaderBadge(
             backgroundColor: AppTheme.pastelPurple(context),
             child: Text(
               '${module.orderIndex + 1}',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.pastelPurpleText(context),
               ),
@@ -186,7 +186,7 @@ class ModuleOptionsSheet extends StatelessWidget {
           title: module.title,
           subtitle: subtitle,
         ),
-        const VGapMd(),
+        const VGapSm(),
         SheetActionRow(
           icon: Icons.edit_outlined,
           title: 'Edit Module',
@@ -213,12 +213,12 @@ class ModuleOptionsSheet extends StatelessWidget {
             },
           ),
         ],
-        const VGapSm(),
+        const VGapXs(),
         SheetDestructiveButton(
           title: 'Delete Module',
           onTap: () => Navigator.pop(context, ModuleOptionAction.delete),
         ),
-        const VGapMd(),
+        const VGapSm(),
         const SheetCancelButton(),
       ],
     );
