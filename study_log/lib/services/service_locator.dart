@@ -8,6 +8,7 @@ import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/notification_controller.dart';
 import 'firestore_service.dart';
+import 'notification_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -29,6 +30,9 @@ void setupLocator() {
   }
   if (!getIt.isRegistered<ProgressController>()) {
     getIt.registerLazySingleton<ProgressController>(() => ProgressController());
+  }
+  if (!getIt.isRegistered<NotificationService>()) {
+    getIt.registerLazySingleton<NotificationService>(() => NotificationService());
   }
   if (!getIt.isRegistered<NotificationController>()) {
     getIt.registerLazySingleton<NotificationController>(() => NotificationController());

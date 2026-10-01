@@ -8,6 +8,7 @@ import '../services/local_course_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
 import '../services/local_study_log_storage.dart';
+import '../services/notification_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -91,6 +92,42 @@ class SettingsScreen extends StatelessWidget {
         );
       }
     }
+  }
+
+  /// Fires a dummy notification so the user can confirm reminders actually
+  /// reach the device. Deliberately ignores the stored notification prefs.
+  Future<void> _sendTestNotification(BuildContext context) async {
+    final result = await getIt<NotificationService>().showInstantNotification(
+      title: 'Test Notification',
+      body: 'If you can see this, reminder delivery is working.',
+    );
+
+    if (!context.mounted) return;
+
+    final message = switch (result) {
+      TestNotificationResult.instantSent => 'Test notification sent.',
+      TestNotificationResult.permissionDenied =>
+        'Notification permission denied. Enable it in system settings.',
+      _ => 'Could not deliver the test notification. Check logs.',
+    };
+    final color = switch (result) {
+      TestNotificationResult.instantSent => AppTheme.successColor,
+      TestNotificationResult.permissionDenied => AppTheme.warningColor,
+      _ => AppTheme.errorColor,
+    };
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
+          ),
+        ),
+      );
   }
 
   void _showRevisionInfo(BuildContext context) {
@@ -267,6 +304,15 @@ class SettingsScreen extends StatelessWidget {
                 );
               },
             ),
+            _TileDivider(),
+            _SettingsTile(
+              icon: Icons.notifications_active_rounded,
+              iconBgColor: AppTheme.pastelGreen(context),
+              iconColor: AppTheme.pastelGreenText(context),
+              title: 'Send Test Notification',
+              subtitle: 'Post a dummy reminder now',
+              onTap: () => _sendTestNotification(context),
+            ),
           ],
         ),
         const VGapMd(),
@@ -405,15 +451,31 @@ class _SettingsTile extends StatelessWidget {
               ),
               const HGapSm(),
               Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: isDestructive
-                        ? AppTheme.errorColor
-                        : AppTheme.textPrimaryColor(context),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDestructive
+                            ? AppTheme.errorColor
+                            : AppTheme.textPrimaryColor(context),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const VGapXs(),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textSecondaryColor(context),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (badgeText != null) ...[

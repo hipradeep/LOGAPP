@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'controllers/theme_controller.dart';
 import 'services/service_locator.dart';
 import 'services/navigation_service.dart';
+import 'services/notification_service.dart';
 import 'widgets/app_provider.dart';
 import 'screens/splash_screen.dart';
 
@@ -39,6 +40,10 @@ void main() async {
 
   // Pre-load data in background immediately on startup so it is ready on launch
   unawaited(warmupControllers());
+
+  // Register the local notifications plugin early so test/scheduled reminders
+  // can be delivered without waiting for a user interaction.
+  unawaited(getIt<NotificationService>().init());
 
   runApp(const StudyLogApp());
 }
