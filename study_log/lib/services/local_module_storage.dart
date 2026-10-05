@@ -182,6 +182,16 @@ class LocalModuleStorage {
     });
   }
 
+  /// Looks up a single module by id across all cached modules.
+  static Future<Module?> getModuleById(String moduleId) async {
+    if (moduleId.isEmpty) return null;
+    final all = await loadAllModules();
+    for (final m in all) {
+      if (m.id == moduleId) return m;
+    }
+    return null;
+  }
+
   /// Clears all locally cached modules from disk.
   static Future<void> clearAll() {
     return _synchronized(() async {

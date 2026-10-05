@@ -3,12 +3,13 @@ import 'topic.dart';
 
 /// An independent revision topic entity managed exclusively inside a Revision.
 /// Allows full CRUD operations and completion toggling separate from course modules.
+/// - [moduleId] is inherited from the parent [Revision]; not stored here.
+/// - [title] is looked up from [Topic] via [topicId].
 class RevisionTopic {
   final String id;
   final String revisionId;
   final String courseId;
-  final String moduleId;
-  final String title;
+  final String topicId;   // FK → Topic.id  (replaces stored title)
   final TopicStatus status;
   final int orderIndex;
   final DateTime? completedAt;
@@ -19,8 +20,7 @@ class RevisionTopic {
     required this.id,
     required this.revisionId,
     this.courseId = '',
-    this.moduleId = '',
-    required this.title,
+    this.topicId = '',
     this.status = TopicStatus.notStarted,
     this.orderIndex = 0,
     this.completedAt,
@@ -34,8 +34,7 @@ class RevisionTopic {
     String? id,
     String? revisionId,
     String? courseId,
-    String? moduleId,
-    String? title,
+    String? topicId,
     TopicStatus? status,
     int? orderIndex,
     DateTime? completedAt,
@@ -47,8 +46,7 @@ class RevisionTopic {
       id: id ?? this.id,
       revisionId: revisionId ?? this.revisionId,
       courseId: courseId ?? this.courseId,
-      moduleId: moduleId ?? this.moduleId,
-      title: title ?? this.title,
+      topicId: topicId ?? this.topicId,
       status: status ?? this.status,
       orderIndex: orderIndex ?? this.orderIndex,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
@@ -58,15 +56,17 @@ class RevisionTopic {
   }
 
   /// Converts this [RevisionTopic] into a lightweight [Topic] so widgets like [TopicListItem]
-  /// can consume it with 100% interoperability.
-  Topic toTopic() {
+  /// can consume it. The [topic] parameter supplies the title and icon looked up via [topicId].
+  Topic toTopic({Topic? topic}) {
     return Topic(
       id: id,
       courseId: courseId,
-      moduleId: moduleId,
-      title: title,
+      moduleId: topic?.moduleId ?? '',
+      title: topic?.title ?? topicId,
       status: status,
       orderIndex: orderIndex,
+      iconCodePoint: topic?.iconCodePoint,
+      colorValue: topic?.colorValue,
       completedAt: completedAt,
     );
   }
@@ -79,14 +79,12 @@ class RevisionTopic {
   }) {
     final now = DateTime.now();
     return RevisionTopic(
-      id: newId ?? (topic.id.isNotEmpty ? topic.id : 'rev_topic_${now.millisecondsSinceEpoch}'),
+      id: newId ?? (topic.id.isNotEmpty ? 'rev_${topic.id}' : 'rev_topic_${now.millisecondsSinceEpoch}'),
       revisionId: revisionId,
       courseId: topic.courseId,
-      moduleId: topic.moduleId,
-      title: topic.title,
-      status: topic.status,
+      topicId: topic.id,
+      status: TopicStatus.notStarted,
       orderIndex: topic.orderIndex,
-      completedAt: topic.completedAt,
       createdAt: now,
       updatedAt: now,
     );
@@ -97,8 +95,7 @@ class RevisionTopic {
       'id': id,
       'revisionId': revisionId,
       'courseId': courseId,
-      'moduleId': moduleId,
-      'title': title,
+      'topicId': topicId,
       'status': status.name,
       'orderIndex': orderIndex,
       'completedAt': completedAt == null
@@ -123,8 +120,7 @@ class RevisionTopic {
           : (map['id']?.toString() ?? ''),
       revisionId: map['revisionId']?.toString() ?? '',
       courseId: map['courseId']?.toString() ?? '',
-      moduleId: map['moduleId']?.toString() ?? '',
-      title: map['title']?.toString() ?? '',
+      topicId: map['topicId']?.toString() ?? '',
       status: Topic.parseStatus(map['status']),
       orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
       completedAt: Topic.parseDateTime(map['completedAt']),

@@ -111,8 +111,11 @@ class _RevisionScreenState extends State<RevisionScreen> {
         if (total > 0 && done < total) return false;
       }
       if (query.isNotEmpty) {
-        final matches = r.moduleTitle.toLowerCase().contains(query) ||
-            r.moduleDescription.toLowerCase().contains(query);
+        final module = ongoing?.getModuleById(r.moduleId);
+        final title = module?.title ?? '';
+        final desc = module?.description ?? '';
+        final matches = title.toLowerCase().contains(query) ||
+            desc.toLowerCase().contains(query);
         if (!matches) return false;
       }
       switch (_scope) {
@@ -145,9 +148,9 @@ class _RevisionScreenState extends State<RevisionScreen> {
       case RevisionSortMode.name:
         filtered.sort((a, b) {
           if (a.isFinished != b.isFinished) return a.isFinished ? 1 : -1;
-          return a.moduleTitle.toLowerCase().compareTo(
-                b.moduleTitle.toLowerCase(),
-              );
+          final titleA = ongoing?.moduleTitleFor(a.moduleId) ?? '';
+          final titleB = ongoing?.moduleTitleFor(b.moduleId) ?? '';
+          return titleA.toLowerCase().compareTo(titleB.toLowerCase());
         });
         break;
     }
@@ -921,7 +924,7 @@ class _RevisionItemCard extends StatelessWidget {
         size: 38,
         radius: 10,
       ),
-      title: revision.moduleTitle,
+      title: _moduleTitleFor(revision),
       titleBadge: _RevisionLevelPill(
         level: revision.currentLevel,
         isFinished: revision.isFinished,
@@ -955,13 +958,17 @@ class _RevisionItemCard extends StatelessWidget {
     );
   }
 
+  static String _moduleTitleFor(Revision revision) {
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      return getIt<OngoingModulesController>().moduleTitleFor(revision.moduleId);
+    }
+    return '';
+  }
+
   static String _courseFor(Revision revision) {
-    final title = revision.courseTitle.trim();
-    if (title.isNotEmpty) return title;
     if (getIt.isRegistered<CoursesController>()) {
-      for (final c in getIt<CoursesController>().courses) {
-        if (c.id == revision.courseId) return c.title;
-      }
+      final course = getIt<CoursesController>().getCourseById(revision.courseId);
+      if (course != null && course.title.isNotEmpty) return course.title;
     }
     return '';
   }

@@ -162,7 +162,13 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   String get _currentTopicTitle {
     if (widget.isRevision) {
       if (_currentTopicIndex < _revisionTopics.length) {
-        return _revisionTopics[_currentTopicIndex].title;
+        if (_currentTopicIndex < _topics.length && _topics[_currentTopicIndex].title.isNotEmpty) {
+          return _topics[_currentTopicIndex].title;
+        }
+        final rt = _revisionTopics[_currentTopicIndex];
+        final match = _topics.where((t) => t.id == rt.topicId).firstOrNull;
+        if (match != null && match.title.isNotEmpty) return match.title;
+        return rt.topicId.isNotEmpty ? rt.topicId : 'Topic';
       }
     } else {
       if (_currentTopicIndex < _topics.length) {
@@ -220,8 +226,8 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         courseTitle: widget.courseTitle,
         moduleId: widget.moduleId,
         moduleTitle: widget.moduleTitle,
-        topicId: updated.id,
-        topicTitle: updated.title,
+        topicId: updated.topicId.isNotEmpty ? updated.topicId : updated.id,
+        topicTitle: _currentTopicTitle,
         timestamp: now,
         createdAt: now,
       );

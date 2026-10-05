@@ -128,9 +128,9 @@ class RevisionController extends ChangeNotifier {
       id: 'rev_${current.id}_${now.millisecondsSinceEpoch}',
       type: StudyLogType.revisionCompleted,
       courseId: current.courseId,
-      courseTitle: current.courseTitle,
+      courseTitle: '',
       moduleId: current.moduleId,
-      moduleTitle: current.moduleTitle,
+      moduleTitle: '',
       revisionLevel: current.currentLevel,
       timestamp: now,
       createdAt: now,
@@ -173,14 +173,9 @@ class RevisionController extends ChangeNotifier {
     await _pushToFirestore(reset, isNew: false);
   }
 
-  Revision? revisionForModule(String moduleId, {String moduleTitle = ''}) {
+  Revision? revisionForModule(String moduleId, {String? moduleTitle}) {
     for (final revision in _revisions) {
       if (moduleId.isNotEmpty && revision.moduleId == moduleId) return revision;
-      if (moduleTitle.isNotEmpty &&
-          revision.moduleTitle.trim().toLowerCase() ==
-              moduleTitle.trim().toLowerCase()) {
-        return revision;
-      }
     }
     return null;
   }
@@ -298,58 +293,29 @@ class RevisionController extends ChangeNotifier {
   Future<Revision> createOrEnsureRevision({
     required String courseId,
     required String moduleId,
-    required String courseTitle,
-    required String moduleTitle,
-    String moduleDescription = '',
+    String? courseTitle,
+    String? moduleTitle,
+    String? moduleDescription,
   }) async {
     final now = DateTime.now();
 
     // Un-suppress so manual add takes effect immediately
-    final key1 = moduleId;
-    final key2 = moduleTitle.trim().toLowerCase();
-    if (_suppressedModuleIds.remove(key1) || _suppressedModuleIds.remove(key2)) {
+    if (_suppressedModuleIds.remove(moduleId)) {
       unawaited(LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds));
     }
 
     final existingIndex = _revisions.indexWhere(
-      (r) =>
-          (moduleId.isNotEmpty && r.moduleId == moduleId) ||
-          (moduleTitle.isNotEmpty &&
-              r.moduleTitle.toLowerCase() == moduleTitle.toLowerCase()),
+      (r) => moduleId.isNotEmpty && r.moduleId == moduleId,
     );
 
     if (existingIndex != -1) {
-      final existing = _revisions[existingIndex];
-      if (existing.courseTitle != courseTitle ||
-          existing.moduleTitle != moduleTitle ||
-          existing.moduleDescription != moduleDescription) {
-        final updated = existing.copyWith(
-          courseTitle:
-              courseTitle.isNotEmpty ? courseTitle : existing.courseTitle,
-          moduleTitle:
-              moduleTitle.isNotEmpty ? moduleTitle : existing.moduleTitle,
-          moduleDescription: moduleDescription.isNotEmpty
-              ? moduleDescription
-              : existing.moduleDescription,
-          updatedAt: now,
-        );
-        _revisions =
-            _sorted(List<Revision>.of(_revisions)..[existingIndex] = updated);
-        await LocalRevisionStorage.saveAll(_revisions);
-        notifyListeners();
-        await _pushToFirestore(updated, isNew: false);
-        return updated;
-      }
-      return existing;
+      return _revisions[existingIndex];
     }
 
     final newRevision = Revision(
-      id: 'revision_${moduleId.isNotEmpty ? moduleId : moduleTitle.toLowerCase().replaceAll(' ', '_')}_${now.millisecondsSinceEpoch}',
+      id: 'revision_${moduleId.isNotEmpty ? moduleId : 'module'}_${now.millisecondsSinceEpoch}',
       courseId: courseId,
       moduleId: moduleId,
-      courseTitle: courseTitle,
-      moduleTitle: moduleTitle,
-      moduleDescription: moduleDescription,
       currentLevel: 1,
       status: RevisionStatus.active,
       nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),
@@ -396,11 +362,6 @@ class RevisionController extends ChangeNotifier {
     final byModuleId = <String, Revision>{
       for (final revision in working)
         if (revision.moduleId.isNotEmpty) revision.moduleId: revision,
-    };
-    final byModuleTitle = <String, Revision>{
-      for (final revision in working)
-        if (revision.moduleTitle.isNotEmpty)
-          revision.moduleTitle.trim().toLowerCase(): revision,
     };
 
     // Build course map for fast lookup and fallback to local disk if needed
@@ -462,28 +423,10 @@ class RevisionController extends ChangeNotifier {
 
       if (course.status.toLowerCase() == 'archived') continue;
 
-      final existing = byModuleId[module.id] ??
-          byModuleTitle[module.title.trim().toLowerCase()];
+      final existing = byModuleId[module.id];
 
       if (existing != null) {
-        if (existing.moduleDescription != module.description ||
-            (existing.courseTitle.isEmpty && course.title.isNotEmpty)) {
-          final index = working.indexWhere((r) => r.id == existing.id);
-          if (index != -1) {
-            final updated = existing.copyWith(
-              moduleDescription: module.description,
-              courseTitle: course.title.isNotEmpty ? course.title : existing.courseTitle,
-              updatedAt: now,
-            );
-            working[index] = updated;
-            if (updated.moduleId.isNotEmpty) byModuleId[updated.moduleId] = updated;
-            if (updated.moduleTitle.isNotEmpty) {
-              byModuleTitle[updated.moduleTitle.trim().toLowerCase()] = updated;
-            }
-            changed = true;
-            await _pushToFirestore(updated, isNew: false);
-          }
-        }
+        // No metadata to sync — titles/descriptions are looked up from Module at display time
       }
     }
 
@@ -502,8 +445,8 @@ class RevisionController extends ChangeNotifier {
     final toDelete = _revisions.firstWhere(
       (r) => r.id == revisionId,
       orElse: () => Revision(
-        id: '', courseId: '', moduleId: '', courseTitle: '', moduleTitle: '',
-        moduleDescription: '', currentLevel: 1, status: RevisionStatus.active,
+        id: '', courseId: '', moduleId: '',
+        currentLevel: 1, status: RevisionStatus.active,
         nextRevisionAt: DateTime.now(), createdAt: DateTime.now(), updatedAt: DateTime.now(),
       ),
     );
@@ -511,12 +454,9 @@ class RevisionController extends ChangeNotifier {
     _revisions = _revisions.where((r) => r.id != revisionId).toList();
     await LocalRevisionStorage.saveAll(_revisions);
 
-    // Suppress by both moduleId and moduleTitle key so reconcile skips it.
+    // Suppress by moduleId so reconcile skips it.
     if (toDelete.moduleId.isNotEmpty) {
       _suppressedModuleIds.add(toDelete.moduleId);
-    }
-    if (toDelete.moduleTitle.isNotEmpty) {
-      _suppressedModuleIds.add(toDelete.moduleTitle.trim().toLowerCase());
     }
     await LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds);
 
@@ -547,9 +487,6 @@ class RevisionController extends ChangeNotifier {
       if (r.moduleId.isNotEmpty) {
         _suppressedModuleIds.remove(r.moduleId);
       }
-      if (r.moduleTitle.isNotEmpty) {
-        _suppressedModuleIds.remove(r.moduleTitle.trim().toLowerCase());
-      }
     }
     await LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds);
 
@@ -577,30 +514,26 @@ class RevisionController extends ChangeNotifier {
   /// Checks if a revision's module has completed all its topics.
   Future<bool> _isRevisionComplete(Revision revision) async {
     final moduleId = revision.moduleId;
-    final moduleTitle = revision.moduleTitle;
+    if (moduleId.isEmpty) return false;
 
     // 1. Check OngoingModulesController in-memory first
-    if (moduleId.isNotEmpty) {
-      final total = _ongoingController.topicCountForModule(moduleId);
-      final done = _ongoingController.completedTopicCountForModule(moduleId);
-      if (total > 0) {
-        return done >= total;
-      }
+    final total = _ongoingController.topicCountForModule(moduleId);
+    final done = _ongoingController.completedTopicCountForModule(moduleId);
+    if (total > 0) {
+      return done >= total;
     }
 
     // 2. Load topics from local disk cache
     var topics = await LocalTopicStorage.loadTopicsForModule(
       moduleId: moduleId,
-      fallbackTitle: moduleTitle,
     );
 
     // 3. Fallback to Firestore if local topics empty
-    if (topics.isEmpty && _firestoreService.isAvailable && moduleId.isNotEmpty) {
+    if (topics.isEmpty && _firestoreService.isAvailable) {
       try {
         topics = await _firestoreService.getTopics(moduleId: moduleId);
         if (topics.isNotEmpty) {
-          final key = moduleId.isNotEmpty ? moduleId : moduleTitle;
-          await LocalTopicStorage.saveTopics(key, topics);
+          await LocalTopicStorage.saveTopics(moduleId, topics);
         }
       } catch (_) {}
     }
@@ -614,10 +547,7 @@ class RevisionController extends ChangeNotifier {
     if (revision.courseId.isNotEmpty) {
       final modules = await LocalModuleStorage.loadModules(revision.courseId);
       final match = modules.firstWhere(
-        (m) =>
-            (moduleId.isNotEmpty && m.id == moduleId) ||
-            (moduleTitle.isNotEmpty &&
-                m.title.toLowerCase() == moduleTitle.toLowerCase()),
+        (m) => m.id == moduleId,
         orElse: () => Module(
           id: '',
           courseId: '',
@@ -674,9 +604,6 @@ class RevisionController extends ChangeNotifier {
       id: 'revision_${module.id}_${now.millisecondsSinceEpoch}',
       courseId: course.id,
       moduleId: module.id,
-      courseTitle: course.title,
-      moduleTitle: module.title,
-      moduleDescription: module.description,
       currentLevel: 1,
       status: RevisionStatus.active,
       nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),

@@ -71,7 +71,13 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
   String _getTopicTitleAtIndex(int index) {
     if (widget.isRevision && widget.revisionTopics != null) {
       if (index >= 0 && index < widget.revisionTopics!.length) {
-        return widget.revisionTopics![index].title;
+        if (index < widget.topics.length && widget.topics[index].title.isNotEmpty) {
+          return widget.topics[index].title;
+        }
+        final rt = widget.revisionTopics![index];
+        final match = widget.topics.where((t) => t.id == rt.topicId).firstOrNull;
+        if (match != null && match.title.isNotEmpty) return match.title;
+        return rt.topicId.isNotEmpty ? rt.topicId : 'Topic';
       }
     } else {
       if (index >= 0 && index < widget.topics.length) {

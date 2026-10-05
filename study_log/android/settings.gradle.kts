@@ -1,3 +1,21 @@
+// Remove conflicting ANDROID_PREFS_ROOT environment variable to prevent AndroidLocationsException
+try {
+    val processEnvironmentClass = Class.forName("java.lang.ProcessEnvironment")
+    val theEnvironmentField = processEnvironmentClass.getDeclaredField("theEnvironment")
+    theEnvironmentField.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val map = theEnvironmentField.get(null) as MutableMap<String, String>
+    map.remove("ANDROID_PREFS_ROOT")
+    
+    val theCaseInsensitiveEnvironmentField = processEnvironmentClass.getDeclaredField("theCaseInsensitiveEnvironment")
+    theCaseInsensitiveEnvironmentField.isAccessible = true
+    @Suppress("UNCHECKED_CAST")
+    val ciMap = theCaseInsensitiveEnvironmentField.get(null) as MutableMap<String, String>
+    ciMap.remove("ANDROID_PREFS_ROOT")
+} catch (e: Exception) {
+    // Ignore if internal APIs change
+}
+
 pluginManagement {
     val flutterSdkPath =
         run {

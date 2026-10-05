@@ -136,6 +136,25 @@ class LocalTopicStorage {
     }
   }
 
+  /// Looks up a single topic by id across all cached topic buckets.
+  static Future<Topic?> getTopicById(String topicId) async {
+    if (topicId.isEmpty) return null;
+    final buckets = await loadAllBuckets();
+    for (final list in buckets.values) {
+      for (final t in list) {
+        if (t.id == topicId) return t;
+      }
+    }
+    return null;
+  }
+
+  /// Loads topics for a module and returns them keyed by topic id for fast lookup.
+  static Future<Map<String, Topic>> loadTopicsMapForModule(String moduleId) async {
+    if (moduleId.isEmpty) return {};
+    final topics = await loadTopicsForModule(moduleId: moduleId);
+    return {for (final t in topics) t.id: t};
+  }
+
   /// Fast query for progress analytics: loads completion timestamps for completed
   /// topics within the specified date window directly from raw JSON, avoiding
   /// the allocation of full Topic model objects for incomplete or historical items.

@@ -21,6 +21,7 @@ import '../services/local_topic_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
+import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/progress_controller.dart';
@@ -40,12 +41,30 @@ class RevisionDetailScreen extends StatefulWidget {
 class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
   List<RevisionTopic> _revisionTopics = const [];
+  Map<String, Topic> _baseTopicsById = const {};
   StreamSubscription<List<RevisionTopic>>? _topicsSubscription;
   bool _isLoadingTopics = true;
 
   String _resolvedModuleId = '';
 
   RevisionController get _controller => getIt<RevisionController>();
+
+  /// Course title looked up dynamically from CoursesController
+  String get _courseTitle {
+    if (getIt.isRegistered<CoursesController>()) {
+      return getIt<CoursesController>().getCourseById(widget.revision.courseId)?.title ?? '';
+    }
+    return '';
+  }
+
+  /// Module title looked up dynamically from OngoingModulesController
+  String get _moduleTitle {
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      final t = getIt<OngoingModulesController>().moduleTitleFor(widget.revision.moduleId);
+      if (t.isNotEmpty) return t;
+    }
+    return '';
+  }
 
   /// Always prefers the live record so the ladder reflects auto-progression.
   Revision get _revision =>
@@ -114,45 +133,25 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     // 3. If no revision topics exist yet, auto-seed from base module topics!
     if (revTopics.isEmpty) {
       await _autoSeedTopicsFromModule();
-    } else if (mounted) {
-      setState(() {
-        _isLoadingTopics = false;
-      });
+    } else {
+      final baseMap = await LocalTopicStorage.loadTopicsMapForModule(revision.moduleId);
+      if (mounted) {
+        setState(() {
+          _baseTopicsById = baseMap;
+          _isLoadingTopics = false;
+        });
+      }
     }
   }
 
   Future<void> _autoSeedTopicsFromModule() async {
     final revision = widget.revision;
-    String targetModuleId = revision.moduleId;
-
-    if (targetModuleId.isEmpty && revision.moduleTitle.isNotEmpty) {
-      final allModules = await LocalModuleStorage.loadAllModules();
-      final match = allModules.firstWhere(
-        (m) => m.title.trim().toLowerCase() == revision.moduleTitle.trim().toLowerCase(),
-        orElse: () => Module(
-          id: '',
-          courseId: '',
-          title: '',
-          description: '',
-          orderIndex: 0,
-          status: '',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
-      if (match.id.isNotEmpty) {
-        targetModuleId = match.id;
-      }
-    }
+    final targetModuleId = revision.moduleId;
     _resolvedModuleId = targetModuleId;
 
     var baseTopics = await LocalTopicStorage.loadTopicsForModule(
       moduleId: targetModuleId,
-      fallbackTitle: revision.moduleTitle,
     );
-    if (baseTopics.isEmpty && revision.moduleTitle.isNotEmpty) {
-      baseTopics = await LocalTopicStorage.loadTopics(revision.moduleTitle);
-    }
     if (baseTopics.isEmpty && getIt.isRegistered<FirestoreService>()) {
       final firestore = getIt<FirestoreService>();
       if (firestore.isAvailable && targetModuleId.isNotEmpty) {
@@ -164,23 +163,19 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
     if (baseTopics.isNotEmpty) {
       final now = DateTime.now();
+      final baseMap = {for (final t in baseTopics) t.id: t};
       final seeded = baseTopics.asMap().entries.map((entry) {
         final t = entry.value;
-        return RevisionTopic(
-          id: 'rev_topic_${revision.id}_${entry.key}_${now.millisecondsSinceEpoch}',
+        return RevisionTopic.fromTopic(
+          t,
           revisionId: revision.id,
-          courseId: revision.courseId.isNotEmpty ? revision.courseId : t.courseId,
-          moduleId: targetModuleId.isNotEmpty ? targetModuleId : t.moduleId,
-          title: t.title,
-          status: TopicStatus.notStarted,
-          orderIndex: entry.key,
-          createdAt: now,
-          updatedAt: now,
+          newId: 'rev_topic_${revision.id}_${entry.key}_${now.millisecondsSinceEpoch}',
         );
       }).toList();
 
       if (mounted) {
         setState(() {
+          _baseTopicsById = baseMap;
           _revisionTopics = seeded;
           _isLoadingTopics = false;
         });
@@ -260,8 +255,8 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         await RevisionCompletionDialog.show(
           context,
           topicTitle: 'All Topics Completed',
-          courseTitle: revision.courseTitle,
-          moduleTitle: revision.moduleTitle,
+          courseTitle: _courseTitle,
+          moduleTitle: _moduleTitle,
           currentLevel: revision.currentLevel,
           isFinished: revision.isFinished,
           completedAt: updated.completedAt ?? DateTime.now(),
@@ -293,8 +288,8 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         await RevisionCompletionDialog.show(
           context,
           topicTitle: 'All Topics Completed',
-          courseTitle: revision.courseTitle,
-          moduleTitle: revision.moduleTitle,
+          courseTitle: _courseTitle,
+          moduleTitle: _moduleTitle,
           currentLevel: revision.currentLevel,
           isFinished: revision.isFinished,
           completedAt: updated.completedAt ?? DateTime.now(),
@@ -305,9 +300,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
               id: 'rev_${revision.id}_${now.millisecondsSinceEpoch}',
               type: StudyLogType.revisionCompleted,
               courseId: revision.courseId,
-              courseTitle: revision.courseTitle,
+              courseTitle: _courseTitle,
               moduleId: revision.moduleId,
-              moduleTitle: revision.moduleTitle,
+              moduleTitle: _moduleTitle,
               revisionLevel: revision.currentLevel,
               timestamp: now,
               createdAt: now,
@@ -513,10 +508,13 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => SessionSetupScreen(
-                    courseTitle: revision.courseTitle,
+                    courseTitle: _courseTitle,
                     courseId: revision.courseId,
-                    moduleTitle: revision.moduleTitle,
+                    moduleTitle: _moduleTitle,
                     moduleId: revision.moduleId,
+                    topics: _revisionTopics
+                        .map((rt) => rt.toTopic(topic: _baseTopicsById[rt.topicId]))
+                        .toList(),
                     revisionTopics: _revisionTopics,
                     revisionId: revision.id,
                     isRevision: true,
@@ -541,7 +539,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
             return Column(
               children: [
                 CustomAppBar(
-                  title: revision.courseTitle.isNotEmpty ? revision.courseTitle : 'REVISION',
+                  title: _courseTitle.isNotEmpty ? _courseTitle : 'REVISION',
                   onBack: _handleBack,
                   actions: [
                     _RevisionLevelChip(
@@ -570,7 +568,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: ModuleContextPill(
-                            moduleTitle: revision.moduleTitle,
+                            moduleTitle: _moduleTitle,
                             courseId: revision.courseId,
                           ),
                         ),
@@ -617,6 +615,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                       }
                       return _RevisionTopicsView(
                         topics: _revisionTopics,
+                        baseTopicsById: _baseTopicsById,
                         revision: revision,
                         isLoading: _isLoadingTopics,
                         bottomPadding: bottomSafe + 84,
@@ -872,6 +871,7 @@ class _TabItem extends StatelessWidget {
 /// Completely decoupled from course modules.
 class _RevisionTopicsView extends StatelessWidget {
   final List<RevisionTopic> topics;
+  final Map<String, Topic> baseTopicsById;
   final Revision revision;
   final bool isLoading;
   final double bottomPadding;
@@ -879,6 +879,7 @@ class _RevisionTopicsView extends StatelessWidget {
 
   const _RevisionTopicsView({
     required this.topics,
+    this.baseTopicsById = const {},
     required this.revision,
     required this.isLoading,
     required this.bottomPadding,
@@ -920,8 +921,9 @@ class _RevisionTopicsView extends StatelessWidget {
             itemCount: topics.length,
             itemBuilder: (context, index) {
               final topic = topics[index];
+              final base = baseTopicsById[topic.topicId];
               return TopicListItem(
-                topic: topic.toTopic(),
+                topic: topic.toTopic(topic: base),
                 showCheckbox: true,
                 showTrailing: false,
                 onCheckboxTap: () => onToggle(index),

@@ -85,6 +85,7 @@ class OngoingModulesController extends ChangeNotifier {
   final Set<String> _completedModuleIds = {};
   final Map<String, CourseModuleProgress> _courseProgress =
       <String, CourseModuleProgress>{};
+  final Map<String, Module> _modulesById = {};
   int _totalTopicCount = 0;
   int _completedTopicCount = 0;
   int _completedTodayCount = 0;
@@ -102,6 +103,16 @@ class OngoingModulesController extends ChangeNotifier {
 
   List<OngoingModuleItem> get ongoingItems => List.unmodifiable(_ongoingItems);
   bool get isLoading => _isLoading;
+
+  /// Look up any cached module by its ID.
+  Module? getModuleById(String moduleId) => _modulesById[moduleId];
+
+  /// Look up module title by its ID.
+  String moduleTitleFor(String moduleId) => _modulesById[moduleId]?.title ?? '';
+
+  /// Look up module description by its ID.
+  String moduleDescriptionFor(String moduleId) =>
+      _modulesById[moduleId]?.description ?? '';
 
   /// Real number of topics stored for a module, keyed by module id.
   int topicCountForModule(String moduleId) => _topicCounts[moduleId] ?? 0;
@@ -172,8 +183,10 @@ class OngoingModulesController extends ChangeNotifier {
       // Read all cached modules in 1 pass from local disk
       final allCachedModules = await LocalModuleStorage.loadAllModules();
       final Map<String, List<Module>> modulesByCourse = {};
+      _modulesById.clear();
       for (final m in allCachedModules) {
         modulesByCourse.putIfAbsent(m.courseId, () => []).add(m);
+        if (m.id.isNotEmpty) _modulesById[m.id] = m;
       }
 
       // If any active courses are missing modules in cache, fetch them concurrently from Firestore
@@ -187,6 +200,9 @@ class OngoingModulesController extends ChangeNotifier {
               final fetched = await _firestoreService.getModules(courseId: c.id);
               if (fetched.isNotEmpty) {
                 modulesByCourse[c.id] = fetched;
+                for (final m in fetched) {
+                  if (m.id.isNotEmpty) _modulesById[m.id] = m;
+                }
                 await LocalModuleStorage.saveModulesForCourse(c.id, fetched);
               }
             } catch (_) {}
@@ -199,6 +215,9 @@ class OngoingModulesController extends ChangeNotifier {
       for (final course in nonArchivedCourses) {
         final mods = modulesByCourse[course.id] ?? [];
         allModulesList.addAll(mods);
+        for (final m in mods) {
+          if (m.id.isNotEmpty) _modulesById[m.id] = m;
+        }
       }
 
       final modulesMissingTopics = allModulesList.where((m) {
@@ -228,13 +247,9 @@ class OngoingModulesController extends ChangeNotifier {
       }
 
       final Set<String> revisionModuleIds = {};
-      final Set<String> revisionModuleTitles = {};
       final cachedRevs = await LocalRevisionStorage.loadAll();
       for (final r in cachedRevs) {
         if (r.moduleId.isNotEmpty) revisionModuleIds.add(r.moduleId);
-        if (r.moduleTitle.isNotEmpty) {
-          revisionModuleTitles.add(r.moduleTitle.trim().toLowerCase());
-        }
       }
 
       final List<OngoingModuleItem> runningItems = [];
@@ -328,8 +343,7 @@ class OngoingModulesController extends ChangeNotifier {
             courseCompletedModules++;
           }
 
-          final isMovedToRevision = revisionModuleIds.contains(module.id) ||
-              revisionModuleTitles.contains(module.title.trim().toLowerCase());
+          final isMovedToRevision = revisionModuleIds.contains(module.id);
 
           // Exclude completed courses, OR completed modules (only in-progress or not-started belong here)
           if (isCourseMarkedComplete || studyStatus == ModuleStudyStatus.completed) {
