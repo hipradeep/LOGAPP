@@ -44,8 +44,12 @@ class NotificationController extends ChangeNotifier {
     _load();
   }
 
+  Timer? _debounceTimer;
+  bool _isSyncing = false;
+
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _revisionController?.removeListener(_onRevisionChanged);
     _ongoingController?.removeListener(_onOngoingChanged);
     _coursesController?.removeListener(_onCoursesChanged);
@@ -54,20 +58,27 @@ class NotificationController extends ChangeNotifier {
 
   void _onRevisionChanged() {
     if (_settings.enabled && _settings.revisionDueEnabled) {
-      unawaited(syncRevisionReminders());
+      _scheduleDebouncedSync();
     }
   }
 
   void _onOngoingChanged() {
     if (_settings.enabled && _settings.streakSaverEnabled) {
-      unawaited(syncStreakSaverReminders());
+      _scheduleDebouncedSync();
     }
   }
 
   void _onCoursesChanged() {
     if (_settings.enabled && _settings.deadlineEnabled) {
-      unawaited(syncDeadlineReminders());
+      _scheduleDebouncedSync();
     }
+  }
+
+  void _scheduleDebouncedSync() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 1500), () {
+      syncAllNotifications();
+    });
   }
 
   NotificationSettings get settings => _settings;
@@ -97,22 +108,25 @@ class NotificationController extends ChangeNotifier {
     _settings = await LocalNotificationStorage.loadSettings();
     _isLoading = false;
     notifyListeners();
-    unawaited(syncAllNotifications());
+    _scheduleDebouncedSync();
   }
 
   Future<void> _update(NotificationSettings newSettings) async {
     _settings = newSettings;
     notifyListeners();
     unawaited(LocalNotificationStorage.saveSettings(_settings));
-    unawaited(syncAllNotifications());
+    _scheduleDebouncedSync();
   }
 
   /// Synchronizes all native notification schedules based on current settings and today's status.
   Future<void> syncAllNotifications() async {
-    if (!_settings.enabled) {
-      await _notificationService.cancelAllReminders();
-      return;
-    }
+    if (_isSyncing) return;
+    _isSyncing = true;
+    try {
+      if (!_settings.enabled) {
+        await _notificationService.cancelAllReminders();
+        return;
+      }
 
     // 1. Course Study reminder (daily repeating)
     if (_settings.courseDueEnabled) {
@@ -142,6 +156,9 @@ class NotificationController extends ChangeNotifier {
       await syncDeadlineReminders();
     } else {
       await _notificationService.cancelAllDeadlineReminders();
+    }
+    } finally {
+      _isSyncing = false;
     }
   }
 

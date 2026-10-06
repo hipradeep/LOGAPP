@@ -1,264 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import '../theme/revision_level_palette.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/full_screen_page.dart';
+import '../widgets/custom_app_bar.dart';
 import '../widgets/appearance_sheet.dart';
-import '../services/local_course_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_revision_storage.dart';
-import '../services/database_service.dart';
-import '../services/notification_service.dart';
 import '../services/service_locator.dart';
-import '../controllers/courses_controller.dart';
-import '../controllers/ongoing_modules_controller.dart';
-import '../controllers/progress_controller.dart';
-import '../controllers/revision_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../controllers/cloud_sync_controller.dart';
-import 'courses_screen.dart';
 import 'upload_json_screen.dart';
 import 'notification_settings_screen.dart';
 
-/// Dedicated Settings screen holding all configuration options:
-/// - Study: Courses, Revision Intervals
+/// Dedicated Settings screen holding configuration options:
 /// - Preferences: Appearance, Notifications
-/// - Data & Storage: Import Curriculum, Clear Local Cache
+/// - Cloud Backup & Sync: Google Drive Account, Back Up to Drive
+/// - Curriculum: Import Curriculum (JSON)
 /// - About: About Study Log
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  void _openCourses(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CoursesScreen()),
-    );
-  }
 
   void _openUploadJson(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
-    );
-  }
-
-  Future<void> _handleClearCache(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Clear Cache?',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'This will clear all locally stored course, topic, and revision cache.',
-          style: TextStyle(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
-            child: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      await DatabaseService.instance.clearAllData();
-      getIt<CoursesController>().refresh();
-      if (getIt.isRegistered<OngoingModulesController>()) {
-        getIt<OngoingModulesController>().refresh();
-      }
-      if (getIt.isRegistered<RevisionController>()) {
-        await getIt<RevisionController>().reconcile();
-      }
-      if (getIt.isRegistered<ProgressController>()) {
-        await getIt<ProgressController>().refresh();
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('All data reset successfully'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleLocalExport(BuildContext context) async {
-    final ctrl = getIt<CloudSyncController>();
-    final path = await ctrl.exportToLocalFile();
-    if (!context.mounted) return;
-    if (path != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Database exported: $path'),
-          backgroundColor: AppTheme.successColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else if (ctrl.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ctrl.errorMessage!),
-          backgroundColor: AppTheme.errorColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleLocalImport(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Restore Database?'),
-        content: const Text(
-          'Restoring from a backup will replace your current courses, progress, and study logs.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.warningColor),
-            child: const Text('Restore', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    final ctrl = getIt<CloudSyncController>();
-    final success = await ctrl.importFromLocalFile();
-    if (!context.mounted) return;
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Database restored successfully!'),
-          backgroundColor: AppTheme.successColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else if (ctrl.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ctrl.errorMessage!),
-          backgroundColor: AppTheme.errorColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  /// Fires a dummy notification so the user can confirm reminders actually
-  /// reach the device. Deliberately ignores the stored notification prefs.
-  Future<void> _sendTestNotification(BuildContext context) async {
-    final result = await getIt<NotificationService>().showInstantNotification(
-      title: 'Test Notification',
-      body: 'If you can see this, reminder delivery is working.',
-    );
-
-    if (!context.mounted) return;
-
-    final message = switch (result) {
-      TestNotificationResult.instantSent => 'Test notification sent.',
-      TestNotificationResult.permissionDenied =>
-        'Notification permission denied. Enable it in system settings.',
-      _ => 'Could not deliver the test notification. Check logs.',
-    };
-    final color = switch (result) {
-      TestNotificationResult.instantSent => AppTheme.successColor,
-      TestNotificationResult.permissionDenied => AppTheme.warningColor,
-      _ => AppTheme.errorColor,
-    };
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: color,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-          ),
-        ),
-      );
-  }
-
-  void _showRevisionInfo(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surface(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppTheme.borderColor(context),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const VGapMd(),
-              Text(
-                'Spaced Repetition Schedule',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
-                ),
-              ),
-              const VGapSm(),
-              Text(
-                'The study ladder uses 5 intervals to lock knowledge into long-term memory:',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondaryColor(context),
-                ),
-              ),
-              const VGapMd(),
-              const _IntervalRow(level: 1, interval: '1 day after completion'),
-              const _IntervalRow(level: 2, interval: '3 days after R1'),
-              const _IntervalRow(level: 3, interval: '7 days after R2'),
-              const _IntervalRow(level: 4, interval: '14 days after R3'),
-              const _IntervalRow(level: 5, interval: '30 days after R4 (Mastered)'),
-              const VGapMd(),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -328,129 +91,92 @@ class SettingsScreen extends StatelessWidget {
       themeLabel = 'System';
     }
 
-    return FullScreenPage(
-      title: 'Settings',
-      showBackButton: true,
-      children: [
-        const VGapSm(),
-        const _SectionHeader(title: 'STUDY'),
-        _SettingsCard(
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: AppTheme.background(context),
+      body: SafeArea(
+        child: Column(
           children: [
-            _SettingsTile(
-              icon: Icons.school_rounded,
-              iconBgColor: AppTheme.pastelPurple(context),
-              iconColor: AppTheme.pastelPurpleText(context),
-              title: 'Courses',
-              onTap: () => _openCourses(context),
+            CustomAppBar(
+              title: 'Settings',
+              onBack: () => Navigator.of(context).pop(),
             ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.tune_rounded,
-              iconBgColor: const Color(0xFFCFFAFE),
-              iconColor: const Color(0xFF0891B2),
-              title: 'Revision Intervals',
-              onTap: () => _showRevisionInfo(context),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionHeader(title: 'PREFERENCES'),
+                    _SettingsCard(
+                      children: [
+                        _SettingsTile(
+                          icon: Icons.palette_outlined,
+                          iconBgColor: const Color(0xFFFFEDD5),
+                          iconColor: const Color(0xFFEA580C),
+                          title: 'Appearance',
+                          badgeText: themeLabel,
+                          onTap: () => AppearanceSheet.show(context),
+                        ),
+                        _TileDivider(),
+                        _SettingsTile(
+                          icon: Icons.notifications_none_rounded,
+                          iconBgColor: const Color(0xFFE0E7FF),
+                          iconColor: const Color(0xFF4F46E5),
+                          title: 'Notifications',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationSettingsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const VGapMd(),
+                    const _SectionHeader(title: 'CLOUD BACKUP & SYNC'),
+                    const _CloudSyncCard(),
+                    const VGapMd(),
+                    const _SectionHeader(title: 'CURRICULUM'),
+                    _SettingsCard(
+                      children: [
+                        _SettingsTile(
+                          icon: Icons.upload_file_rounded,
+                          iconBgColor: const Color(0xFFEDE9FE),
+                          iconColor: const Color(0xFF7C3AED),
+                          title: 'Import Curriculum (JSON)',
+                          subtitle: 'Load syllabus from course JSON file',
+                          onTap: () => _openUploadJson(context),
+                        ),
+                      ],
+                    ),
+                    const VGapMd(),
+                    const _SectionHeader(title: 'ABOUT'),
+                    _SettingsCard(
+                      children: [
+                        _SettingsTile(
+                          icon: Icons.info_outline_rounded,
+                          iconBgColor: const Color(0xFFF1F5F9),
+                          iconColor: const Color(0xFF475569),
+                          title: 'About Study Log',
+                          badgeText: 'v1.0.0',
+                          onTap: () => _showAboutDialog(context),
+                        ),
+                      ],
+                    ),
+                    const VGapLg(),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
-        const VGapMd(),
-        const _SectionHeader(title: 'PREFERENCES'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.palette_outlined,
-              iconBgColor: const Color(0xFFFFEDD5),
-              iconColor: const Color(0xFFEA580C),
-              title: 'Appearance',
-              badgeText: themeLabel,
-              onTap: () => AppearanceSheet.show(context),
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.notifications_none_rounded,
-              iconBgColor: const Color(0xFFE0E7FF),
-              iconColor: const Color(0xFF4F46E5),
-              title: 'Notifications',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const NotificationSettingsScreen(),
-                  ),
-                );
-              },
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.notifications_active_rounded,
-              iconBgColor: AppTheme.pastelGreen(context),
-              iconColor: AppTheme.pastelGreenText(context),
-              title: 'Send Test Notification',
-              subtitle: 'Post a dummy reminder now',
-              onTap: () => _sendTestNotification(context),
-            ),
-          ],
-        ),
-        const VGapMd(),
-        const _SectionHeader(title: 'CLOUD BACKUP & SYNC'),
-        const _CloudSyncCard(),
-        const VGapMd(),
-        const _SectionHeader(title: 'LOCAL DATA & STORAGE'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.upload_file_rounded,
-              iconBgColor: const Color(0xFFEDE9FE),
-              iconColor: const Color(0xFF7C3AED),
-              title: 'Import Curriculum (JSON)',
-              subtitle: 'Load syllabus from course JSON file',
-              onTap: () => _openUploadJson(context),
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.file_download_outlined,
-              iconBgColor: const Color(0xFFE0E7FF),
-              iconColor: const Color(0xFF4338CA),
-              title: 'Export Database (JSON)',
-              subtitle: 'Save offline backup file to device',
-              onTap: () => _handleLocalExport(context),
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.file_upload_outlined,
-              iconBgColor: const Color(0xFFFEF3C7),
-              iconColor: const Color(0xFFB45309),
-              title: 'Restore Database (JSON)',
-              subtitle: 'Restore database from an offline backup file',
-              onTap: () => _handleLocalImport(context),
-            ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.cleaning_services_rounded,
-              iconBgColor: const Color(0xFFFEE2E2),
-              iconColor: AppTheme.errorColor,
-              title: 'Clear Local Cache',
-              subtitle: 'Wipe all local courses and study logs',
-              isDestructive: true,
-              onTap: () => _handleClearCache(context),
-            ),
-          ],
-        ),
-        const VGapMd(),
-        const _SectionHeader(title: 'ABOUT'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.info_outline_rounded,
-              iconBgColor: const Color(0xFFF1F5F9),
-              iconColor: const Color(0xFF475569),
-              title: 'About Study Log',
-              badgeText: 'v1.0.0',
-              onTap: () => _showAboutDialog(context),
-            ),
-          ],
-        ),
-        const VGapLg(),
-      ],
+      ),
     );
   }
 }
@@ -619,6 +345,33 @@ class _CloudSyncCard extends StatelessWidget {
 
   const _CloudSyncCard();
 
+  Future<void> _handleSignIn(BuildContext context, CloudSyncController ctrl) async {
+    debugPrint('👉 [_CloudSyncCard] Sign In tapped!');
+    final success = await ctrl.signIn();
+    debugPrint('👉 [_CloudSyncCard] signIn result: $success, error: ${ctrl.errorMessage}');
+    if (!context.mounted) return;
+    if (!success && ctrl.errorMessage != null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.surface(context),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Google Sign-In Status'),
+          content: Text(
+            ctrl.errorMessage!,
+            style: const TextStyle(fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _handleBackup(BuildContext context, CloudSyncController ctrl) async {
     final success = await ctrl.backupToDrive();
     if (!context.mounted) return;
@@ -641,15 +394,15 @@ class _CloudSyncCard extends StatelessWidget {
     }
   }
 
-  Future<void> _handleRestore(BuildContext context, CloudSyncController ctrl) async {
+  Future<void> _handleSignOut(BuildContext context, CloudSyncController ctrl) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Restore from Google Drive?'),
+        title: const Text('Log Out from Google?'),
         content: const Text(
-          'This will overwrite your local study data with your latest Google Drive backup. Are you sure you want to proceed?',
+          'Your latest study progress will be backed up to Google Drive, and local data will be cleared from this device.',
         ),
         actions: [
           TextButton(
@@ -658,33 +411,24 @@ class _CloudSyncCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.warningColor),
-            child: const Text('Restore', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
+            child: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !context.mounted) return;
-
-    final success = await ctrl.restoreFromDrive();
-    if (!context.mounted) return;
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Data restored successfully from Google Drive!'),
-          backgroundColor: AppTheme.successColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else if (ctrl.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ctrl.errorMessage!),
-          backgroundColor: AppTheme.errorColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (confirmed == true && context.mounted) {
+      await ctrl.signOut();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Backed up to Drive and logged out'),
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -718,37 +462,49 @@ class _CloudSyncCard extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : (isSignedIn
-                      ? TextButton(
-                          onPressed: isBusy ? null : syncCtrl.signOut,
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'Sign Out',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.textMutedColor(context),
+                      ? InkWell(
+                          onTap: isBusy ? null : () => _handleSignOut(context, syncCtrl),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppTheme.errorColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Log Out',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.errorColor,
+                              ),
                             ),
                           ),
                         )
-                      : Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primaryColor,
+                      : InkWell(
+                          onTap: isBusy ? null : () => _handleSignIn(context, syncCtrl),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primaryColor,
+                              ),
                             ),
                           ),
                         )),
-              onTap: (!isSignedIn && !isBusy) ? syncCtrl.signIn : null,
+              onTap: isBusy
+                  ? null
+                  : () => isSignedIn
+                      ? _handleSignOut(context, syncCtrl)
+                      : _handleSignIn(context, syncCtrl),
             ),
             _TileDivider(),
             _SettingsTile(
@@ -768,22 +524,6 @@ class _CloudSyncCard extends StatelessWidget {
                   : null,
               onTap: isBusy ? null : () => _handleBackup(context, syncCtrl),
             ),
-            _TileDivider(),
-            _SettingsTile(
-              icon: Icons.cloud_download_rounded,
-              iconBgColor: const Color(0xFFFEF3C7),
-              iconColor: const Color(0xFFD97706),
-              title: 'Restore from Drive',
-              subtitle: 'Download latest cloud backup to this device',
-              trailing: syncCtrl.isRestoring
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : null,
-              onTap: isBusy ? null : () => _handleRestore(context, syncCtrl),
-            ),
           ],
         );
       },
@@ -799,55 +539,6 @@ class _TileDivider extends StatelessWidget {
       thickness: 0.6,
       indent: 48,
       color: AppTheme.borderColor(context),
-    );
-  }
-}
-
-class _IntervalRow extends StatelessWidget {
-  final int level;
-  final String interval;
-
-  const _IntervalRow({
-    required this.level,
-    required this.interval,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = RevisionLevelPalette.of(context, level);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: colors.border, width: 0.5),
-            ),
-            child: Text(
-              'R$level',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: colors.foreground,
-              ),
-            ),
-          ),
-          const HGapSm(),
-          Expanded(
-            child: Text(
-              interval,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.textPrimaryColor(context),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

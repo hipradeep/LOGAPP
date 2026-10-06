@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/tab_header.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -57,6 +58,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -64,83 +67,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: bottomSafe + 24,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ProfileHeader(onSettingsTap: () => _openSettings(context)),
-              const VGapMd(),
-              const _UserProfileCard(),
-              const VGapMd(),
-              ListenableBuilder(
-                listenable: _progressController,
-                builder: (context, _) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      StreakHighlightsCard(controller: _progressController),
-                      const VGapMd(),
-                      StrikeHeatmapCard(controller: _progressController),
-                      const VGapMd(),
-                      const _SectionHeader(title: 'MENU'),
-                      _ProfileMenuCard(
-                        onActivityTap: () => _openActivity(context),
-                        onCoursesTap: () => _openCourses(context),
-                      ),
-                    ],
-                  );
-                },
+        child: Column(
+          children: [
+            TabHeader(
+              title: 'Profile',
+              subtitle: 'Your learning stats & settings',
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    Icons.settings_rounded,
+                    color: AppTheme.textPrimaryColor(context),
+                    size: 22,
+                  ),
+                  onPressed: () => _openSettings(context),
+                  tooltip: 'Settings',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 4,
+                  bottom: bottomSafe + 24,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _UserProfileCard(),
+                    const VGapMd(),
+                    ListenableBuilder(
+                      listenable: _progressController,
+                      builder: (context, _) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            StreakHighlightsCard(controller: _progressController),
+                            const VGapMd(),
+                            StrikeHeatmapCard(controller: _progressController),
+                            const VGapMd(),
+                            const _SectionHeader(title: 'MENU'),
+                            _ProfileMenuCard(
+                              onActivityTap: () => _openActivity(context),
+                              onCoursesTap: () => _openCourses(context),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  final VoidCallback onSettingsTap;
-
-  const _ProfileHeader({required this.onSettingsTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'Profile',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-            letterSpacing: -0.3,
-          ),
-        ),
-        IconButton(
-          icon: Icon(
-            Icons.settings_rounded,
-            color: AppTheme.textPrimaryColor(context),
-            size: 22,
-          ),
-          onPressed: onSettingsTap,
-          tooltip: 'Settings',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-        ),
-      ],
-    );
-  }
-}
 
 class _UserProfileCard extends StatelessWidget {
   const _UserProfileCard();
@@ -207,13 +196,31 @@ class _UserProfileCard extends StatelessWidget {
                         ],
                       ),
                       alignment: Alignment.center,
-                      child: Text(
-                        progressCtrl?.userInitial ?? 'P',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                      child: ClipOval(
+                        child: (progressCtrl?.userAvatarUrl != null &&
+                                progressCtrl!.userAvatarUrl!.isNotEmpty)
+                            ? Image.network(
+                                progressCtrl.userAvatarUrl!,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Text(
+                                  progressCtrl.userInitial,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Text(
+                                progressCtrl?.userInitial ?? 'P',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
                       ),
                     ),
                     const HGapMd(),
@@ -246,7 +253,9 @@ class _UserProfileCard extends StatelessWidget {
                           ),
                           const VGapXs(),
                           Text(
-                            progressCtrl?.userHeadline ?? 'Software Developer',
+                            (progressCtrl?.userEmail?.isNotEmpty == true)
+                                ? progressCtrl!.userEmail!
+                                : (progressCtrl?.userHeadline ?? 'Learner'),
                             style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.textSecondaryColor(context),
@@ -450,6 +459,7 @@ class _MenuTile extends StatelessWidget {
   final Color iconColor;
   final Color iconBgColor;
   final String title;
+  final Color? textColor;
   final VoidCallback onTap;
 
   const _MenuTile({
@@ -457,6 +467,7 @@ class _MenuTile extends StatelessWidget {
     required this.iconColor,
     required this.iconBgColor,
     required this.title,
+    this.textColor,
     required this.onTap,
   });
 
@@ -488,13 +499,13 @@ class _MenuTile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimaryColor(context),
+                    color: textColor ?? AppTheme.textPrimaryColor(context),
                   ),
                 ),
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: AppTheme.textMutedColor(context),
+                color: textColor ?? AppTheme.textMutedColor(context),
                 size: 18,
               ),
             ],

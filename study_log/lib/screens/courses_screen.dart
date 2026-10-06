@@ -3,6 +3,7 @@ import '../models/course.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/course_options_sheet.dart';
 import '../widgets/compact_list_item.dart';
@@ -89,9 +90,15 @@ class _CoursesScreenState extends State<CoursesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _CoursesTopBar(
+            CustomAppBar(
+              title: 'Courses',
               onBack: _handleBack,
-              onAddCourse: _openAddCourse,
+              actions: [
+                AddPillButton(
+                  label: 'Add Course',
+                  onPressed: _openAddCourse,
+                ),
+              ],
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -103,7 +110,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 searchQueryNotifier: _searchQuery,
                 onCourseTap: _openCourseDetail,
                 onCourseLongPress: _openCourseOptions,
-                onAddCourse: _openAddCourse,
                 onOpenArchived: _openArchivedCourses,
                 bottomPadding: bottomSafe + 24,
               ),
@@ -115,50 +121,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
   }
 }
 
-class _CoursesTopBar extends StatelessWidget {
-  final VoidCallback onBack;
-  final VoidCallback onAddCourse;
 
-  const _CoursesTopBar({
-    required this.onBack,
-    required this.onAddCourse,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12.0, 10.0, 16.0, 10.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Text(
-            'Courses',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.3,
-            ),
-          ),
-          const Spacer(),
-          AddPillButton(
-            label: 'Add Course',
-            onPressed: onAddCourse,
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CoursesSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -192,6 +155,7 @@ class _CoursesSearchBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              cursorColor: AppTheme.primaryColor,
               style: TextStyle(
                 fontSize: 14,
                 color: AppTheme.textPrimaryColor(context),
@@ -219,7 +183,6 @@ class _CoursesFilteredList extends StatelessWidget {
   final ValueNotifier<String> searchQueryNotifier;
   final ValueChanged<Course> onCourseTap;
   final ValueChanged<Course> onCourseLongPress;
-  final VoidCallback onAddCourse;
   final VoidCallback onOpenArchived;
   final double bottomPadding;
 
@@ -228,7 +191,6 @@ class _CoursesFilteredList extends StatelessWidget {
     required this.searchQueryNotifier,
     required this.onCourseTap,
     required this.onCourseLongPress,
-    required this.onAddCourse,
     required this.onOpenArchived,
     required this.bottomPadding,
   });
@@ -256,7 +218,6 @@ class _CoursesFilteredList extends StatelessWidget {
         if (userCourses.isEmpty) {
           return _CoursesEmptyState(
             bottomPadding: bottomPadding,
-            onAddCourse: onAddCourse,
             archivedCount: archivedCount,
             onOpenArchived: onOpenArchived,
           );
@@ -334,13 +295,11 @@ class _CoursesFilteredList extends StatelessWidget {
 }
 
 class _CoursesEmptyState extends StatelessWidget {
-  final VoidCallback onAddCourse;
   final VoidCallback onOpenArchived;
   final int archivedCount;
   final double bottomPadding;
 
   const _CoursesEmptyState({
-    required this.onAddCourse,
     required this.onOpenArchived,
     required this.archivedCount,
     required this.bottomPadding,
@@ -380,23 +339,11 @@ class _CoursesEmptyState extends StatelessWidget {
         ),
         const VGapXs(),
         Text(
-          'Add a course to start tracking its modules and topics.',
+          'Add a course from the top bar to start tracking its modules and topics.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 13,
             color: AppTheme.textSecondaryColor(context),
-          ),
-        ),
-        const VGapMd(),
-        Center(
-          child: TextButton.icon(
-            onPressed: onAddCourse,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add course'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppTheme.primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
           ),
         ),
         if (archivedCount > 0) ...[

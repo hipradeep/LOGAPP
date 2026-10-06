@@ -816,7 +816,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 onEdit: _handleEditTopic,
                 onDuplicate: _handleDuplicateTopic,
                 onDelete: _handleDeleteTopic,
-                onAddTopic: _openAddTopicScreen,
                 bottomPadding: bottomSafe + 84,
               ),
             ),
@@ -976,7 +975,6 @@ class _TopicsListView extends StatelessWidget {
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onDuplicate;
   final ValueChanged<int> onDelete;
-  final VoidCallback onAddTopic;
   final double bottomPadding;
 
   const _TopicsListView({
@@ -989,7 +987,6 @@ class _TopicsListView extends StatelessWidget {
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
-    required this.onAddTopic,
     required this.bottomPadding,
   });
 
@@ -1002,10 +999,19 @@ class _TopicsListView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.format_list_bulleted_rounded,
-                size: 48,
-                color: AppTheme.textSecondaryColor(context),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppTheme.pastelIndigo(context),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.pastelIndigoBorder(context)),
+                ),
+                child: Icon(
+                  Icons.format_list_bulleted_rounded,
+                  size: 30,
+                  color: AppTheme.pastelIndigoText(context),
+                ),
               ),
               const VGapMd(),
               Text(
@@ -1018,25 +1024,11 @@ class _TopicsListView extends StatelessWidget {
               ),
               const VGapXs(),
               Text(
-                'Tap "+ Add Topic" to add your first topic.',
+                'Add a topic from the top bar to start learning.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
                   color: AppTheme.textSecondaryColor(context),
-                ),
-              ),
-              const VGapMd(),
-              ElevatedButton.icon(
-                onPressed: onAddTopic,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Add Topic'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ],

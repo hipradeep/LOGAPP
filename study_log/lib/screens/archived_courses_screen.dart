@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/archived_course_options_sheet.dart';
 import '../widgets/course_icon_chip.dart';
+import '../widgets/custom_app_bar.dart';
 import 'archived_course_detail_screen.dart';
 
 /// Lists every archived course as a plain vertical list.
@@ -40,7 +41,13 @@ class ArchivedCoursesScreen extends StatelessWidget {
 
             return Column(
               children: [
-                _ArchivedTopBar(archivedCount: archivedCourses.length),
+                CustomAppBar(
+                  title: 'Archived Courses',
+                  subtitle: archivedCourses.isNotEmpty
+                      ? '${archivedCourses.length} ${archivedCourses.length == 1 ? "course" : "courses"}'
+                      : null,
+                  onBack: () => Navigator.of(context).pop(),
+                ),
                 Expanded(
                   child: archivedCourses.isEmpty
                       ? _ArchivedEmptyState(bottomPadding: bottomSafe + 24)
@@ -79,58 +86,7 @@ class ArchivedCoursesScreen extends StatelessWidget {
   }
 }
 
-class _ArchivedTopBar extends StatelessWidget {
-  final int archivedCount;
 
-  const _ArchivedTopBar({required this.archivedCount});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12.0, 10.0, 16.0, 10.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Text(
-            'Archived Courses',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.3,
-            ),
-          ),
-          const HGapSm(),
-          if (archivedCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$archivedCount',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 /// A single archived course. Tapping opens the detail page; long-pressing opens
 /// the restore/delete sheet.

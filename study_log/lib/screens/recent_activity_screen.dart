@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/study_log.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
@@ -347,7 +348,8 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _RecentActivityTopBar(
+            CustomAppBar(
+              title: 'Recent Activity',
               onBack: _handleBack,
             ),
             const VGapXs(),
@@ -378,75 +380,7 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
   }
 }
 
-// =============================================================================
-// Top App Bar
-// =============================================================================
-class _RecentActivityTopBar extends StatelessWidget {
-  final VoidCallback onBack;
 
-  const _RecentActivityTopBar({
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14.0, 10.0, 16.0, 4.0),
-      child: Row(
-        children: [
-          Material(
-            color: AppTheme.surface(context),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: onBack,
-              customBorder: const CircleBorder(),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.borderColor(context)),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 16,
-                  color: AppTheme.textPrimaryColor(context),
-                ),
-              ),
-            ),
-          ),
-          const HGapSm(),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Recent Activity',
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                Text(
-                  'Select date to view activity logs',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textSecondaryColor(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // =============================================================================
 // Calendar Date Strip
@@ -667,7 +601,7 @@ class _DateStripPill extends StatelessWidget {
                   width: 4.5,
                   height: 4.5,
                   decoration: BoxDecoration(
-                    color: isSelected ? Colors.white : const Color(0xFF10B981),
+                    color: isSelected ? Colors.white : AppTheme.successColor,
                     shape: BoxShape.circle,
                   ),
                 )
@@ -851,24 +785,24 @@ class _SelectedDateSummaryCard extends StatelessWidget {
                 icon: Icons.menu_book_rounded,
                 count: '${activity.topicsFinished}',
                 label: 'Topics',
-                bgColor: const Color(0xFFE8F8F0),
-                iconColor: const Color(0xFF10B981),
+                bgColor: AppTheme.pastelGreen(context),
+                iconColor: AppTheme.pastelGreenText(context),
               ),
               const HGapSm(),
               _SummaryStatBadge(
                 icon: Icons.sync_rounded,
                 count: '${activity.revisionsDone}',
                 label: 'Revisions',
-                bgColor: const Color(0xFFF0EEFF),
-                iconColor: const Color(0xFF7A6EFC),
+                bgColor: AppTheme.pastelPurple(context),
+                iconColor: AppTheme.pastelPurpleText(context),
               ),
               const HGapSm(),
               _SummaryStatBadge(
                 icon: Icons.schedule_rounded,
                 count: _formatDurationDetailed(activity.studyMinutes),
                 label: 'Time Spent',
-                bgColor: const Color(0xFFFEF3C7),
-                iconColor: const Color(0xFFD97706),
+                bgColor: AppTheme.pastelOrange(context),
+                iconColor: AppTheme.pastelOrangeText(context),
               ),
             ],
           ),
@@ -1004,35 +938,30 @@ class _EmptyLogsPlaceholder extends StatelessWidget {
         selectedDate.month == now.month &&
         selectedDate.day == now.day;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              color: AppTheme.surfaceVariant(context),
-              shape: BoxShape.circle,
+              color: AppTheme.pastelIndigo(context),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppTheme.pastelIndigoBorder(context)),
             ),
-            alignment: Alignment.center,
             child: Icon(
               Icons.event_note_rounded,
-              size: 24,
-              color: AppTheme.textMutedColor(context),
+              size: 30,
+              color: AppTheme.pastelIndigoText(context),
             ),
           ),
           const VGapMd(),
           Text(
             isToday ? 'No logs recorded today yet' : 'No study logs on ${_shortDateFormat.format(selectedDate)}',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimaryColor(context),
             ),
@@ -1041,7 +970,7 @@ class _EmptyLogsPlaceholder extends StatelessWidget {
           Text(
             'Complete topics or revisions to build your study trail.',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: AppTheme.textSecondaryColor(context),
             ),
             textAlign: TextAlign.center,
@@ -1086,11 +1015,11 @@ class _StudyLogListItem extends StatelessWidget {
         ? Icons.sync_rounded
         : (isSession ? Icons.timer_outlined : Icons.menu_book_rounded);
     final iconColor = isRevision
-        ? const Color(0xFF7A6EFC)
-        : (isSession ? const Color(0xFFD97706) : const Color(0xFF10B981));
+        ? AppTheme.pastelPurpleText(context)
+        : (isSession ? AppTheme.pastelOrangeText(context) : AppTheme.pastelGreenText(context));
     final iconBg = isRevision
-        ? const Color(0xFFF0EEFF)
-        : (isSession ? const Color(0xFFFEF3C7) : const Color(0xFFE8F8F0));
+        ? AppTheme.pastelPurple(context)
+        : (isSession ? AppTheme.pastelOrange(context) : AppTheme.pastelGreen(context));
 
     final badgeLabel = isRevision
         ? (log.revisionLevel != null ? 'R${log.revisionLevel}' : 'Revision')
@@ -1182,24 +1111,24 @@ class _StudyLogListItem extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
+                        color: AppTheme.pastelOrange(context),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.schedule_rounded,
                             size: 10,
-                            color: Color(0xFFD97706),
+                            color: AppTheme.pastelOrangeText(context),
                           ),
                           const SizedBox(width: 3),
                           Text(
                             _formatDuration(minutes),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFFD97706),
+                              color: AppTheme.pastelOrangeText(context),
                             ),
                           ),
                         ],

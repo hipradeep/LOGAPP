@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
-import '../services/notification_service.dart';
-import '../controllers/notification_controller.dart';
 import 'main_navigation_screen.dart';
 
 /// Animated Splash Screen displaying the new app logo and branding.
@@ -32,10 +30,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     unawaited(warmupControllers());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_requestNotificationPermissionOnStart());
-    });
 
     _controller = AnimationController(
       vsync: this,
@@ -79,18 +73,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         );
       }
     });
-  }
-
-  Future<void> _requestNotificationPermissionOnStart() async {
-    try {
-      if (!getIt.isRegistered<NotificationService>()) return;
-      final granted = await getIt<NotificationService>().requestPermission();
-      if (granted && getIt.isRegistered<NotificationController>()) {
-        unawaited(getIt<NotificationController>().syncAllNotifications());
-      }
-    } catch (e) {
-      debugPrint('SplashScreen notification permission error: $e');
-    }
   }
 
   @override

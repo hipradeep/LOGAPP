@@ -20,6 +20,7 @@ import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
 
 /// Upload JSON Screen: lets the user pick a JSON file from their device and
 /// bulk-import Courses or Modules → Topics into local cache.
@@ -468,88 +469,59 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics()),
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.paddingOf(context).bottom + 32,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _UploadHeader(),
-              const VGapLg(),
-              const _InfoCard(),
-              const VGapLg(),
-              const _ModuleLabel(label: 'AI Course Prompt'),
-              const VGapSm(),
-              _AiPromptCard(
-                promptText: _coursePrompt,
-                onCopy: _copyPrompt,
-              ),
-              const VGapLg(),
-              const _ModuleLabel(label: 'Import from File'),
-              const VGapSm(),
-              _ImportButton(
-                isImporting: _isImporting,
-                onTap: _pickAndImport,
-              ),
-              if (_resultMessage != null) ...[
-                const VGapMd(),
-                _ResultBanner(
-                  message: _resultMessage!,
-                  isSuccess: _isSuccess,
+        child: Column(
+          children: [
+            CustomAppBar(
+              title: 'Upload JSON',
+              onBack: () => Navigator.pop(context),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics()),
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 8,
+                  bottom: MediaQuery.paddingOf(context).bottom + 32,
                 ),
-              ],
-            ],
-          ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _InfoCard(),
+                    const VGapLg(),
+                    const _ModuleLabel(label: 'AI Course Prompt'),
+                    const VGapSm(),
+                    _AiPromptCard(
+                      promptText: _coursePrompt,
+                      onCopy: _copyPrompt,
+                    ),
+                    const VGapLg(),
+                    const _ModuleLabel(label: 'Import from File'),
+                    const VGapSm(),
+                    _ImportButton(
+                      isImporting: _isImporting,
+                      onTap: _pickAndImport,
+                    ),
+                    if (_resultMessage != null) ...[
+                      const VGapMd(),
+                      _ResultBanner(
+                        message: _resultMessage!,
+                        isSuccess: _isSuccess,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _UploadHeader extends StatelessWidget {
-  const _UploadHeader();
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderColor(context)),
-            ),
-            child: Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 16,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-        ),
-        const HGapMd(),
-        Text(
-          'Upload JSON',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-            letterSpacing: -0.3,
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard();

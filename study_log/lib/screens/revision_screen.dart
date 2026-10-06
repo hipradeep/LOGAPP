@@ -3,10 +3,11 @@ import '../theme/app_theme.dart';
 import '../theme/revision_level_palette.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/app_back_button.dart';
+import '../widgets/tab_header.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/compact_list_item.dart';
 import '../widgets/revision_options_sheet.dart';
+import '../widgets/revision_interval_sheet.dart';
 import '../models/revision.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/courses_controller.dart';
@@ -163,8 +164,29 @@ class _RevisionScreenState extends State<RevisionScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _RevisionHeader(
+            TabHeader(
+              title: 'Revision',
+              subtitle: 'Review due & upcoming topics',
               onBack: widget.onBack,
+              padding: EdgeInsets.fromLTRB(
+                widget.onBack != null ? 12.0 : 20.0,
+                16.0,
+                20.0,
+                8.0,
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    Icons.info_outline_rounded,
+                    color: AppTheme.textSecondaryColor(context),
+                    size: 22,
+                  ),
+                  onPressed: () => RevisionIntervalSheet.show(context),
+                  tooltip: 'Revision Intervals',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
             ),
             ListenableBuilder(
               listenable: widget.revisionController,
@@ -244,6 +266,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
                           icon: Icons.sync_rounded,
                           title: _emptyTitleFor(),
                           description: _emptyDescriptionFor(),
+                          showCard: false,
                         ),
                       ),
                     );
@@ -404,43 +427,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
   }
 }
 
-class _RevisionHeader extends StatelessWidget {
-  final VoidCallback? onBack;
-
-  const _RevisionHeader({
-    this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        onBack != null ? 8.0 : 20.0,
-        16.0,
-        20.0,
-        8.0,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (onBack != null) ...[
-            AppBackButton(onPressed: onBack),
-            const HGapXs(),
-          ],
-          Text(
-            'Revision',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.3,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 /// Horizontal category filter row: All (12), R1 (Purple), R2 (Blue), R3 (Teal), R4 (Orange), R5 (Coral), Finished (Green)
 class _RevisionLevelFilterRow extends StatelessWidget {
@@ -537,7 +523,7 @@ class _AllPillTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFFC7D2FE)
+                  ? AppTheme.pastelIndigoBorder(context)
                   : AppTheme.borderColor(context),
               width: isSelected ? 1.5 : 1.0,
             ),
@@ -617,10 +603,10 @@ class _LevelTabCard extends StatelessWidget {
                   alignment: Alignment.center,
                   child: Text(
                     '$count',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppTheme.isDark ? const Color(0xFF0F0F14) : Colors.white,
                     ),
                   ),
                 ),
@@ -690,10 +676,10 @@ class _FinishedTabCard extends StatelessWidget {
                   alignment: Alignment.center,
                   child: Text(
                     '$count',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppTheme.isDark ? const Color(0xFF0F0F14) : Colors.white,
                     ),
                   ),
                 ),
@@ -787,15 +773,15 @@ class _RevisionSectionHeader extends StatelessWidget {
               children: [
                 Text(
                   sortMode.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF475569),
+                    color: AppTheme.textSecondaryColor(context),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF475569),
+                  color: AppTheme.textSecondaryColor(context),
                   size: 20,
                 ),
               ],
@@ -805,7 +791,7 @@ class _RevisionSectionHeader extends StatelessWidget {
           Material(
             color: scope != RevisionScope.all
                 ? AppTheme.pastelIndigo(context)
-                : const Color(0xFFF1F5F9),
+                : AppTheme.surfaceVariant(context),
             shape: const CircleBorder(),
             child: InkWell(
               onTap: onFilterPressed,
@@ -817,8 +803,8 @@ class _RevisionSectionHeader extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: scope != RevisionScope.all
-                        ? const Color(0xFFC7D2FE)
-                        : const Color(0xFFE2E8F0),
+                        ? AppTheme.pastelIndigoBorder(context)
+                        : AppTheme.borderColor(context),
                   ),
                 ),
                 alignment: Alignment.center,
@@ -826,7 +812,7 @@ class _RevisionSectionHeader extends StatelessWidget {
                   Icons.tune_rounded,
                   color: scope != RevisionScope.all
                       ? AppTheme.pastelIndigoText(context)
-                      : const Color(0xFF475569),
+                      : AppTheme.textSecondaryColor(context),
                   size: 18,
                 ),
               ),
@@ -932,7 +918,7 @@ class _RevisionItemCard extends StatelessWidget {
       BuildContext context, int days, bool isDue, Revision revision) {
     if (revision.isFinished) return AppTheme.successColor;
     if (isDue) {
-      return days < 0 ? const Color(0xFFDC2626) : AppTheme.errorColor;
+      return AppTheme.errorColor;
     }
     return AppTheme.textSecondaryColor(context);
   }

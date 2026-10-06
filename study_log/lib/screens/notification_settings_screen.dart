@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/full_screen_page.dart';
+import '../widgets/custom_app_bar.dart';
 import '../services/service_locator.dart';
 import '../services/notification_service.dart';
 import '../controllers/notification_controller.dart';
@@ -15,12 +15,27 @@ class NotificationSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = getIt<NotificationController>();
 
-    return FullScreenPage(
-      title: 'Notifications',
-      showBackButton: true,
-      children: [
-        const VGapSm(),
-        ListenableBuilder(
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: AppTheme.background(context),
+      body: SafeArea(
+        child: Column(
+          children: [
+            CustomAppBar(
+              title: 'Notifications',
+              onBack: () => Navigator.of(context).pop(),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListenableBuilder(
           listenable: controller,
           builder: (context, _) {
             final isMasterEnabled = controller.enabled;
@@ -93,12 +108,18 @@ class NotificationSettingsScreen extends StatelessWidget {
             );
           },
         ),
-        const VGapMd(),
-        const _SectionLabel(title: 'DIAGNOSTICS'),
-        const VGapXs(),
-        const _TestNotificationCard(),
-        const VGapLg(),
-      ],
+                    const VGapMd(),
+                    const _SectionLabel(title: 'DIAGNOSTICS'),
+                    const VGapXs(),
+                    const _TestNotificationCard(),
+                    const VGapLg(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
 import '../widgets/study_text_fields.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
@@ -300,11 +301,17 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _AddCourseTopBar(
+            CustomAppBar(
               title: widget.courseToEdit != null ? 'Edit Course' : 'Add Course',
               onBack: _handleBack,
-              onSave: _handleSubmit,
-              isSubmitting: _isSubmitting,
+              actions: [
+                AddPillButton(
+                  label: 'Save',
+                  icon: Icons.check_rounded,
+                  isLoading: _isSubmitting,
+                  onPressed: _handleSubmit,
+                ),
+              ],
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -361,56 +368,6 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
   }
 }
 
-class _AddCourseTopBar extends StatelessWidget {
-  final String title;
-  final VoidCallback onBack;
-  final VoidCallback onSave;
-  final bool isSubmitting;
-
-  const _AddCourseTopBar({
-    this.title = 'Add Course',
-    required this.onBack,
-    required this.onSave,
-    required this.isSubmitting,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.3,
-            ),
-          ),
-          const Spacer(),
-          AddPillButton(
-            label: 'Save',
-            icon: Icons.check_rounded,
-            isLoading: isSubmitting,
-            onPressed: onSave,
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CourseIconAndColorRow extends StatelessWidget {
   final IconData selectedIcon;

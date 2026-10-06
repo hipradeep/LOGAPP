@@ -156,41 +156,36 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
-          onRefresh: _handleRefresh,
-          color: AppTheme.primaryColor,
-          backgroundColor: AppTheme.surface(context),
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
-                sliver: SliverToBoxAdapter(
-                  child: _HomeTopModule(
-                    ongoingController: ongoingController,
-                    onViewAll: _handleViewAll,
-                    onCourseTap: _openCourseByTitle,
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-                sliver: _CurrentModulesSliverList(
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
+              sliver: SliverToBoxAdapter(
+                child: _HomeTopModule(
                   ongoingController: ongoingController,
-                  onModuleTap: _openModuleDetail,
                   onViewAll: _handleViewAll,
+                  onCourseTap: _openCourseByTitle,
                 ),
               ),
-              SliverPadding(
-                padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
-                sliver: SliverToBoxAdapter(
-                  child: _HomeRecentActivitySection(
-                    onOpenActivity: () => _openActivity(context),
-                  ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+              sliver: _CurrentModulesSliverList(
+                ongoingController: ongoingController,
+                onModuleTap: _openModuleDetail,
+                onViewAll: _handleViewAll,
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
+              sliver: SliverToBoxAdapter(
+                child: _HomeRecentActivitySection(
+                  onOpenActivity: () => _openActivity(context),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

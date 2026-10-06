@@ -22,7 +22,7 @@ class AddPillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF5F3FF),
+      color: AppTheme.pastelPurple(context),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: isLoading ? null : onPressed,
@@ -31,27 +31,27 @@ class AddPillButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFDDD6FE)),
+            border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isLoading)
-                const SizedBox(
+                SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppTheme.primaryColor,
+                    color: AppTheme.pastelPurpleText(context),
                   ),
                 )
               else if (icon != null)
-                Icon(icon, color: AppTheme.primaryColor, size: 16),
+                Icon(icon, color: AppTheme.pastelPurpleText(context), size: 16),
               const HGapXs(),
               Text(
                 label,
-                style: const TextStyle(
-                  color: AppTheme.primaryColor,
+                style: TextStyle(
+                  color: AppTheme.pastelPurpleText(context),
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),

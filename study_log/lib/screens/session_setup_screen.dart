@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/custom_app_bar.dart';
 import '../widgets/sheet_action_widgets.dart';
 import '../models/topic.dart';
 import '../models/revision_topic.dart';
@@ -702,68 +703,43 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 18,
-              color: AppTheme.textPrimaryColor(context),
+    return CustomAppBar(
+      title: widget.isRevision ? 'Revision Session' : 'Study Session',
+      onBack: () => Navigator.of(context).pop(),
+      actions: [
+        if (_isRestrictMode) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppTheme.pastelOrange(context),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AppTheme.pastelOrangeBorder(context)),
             ),
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Back',
-            visualDensity: VisualDensity.compact,
-          ),
-          Text(
-            widget.isRevision ? 'Revision Session' : 'Study Session',
-            style: TextStyle(
-              fontSize: 16.5,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_isRestrictMode) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.pastelOrange(context),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppTheme.pastelOrangeBorder(context)),
-                  ),
-                  child: Text(
-                    'STRICT',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.pastelOrangeText(context),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-                const HGapXs(),
-              ],
-              IconButton(
-                icon: Icon(
-                  Icons.settings_outlined,
-                  size: 20,
-                  color: _isRestrictMode
-                      ? AppTheme.pastelOrangeText(context)
-                      : AppTheme.textSecondaryColor(context),
-                ),
-                onPressed: _openSessionSettingsSheet,
-                tooltip: 'Session Settings',
-                visualDensity: VisualDensity.compact,
+            child: Text(
+              'STRICT',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.pastelOrangeText(context),
+                letterSpacing: 0.5,
               ),
-            ],
+            ),
           ),
+          const HGapXs(),
         ],
-      ),
+        IconButton(
+          icon: Icon(
+            Icons.settings_outlined,
+            size: 20,
+            color: _isRestrictMode
+                ? AppTheme.pastelOrangeText(context)
+                : AppTheme.textSecondaryColor(context),
+          ),
+          onPressed: _openSessionSettingsSheet,
+          tooltip: 'Session Settings',
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
     );
   }
 

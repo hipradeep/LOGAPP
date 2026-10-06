@@ -89,6 +89,25 @@ class ProgressController extends ChangeNotifier {
   String get userName => _userProfile?.name ?? 'Pradeep Maurya';
   String get userHeadline => _userProfile?.headline ?? 'Software Developer';
   String get userInitial => _userProfile?.initial ?? 'P';
+  String? get userEmail => _userProfile?.email;
+  String? get userAvatarUrl => _userProfile?.avatarUrl;
+
+  /// Resets all in-memory statistics, streaks, and profile state to zero/empty.
+  void reset() {
+    _userProfile = null;
+    _totalStudyMinutes = 0;
+    _currentStreak = 0;
+    _longestStreak = 0;
+    _totalActiveDays = 0;
+    _totalTopicsFinished = 0;
+    _totalTopicRevisions = 0;
+    _dailyTopicsFinished.clear();
+    _dailyRevisions.clear();
+    _dailyStudyMinutes.clear();
+    _activitiesInRange = [];
+    _recentActivities = [];
+    notifyListeners();
+  }
 
   /// Compact study hours string (e.g. "0h", "1.5h", "12h").
   String get formattedStudyHours {
@@ -137,16 +156,16 @@ class ProgressController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 0. Fast local hydration: display cached user profile stats immediately without waiting
+      // 0. Fast local hydration: reset in-memory variables and apply cached profile
       final cachedProfile = await LocalUserProfileStorage.loadProfile();
-      if (cachedProfile != null) {
-        _userProfile = cachedProfile;
-        if (_totalStudyMinutes == 0) _totalStudyMinutes = cachedProfile.totalStudyMinutes;
-        if (_currentStreak == 0) _currentStreak = cachedProfile.currentStreak;
-        if (_longestStreak == 0) _longestStreak = cachedProfile.longestStreak;
-        if (_totalActiveDays == 0) _totalActiveDays = cachedProfile.totalActiveDays;
-        notifyListeners();
-      }
+      _userProfile = cachedProfile;
+      _totalStudyMinutes = cachedProfile?.totalStudyMinutes ?? 0;
+      _currentStreak = cachedProfile?.currentStreak ?? 0;
+      _longestStreak = cachedProfile?.longestStreak ?? 0;
+      _totalActiveDays = cachedProfile?.totalActiveDays ?? 0;
+      _totalTopicsFinished = cachedProfile?.totalTopicsFinished ?? 0;
+      _totalTopicRevisions = cachedProfile?.totalTopicRevisions ?? 0;
+      notifyListeners();
 
       final now = DateTime.now();
       final today = normalizeDate(now);

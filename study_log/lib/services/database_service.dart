@@ -843,6 +843,40 @@ class DatabaseService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Generic App Settings Key-Value Operations
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<String?> getSetting(String key) async {
+    final db = await database;
+    final res = await db.query(
+      'notification_settings',
+      where: 'id = ?',
+      whereArgs: ['setting_$key'],
+      limit: 1,
+    );
+    if (res.isEmpty) return null;
+    return res.first['data'] as String?;
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    final db = await database;
+    await db.insert(
+      'notification_settings',
+      {'id': 'setting_$key', 'data': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteSetting(String key) async {
+    final db = await database;
+    await db.delete(
+      'notification_settings',
+      where: 'id = ?',
+      whereArgs: ['setting_$key'],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Batch Operations (e.g. from JSON Import Screen)
   // ─────────────────────────────────────────────────────────────────────────
 

@@ -10,6 +10,7 @@ import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
+import '../widgets/custom_app_bar.dart';
 import 'archived_topic_detail_sheet.dart';
 
 /// Detail page for a single archived course: completion summary, restore/delete
@@ -124,53 +125,49 @@ class _ArchivedCourseDetailScreenState
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
-        child: course == null
-            ? Column(
-                children: [
-                  _DetailTopBar(
-                    title: 'Archive',
-                    onBack: () => Navigator.of(context).pop(),
-                  ),
-                  Expanded(
-                    child: _ArchivedEmptyDetail(bottomPadding: bottomSafe + 24),
-                  ),
-                ],
-              )
-            : ListView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                padding: EdgeInsets.fromLTRB(16, 0, 16, bottomSafe + 32),
-                children: [
-                  _DetailTopBar(
-                    title: 'Archive',
-                    onBack: () => Navigator.of(context).pop(),
-                  ),
-                  const VGapMd(),
-                  _ArchivedCourseCompletionHeader(
-                    course: course,
-                    completedModules: _completedModulesCount,
-                    totalModules: _modules.length,
-                    completedTopics: _completedTopicsCount,
-                    totalTopics: _totalTopicsCount,
-                  ),
-                  const VGapLg(),
-                  if (_isLoadingDetails)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40.0),
-                      child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
+        child: Column(
+          children: [
+            CustomAppBar(
+              title: course?.title ?? 'Archive',
+              subtitle: course != null ? 'Archived Course' : null,
+              onBack: () => Navigator.of(context).pop(),
+            ),
+            Expanded(
+              child: course == null
+                  ? _ArchivedEmptyDetail(bottomPadding: bottomSafe + 24)
+                  : ListView(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
                       ),
-                    )
-                  else if (_modules.isEmpty)
-                    const _ArchivedNoModulesCard()
-                  else
-                    _ArchivedModulesSection(
-                      modules: _modules,
-                      moduleTopics: _moduleTopics,
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
+                      children: [
+                        _ArchivedCourseCompletionHeader(
+                          course: course,
+                          completedModules: _completedModulesCount,
+                          totalModules: _modules.length,
+                          completedTopics: _completedTopicsCount,
+                          totalTopics: _totalTopicsCount,
+                        ),
+                        const VGapLg(),
+                        if (_isLoadingDetails)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 40.0),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2.5),
+                            ),
+                          )
+                        else if (_modules.isEmpty)
+                          const _ArchivedNoModulesCard()
+                        else
+                          _ArchivedModulesSection(
+                            modules: _modules,
+                            moduleTopics: _moduleTopics,
+                          ),
+                      ],
                     ),
-                ],
-              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -313,46 +310,7 @@ class _CollapseAllToggle extends StatelessWidget {
   }
 }
 
-class _DetailTopBar extends StatelessWidget {
-  final String title;
-  final VoidCallback onBack;
 
-  const _DetailTopBar({required this.title, required this.onBack});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12.0, 10.0, 16.0, 0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 28,
-            ),
-            onPressed: onBack,
-            tooltip: 'Back',
-          ),
-          const HGapXs(),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _ArchivedCourseCompletionHeader extends StatelessWidget {
   final Course course;

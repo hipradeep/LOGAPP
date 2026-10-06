@@ -179,7 +179,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     course: widget.course,
                     modulesController: _modulesController,
                     onModuleTap: _openModuleDetail,
-                    onAddModule: _openAddModuleScreen,
                     bottomPadding: bottomSafe + 24,
                   );
                 },
@@ -392,14 +391,12 @@ class _CourseModulesListView extends StatelessWidget {
   final Course course;
   final ModulesController modulesController;
   final void Function(Module, int) onModuleTap;
-  final VoidCallback onAddModule;
   final double bottomPadding;
 
   const _CourseModulesListView({
     required this.course,
     required this.modulesController,
     required this.onModuleTap,
-    required this.onAddModule,
     required this.bottomPadding,
   });
 
@@ -431,10 +428,19 @@ class _CourseModulesListView extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.layers_clear_outlined,
-                    size: 48,
-                    color: AppTheme.textSecondaryColor(context),
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppTheme.pastelIndigo(context),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.pastelIndigoBorder(context)),
+                    ),
+                    child: Icon(
+                      Icons.layers_clear_outlined,
+                      size: 30,
+                      color: AppTheme.pastelIndigoText(context),
+                    ),
                   ),
                   const VGapMd(),
                   Text(
@@ -447,25 +453,11 @@ class _CourseModulesListView extends StatelessWidget {
                   ),
                   const VGapXs(),
                   Text(
-                    'Tap "+ Add Module" to add topics to this course.',
+                    'Add a module from the top bar to start tracking topics.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
                       color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                  const VGapMd(),
-                  ElevatedButton.icon(
-                    onPressed: onAddModule,
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('Add Module'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
                   ),
                 ],

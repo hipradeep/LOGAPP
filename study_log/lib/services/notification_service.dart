@@ -540,10 +540,11 @@ class NotificationService {
   Future<void> cancelAllStreakReminders() async {
     try {
       await init();
-      await _plugin.cancel(id: streakNotificationId);
-      for (int i = 0; i < maxStreakSlots; i++) {
-        await _plugin.cancel(id: streakBaseNotificationId + i);
-      }
+      await Future.wait([
+        _plugin.cancel(id: streakNotificationId),
+        for (int i = 0; i < maxStreakSlots; i++)
+          _plugin.cancel(id: streakBaseNotificationId + i),
+      ]);
       debugPrint('NotificationService: Cancelled all streak saver reminders.');
     } catch (e) {
       debugPrint('NotificationService cancelAllStreakReminders error: $e');
@@ -614,10 +615,10 @@ class NotificationService {
   Future<void> cancelAllRevisionReminders() async {
     try {
       await init();
-      for (int i = 0; i < maxRevisionSlots; i++) {
-        await _plugin.cancel(id: revisionBaseNotificationId + i);
-      }
-      debugPrint('NotificationService cancelAllRevisionReminders error: cancelled');
+      await Future.wait([
+        for (int i = 0; i < maxRevisionSlots; i++)
+          _plugin.cancel(id: revisionBaseNotificationId + i),
+      ]);
     } catch (e) {
       debugPrint('NotificationService cancelAllRevisionReminders error: $e');
     }
@@ -676,9 +677,10 @@ class NotificationService {
   Future<void> cancelAllDeadlineReminders() async {
     try {
       await init();
-      for (int i = 0; i < maxDeadlineSlots; i++) {
-        await _plugin.cancel(id: deadlineBaseNotificationId + i);
-      }
+      await Future.wait([
+        for (int i = 0; i < maxDeadlineSlots; i++)
+          _plugin.cancel(id: deadlineBaseNotificationId + i),
+      ]);
       debugPrint('NotificationService: Cancelled all deadline reminders.');
     } catch (e) {
       debugPrint('NotificationService cancelAllDeadlineReminders error: $e');

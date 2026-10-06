@@ -192,6 +192,14 @@ class CoursesController extends ChangeNotifier {
     loadCourses();
   }
 
+  /// Immediately clears in-memory courses list.
+  void clear() {
+    _courses = [];
+    _isLoading = false;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _coursesSubscription?.cancel();
