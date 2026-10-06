@@ -97,6 +97,33 @@ class RevisionController extends ChangeNotifier {
 
   int get dueCount => dueRevisions.length;
 
+  /// Revisions due on the current calendar day (or already unlocked/overdue) and not yet finished.
+  List<Revision> get revisionsDueToday {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _activeRevisions.where((r) {
+      if (r.isFinished) return false;
+      final dueDay = DateTime(
+        r.nextRevisionAt.year,
+        r.nextRevisionAt.month,
+        r.nextRevisionAt.day,
+      );
+      return dueDay.isAtSameMomentAs(today) || r.isDueAt(now);
+    }).toList();
+  }
+
+  /// Titles of modules currently due for revision today.
+  List<String> get moduleTitlesDueToday {
+    final titles = <String>[];
+    for (final r in revisionsDueToday) {
+      final module = _ongoingController.getModuleById(r.moduleId);
+      if (module != null && module.title.isNotEmpty) {
+        titles.add(module.title);
+      }
+    }
+    return titles;
+  }
+
   /// Every record in one continuous list, most urgent due date first.
   /// Finished records sink to the bottom because they have nothing left due.
   List<Revision> get scheduledRevisions => _sorted(List<Revision>.of(_activeRevisions));
@@ -109,28 +136,16 @@ class RevisionController extends ChangeNotifier {
 
   /// Marks the current level as revised and moves the ladder on.
   ///
-  /// This only advances the level when the revision is due or overdue as of [at],
-  /// unless [force] is true. Early revisions before the scheduled due date
-  /// keep their current level.
-  Future<bool> completeCurrentLevel(
-    String revisionId, {
-    DateTime? at,
-    bool force = false,
-  }) async {
+  /// This is the only path that advances a level, so a record stays due — and
+  /// keeps offering its "Start Rn" button — until the user acts. Returns true
+  /// when something changed.
+  Future<bool> completeCurrentLevel(String revisionId, {DateTime? at}) async {
     final now = at ?? DateTime.now();
-    final index = _revisions.indexWhere(
-      (r) => r.id == revisionId || (r.moduleId.isNotEmpty && r.moduleId == revisionId),
-    );
+    final index = _revisions.indexWhere((r) => r.id == revisionId);
     if (index == -1) return false;
 
     final current = _revisions[index];
     if (current.isFinished) return false;
-
-    // Do not advance level if revising before scheduled due date unless forced
-    if (!force && !current.isDueAt(now)) {
-      debugPrint('Revision ${current.id} is not due yet. Skipping level advancement.');
-      return false;
-    }
 
     final advanced = current.advance(now);
     _revisions = _sorted(List<Revision>.of(_revisions)..[index] = advanced);

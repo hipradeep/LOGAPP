@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
@@ -9,6 +10,8 @@ import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
+import '../controllers/notification_controller.dart';
+import '../services/notification_service.dart';
 import '../models/course.dart';
 import 'activity_screen.dart';
 import 'add_course_screen.dart';
@@ -35,6 +38,21 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _ensureDataLoaded();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkNotificationPermission();
+    });
+  }
+
+  Future<void> _checkNotificationPermission() async {
+    try {
+      if (!getIt.isRegistered<NotificationService>()) return;
+      final granted = await getIt<NotificationService>().requestPermission();
+      if (granted && getIt.isRegistered<NotificationController>()) {
+        unawaited(getIt<NotificationController>().syncAllNotifications());
+      }
+    } catch (e) {
+      debugPrint('HomeScreen notification permission error: $e');
+    }
   }
 
   void _ensureDataLoaded() {

@@ -47,22 +47,16 @@ class NotificationSettingsScreen extends StatelessWidget {
                           iconColor: const Color(0xFF8B5CF6),
                           iconBgColor: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
                           title: 'Revision Due',
+                          subtitle: 'Repeats every 90–120 min from 4 AM if revisions due today',
                           value: controller.revisionDueEnabled,
                           onChanged: controller.setRevisionDue,
-                          child: controller.revisionDueEnabled
-                              ? _IntervalSelector(
-                                  label: 'If pending',
-                                  selectedHours: controller.revisionIntervalHours,
-                                  onSelectHours: controller.setRevisionIntervalHours,
-                                )
-                              : null,
                         ),
                         const _TileDivider(),
                         _NotificationOptionTile(
                           icon: Icons.school_outlined,
                           iconColor: const Color(0xFF3B82F6),
                           iconBgColor: const Color(0xFF3B82F6).withValues(alpha: 0.12),
-                          title: 'Course Study',
+                          title: 'Study',
                           value: controller.courseDueEnabled,
                           onChanged: controller.setCourseDue,
                           child: controller.courseDueEnabled
@@ -79,6 +73,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                           iconColor: const Color(0xFFF97316),
                           iconBgColor: const Color(0xFFF97316).withValues(alpha: 0.12),
                           title: 'Streak Saver',
+                          subtitle: 'Repeats every 90–120 min from 4 AM if study not logged today',
                           value: controller.streakSaverEnabled,
                           onChanged: controller.setStreakSaver,
                         ),
@@ -88,6 +83,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                           iconColor: const Color(0xFF10B981),
                           iconBgColor: const Color(0xFF10B981).withValues(alpha: 0.12),
                           title: 'Deadline Alerts',
+                          subtitle: 'Repeats every 90–120 min from 4 AM if course deadline is today',
                           value: controller.deadlineEnabled,
                           onChanged: controller.setDeadlineEnabled,
                         ),
@@ -437,6 +433,7 @@ class _NotificationOptionTile extends StatelessWidget {
   final Color iconColor;
   final Color iconBgColor;
   final String title;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
   final Widget? child;
@@ -446,6 +443,7 @@ class _NotificationOptionTile extends StatelessWidget {
     required this.iconColor,
     required this.iconBgColor,
     required this.title,
+    this.subtitle,
     required this.value,
     required this.onChanged,
     this.child,
@@ -471,13 +469,28 @@ class _NotificationOptionTile extends StatelessWidget {
               ),
               const HGapSm(),
               Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimaryColor(context),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const VGapXs(),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               _CompactSwitch(
@@ -583,7 +596,19 @@ class _TimePickerRow extends StatelessWidget {
       },
     );
     if (picked != null) {
-      onSelectTime(picked);
+      if (picked.hour < 4) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notifications must start from 4:00 AM onwards. Adjusted to 4:00 AM.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        onSelectTime(const TimeOfDay(hour: 4, minute: 0));
+      } else {
+        onSelectTime(picked);
+      }
     }
   }
 
@@ -633,74 +658,6 @@ class _TimePickerRow extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _IntervalSelector extends StatelessWidget {
-  final String label;
-  final int selectedHours;
-  final ValueChanged<int> onSelectHours;
-
-  const _IntervalSelector({
-    required this.label,
-    required this.selectedHours,
-    required this.onSelectHours,
-  });
-
-  static const List<int> _options = [1, 2];
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: AppTheme.textSecondaryColor(context),
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-        const HGapSm(),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: _options.map((hours) {
-            final isSelected = hours == selectedHours;
-            final chipLabel = '${hours}h';
-
-            return Padding(
-              padding: const EdgeInsets.only(left: 4.0),
-              child: InkWell(
-                onTap: () => onSelectHours(hours),
-                borderRadius: BorderRadius.circular(4),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.primaryColor
-                        : AppTheme.borderColor(context).withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    chipLabel,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white
-                          : AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
         ),
       ],
     );

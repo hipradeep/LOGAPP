@@ -54,6 +54,9 @@ Future<void> warmupControllers() async {
       revision.reconcile(),
     ]);
     await progress.load();
+    if (getIt.isRegistered<NotificationController>()) {
+      await getIt<NotificationController>().syncAllNotifications();
+    }
   } catch (e) {
     debugPrint('warmupControllers error: $e');
     try {

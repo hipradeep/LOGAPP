@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 /// Configuration model representing user notification preferences.
 class NotificationSettings {
   final bool enabled;
+  final int repeatIntervalHours;
   final bool revisionDueEnabled;
-  final int revisionIntervalHours;
   final TimeOfDay revisionDueTime;
   final bool courseDueEnabled;
   final TimeOfDay courseDueTime;
@@ -15,9 +15,9 @@ class NotificationSettings {
 
   const NotificationSettings({
     this.enabled = true,
+    this.repeatIntervalHours = 2,
     this.revisionDueEnabled = true,
-    this.revisionIntervalHours = 2,
-    this.revisionDueTime = const TimeOfDay(hour: 9, minute: 0),
+    this.revisionDueTime = const TimeOfDay(hour: 4, minute: 0),
     this.courseDueEnabled = true,
     this.courseDueTime = const TimeOfDay(hour: 11, minute: 0),
     this.streakSaverEnabled = true,
@@ -26,8 +26,12 @@ class NotificationSettings {
     this.deadlineDaysBefore = 3,
   });
 
+  /// Alias for backward compatibility with revision interval settings.
+  int get revisionIntervalHours => repeatIntervalHours;
+
   NotificationSettings copyWith({
     bool? enabled,
+    int? repeatIntervalHours,
     bool? revisionDueEnabled,
     int? revisionIntervalHours,
     TimeOfDay? revisionDueTime,
@@ -38,10 +42,11 @@ class NotificationSettings {
     bool? deadlineEnabled,
     int? deadlineDaysBefore,
   }) {
+    final effectiveRepeatHours = repeatIntervalHours ?? revisionIntervalHours ?? this.repeatIntervalHours;
     return NotificationSettings(
       enabled: enabled ?? this.enabled,
+      repeatIntervalHours: effectiveRepeatHours,
       revisionDueEnabled: revisionDueEnabled ?? this.revisionDueEnabled,
-      revisionIntervalHours: revisionIntervalHours ?? this.revisionIntervalHours,
       revisionDueTime: revisionDueTime ?? this.revisionDueTime,
       courseDueEnabled: courseDueEnabled ?? this.courseDueEnabled,
       courseDueTime: courseDueTime ?? this.courseDueTime,
@@ -55,8 +60,9 @@ class NotificationSettings {
   Map<String, dynamic> toMap() {
     return {
       'enabled': enabled,
+      'repeatIntervalHours': repeatIntervalHours,
+      'revisionIntervalHours': repeatIntervalHours,
       'revisionDueEnabled': revisionDueEnabled,
-      'revisionIntervalHours': revisionIntervalHours,
       'revisionDueHour': revisionDueTime.hour,
       'revisionDueMinute': revisionDueTime.minute,
       'courseDueEnabled': courseDueEnabled,
@@ -71,12 +77,16 @@ class NotificationSettings {
   }
 
   factory NotificationSettings.fromMap(Map<String, dynamic> map) {
+    final parsedRepeatHours = (map['repeatIntervalHours'] as num?)?.toInt() ??
+        (map['revisionIntervalHours'] as num?)?.toInt() ??
+        2;
+
     return NotificationSettings(
       enabled: map['enabled'] as bool? ?? true,
+      repeatIntervalHours: parsedRepeatHours,
       revisionDueEnabled: map['revisionDueEnabled'] as bool? ?? true,
-      revisionIntervalHours: map['revisionIntervalHours'] as int? ?? 2,
       revisionDueTime: TimeOfDay(
-        hour: map['revisionDueHour'] as int? ?? 9,
+        hour: map['revisionDueHour'] as int? ?? 4,
         minute: map['revisionDueMinute'] as int? ?? 0,
       ),
       courseDueEnabled: map['courseDueEnabled'] as bool? ?? true,
