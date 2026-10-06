@@ -83,7 +83,16 @@ class RevisionModule {
       isFinished ? 1.0 : (currentLevel - 1) / RevisionSchedule.maxLevel;
 
   /// True when [currentLevel] has unlocked and is waiting to be revised.
-  bool isDueAt(DateTime now) => !isFinished && !now.isBefore(nextRevisionAt);
+  bool isDueAt(DateTime now) {
+    if (isFinished) return false;
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDay = DateTime(
+      nextRevisionAt.year,
+      nextRevisionAt.month,
+      nextRevisionAt.day,
+    );
+    return !today.isBefore(dueDay);
+  }
 
   /// Whole days until [currentLevel] unlocks. Negative once overdue.
   int daysUntilDue(DateTime now) {

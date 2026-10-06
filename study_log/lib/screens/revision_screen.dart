@@ -3,9 +3,10 @@ import '../theme/app_theme.dart';
 import '../theme/revision_level_palette.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/custom_app_bar.dart';
+import '../widgets/app_back_button.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/compact_list_item.dart';
+import '../widgets/revision_options_sheet.dart';
 import '../models/revision.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/courses_controller.dart';
@@ -33,16 +34,12 @@ enum RevisionScope {
   final String label;
 }
 
-
-
 /// Revision screen — a tracking list for the R1 -> R5 spaced repetition ladder.
 ///
 /// Clean visual design with:
-/// - Circular action buttons in top bar
-/// - Horizontal level tabs showing intervals and count badges
+/// - Horizontal level tabs showing intervals and count badges, plus a Finished chip
 /// - Section header showing active category with count and sort dropdown
 /// - Modern white item cards with tech icon glyphs, level pill tags, and due status
-/// - Play revision button and three-dot list item menu removed as requested.
 class RevisionScreen extends StatefulWidget {
   final RevisionController revisionController;
   final VoidCallback? onBack;
@@ -60,46 +57,28 @@ class RevisionScreen extends StatefulWidget {
 }
 
 class _RevisionScreenState extends State<RevisionScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  final ValueNotifier<String> _searchQuery = ValueNotifier<String>('');
-
   int? _levelFilter;
   RevisionScope _scope = RevisionScope.all;
   RevisionSortMode _sortMode = RevisionSortMode.dueDate;
-  bool _isSearchVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_onSearchChanged);
     widget.revisionController.reconcile();
   }
 
-  @override
-  void dispose() {
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
-    _searchQuery.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged() {
-    _searchQuery.value = _searchController.text.trim().toLowerCase();
-  }
-
-  void _toggleSearch() {
-    setState(() {
-      _isSearchVisible = !_isSearchVisible;
-      if (!_isSearchVisible && _searchController.text.isNotEmpty) {
-        _searchController.clear();
-      }
-    });
+  void _handleRevisionLongPress(Revision revision) {
+    RevisionOptionsSheet.show(
+      context,
+      revision: revision,
+      revisionController: widget.revisionController,
+      onOpenRevision: widget.onOpenRevision,
+    );
   }
 
   /// Filters, scopes and orders the records for the single list.
   List<Revision> _visibleRevisions(DateTime now) {
-    final query = _searchQuery.value;
-    final items = widget.revisionController.revisionsAtLevel(_levelFilter);
+    final items = widget.revisionController.revisions;
     final ongoing = getIt.isRegistered<OngoingModulesController>()
         ? getIt<OngoingModulesController>()
         : null;
@@ -110,14 +89,18 @@ class _RevisionScreenState extends State<RevisionScreen> {
         final done = ongoing.completedTopicCountForModule(r.moduleId);
         if (total > 0 && done < total) return false;
       }
-      if (query.isNotEmpty) {
-        final module = ongoing?.getModuleById(r.moduleId);
-        final title = module?.title ?? '';
-        final desc = module?.description ?? '';
-        final matches = title.toLowerCase().contains(query) ||
-            desc.toLowerCase().contains(query);
-        if (!matches) return false;
+
+      if (_levelFilter == null) {
+        // Finished items will not show in "all" section
+        if (r.isFinished) return false;
+      } else if (_levelFilter == 6) {
+        // Finished tab selected
+        if (!r.isFinished) return false;
+      } else {
+        // R1..R5 tab selected
+        if (r.isFinished || r.currentLevel != _levelFilter) return false;
       }
+
       switch (_scope) {
         case RevisionScope.all:
           return true;
@@ -182,16 +165,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
           children: [
             _RevisionHeader(
               onBack: widget.onBack,
-              isSearchVisible: _isSearchVisible,
-              onSearchTap: _toggleSearch,
-              onMenuAction: _handleTopMenuAction,
-              scope: _scope,
             ),
-            if (_isSearchVisible)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: _RevisionSearchBar(controller: _searchController),
-              ),
             ListenableBuilder(
               listenable: widget.revisionController,
               builder: (context, _) {
@@ -203,10 +177,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
               },
             ),
             ListenableBuilder(
-              listenable: Listenable.merge([
-                widget.revisionController,
-                _searchQuery,
-              ]),
+              listenable: widget.revisionController,
               builder: (context, _) {
                 final now = DateTime.now();
                 final revisions = _visibleRevisions(now);
@@ -214,11 +185,14 @@ class _RevisionScreenState extends State<RevisionScreen> {
                 final String sectionTitle;
                 final int sectionCount;
 
-                if (_scope == RevisionScope.dueToday) {
-                  sectionTitle = 'Due Today';
+                if (_levelFilter == 6) {
+                  sectionTitle = 'Finished Revisions';
                   sectionCount = revisions.length;
                 } else if (_levelFilter != null) {
                   sectionTitle = 'R$_levelFilter Revisions';
+                  sectionCount = revisions.length;
+                } else if (_scope == RevisionScope.dueToday) {
+                  sectionTitle = 'Due Today';
                   sectionCount = revisions.length;
                 } else if (_scope == RevisionScope.upcoming) {
                   sectionTitle = 'Upcoming';
@@ -243,10 +217,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
             ),
             Expanded(
               child: ListenableBuilder(
-                listenable: Listenable.merge([
-                  widget.revisionController,
-                  _searchQuery,
-                ]),
+                listenable: widget.revisionController,
                 builder: (context, _) {
                   final revisions = _visibleRevisions(DateTime.now());
 
@@ -292,12 +263,14 @@ class _RevisionScreenState extends State<RevisionScreen> {
                         bottomSafe + 24,
                       ),
                       itemCount: revisions.length,
-                      separatorBuilder: (_, __) => const VGapSm(),
+                      separatorBuilder: (_, _) => const VGapSm(),
                       itemBuilder: (context, index) {
                         final revision = revisions[index];
                         return _RevisionItemCard(
+                          key: ValueKey(revision.id),
                           revision: revision,
                           onTap: () => widget.onOpenRevision(revision),
+                          onLongPress: () => _handleRevisionLongPress(revision),
                         );
                       },
                     ),
@@ -312,7 +285,8 @@ class _RevisionScreenState extends State<RevisionScreen> {
   }
 
   String _emptyTitleFor() {
-    if (_searchQuery.value.isNotEmpty) return 'No matches found';
+    if (_levelFilter == 6) return 'No finished revisions';
+    if (_levelFilter != null) return 'No R$_levelFilter revisions';
     switch (_scope) {
       case RevisionScope.all:
         return 'No revisions scheduled';
@@ -326,8 +300,11 @@ class _RevisionScreenState extends State<RevisionScreen> {
   }
 
   String _emptyDescriptionFor() {
-    if (_searchQuery.value.isNotEmpty) {
-      return 'Try a different search term or clear the R-level filter.';
+    if (_levelFilter == 6) {
+      return 'Complete the R5 level of a ladder to see it here.';
+    }
+    if (_levelFilter != null) {
+      return 'Revisions appear here when they reach level R$_levelFilter.';
     }
     switch (_scope) {
       case RevisionScope.all:
@@ -341,15 +318,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
       case RevisionScope.finished:
         return 'Complete the R5 level of a ladder to see it here.';
     }
-  }
-
-  Future<void> _handleTopMenuAction(String action) async {
-    if (action != 'showFinished') return;
-    setState(() {
-      _scope = _scope == RevisionScope.finished
-          ? RevisionScope.all
-          : RevisionScope.finished;
-    });
   }
 
   Future<void> _openFilterSheet() async {
@@ -438,17 +406,9 @@ class _RevisionScreenState extends State<RevisionScreen> {
 
 class _RevisionHeader extends StatelessWidget {
   final VoidCallback? onBack;
-  final bool isSearchVisible;
-  final VoidCallback onSearchTap;
-  final ValueChanged<String> onMenuAction;
-  final RevisionScope scope;
 
   const _RevisionHeader({
     this.onBack,
-    required this.isSearchVisible,
-    required this.onSearchTap,
-    required this.onMenuAction,
-    required this.scope,
   });
 
   @override
@@ -476,124 +436,13 @@ class _RevisionHeader extends StatelessWidget {
               letterSpacing: -0.3,
             ),
           ),
-          const Spacer(),
-          IconButton(
-            icon: Icon(
-              isSearchVisible
-                  ? Icons.close_rounded
-                  : Icons.search_rounded,
-              color: isSearchVisible
-                  ? AppTheme.primaryColor
-                  : AppTheme.textPrimaryColor(context),
-              size: 24,
-            ),
-            onPressed: onSearchTap,
-            tooltip: isSearchVisible ? 'Close' : 'Search',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          ),
-          const HGapXs(),
-          PopupMenuButton<String>(
-            onSelected: onMenuAction,
-            color: AppTheme.surface(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 6,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            icon: Icon(
-              Icons.more_vert_rounded,
-              color: AppTheme.textPrimaryColor(context),
-              size: 24,
-            ),
-            itemBuilder: (ctx) => [
-              PopupMenuItem<String>(
-                value: 'showFinished',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline_rounded,
-                      color: AppTheme.textPrimaryColor(context),
-                      size: 20,
-                    ),
-                    const HGapSm(),
-                    Text(
-                      scope == RevisionScope.finished
-                          ? 'Show All Revisions'
-                          : 'Show Finished Revisions',
-                      style: TextStyle(
-                        color: AppTheme.textPrimaryColor(context),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 }
 
-class _RevisionSearchBar extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _RevisionSearchBar({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.shadowColor(context),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.search_rounded,
-            color: Color(0xFF94A3B8),
-            size: 20,
-          ),
-          const HGapSm(),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppTheme.textPrimaryColor(context),
-              ),
-              decoration: const InputDecoration(
-                hintText: 'Search revisions...',
-                hintStyle: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF94A3B8),
-                ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Horizontal category filter row: All (12), R1 (Purple), R2 (Blue), R3 (Teal), R4 (Orange), R5 (Coral)
+/// Horizontal category filter row: All (12), R1 (Purple), R2 (Blue), R3 (Teal), R4 (Orange), R5 (Coral), Finished (Green)
 class _RevisionLevelFilterRow extends StatelessWidget {
   final int? selectedLevel;
   final List<Revision> revisions;
@@ -607,10 +456,27 @@ class _RevisionLevelFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Single-pass count of revisions by level to optimize from O(5N) to O(N)
-    final counts = <int, int>{};
+    int activeTotalCount = 0;
+    int finishedTotalCount = 0;
+    final levelCounts = <int, int>{};
+
+    final ongoing = getIt.isRegistered<OngoingModulesController>()
+        ? getIt<OngoingModulesController>()
+        : null;
+
     for (final r in revisions) {
-      counts[r.currentLevel] = (counts[r.currentLevel] ?? 0) + 1;
+      if (ongoing != null && r.moduleId.isNotEmpty) {
+        final total = ongoing.topicCountForModule(r.moduleId);
+        final done = ongoing.completedTopicCountForModule(r.moduleId);
+        if (total > 0 && done < total) continue;
+      }
+
+      if (r.isFinished) {
+        finishedTotalCount++;
+      } else {
+        activeTotalCount++;
+        levelCounts[r.currentLevel] = (levelCounts[r.currentLevel] ?? 0) + 1;
+      }
     }
 
     return SizedBox(
@@ -622,16 +488,21 @@ class _RevisionLevelFilterRow extends StatelessWidget {
         children: [
           _AllPillTab(
             isSelected: selectedLevel == null,
-            count: revisions.length,
+            count: activeTotalCount,
             onTap: () => onSelected(null),
           ),
           for (final level in RevisionLevelPalette.levels)
             _LevelTabCard(
               level: level,
-              count: counts[level] ?? 0,
+              count: levelCounts[level] ?? 0,
               isSelected: selectedLevel == level,
               onTap: () => onSelected(level),
             ),
+          _FinishedTabCard(
+            count: finishedTotalCount,
+            isSelected: selectedLevel == 6,
+            onTap: () => onSelected(6),
+          ),
         ],
       ),
     );
@@ -677,8 +548,8 @@ class _AllPillTab extends StatelessWidget {
               fontSize: 12.5,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               color: isSelected
-                ? AppTheme.pastelIndigoText(context)
-                : AppTheme.textSecondaryColor(context),
+                  ? AppTheme.pastelIndigoText(context)
+                  : AppTheme.textSecondaryColor(context),
             ),
           ),
         ),
@@ -762,6 +633,79 @@ class _LevelTabCard extends StatelessWidget {
   }
 }
 
+class _FinishedTabCard extends StatelessWidget {
+  final int count;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FinishedTabCard({
+    required this.count,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = RevisionLevelPalette.completed(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? colors.background
+                : colors.background.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? colors.foreground : colors.border,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Finished',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: colors.foreground,
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  height: 16,
+                  constraints: const BoxConstraints(minWidth: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: colors.foreground,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Section header row: Left title + count badge, Right sort dropdown + filter icon
 class _RevisionSectionHeader extends StatelessWidget {
   final String title;
@@ -804,7 +748,7 @@ class _RevisionSectionHeader extends StatelessWidget {
             ),
             child: Text(
               '$count',
-              style:  TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.pastelIndigoText(context),
@@ -900,14 +844,16 @@ class _RevisionSectionHeader extends StatelessWidget {
 /// - Title with R-level pill tag
 /// - Subtitle (course & description)
 /// - Red clock with due status
-/// - Play revision button & three-dot menu removed as requested.
 class _RevisionItemCard extends StatelessWidget {
   final Revision revision;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _RevisionItemCard({
+    super.key,
     required this.revision,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -955,6 +901,7 @@ class _RevisionItemCard extends StatelessWidget {
         ],
       ),
       onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 

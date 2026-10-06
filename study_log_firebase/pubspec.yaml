@@ -1,0 +1,35 @@
+name: study_log
+description: "Study Flutter application."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  firebase_core: ^3.0.0
+  cloud_firestore: ^5.0.0
+  google_fonts: ^8.0.2
+  intl: ^0.20.2
+  path_provider: ^2.1.0
+  get_it: ^8.0.0
+  file_picker: ^8.0.0
+  flutter_local_notifications: ^22.3.1
+  timezone: ^0.11.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/

@@ -10,6 +10,7 @@ import '../services/local_study_log_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_topic_storage.dart';
+import '../services/local_revision_topic_storage.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 import 'ongoing_modules_controller.dart';
@@ -108,16 +109,28 @@ class RevisionController extends ChangeNotifier {
 
   /// Marks the current level as revised and moves the ladder on.
   ///
-  /// This is the only path that advances a level, so a record stays due — and
-  /// keeps offering its "Start Rn" button — until the user acts. Returns true
-  /// when something changed.
-  Future<bool> completeCurrentLevel(String revisionId, {DateTime? at}) async {
+  /// This only advances the level when the revision is due or overdue as of [at],
+  /// unless [force] is true. Early revisions before the scheduled due date
+  /// keep their current level.
+  Future<bool> completeCurrentLevel(
+    String revisionId, {
+    DateTime? at,
+    bool force = false,
+  }) async {
     final now = at ?? DateTime.now();
-    final index = _revisions.indexWhere((r) => r.id == revisionId);
+    final index = _revisions.indexWhere(
+      (r) => r.id == revisionId || (r.moduleId.isNotEmpty && r.moduleId == revisionId),
+    );
     if (index == -1) return false;
 
     final current = _revisions[index];
     if (current.isFinished) return false;
+
+    // Do not advance level if revising before scheduled due date unless forced
+    if (!force && !current.isDueAt(now)) {
+      debugPrint('Revision ${current.id} is not due yet. Skipping level advancement.');
+      return false;
+    }
 
     final advanced = current.advance(now);
     _revisions = _sorted(List<Revision>.of(_revisions)..[index] = advanced);
@@ -232,6 +245,7 @@ class RevisionController extends ChangeNotifier {
     //  - If Firestore still has it, pick whichever copy is newer.
     //  - If Firestore no longer has it (was deleted remotely), drop it.
     for (final local in _revisions) {
+      if (_suppressedModuleIds.contains(local.moduleId)) continue;
       final remoteVersion = remoteById[local.id];
       if (remoteVersion == null) {
         // Record was deleted on Firestore (or never pushed) — keep local only
@@ -249,7 +263,9 @@ class RevisionController extends ChangeNotifier {
 
     // Add any records that exist only on Firestore (synced from another device).
     for (final r in remote) {
-      merged.putIfAbsent(r.id, () => r);
+      if (!_suppressedModuleIds.contains(r.moduleId)) {
+        merged.putIfAbsent(r.id, () => r);
+      }
     }
 
     _revisions = _sorted(merged.values.toList());
@@ -453,6 +469,9 @@ class RevisionController extends ChangeNotifier {
 
     _revisions = _revisions.where((r) => r.id != revisionId).toList();
     await LocalRevisionStorage.saveAll(_revisions);
+
+    // Clean up local revision topics for this revision ID
+    unawaited(LocalRevisionTopicStorage.deleteTopicsForRevision(revisionId));
 
     // Suppress by moduleId so reconcile skips it.
     if (toDelete.moduleId.isNotEmpty) {

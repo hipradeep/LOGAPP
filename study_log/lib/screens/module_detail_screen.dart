@@ -170,13 +170,26 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       DateTime? latestDate;
       int totalMinutes = 0;
 
+      final topicIds = _topics.map((t) => t.id).toSet();
+      final topicTitles = _topics.map((t) => t.title.toLowerCase().trim()).toSet();
+
       final logs = await LocalStudyLogStorage.loadAll();
       for (final log in logs) {
         final matches = (widget.moduleId.isNotEmpty && log.moduleId == widget.moduleId) ||
             (widget.moduleTitle.isNotEmpty &&
                 log.moduleTitle.toLowerCase() == widget.moduleTitle.toLowerCase());
         if (matches) {
-          totalMinutes += (log.durationMinutes ?? 0);
+          final isTopicSession = log.type == StudyLogType.studySession &&
+              log.revisionLevel == null &&
+              (_topics.isEmpty ||
+                  (log.topicId != null && topicIds.contains(log.topicId)) ||
+                  (log.topicTitle != null && topicTitles.contains(log.topicTitle!.toLowerCase().trim())) ||
+                  log.topicId == null);
+
+          if (isTopicSession && log.durationMinutes != null && log.durationMinutes! > 0) {
+            totalMinutes += log.durationMinutes!;
+          }
+
           final logDate = log.timestamp;
           if (latestDate == null || logDate.isAfter(latestDate)) {
             latestDate = logDate;
@@ -608,6 +621,180 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
   }
 
+  void _showModuleCompletedDialog({bool isInRevision = false}) {
+    if (!mounted) return;
+    final revisionCtrl = getIt.isRegistered<RevisionController>()
+        ? getIt<RevisionController>()
+        : null;
+
+    final inRevision = isInRevision || (revisionCtrl != null &&
+        revisionCtrl.revisionForModule(widget.moduleId, moduleTitle: widget.moduleTitle) != null);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: AppTheme.surface(ctx),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 340),
+            padding: const EdgeInsets.fromLTRB(20, 12, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: InkWell(
+                    onTap: () => Navigator.of(ctx).pop(),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: AppTheme.textMutedColor(ctx),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.pastelGreen(ctx),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.pastelGreenBorder(ctx), width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: AppTheme.pastelGreenText(ctx),
+                    size: 30,
+                  ),
+                ),
+                const VGapMd(),
+                Text(
+                  'Successfully completed this module!',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor(ctx),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const VGapXs(),
+                Text(
+                  widget.moduleTitle,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryColor,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const VGapSm(),
+                Text(
+                  inRevision
+                      ? 'All topics completed. Move this module forward in your revision schedule.'
+                      : 'All topics have been completed! Add this module to revision to retain what you learned.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: AppTheme.textSecondaryColor(ctx),
+                    height: 1.35,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const VGapLg(),
+                SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.of(ctx).pop();
+                      if (inRevision) {
+                        final rev = revisionCtrl?.revisionForModule(widget.moduleId, moduleTitle: widget.moduleTitle);
+                        if (rev != null && revisionCtrl != null) {
+                          final now = DateTime.now();
+                          final isDue = rev.isDueAt(now);
+                          if (isDue) {
+                            await revisionCtrl.completeCurrentLevel(rev.id);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Moved "${widget.moduleTitle}" to next revision level (R${rev.currentLevel + 1})!'),
+                                  backgroundColor: AppTheme.successColor,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            }
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('"${widget.moduleTitle}" revised! Level remains R${rev.currentLevel} until scheduled due date.'),
+                                  backgroundColor: AppTheme.primaryColor,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      } else {
+                        if (revisionCtrl != null) {
+                          final rev = await revisionCtrl.createOrEnsureRevision(
+                            courseId: widget.courseId,
+                            moduleId: widget.moduleId,
+                            courseTitle: widget.courseTitle,
+                            moduleTitle: widget.moduleTitle,
+                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('"${widget.moduleTitle}" added to revision schedule (Level R${rev.currentLevel})!'),
+                                backgroundColor: AppTheme.successColor,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                          }
+                        }
+                      }
+                      await _loadTopics();
+                      await _loadModuleStats();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      inRevision ? 'Next Revision Level' : 'Add to Revise',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -619,8 +806,8 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       backgroundColor: AppTheme.background(context),
       floatingActionButton: _topics.isNotEmpty
           ? FloatingActionButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push<dynamic>(
                   context,
                   MaterialPageRoute(
                     builder: (_) => SessionSetupScreen(
@@ -633,6 +820,18 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     ),
                   ),
                 );
+                await _loadTopics();
+                await _loadModuleStats();
+                final allDone = (result == true) ||
+                    (result is Map && result['allCompleted'] == true) ||
+                    (_topics.isNotEmpty && _topics.every((t) => t.isCompleted));
+                if (allDone && mounted) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      _showModuleCompletedDialog(isInRevision: result is Map && result['isRevision'] == true);
+                    }
+                  });
+                }
               },
               backgroundColor: AppTheme.primaryColor,
               foregroundColor: Colors.white,
