@@ -8,7 +8,6 @@ import '../models/study_log.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_topic_storage.dart';
-import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -24,7 +23,7 @@ import '../widgets/sheet_action_widgets.dart';
 /// - Tap to mark topic complete triggers the "Topic Complete / Revised" popup (Screens 4 & 9).
 /// - "Stay Here" keeps current topic active; "Next Topic" advances seamlessly to the next topic (Screens 5 & 10).
 /// - Pause / Resume and End Session controls.
-/// - Persists completed topics and study session logs to local storage and Firestore.
+/// - Persists completed topics and study session logs to local SQLite database.
 class SessionTimerScreen extends StatefulWidget {
   final String title;
   final String? subtitle;
@@ -107,14 +106,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
 
         if (widget.revisionId != null && widget.revisionId!.isNotEmpty) {
           unawaited(LocalRevisionTopicStorage.saveTopics(widget.revisionId!, _revisionTopics));
-          if (getIt.isRegistered<FirestoreService>()) {
-            final firestore = getIt<FirestoreService>();
-            if (firestore.isAvailable) {
-              for (final t in _revisionTopics) {
-                unawaited(firestore.updateRevisionTopic(t));
-              }
-            }
-          }
         }
       } else if (_topics.isNotEmpty && _revisionTopics.isEmpty && _topics.every((t) => t.isCompleted)) {
         // If regular topics passed for revision and all completed, restart from first and reset status
@@ -126,14 +117,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
 
         final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
         unawaited(LocalTopicStorage.saveTopics(key, _topics));
-        if (getIt.isRegistered<FirestoreService>()) {
-          final firestore = getIt<FirestoreService>();
-          if (firestore.isAvailable) {
-            for (final t in _topics) {
-              unawaited(firestore.updateTopic(t));
-            }
-          }
-        }
       } else {
         _currentTopicIndex = widget.initialTopicIndex.clamp(
           0,
@@ -260,13 +243,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         await LocalRevisionTopicStorage.saveTopics(widget.revisionId!, _revisionTopics);
       }
 
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable && updated.id.isNotEmpty) {
-          unawaited(firestore.updateRevisionTopic(updated));
-        }
-      }
-
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
 
       // Log to StudyLog
@@ -284,12 +260,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         createdAt: now,
       );
       await LocalStudyLogStorage.addLog(studyLog);
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          unawaited(firestore.addStudyLog(studyLog));
-        }
-      }
       // 2) Save study session for this topic
       if (widget.trackSession) {
         final sessionLog = StudyLog(
@@ -307,12 +277,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           createdAt: now,
         );
         await LocalStudyLogStorage.addLog(sessionLog);
-        if (getIt.isRegistered<FirestoreService>()) {
-          final firestore = getIt<FirestoreService>();
-          if (firestore.isAvailable) {
-            unawaited(firestore.addStudyLog(sessionLog));
-          }
-        }
       }
     } else {
       if (_currentTopicIndex >= _topics.length) return;
@@ -332,13 +296,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
       }
 
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable && updated.id.isNotEmpty) {
-          unawaited(firestore.updateTopic(updated));
-        }
-      }
-
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
 
       // Log to StudyLog
@@ -356,12 +313,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         createdAt: now,
       );
       await LocalStudyLogStorage.addLog(studyLog);
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          unawaited(firestore.addStudyLog(studyLog));
-        }
-      }
 
       // 2) Save study session for this topic
       if (widget.trackSession) {
@@ -379,12 +330,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           createdAt: now,
         );
         await LocalStudyLogStorage.addLog(sessionLog);
-        if (getIt.isRegistered<FirestoreService>()) {
-          final firestore = getIt<FirestoreService>();
-          if (firestore.isAvailable) {
-            unawaited(firestore.addStudyLog(sessionLog));
-          }
-        }
       }
     }
 
@@ -502,13 +447,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       );
 
       await LocalStudyLogStorage.addLog(studyLog);
-
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          unawaited(firestore.addStudyLog(studyLog));
-        }
-      }
 
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.logapp.studylog"
+    namespace = "com.logapp.studylog.firebase"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.logapp.studylog"
+        applicationId = "com.logapp.studylog.firebase"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

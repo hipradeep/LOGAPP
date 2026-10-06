@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum StudyLogType {
   topicCompleted,
   revisionCompleted,
@@ -69,8 +67,8 @@ class StudyLog {
       if (topicTitle != null) 'topicTitle': topicTitle,
       if (revisionLevel != null) 'revisionLevel': revisionLevel,
       if (durationMinutes != null) 'durationMinutes': durationMinutes,
-      'timestamp': forLocalJson ? timestamp.toIso8601String() : Timestamp.fromDate(timestamp),
-      'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
+      'timestamp': timestamp.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 
@@ -129,7 +127,6 @@ class StudyLog {
 
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;
-    if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
     if (value is String) {
       try {

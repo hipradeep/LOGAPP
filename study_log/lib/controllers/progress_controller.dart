@@ -8,7 +8,6 @@ import '../services/local_revision_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/local_user_profile_storage.dart';
-import '../services/firestore_service.dart';
 import '../services/service_locator.dart';
 
 /// Activity level for strike heatmap visualization.
@@ -120,34 +119,7 @@ class ProgressController extends ChangeNotifier {
   StreamSubscription<UserProfile?>? _profileSub;
 
   ProgressController() {
-    _initProfileStream();
     load();
-  }
-
-  void _initProfileStream() {
-    if (getIt.isRegistered<FirestoreService>()) {
-      final fs = getIt<FirestoreService>();
-      if (fs.isAvailable) {
-        _profileSub = fs.streamUserProfile().listen((profile) {
-          if (profile != null) {
-            _userProfile = profile;
-            if (_totalStudyMinutes == 0 && profile.totalStudyMinutes > 0) {
-              _totalStudyMinutes = profile.totalStudyMinutes;
-            }
-            if (_currentStreak == 0 && profile.currentStreak > 0) {
-              _currentStreak = profile.currentStreak;
-            }
-            if (_longestStreak == 0 && profile.longestStreak > 0) {
-              _longestStreak = profile.longestStreak;
-            }
-            if (_totalActiveDays == 0 && profile.totalActiveDays > 0) {
-              _totalActiveDays = profile.totalActiveDays;
-            }
-            notifyListeners();
-          }
-        });
-      }
-    }
   }
 
   @override
@@ -195,12 +167,7 @@ class ProgressController extends ChangeNotifier {
       final recordedEvents = results[1] as List<DateTime>;
       final studyLogs = results[2] as List<StudyLog>;
 
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          unawaited(firestore.syncAllLocalStudyLogsToFirestore());
-        }
-      }
+
 
       final Set<DateTime> allActiveDates = <DateTime>{};
 
@@ -254,9 +221,9 @@ class ProgressController extends ChangeNotifier {
 
       // Fallback: If no dedicated revision event logs exist, inspect cached revisions lazily
       if (revisionsCount == 0) {
-        final revisions = await LocalRevisionStorage.loadAll();
+        final List<RevisionModule> revisions = await LocalRevisionStorage.loadAll();
         for (final r in revisions) {
-          final timesRevised = r.isFinished ? RevisionSchedule.maxLevel : (r.currentLevel - 1);
+          final int timesRevised = r.isFinished ? RevisionSchedule.maxLevel : (r.currentLevel - 1);
           if (timesRevised > 0) {
             final d = normalizeDate(r.lastRevisionAt ?? r.updatedAt);
             if (!d.isAfter(today)) {
@@ -276,14 +243,7 @@ class ProgressController extends ChangeNotifier {
       // Compute streaks and highlights across all active dates
       _computeStreaksAndHighlights(today, allActiveDates);
 
-      // Sync or restore UserProfile document (profile details, streaks, total session hours)
-      var profile = await LocalUserProfileStorage.loadProfile();
-      if (profile == null && getIt.isRegistered<FirestoreService>()) {
-        final fs = getIt<FirestoreService>();
-        if (fs.isAvailable) {
-          profile = await fs.getUserProfile();
-        }
-      }
+      final profile = await LocalUserProfileStorage.loadProfile();
 
       if (allActiveDates.isEmpty && _totalStudyMinutes == 0 && profile != null) {
         // Fresh install / data cleared: restore stats from cloud profile
@@ -316,12 +276,6 @@ class ProgressController extends ChangeNotifier {
         _userProfile = updatedProfile;
 
         unawaited(LocalUserProfileStorage.saveProfile(updatedProfile));
-        if (getIt.isRegistered<FirestoreService>()) {
-          final fs = getIt<FirestoreService>();
-          if (fs.isAvailable) {
-            unawaited(fs.saveUserProfile(updatedProfile));
-          }
-        }
       }
 
       // Generate 3-month daily activities (90 days exactly)
@@ -359,7 +313,7 @@ class ProgressController extends ChangeNotifier {
     }
   }
 
-  /// Updates user identity details (name, headline, email, avatarUrl) and saves locally & to Firestore.
+  /// Updates user identity details (name, headline, email, avatarUrl) and saves to SQLite local database.
   Future<void> updateProfileDetails({
     required String name,
     required String headline,
@@ -378,12 +332,6 @@ class ProgressController extends ChangeNotifier {
     _userProfile = updated;
     notifyListeners();
     await LocalUserProfileStorage.saveProfile(updated);
-    if (getIt.isRegistered<FirestoreService>()) {
-      final fs = getIt<FirestoreService>();
-      if (fs.isAvailable) {
-        await fs.saveUserProfile(updated);
-      }
-    }
   }
 
   void _computeStreaksAndHighlights(DateTime today, Set<DateTime> allDates) {

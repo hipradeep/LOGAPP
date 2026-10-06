@@ -3,9 +3,9 @@ import '../controllers/courses_controller.dart';
 import '../models/course.dart';
 import '../models/module.dart';
 import '../models/topic.dart';
-import '../services/firestore_service.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_topic_storage.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
@@ -50,18 +50,8 @@ class _ArchivedCourseDetailScreenState
 
   Future<void> _loadCourseDetails() async {
     try {
-      // 1. Load modules for this course (local first, fallback to Firestore)
-      var loadedModules = await LocalModuleStorage.loadModules(_courseId);
-      final firestoreService = getIt<FirestoreService>();
-      if (loadedModules.isEmpty && firestoreService.isAvailable) {
-        try {
-          final remote = await firestoreService.getModules(courseId: _courseId);
-          if (remote.isNotEmpty) {
-            loadedModules = remote;
-            await LocalModuleStorage.saveModulesForCourse(_courseId, remote);
-          }
-        } catch (_) {}
-      }
+      // 1. Load modules for this course
+      final loadedModules = await LocalModuleStorage.loadModules(_courseId);
 
       // 2. Load all topic buckets to resolve topics per module
       final topicBuckets = await LocalTopicStorage.loadAllBuckets();
@@ -77,16 +67,13 @@ class _ArchivedCourseDetailScreenState
           fallbackTitle: module.title,
         );
 
-        if (topics.isEmpty &&
-            firestoreService.isAvailable &&
-            module.id.isNotEmpty) {
+        if (topics.isEmpty && module.id.isNotEmpty) {
           try {
-            final remoteTopics = await firestoreService.getTopics(
+            final dbTopics = await DatabaseService.instance.getTopics(
               moduleId: module.id,
             );
-            if (remoteTopics.isNotEmpty) {
-              topics = remoteTopics;
-              await LocalTopicStorage.saveTopics(module.id, remoteTopics);
+            if (dbTopics.isNotEmpty) {
+              topics = dbTopics;
             }
           } catch (_) {}
         }

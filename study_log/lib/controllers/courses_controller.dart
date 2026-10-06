@@ -1,23 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/course.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../services/local_course_storage.dart';
 import '../services/service_locator.dart';
 import 'revision_controller.dart';
 
 class CoursesController extends ChangeNotifier {
-  final FirestoreService _firestoreService;
+  final DatabaseService _dbService;
   StreamSubscription<List<Course>>? _coursesSubscription;
-  Timer? _loadingFallbackTimer;
 
   List<Course> _courses = [];
-  final Set<String> _deletedCourseIds = {};
   bool _isLoading = true;
   String? _errorMessage;
 
-  CoursesController({FirestoreService? firestoreService})
-      : _firestoreService = firestoreService ?? getIt<FirestoreService>() {
+  CoursesController({DatabaseService? databaseService})
+      : _dbService = databaseService ?? getIt<DatabaseService>() {
     _init();
   }
 
@@ -48,9 +46,9 @@ class CoursesController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> _init() async {
-    // 1. Immediately hydrate from local storage so UI is populated instantly
+    // 1. Immediately hydrate from local SQLite storage
     try {
-      final cached = await LocalCourseStorage.loadCourses();
+      final cached = await _dbService.getCourses();
       if (cached.isNotEmpty) {
         _courses = cached;
         _isLoading = false;
@@ -60,40 +58,25 @@ class CoursesController extends ChangeNotifier {
       debugPrint('Local courses hydration error: $e');
     }
 
-    // 2. Start Firestore realtime stream
+    // 2. Start reactive SQLite stream
     _initStream();
   }
 
   void _initStream() {
     _coursesSubscription?.cancel();
-    _loadingFallbackTimer?.cancel();
     _errorMessage = null;
 
-    if (_courses.isEmpty) {
-      _isLoading = true;
-    }
-
-    // Safety fallback: Never leave the user stuck on an infinite loader
-    _loadingFallbackTimer = Timer(const Duration(seconds: 2), () {
-      if (_isLoading) {
-        _isLoading = false;
-        notifyListeners();
-      }
-    });
-
     try {
-      _coursesSubscription = _firestoreService.streamCourses().listen(
-        (remoteCourses) {
-          _loadingFallbackTimer?.cancel();
+      _coursesSubscription = _dbService.streamCourses().listen(
+        (coursesList) {
           _isLoading = false;
           _errorMessage = null;
-          _mergeCourses(remoteCourses);
+          _courses = coursesList;
+          notifyListeners();
         },
         onError: (error) {
-          _loadingFallbackTimer?.cancel();
-          debugPrint('Error streaming courses from Firebase: $error');
+          debugPrint('Error streaming courses from database: $error');
           _isLoading = false;
-          // Only show error if we have no courses to display
           if (_courses.isEmpty) {
             _errorMessage = error.toString();
           }
@@ -101,39 +84,12 @@ class CoursesController extends ChangeNotifier {
         },
       );
     } catch (e) {
-      _loadingFallbackTimer?.cancel();
       _isLoading = false;
       if (_courses.isEmpty) {
         _errorMessage = e.toString();
       }
       notifyListeners();
     }
-  }
-
-  void _mergeCourses(List<Course> remoteCourses) {
-    final Map<String, Course> merged = {};
-
-    // 1. Add valid remote courses (ignoring recently deleted ones)
-    for (final course in remoteCourses) {
-      if (!_deletedCourseIds.contains(course.id)) {
-        merged[course.id] = course;
-      }
-    }
-
-    // 2. Retain local courses that might not yet have reached Firestore
-    for (final local in _courses) {
-      if (!_deletedCourseIds.contains(local.id)) {
-        if (!merged.containsKey(local.id)) {
-          merged[local.id] = local;
-        }
-      }
-    }
-
-    final result = merged.values.toList();
-    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    _courses = result;
-    LocalCourseStorage.saveCourses(_courses);
-    notifyListeners();
   }
 
   Future<void> addCourse({
@@ -158,25 +114,18 @@ class CoursesController extends ChangeNotifier {
       updatedAt: now,
     );
 
-    // 1. Optimistic update and instant local disk persistence
-    _deletedCourseIds.remove(newId);
+    // Optimistic local update
     _courses.removeWhere((c) => c.id == newId);
     _courses.insert(0, newCourse);
     _isLoading = false;
-    _errorMessage = null; // Clear any previous error!
-    await LocalCourseStorage.saveCourses(_courses);
+    _errorMessage = null;
     notifyListeners();
 
-    // 2. Persist to Firestore with timeout fallback
+    // Persist to SQLite
     try {
-      await _firestoreService.addCourse(newCourse).timeout(
-        const Duration(seconds: 4),
-        onTimeout: () {
-          debugPrint('Firestore write timed out, course safely persisted in local storage.');
-        },
-      );
+      await _dbService.addCourse(newCourse);
     } catch (e) {
-      debugPrint('Firestore addCourse error (saved locally): $e');
+      debugPrint('Database addCourse error: $e');
     }
   }
 
@@ -185,19 +134,13 @@ class CoursesController extends ChangeNotifier {
     final index = _courses.indexWhere((c) => c.id == courseToSave.id);
     if (index != -1) {
       _courses[index] = courseToSave;
-      await LocalCourseStorage.saveCourses(_courses);
       notifyListeners();
     }
 
     try {
-      await _firestoreService.updateCourse(courseToSave).timeout(
-        const Duration(seconds: 4),
-        onTimeout: () {
-          debugPrint('Firestore update timed out, kept local state.');
-        },
-      );
+      await _dbService.updateCourse(courseToSave);
     } catch (e) {
-      debugPrint('Firestore update error (saved locally): $e');
+      debugPrint('Database updateCourse error: $e');
     }
   }
 
@@ -212,7 +155,6 @@ class CoursesController extends ChangeNotifier {
   }
 
   /// Restores an archived course back to active.
-  /// Old revisions are cleared so when modules are added to revision, they get a new revision ID.
   Future<void> unarchiveCourse(String courseId) async {
     final course = getCourseById(courseId);
     if (course == null) return;
@@ -223,45 +165,35 @@ class CoursesController extends ChangeNotifier {
   }
 
   Future<void> deleteCourse(String courseId) async {
-    _deletedCourseIds.add(courseId);
     _courses.removeWhere((c) => c.id == courseId);
-    await LocalCourseStorage.saveCourses(_courses);
     notifyListeners();
 
     try {
-      await _firestoreService.deleteCourse(courseId).timeout(
-        const Duration(seconds: 4),
-        onTimeout: () {
-          debugPrint('Firestore delete timed out, kept local deletion.');
-        },
-      );
+      await _dbService.deleteCourse(courseId);
     } catch (e) {
-      debugPrint('Firestore delete error (saved locally): $e');
+      debugPrint('Database deleteCourse error: $e');
     }
   }
 
-  /// Reloads courses from local disk storage and syncs with Firestore stream.
+  /// Reloads courses from local SQLite storage.
   Future<void> loadCourses() async {
-    _deletedCourseIds.clear();
     try {
-      final cached = await LocalCourseStorage.loadCourses();
-      _courses = cached;
+      final list = await _dbService.getCourses();
+      _courses = list;
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       debugPrint('Error reloading courses: $e');
     }
-    _initStream();
   }
 
-  /// Clears in-memory state and re-fetches from local cache & Firestore.
+  /// Clears in-memory state and re-fetches from SQLite.
   void refresh() {
     loadCourses();
   }
 
   @override
   void dispose() {
-    _loadingFallbackTimer?.cancel();
     _coursesSubscription?.cancel();
     super.dispose();
   }

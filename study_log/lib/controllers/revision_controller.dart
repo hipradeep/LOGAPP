@@ -4,7 +4,7 @@ import '../models/course.dart';
 import '../models/revision.dart';
 import '../models/module.dart';
 import '../models/study_log.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../services/local_revision_storage.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/local_module_storage.dart';
@@ -31,7 +31,7 @@ import 'progress_controller.dart';
 class RevisionController extends ChangeNotifier {
   final CoursesController _coursesController;
   final OngoingModulesController _ongoingController;
-  final FirestoreService _firestoreService;
+  final DatabaseService _dbService;
 
   StreamSubscription<List<Revision>>? _revisionsSubscription;
 
@@ -46,11 +46,11 @@ class RevisionController extends ChangeNotifier {
   RevisionController({
     CoursesController? coursesController,
     OngoingModulesController? ongoingController,
-    FirestoreService? firestoreService,
+    DatabaseService? databaseService,
   })  : _coursesController = coursesController ?? getIt<CoursesController>(),
         _ongoingController =
             ongoingController ?? getIt<OngoingModulesController>(),
-        _firestoreService = firestoreService ?? getIt<FirestoreService>() {
+        _dbService = databaseService ?? getIt<DatabaseService>() {
     _coursesController.addListener(_onCoursesChanged);
     // OngoingModulesController notifies on every course change and on every
     // topic toggle, add or delete, which is exactly when the ladder must be
@@ -164,21 +164,11 @@ class RevisionController extends ChangeNotifier {
       createdAt: now,
     );
     await LocalStudyLogStorage.addLog(log);
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable) {
-        unawaited(firestore.addStudyLog(log));
-      }
-    }
-
-    if (getIt.isRegistered<OngoingModulesController>()) {
-      unawaited(getIt<OngoingModulesController>().refresh());
-    }
     if (getIt.isRegistered<ProgressController>()) {
       unawaited(getIt<ProgressController>().refresh());
     }
     notifyListeners();
-    await _pushToFirestore(advanced, isNew: false);
+    await _pushToDatabase(advanced, isNew: false);
     return true;
   }
 
@@ -198,7 +188,7 @@ class RevisionController extends ChangeNotifier {
     _revisions = _sorted(List<Revision>.of(_revisions)..[index] = reset);
     await LocalRevisionStorage.saveAll(_revisions);
     notifyListeners();
-    await _pushToFirestore(reset, isNew: false);
+    await _pushToDatabase(reset, isNew: false);
   }
 
   Revision? revisionForModule(String moduleId, {String? moduleTitle}) {
@@ -227,15 +217,14 @@ class RevisionController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
-    _listenToFirestore();
+    _listenToDatabase();
     await reconcile();
   }
 
-  void _listenToFirestore() {
-    if (!_firestoreService.isAvailable) return;
+  void _listenToDatabase() {
     _revisionsSubscription?.cancel();
     try {
-      _revisionsSubscription = _firestoreService.streamRevisions().listen(
+      _revisionsSubscription = _dbService.streamRevisions().listen(
         (remote) {
           _mergeRemote(remote);
         },
@@ -249,7 +238,7 @@ class RevisionController extends ChangeNotifier {
   }
 
   void _mergeRemote(List<Revision> remote) {
-    // Build a lookup of what Firestore currently has.
+    // Build a lookup of what the database stream currently provides.
     final remoteById = <String, Revision>{
       for (final r in remote) r.id: r,
     };
@@ -257,26 +246,23 @@ class RevisionController extends ChangeNotifier {
     final merged = <String, Revision>{};
 
     // For every local record:
-    //  - If Firestore still has it, pick whichever copy is newer.
-    //  - If Firestore no longer has it (was deleted remotely), drop it.
+    //  - If database stream still has it, pick whichever copy is newer.
+    //  - If database stream no longer has it (was deleted), drop it.
     for (final local in _revisions) {
       if (_suppressedModuleIds.contains(local.moduleId)) continue;
       final remoteVersion = remoteById[local.id];
       if (remoteVersion == null) {
-        // Record was deleted on Firestore (or never pushed) — keep local only
-        // if it is strictly newer than any remote update we can find, i.e. it
-        // was created or modified offline after the remote delete.  We cannot
-        // distinguish an offline-new record from a remotely-deleted one, so we
-        // keep it — reconcile will re-push it if the module is still complete.
+        // Record was deleted in database (or never pushed) — keep local only
+        // if it is strictly newer than any update we can find.
         merged[local.id] = local;
       } else if (!local.updatedAt.isBefore(remoteVersion.updatedAt)) {
         merged[local.id] = local; // local is newer, keep it
       } else {
-        merged[local.id] = remoteVersion; // remote is newer
+        merged[local.id] = remoteVersion; // stream version is newer
       }
     }
 
-    // Add any records that exist only on Firestore (synced from another device).
+    // Add any records that exist only in database stream.
     for (final r in remote) {
       if (!_suppressedModuleIds.contains(r.moduleId)) {
         merged.putIfAbsent(r.id, () => r);
@@ -358,7 +344,7 @@ class RevisionController extends ChangeNotifier {
     _isLoading = false;
     await LocalRevisionStorage.saveAll(_revisions);
     notifyListeners();
-    await _pushToFirestore(newRevision, isNew: true);
+    await _pushToDatabase(newRevision, isNew: true);
     unawaited(_ongoingController.refresh());
     return newRevision;
   }
@@ -382,11 +368,9 @@ class RevisionController extends ChangeNotifier {
       working.removeWhere((r) => toRemove.contains(r.id));
       changed = true;
       for (final id in toRemove) {
-        if (_firestoreService.isAvailable) {
-          try {
-            await _firestoreService.deleteRevision(id);
-          } catch (_) {}
-        }
+        try {
+          await _dbService.deleteRevision(id);
+        } catch (_) {}
       }
     }
 
@@ -425,14 +409,9 @@ class RevisionController extends ChangeNotifier {
 
     for (final course in coursesMap.values) {
       if (course.status.toLowerCase() == 'archived') continue;
-      var courseModules = await LocalModuleStorage.loadModules(course.id);
-      if (courseModules.isEmpty && _firestoreService.isAvailable) {
-        try {
-          courseModules = await _firestoreService.getModules(courseId: course.id);
-          if (courseModules.isNotEmpty) {
-            await LocalModuleStorage.saveModulesForCourse(course.id, courseModules);
-          }
-        } catch (_) {}
+      final courseModules = await LocalModuleStorage.loadModules(course.id);
+      for (final m in courseModules) {
+        addModuleCandidate(m);
       }
       for (final m in courseModules) {
         addModuleCandidate(m);
@@ -497,12 +476,10 @@ class RevisionController extends ChangeNotifier {
     notifyListeners();
     unawaited(_ongoingController.refresh());
 
-    if (_firestoreService.isAvailable) {
-      try {
-        await _firestoreService.deleteRevision(revisionId);
-      } catch (e) {
-        debugPrint('Error deleting revision from firestore: $e');
-      }
+    try {
+      await _dbService.deleteRevision(revisionId);
+    } catch (e) {
+      debugPrint('Error deleting revision from database: $e');
     }
   }
 
@@ -527,13 +504,11 @@ class RevisionController extends ChangeNotifier {
     notifyListeners();
     unawaited(_ongoingController.refresh());
 
-    if (_firestoreService.isAvailable) {
-      for (final r in toRemove) {
-        try {
-          await _firestoreService.deleteRevision(r.id);
-        } catch (e) {
-          debugPrint('Error deleting revision for course $courseId: $e');
-        }
+    for (final r in toRemove) {
+      try {
+        await _dbService.deleteRevision(r.id);
+      } catch (e) {
+        debugPrint('Error deleting revision for course $courseId: $e');
       }
     }
   }
@@ -562,10 +537,10 @@ class RevisionController extends ChangeNotifier {
       moduleId: moduleId,
     );
 
-    // 3. Fallback to Firestore if local topics empty
-    if (topics.isEmpty && _firestoreService.isAvailable) {
+    // 3. Fallback to DatabaseService if local topics empty
+    if (topics.isEmpty) {
       try {
-        topics = await _firestoreService.getTopics(moduleId: moduleId);
+        topics = await _dbService.getTopics(moduleId: moduleId);
         if (topics.isNotEmpty) {
           await LocalTopicStorage.saveTopics(moduleId, topics);
         }
@@ -616,9 +591,9 @@ class RevisionController extends ChangeNotifier {
       moduleId: module.id,
       fallbackTitle: module.title,
     );
-    if (topics.isEmpty && _firestoreService.isAvailable && module.id.isNotEmpty) {
+    if (topics.isEmpty && module.id.isNotEmpty) {
       try {
-        topics = await _firestoreService.getTopics(moduleId: module.id);
+        topics = await _dbService.getTopics(moduleId: module.id);
         if (topics.isNotEmpty) {
           final key = module.id.isNotEmpty ? module.id : module.title;
           await LocalTopicStorage.saveTopics(key, topics);
@@ -646,20 +621,15 @@ class RevisionController extends ChangeNotifier {
     );
   }
 
-  Future<void> _pushToFirestore(Revision revision, {required bool isNew}) async {
-    if (!_firestoreService.isAvailable) return;
+  Future<void> _pushToDatabase(Revision revision, {required bool isNew}) async {
     try {
       if (isNew) {
-        await _firestoreService
-            .addRevision(revision)
-            .timeout(const Duration(seconds: 4));
+        await _dbService.addRevision(revision);
       } else {
-        await _firestoreService
-            .updateRevision(revision)
-            .timeout(const Duration(seconds: 4));
+        await _dbService.updateRevision(revision);
       }
     } catch (e) {
-      debugPrint('Firestore revision write error: $e');
+      debugPrint('Database revision write error: $e');
     }
   }
 

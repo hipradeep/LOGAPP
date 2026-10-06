@@ -21,7 +21,7 @@ import '../services/local_revision_storage.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_module_storage.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -117,40 +117,22 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       await _fetchTopicNames(revTopics);
     }
 
-    // 2. Fetch or stream from Firestore if available
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable && revision.id.isNotEmpty) {
-        try {
-          final remoteRevTopics = await firestore.getRevisionTopics(revisionId: revision.id);
-          if (remoteRevTopics.isNotEmpty && mounted) {
+    // 2. Stream from SQLite database for real-time updates
+    if (getIt.isRegistered<DatabaseService>() && revision.id.isNotEmpty) {
+      final db = getIt<DatabaseService>();
+      _topicsSubscription?.cancel();
+      _topicsSubscription = db.streamRevisionTopics(revisionId: revision.id).listen(
+        (updatedList) {
+          if (mounted && updatedList.isNotEmpty) {
             setState(() {
-              _revisionTopics = remoteRevTopics;
+              _revisionTopics = updatedList;
               _isLoadingTopics = false;
             });
-            await LocalRevisionTopicStorage.saveTopics(revision.id, remoteRevTopics);
-            revTopics = remoteRevTopics;
-            await _fetchTopicNames(remoteRevTopics);
+            unawaited(_fetchTopicNames(updatedList));
           }
-        } catch (e) {
-          debugPrint('Error fetching revision topics from Firestore: $e');
-        }
-
-        // Listen for real-time changes
-        _topicsSubscription?.cancel();
-        _topicsSubscription = firestore.streamRevisionTopics(revisionId: revision.id).listen(
-          (updatedList) {
-            if (mounted && updatedList.isNotEmpty) {
-              setState(() {
-                _revisionTopics = updatedList;
-              });
-              LocalRevisionTopicStorage.saveTopics(revision.id, updatedList);
-              unawaited(_fetchTopicNames(updatedList));
-            }
-          },
-          onError: (_) {},
-        );
-      }
+        },
+        onError: (_) {},
+      );
     }
 
     // 3. If no revision topics exist yet, auto-seed from base module topics!
@@ -159,11 +141,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     }
   }
 
-  /// Fetches and resolves topic names using a cache-first hierarchy to minimize Firestore reads:
+  /// Fetches and resolves topic names using a cache-first hierarchy:
   /// Level 0: Denormalized title in RevisionTopic (0 reads, 0ms)
-  /// Level 1: Local disk cache (LocalTopicStorage - 0 reads)
-  /// Level 2: Firestore SDK local cache (Source.cache - 0 billed reads)
-  /// Level 3: Firestore server fallback (only if missing, then backfilled and saved)
+  /// Level 1: Local SQLite database (LocalTopicStorage - instant local read)
   Future<void> _fetchTopicNames(List<RevisionTopic> revTopics) async {
     if (revTopics.isEmpty) return;
 
@@ -207,43 +187,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       }
     }
 
-    // Level 2 & 3: Only hit Firestore if still missing titles
-    if (missingTopicIds.isNotEmpty && getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable) {
-        // Query module topics first (1 batch query with preferCache instead of N individual reads)
-        if (moduleId.isNotEmpty && map.isEmpty) {
-          try {
-            final remoteTopics = await firestore.getTopics(
-              moduleId: moduleId,
-              preferCache: true,
-            );
-            if (remoteTopics.isNotEmpty) {
-              for (final t in remoteTopics) {
-                map[t.id] = t;
-                missingTopicIds.remove(t.id);
-              }
-              await LocalTopicStorage.saveTopics(moduleId, remoteTopics);
-            }
-          } catch (e) {
-            debugPrint('Error fetching topics from Firestore for module $moduleId: $e');
-          }
-        }
 
-        // If specific topicIds are STILL missing, fetch individually with cache-first
-        if (missingTopicIds.isNotEmpty) {
-          for (final missingId in missingTopicIds.toList()) {
-            try {
-              final t = await firestore.getTopicById(missingId);
-              if (t != null) {
-                map[t.id] = t;
-                missingTopicIds.remove(t.id);
-              }
-            } catch (_) {}
-          }
-        }
-      }
-    }
 
     // Level 4: Backfill resolved titles into RevisionTopic and persist
     var backfillNeeded = false;
@@ -267,17 +211,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       });
     }
 
-    // Permanently save backfilled titles so future visits are 0 Firestore reads!
+    // Permanently save backfilled titles to SQLite database
     if (backfillNeeded) {
       await LocalRevisionTopicStorage.saveTopics(widget.revision.id, updatedRevTopics);
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          for (final rt in updatedRevTopics) {
-            unawaited(firestore.updateRevisionTopic(rt));
-          }
-        }
-      }
     }
   }
 
@@ -290,17 +226,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       moduleId: targetModuleId,
       fallbackTitle: _moduleTitle.isNotEmpty ? _moduleTitle : null,
     );
-    if (baseTopics.isEmpty && getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable && targetModuleId.isNotEmpty) {
-        try {
-          baseTopics = await firestore.getTopics(moduleId: targetModuleId);
-          if (baseTopics.isNotEmpty) {
-            await LocalTopicStorage.saveTopics(targetModuleId, baseTopics);
-          }
-        } catch (_) {}
-      }
-    }
+
 
     if (baseTopics.isNotEmpty) {
       final now = DateTime.now();
@@ -322,14 +248,6 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         });
       }
       await LocalRevisionTopicStorage.saveTopics(revision.id, seeded);
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          for (final t in seeded) {
-            firestore.addRevisionTopic(t);
-          }
-        }
-      }
     } else if (mounted) {
       setState(() {
         _isLoadingTopics = false;
@@ -372,17 +290,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
     await LocalRevisionTopicStorage.saveTopics(widget.revision.id, updatedTopics);
 
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable && updated.id.isNotEmpty) {
-        try {
-          await firestore.updateRevisionTopic(updated).timeout(
-            const Duration(seconds: 4),
-            onTimeout: () {},
-          );
-        } catch (_) {}
-      }
-    }
+
 
     if (next == TopicStatus.completed) {
       final now = DateTime.now();
@@ -406,12 +314,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
       await LocalStudyLogStorage.addLog(studyLog);
 
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          unawaited(firestore.addStudyLog(studyLog));
-        }
-      }
+
       if (getIt.isRegistered<OngoingModulesController>()) {
         unawaited(getIt<OngoingModulesController>().refresh());
       }
@@ -459,14 +362,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
             _revisionTopics = resetTopics;
           });
           await LocalRevisionTopicStorage.saveTopics(revision.id, resetTopics);
-          if (getIt.isRegistered<FirestoreService>()) {
-            final firestore = getIt<FirestoreService>();
-            if (firestore.isAvailable) {
-              for (final t in resetTopics) {
-                unawaited(firestore.updateRevisionTopic(t));
-              }
-            }
-          }
+
           await _startCurrentLevel(revision, popOnComplete: true);
         },
       );
@@ -497,12 +393,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
           );
           await LocalStudyLogStorage.addLog(log);
           await LocalRevisionStorage.recordRevisionEvent(now);
-          if (getIt.isRegistered<FirestoreService>()) {
-            final firestore = getIt<FirestoreService>();
-            if (firestore.isAvailable) {
-              unawaited(firestore.addStudyLog(log));
-            }
-          }
+
           if (getIt.isRegistered<OngoingModulesController>()) {
             unawaited(getIt<OngoingModulesController>().refresh());
           }
@@ -520,14 +411,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
             _revisionTopics = resetTopics;
           });
           await LocalRevisionTopicStorage.saveTopics(revision.id, resetTopics);
-          if (getIt.isRegistered<FirestoreService>()) {
-            final firestore = getIt<FirestoreService>();
-            if (firestore.isAvailable) {
-              for (final t in resetTopics) {
-                unawaited(firestore.updateRevisionTopic(t));
-              }
-            }
-          }
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -556,14 +440,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       _revisionTopics = resetTopics;
     });
     await LocalRevisionTopicStorage.saveTopics(widget.revision.id, resetTopics);
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable) {
-        for (final t in resetTopics) {
-          unawaited(firestore.updateRevisionTopic(t));
-        }
-      }
-    }
+
     if (showFeedback && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

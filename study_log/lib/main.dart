@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'services/database_service.dart';
 import 'theme/app_theme.dart';
 import 'controllers/theme_controller.dart';
 import 'services/service_locator.dart';
@@ -14,11 +14,11 @@ import 'screens/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase with native google-services configuration
+  // Initialize SQLite local database
   try {
-    await Firebase.initializeApp();
+    await DatabaseService.instance.init();
   } catch (e) {
-    debugPrint('Firebase initialization failed/bypassed: $e');
+    debugPrint('Database initialization error: $e');
   }
 
   // Global Flutter error handling

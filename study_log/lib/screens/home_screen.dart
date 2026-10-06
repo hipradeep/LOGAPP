@@ -14,7 +14,6 @@ import '../controllers/notification_controller.dart';
 import '../services/notification_service.dart';
 import '../models/course.dart';
 import 'activity_screen.dart';
-import 'add_course_screen.dart';
 import 'course_detail_screen.dart';
 import 'courses_screen.dart';
 import 'module_detail_screen.dart';
@@ -93,13 +92,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openCourseDetail(BuildContext context, Course course) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => CourseDetailScreen(course: course)),
-    );
-  }
-
   void _openModuleDetail(
     String moduleTitle,
     String courseTitle,
@@ -118,13 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
           moduleOrderIndex: orderIndex,
         ),
       ),
-    );
-  }
-
-  void _openAddCourse(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AddCourseScreen()),
     );
   }
 
@@ -193,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: _CurrentModulesSliverList(
                   ongoingController: ongoingController,
                   onModuleTap: _openModuleDetail,
-                  onAddCourse: _openAddCourse,
                   onViewAll: _handleViewAll,
                 ),
               ),
@@ -246,40 +230,17 @@ class _GreetingHeader extends StatelessWidget {
 }
 
 class _CurrentModulesHeader extends StatelessWidget {
-  final VoidCallback onViewAll;
-
-  const _CurrentModulesHeader({required this.onViewAll});
+  const _CurrentModulesHeader();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'Current Modules',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        GestureDetector(
-          onTap: onViewAll,
-          behavior: HitTestBehavior.opaque,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-            child: Text(
-              'View All',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryColor,
-              ),
-            ),
-          ),
-        ),
-      ],
+    return Text(
+      'Current Modules',
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: AppTheme.textPrimaryColor(context),
+      ),
     );
   }
 }
@@ -321,7 +282,7 @@ class _HomeTopModule extends StatelessWidget {
           ),
         ),
         const VGapLg(),
-        _CurrentModulesHeader(onViewAll: onViewAll),
+        const _CurrentModulesHeader(),
         const VGapSm(),
       ],
     );
@@ -331,13 +292,11 @@ class _HomeTopModule extends StatelessWidget {
 class _CurrentModulesSliverList extends StatelessWidget {
   final OngoingModulesController ongoingController;
   final void Function(String, String, String, String, int) onModuleTap;
-  final void Function(BuildContext) onAddCourse;
   final VoidCallback onViewAll;
 
   const _CurrentModulesSliverList({
     required this.ongoingController,
     required this.onModuleTap,
-    required this.onAddCourse,
     required this.onViewAll,
   });
 
@@ -368,8 +327,8 @@ class _CurrentModulesSliverList extends StatelessWidget {
         }
 
         if (items.isEmpty) {
-          return SliverToBoxAdapter(
-            child: _EmptyOngoingModulesCard(onAddCourse: () => onAddCourse(context)),
+          return const SliverToBoxAdapter(
+            child: _EmptyOngoingModulesCard(),
           );
         }
 
@@ -437,9 +396,7 @@ class _CurrentModulesSliverList extends StatelessWidget {
 }
 
 class _EmptyOngoingModulesCard extends StatelessWidget {
-  final VoidCallback onAddCourse;
-
-  const _EmptyOngoingModulesCard({required this.onAddCourse});
+  const _EmptyOngoingModulesCard();
 
   @override
   Widget build(BuildContext context) {
@@ -473,20 +430,6 @@ class _EmptyOngoingModulesCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               color: AppTheme.textSecondaryColor(context),
-            ),
-          ),
-          const VGapMd(),
-          ElevatedButton.icon(
-            onPressed: onAddCourse,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add Course'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
         ],

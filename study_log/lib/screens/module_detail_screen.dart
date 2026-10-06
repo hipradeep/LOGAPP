@@ -15,7 +15,7 @@ import '../models/study_log.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_module_storage.dart';
 import '../services/local_study_log_storage.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/courses_controller.dart';
@@ -134,34 +134,32 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       }
     }
 
-    // 2. Real-time stream subscription from Firestore
-    if (widget.moduleId.isNotEmpty && getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable) {
-        _topicsSubscription?.cancel();
-        _topicsSubscription = firestore
-            .streamTopics(moduleId: widget.moduleId)
-            .listen((remoteTopics) async {
-          if (!mounted) return;
-          if (remoteTopics.isNotEmpty) {
-            final merged = _mergeTopics(_topics, remoteTopics);
-            setState(() => _topics = merged);
-            unawaited(_loadModuleStats());
-            final key = widget.moduleId.isNotEmpty
-                ? widget.moduleId
-                : widget.moduleTitle;
-            await LocalTopicStorage.saveTopics(key, merged);
-            if (merged.every((t) => t.isCompleted)) {
-              await _syncModuleCompletion();
-            }
-            if (getIt.isRegistered<OngoingModulesController>()) {
-              getIt<OngoingModulesController>().refresh();
-            }
+    // 2. Real-time stream subscription from DatabaseService
+    if (widget.moduleId.isNotEmpty && getIt.isRegistered<DatabaseService>()) {
+      final dbService = getIt<DatabaseService>();
+      _topicsSubscription?.cancel();
+      _topicsSubscription = dbService
+          .streamTopics(moduleId: widget.moduleId)
+          .listen((remoteTopics) async {
+        if (!mounted) return;
+        if (remoteTopics.isNotEmpty) {
+          final merged = _mergeTopics(_topics, remoteTopics);
+          setState(() => _topics = merged);
+          unawaited(_loadModuleStats());
+          final key = widget.moduleId.isNotEmpty
+              ? widget.moduleId
+              : widget.moduleTitle;
+          await LocalTopicStorage.saveTopics(key, merged);
+          if (merged.every((t) => t.isCompleted)) {
+            await _syncModuleCompletion();
           }
-        }, onError: (e) {
-          debugPrint('Error streaming topics from Firestore: $e');
-        });
-      }
+          if (getIt.isRegistered<OngoingModulesController>()) {
+            getIt<OngoingModulesController>().refresh();
+          }
+        }
+      }, onError: (e) {
+        debugPrint('Error streaming topics from database: $e');
+      });
     }
   }
 
@@ -281,17 +279,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           );
           modules[idx] = targetModule;
           await LocalModuleStorage.saveModulesForCourse(courseId, modules);
-          if (getIt.isRegistered<FirestoreService>()) {
-            final fs = getIt<FirestoreService>();
-            if (fs.isAvailable) {
-              try {
-                await fs.updateModule(targetModule).timeout(
-                  const Duration(seconds: 4),
-                  onTimeout: () {},
-                );
-              } catch (_) {}
-            }
-          }
         } else {
           targetModule = modules[idx];
         }
@@ -309,17 +296,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         );
         modules.add(targetModule);
         await LocalModuleStorage.saveModulesForCourse(courseId, modules);
-        if (getIt.isRegistered<FirestoreService>()) {
-          final fs = getIt<FirestoreService>();
-          if (fs.isAvailable) {
-            try {
-              await fs.updateModule(targetModule).timeout(
-                const Duration(seconds: 4),
-                onTimeout: () {},
-              );
-            } catch (_) {}
-          }
-        }
       }
 
       // If all modules in this course are now completed, also update course to completed
@@ -438,34 +414,12 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         createdAt: DateTime.now(),
       );
       await LocalStudyLogStorage.addLog(studyLog);
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable) {
-          unawaited(firestore.addStudyLog(studyLog));
-        }
-      }
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());
       }
     } else {
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());
-      }
-    }
-
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable && updated.id.isNotEmpty) {
-        try {
-          await firestore.updateTopic(updated).timeout(
-            const Duration(seconds: 4),
-            onTimeout: () {
-              debugPrint('Firestore updateTopic timed out, kept local state.');
-            },
-          );
-        } catch (e) {
-          debugPrint('Error updating topic in firestore: $e');
-        }
       }
     }
 
@@ -500,17 +454,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       await _syncModuleCompletion();
       unawaited(_loadModuleStats());
 
-      if (getIt.isRegistered<FirestoreService>()) {
-        final firestore = getIt<FirestoreService>();
-        if (firestore.isAvailable && sub.id.isNotEmpty) {
-          try {
-            await firestore.deleteTopic(sub.id).timeout(
-              const Duration(seconds: 4),
-              onTimeout: () {},
-            );
-          } catch (e) {
-            debugPrint('Error deleting topic in firestore: $e');
-          }
+      if (getIt.isRegistered<DatabaseService>()) {
+        final db = getIt<DatabaseService>();
+        if (sub.id.isNotEmpty) {
+          unawaited(db.deleteTopic(sub.id));
         }
       }
 
@@ -585,20 +532,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
     }
     await _syncModuleCompletion();
-
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable) {
-        try {
-          await firestore.addTopic(duplicated).timeout(
-            const Duration(seconds: 4),
-            onTimeout: () {},
-          );
-        } catch (e) {
-          debugPrint('Error duplicating topic in firestore: $e');
-        }
-      }
-    }
 
     if (getIt.isRegistered<OngoingModulesController>()) {
       await getIt<OngoingModulesController>().refresh();

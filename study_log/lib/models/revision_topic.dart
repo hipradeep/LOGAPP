@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'topic.dart';
 
 /// An independent revision topic entity managed exclusively inside a Revision.
@@ -108,17 +107,9 @@ class RevisionTopic {
       'title': title,
       'status': status.name,
       'orderIndex': orderIndex,
-      'completedAt': completedAt == null
-          ? null
-          : (forLocalJson
-              ? completedAt!.toIso8601String()
-              : Timestamp.fromDate(completedAt!)),
-      'createdAt': forLocalJson
-          ? createdAt.toIso8601String()
-          : Timestamp.fromDate(createdAt),
-      'updatedAt': forLocalJson
-          ? updatedAt.toIso8601String()
-          : Timestamp.fromDate(updatedAt),
+      'completedAt': completedAt?.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../theme/revision_level_palette.dart';
 import '../widgets/app_spacers.dart';
@@ -7,12 +8,15 @@ import '../widgets/appearance_sheet.dart';
 import '../services/local_course_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
-import '../services/local_study_log_storage.dart';
+import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import '../controllers/progress_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/theme_controller.dart';
+import '../controllers/cloud_sync_controller.dart';
 import 'courses_screen.dart';
 import 'upload_json_screen.dart';
 import 'notification_settings_screen.dart';
@@ -50,8 +54,7 @@ class SettingsScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         content: const Text(
-          'This will delete all locally stored course, topic, and revision cache. '
-          'Your Firestore cloud data will remain safe.',
+          'This will clear all locally stored course, topic, and revision cache.',
           style: TextStyle(fontSize: 14),
         ),
         actions: [
@@ -69,20 +72,21 @@ class SettingsScreen extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      await Future.wait([
-        LocalCourseStorage.clearAll(),
-        LocalTopicStorage.clearAll(),
-        LocalRevisionStorage.clearAll(),
-        LocalStudyLogStorage.clearAll(),
-      ]);
+      await DatabaseService.instance.clearAllData();
       getIt<CoursesController>().refresh();
+      if (getIt.isRegistered<OngoingModulesController>()) {
+        getIt<OngoingModulesController>().refresh();
+      }
       if (getIt.isRegistered<RevisionController>()) {
         await getIt<RevisionController>().reconcile();
+      }
+      if (getIt.isRegistered<ProgressController>()) {
+        await getIt<ProgressController>().refresh();
       }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Cache cleared successfully'),
+            content: const Text('All data reset successfully'),
             backgroundColor: AppTheme.primaryColor,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -91,6 +95,77 @@ class SettingsScreen extends StatelessWidget {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _handleLocalExport(BuildContext context) async {
+    final ctrl = getIt<CloudSyncController>();
+    final path = await ctrl.exportToLocalFile();
+    if (!context.mounted) return;
+    if (path != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Database exported: $path'),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (ctrl.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ctrl.errorMessage!),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleLocalImport(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Restore Database?'),
+        content: const Text(
+          'Restoring from a backup will replace your current courses, progress, and study logs.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.warningColor),
+            child: const Text('Restore', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final ctrl = getIt<CloudSyncController>();
+    final success = await ctrl.importFromLocalFile();
+    if (!context.mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Database restored successfully!'),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (ctrl.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ctrl.errorMessage!),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -316,7 +391,10 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
         const VGapMd(),
-        const _SectionHeader(title: 'DATA & STORAGE'),
+        const _SectionHeader(title: 'CLOUD BACKUP & SYNC'),
+        const _CloudSyncCard(),
+        const VGapMd(),
+        const _SectionHeader(title: 'LOCAL DATA & STORAGE'),
         _SettingsCard(
           children: [
             _SettingsTile(
@@ -324,7 +402,26 @@ class SettingsScreen extends StatelessWidget {
               iconBgColor: const Color(0xFFEDE9FE),
               iconColor: const Color(0xFF7C3AED),
               title: 'Import Curriculum (JSON)',
+              subtitle: 'Load syllabus from course JSON file',
               onTap: () => _openUploadJson(context),
+            ),
+            _TileDivider(),
+            _SettingsTile(
+              icon: Icons.file_download_outlined,
+              iconBgColor: const Color(0xFFE0E7FF),
+              iconColor: const Color(0xFF4338CA),
+              title: 'Export Database (JSON)',
+              subtitle: 'Save offline backup file to device',
+              onTap: () => _handleLocalExport(context),
+            ),
+            _TileDivider(),
+            _SettingsTile(
+              icon: Icons.file_upload_outlined,
+              iconBgColor: const Color(0xFFFEF3C7),
+              iconColor: const Color(0xFFB45309),
+              title: 'Restore Database (JSON)',
+              subtitle: 'Restore database from an offline backup file',
+              onTap: () => _handleLocalImport(context),
             ),
             _TileDivider(),
             _SettingsTile(
@@ -332,6 +429,7 @@ class SettingsScreen extends StatelessWidget {
               iconBgColor: const Color(0xFFFEE2E2),
               iconColor: AppTheme.errorColor,
               title: 'Clear Local Cache',
+              subtitle: 'Wipe all local courses and study logs',
               isDestructive: true,
               onTap: () => _handleClearCache(context),
             ),
@@ -414,7 +512,8 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final String? badgeText;
-  final VoidCallback onTap;
+  final Widget? trailing;
+  final VoidCallback? onTap;
   final bool isDestructive;
 
   const _SettingsTile({
@@ -424,7 +523,8 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.badgeText,
-    required this.onTap,
+    this.trailing,
+    this.onTap,
     this.isDestructive = false,
   });
 
@@ -498,17 +598,195 @@ class _SettingsTile extends StatelessWidget {
                 ),
               ],
               const HGapSm(),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: isDestructive
-                    ? AppTheme.errorColor
-                    : AppTheme.textMutedColor(context),
-                size: 16,
-              ),
+              trailing ??
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: isDestructive
+                        ? AppTheme.errorColor
+                        : AppTheme.textMutedColor(context),
+                    size: 16,
+                  ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CloudSyncCard extends StatelessWidget {
+  static final _dateFormat = DateFormat('MMM d, h:mm a');
+
+  const _CloudSyncCard();
+
+  Future<void> _handleBackup(BuildContext context, CloudSyncController ctrl) async {
+    final success = await ctrl.backupToDrive();
+    if (!context.mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Backed up successfully to Google Drive!'),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (ctrl.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ctrl.errorMessage!),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleRestore(BuildContext context, CloudSyncController ctrl) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Restore from Google Drive?'),
+        content: const Text(
+          'This will overwrite your local study data with your latest Google Drive backup. Are you sure you want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.warningColor),
+            child: const Text('Restore', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final success = await ctrl.restoreFromDrive();
+    if (!context.mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Data restored successfully from Google Drive!'),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (ctrl.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ctrl.errorMessage!),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final syncCtrl = getIt<CloudSyncController>();
+
+    return ListenableBuilder(
+      listenable: syncCtrl,
+      builder: (context, _) {
+        final isSignedIn = syncCtrl.isSignedIn;
+        final isBusy = syncCtrl.isBusy;
+        final lastBackup = syncCtrl.lastBackupDate;
+
+        return _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: isSignedIn ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+              iconBgColor: isSignedIn ? const Color(0xFFDCFCE7) : const Color(0xFFE0E7FF),
+              iconColor: isSignedIn ? const Color(0xFF16A34A) : const Color(0xFF4F46E5),
+              title: isSignedIn
+                  ? (syncCtrl.displayName ?? syncCtrl.userEmail ?? 'Google Connected')
+                  : 'Google Drive Account',
+              subtitle: isSignedIn
+                  ? (syncCtrl.userEmail ?? 'Connected to private AppData folder')
+                  : 'Sign in to back up data across devices',
+              trailing: syncCtrl.isSigningIn
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : (isSignedIn
+                      ? TextButton(
+                          onPressed: isBusy ? null : syncCtrl.signOut,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            'Sign Out',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textMutedColor(context),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        )),
+              onTap: (!isSignedIn && !isBusy) ? syncCtrl.signIn : null,
+            ),
+            _TileDivider(),
+            _SettingsTile(
+              icon: Icons.cloud_upload_rounded,
+              iconBgColor: const Color(0xFFE0F2FE),
+              iconColor: const Color(0xFF0284C7),
+              title: 'Back Up to Drive',
+              subtitle: lastBackup != null
+                  ? 'Last backup: ${_dateFormat.format(lastBackup)}'
+                  : 'No backups in Drive yet',
+              trailing: syncCtrl.isSyncing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
+              onTap: isBusy ? null : () => _handleBackup(context, syncCtrl),
+            ),
+            _TileDivider(),
+            _SettingsTile(
+              icon: Icons.cloud_download_rounded,
+              iconBgColor: const Color(0xFFFEF3C7),
+              iconColor: const Color(0xFFD97706),
+              title: 'Restore from Drive',
+              subtitle: 'Download latest cloud backup to this device',
+              trailing: syncCtrl.isRestoring
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
+              onTap: isBusy ? null : () => _handleRestore(context, syncCtrl),
+            ),
+          ],
+        );
+      },
     );
   }
 }

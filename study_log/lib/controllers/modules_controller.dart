@@ -1,27 +1,25 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/module.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../services/local_module_storage.dart';
 import '../services/service_locator.dart';
 import 'ongoing_modules_controller.dart';
 
-/// Controller managing Module entities for a given Course with offline persistence.
+/// Controller managing Module entities for a given Course with local SQLite persistence.
 class ModulesController extends ChangeNotifier {
   final String courseId;
-  final FirestoreService _firestoreService;
+  final DatabaseService _dbService;
   StreamSubscription<List<Module>>? _modulesSubscription;
-  Timer? _loadingFallbackTimer;
 
   List<Module> _modules = [];
-  final Set<String> _deletedModuleIds = {};
   bool _isLoading = true;
   String? _errorMessage;
 
   ModulesController({
     required this.courseId,
-    FirestoreService? firestoreService,
-  }) : _firestoreService = firestoreService ?? getIt<FirestoreService>() {
+    DatabaseService? databaseService,
+  }) : _dbService = databaseService ?? getIt<DatabaseService>() {
     _init();
   }
 
@@ -30,9 +28,9 @@ class ModulesController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> _init() async {
-    // 1. Immediately hydrate from local storage
+    // 1. Immediately hydrate from SQLite
     try {
-      final cached = await LocalModuleStorage.loadModules(courseId);
+      final cached = await _dbService.getModules(courseId: courseId);
       if (cached.isNotEmpty) {
         _modules = cached;
         _isLoading = false;
@@ -42,37 +40,24 @@ class ModulesController extends ChangeNotifier {
       debugPrint('Local modules hydration error: $e');
     }
 
-    // 2. Start Firestore stream
+    // 2. Start reactive SQLite stream
     _initStream();
   }
 
   void _initStream() {
     _modulesSubscription?.cancel();
-    _loadingFallbackTimer?.cancel();
     _errorMessage = null;
 
-    if (_modules.isEmpty) {
-      _isLoading = true;
-    }
-
-    _loadingFallbackTimer = Timer(const Duration(seconds: 2), () {
-      if (_isLoading) {
-        _isLoading = false;
-        notifyListeners();
-      }
-    });
-
     try {
-      _modulesSubscription = _firestoreService.streamModules(courseId: courseId).listen(
+      _modulesSubscription = _dbService.streamModules(courseId: courseId).listen(
         (remoteModules) {
-          _loadingFallbackTimer?.cancel();
           _isLoading = false;
           _errorMessage = null;
-          _mergeModules(remoteModules);
+          _modules = remoteModules;
+          notifyListeners();
         },
         onError: (error) {
-          _loadingFallbackTimer?.cancel();
-          debugPrint('Error streaming modules: $error');
+          debugPrint('Error streaming modules from database: $error');
           _isLoading = false;
           if (_modules.isEmpty) {
             _errorMessage = error.toString();
@@ -81,37 +66,12 @@ class ModulesController extends ChangeNotifier {
         },
       );
     } catch (e) {
-      _loadingFallbackTimer?.cancel();
       _isLoading = false;
       if (_modules.isEmpty) {
         _errorMessage = e.toString();
       }
       notifyListeners();
     }
-  }
-
-  void _mergeModules(List<Module> remoteModules) {
-    final Map<String, Module> merged = {};
-
-    for (final module in remoteModules) {
-      if (!_deletedModuleIds.contains(module.id)) {
-        merged[module.id] = module;
-      }
-    }
-
-    for (final local in _modules) {
-      if (!_deletedModuleIds.contains(local.id)) {
-        if (!merged.containsKey(local.id)) {
-          merged[local.id] = local;
-        }
-      }
-    }
-
-    final result = merged.values.toList();
-    result.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-    _modules = result;
-    LocalModuleStorage.saveModulesForCourse(courseId, _modules);
-    notifyListeners();
   }
 
   Future<void> addModule({
@@ -138,13 +98,11 @@ class ModulesController extends ChangeNotifier {
       updatedAt: now,
     );
 
-    _deletedModuleIds.remove(newId);
     _modules.removeWhere((s) => s.id == newId);
     _modules.add(newModule);
     _modules.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     _isLoading = false;
     _errorMessage = null;
-    await LocalModuleStorage.saveModulesForCourse(courseId, _modules);
     notifyListeners();
 
     if (getIt.isRegistered<OngoingModulesController>()) {
@@ -152,14 +110,9 @@ class ModulesController extends ChangeNotifier {
     }
 
     try {
-      await _firestoreService.addModule(newModule).timeout(
-        const Duration(seconds: 4),
-        onTimeout: () {
-          debugPrint('Firestore addModule timed out, stored locally.');
-        },
-      );
+      await _dbService.addModule(newModule);
     } catch (e) {
-      debugPrint('Firestore addModule error: $e');
+      debugPrint('Database addModule error: $e');
     }
   }
 
@@ -167,12 +120,10 @@ class ModulesController extends ChangeNotifier {
     final index = _modules.indexWhere((s) => s.id == module.id);
     if (index == -1) return;
     final updated = module.copyWith(updatedAt: DateTime.now());
-    _deletedModuleIds.remove(updated.id);
     _modules[index] = updated;
     _modules.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     _isLoading = false;
     _errorMessage = null;
-    await LocalModuleStorage.saveModulesForCourse(courseId, _modules);
     notifyListeners();
 
     if (getIt.isRegistered<OngoingModulesController>()) {
@@ -180,31 +131,29 @@ class ModulesController extends ChangeNotifier {
     }
 
     try {
-      await _firestoreService.updateModule(updated).timeout(
-        const Duration(seconds: 4),
-        onTimeout: () {
-          debugPrint('Firestore updateModule timed out, stored locally.');
-        },
-      );
+      await _dbService.updateModule(updated);
     } catch (e) {
-      debugPrint('Firestore updateModule error: $e');
+      debugPrint('Database updateModule error: $e');
     }
   }
 
   Future<void> deleteModule(String moduleId) async {
-    _deletedModuleIds.add(moduleId);
     _modules.removeWhere((s) => s.id == moduleId);
-    await LocalModuleStorage.saveModulesForCourse(courseId, _modules);
     notifyListeners();
 
     if (getIt.isRegistered<OngoingModulesController>()) {
       getIt<OngoingModulesController>().refresh();
     }
+
+    try {
+      await _dbService.deleteModule(moduleId);
+    } catch (e) {
+      debugPrint('Database deleteModule error: $e');
+    }
   }
 
   @override
   void dispose() {
-    _loadingFallbackTimer?.cancel();
     _modulesSubscription?.cancel();
     super.dispose();
   }

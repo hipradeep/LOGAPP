@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Module {
   final String id;
   final String courseId;
@@ -29,8 +27,8 @@ class Module {
       'description': description,
       'orderIndex': orderIndex,
       'status': status,
-      'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
-      'updatedAt': forLocalJson ? updatedAt.toIso8601String() : Timestamp.fromDate(updatedAt),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -74,7 +72,6 @@ class Module {
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-    if (value is Timestamp) return value.toDate();
     if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
     return DateTime.tryParse(value.toString());
   }

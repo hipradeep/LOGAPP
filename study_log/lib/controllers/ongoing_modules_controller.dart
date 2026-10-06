@@ -9,7 +9,7 @@ import '../services/local_module_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_revision_storage.dart';
 import '../services/local_study_log_storage.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 
@@ -77,7 +77,7 @@ class CourseModuleProgress {
 /// Completely free of static/hardcoded modules or topics.
 class OngoingModulesController extends ChangeNotifier {
   final CoursesController _coursesController;
-  final FirestoreService _firestoreService;
+  final DatabaseService _dbService;
 
   List<OngoingModuleItem> _ongoingItems = [];
   final Map<String, int> _topicCounts = {};
@@ -94,9 +94,9 @@ class OngoingModulesController extends ChangeNotifier {
   int _refreshSeq = 0;
   OngoingModulesController({
     CoursesController? coursesController,
-    FirestoreService? firestoreService,
+    DatabaseService? dbService,
   })  : _coursesController = coursesController ?? getIt<CoursesController>(),
-        _firestoreService = firestoreService ?? getIt<FirestoreService>() {
+        _dbService = dbService ?? getIt<DatabaseService>() {
     _coursesController.addListener(_onCoursesChanged);
     refresh();
   }
@@ -189,15 +189,15 @@ class OngoingModulesController extends ChangeNotifier {
         if (m.id.isNotEmpty) _modulesById[m.id] = m;
       }
 
-      // If any active courses are missing modules in cache, fetch them concurrently from Firestore
+      // If any active courses are missing modules in cache, fetch them from SQLite database
       final missingCourses = nonArchivedCourses
           .where((c) => (modulesByCourse[c.id] ?? []).isEmpty)
           .toList();
-      if (missingCourses.isNotEmpty && _firestoreService.isAvailable) {
+      if (missingCourses.isNotEmpty) {
         await Future.wait(
           missingCourses.map((c) async {
             try {
-              final fetched = await _firestoreService.getModules(courseId: c.id);
+              final fetched = await _dbService.getModules(courseId: c.id);
               if (fetched.isNotEmpty) {
                 modulesByCourse[c.id] = fetched;
                 for (final m in fetched) {
@@ -210,7 +210,7 @@ class OngoingModulesController extends ChangeNotifier {
         );
       }
 
-      // Check which modules have no cached topics in local disk, and fetch from Firestore
+      // Check which modules have no cached topics in local disk, and fetch from database
       final allModulesList = <Module>[];
       for (final course in nonArchivedCourses) {
         final mods = modulesByCourse[course.id] ?? [];
@@ -229,11 +229,11 @@ class OngoingModulesController extends ChangeNotifier {
         return local.isEmpty && m.id.isNotEmpty;
       }).toList();
 
-      if (modulesMissingTopics.isNotEmpty && _firestoreService.isAvailable) {
+      if (modulesMissingTopics.isNotEmpty) {
         await Future.wait(
           modulesMissingTopics.map((m) async {
             try {
-              final remoteTopics = await _firestoreService.getTopics(moduleId: m.id);
+              final remoteTopics = await _dbService.getTopics(moduleId: m.id);
               if (remoteTopics.isNotEmpty) {
                 topicBuckets[m.id] = remoteTopics;
                 if (m.title.isNotEmpty) {
@@ -471,7 +471,7 @@ class OngoingModulesController extends ChangeNotifier {
     return streak;
   }
 
-  /// Deletes a module permanently from both local storage and Firestore.
+  /// Deletes a module permanently from SQLite local database.
   Future<void> deleteModule(OngoingModuleItem item) async {
     try {
       // 1. Remove from local modules for this course
@@ -479,12 +479,12 @@ class OngoingModulesController extends ChangeNotifier {
       final updated = cached.where((s) => s.id != item.module.id && s.title != item.module.title).toList();
       await LocalModuleStorage.saveModulesForCourse(item.course.id, updated);
 
-      // 2. Remove from Firestore if available
-      if (_firestoreService.isAvailable && item.module.id.isNotEmpty) {
+      // 2. Remove from database if available
+      if (item.module.id.isNotEmpty) {
         try {
-          await _firestoreService.deleteModule(item.module.id);
+          await _dbService.deleteModule(item.module.id);
         } catch (e) {
-          debugPrint('Error deleting module from firestore: $e');
+          debugPrint('Error deleting module from database: $e');
         }
       }
 

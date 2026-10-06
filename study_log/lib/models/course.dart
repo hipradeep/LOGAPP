@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Course {
   final String id;
   final String title;
@@ -33,13 +31,11 @@ class Course {
       'title': title,
       'description': description,
       'status': status,
-      'deadline': deadline != null
-          ? (forLocalJson ? deadline!.toIso8601String() : Timestamp.fromDate(deadline!))
-          : null,
+      'deadline': deadline?.toIso8601String(),
       'iconCodePoint': iconCodePoint,
       'colorValue': colorValue,
-      'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
-      'updatedAt': forLocalJson ? updatedAt.toIso8601String() : Timestamp.fromDate(updatedAt),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -86,7 +82,6 @@ class Course {
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-    if (value is Timestamp) return value.toDate();
     if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
     return DateTime.tryParse(value.toString());
   }

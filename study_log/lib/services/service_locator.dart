@@ -7,8 +7,12 @@ import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/notification_controller.dart';
-import 'firestore_service.dart';
+import '../controllers/cloud_sync_controller.dart';
+import 'database_service.dart';
+import 'database_backup_service.dart';
 import 'notification_service.dart';
+import 'google_auth_service.dart';
+import 'google_drive_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -16,8 +20,21 @@ void setupLocator() {
   if (!getIt.isRegistered<ThemeController>()) {
     getIt.registerLazySingleton<ThemeController>(() => ThemeController());
   }
-  if (!getIt.isRegistered<FirestoreService>()) {
-    getIt.registerLazySingleton<FirestoreService>(() => FirestoreService());
+  if (!getIt.isRegistered<DatabaseService>()) {
+    getIt.registerLazySingleton<DatabaseService>(() => DatabaseService.instance);
+  }
+  if (!getIt.isRegistered<DatabaseBackupService>()) {
+    getIt.registerLazySingleton<DatabaseBackupService>(() => DatabaseBackupService());
+  }
+  if (!getIt.isRegistered<GoogleAuthService>()) {
+    getIt.registerLazySingleton<GoogleAuthService>(() => GoogleAuthService());
+  }
+  if (!getIt.isRegistered<GoogleDriveService>()) {
+    getIt.registerLazySingleton<GoogleDriveService>(
+        () => GoogleDriveService(getIt<GoogleAuthService>()));
+  }
+  if (!getIt.isRegistered<CloudSyncController>()) {
+    getIt.registerLazySingleton<CloudSyncController>(() => CloudSyncController());
   }
   if (!getIt.isRegistered<CoursesController>()) {
     getIt.registerLazySingleton<CoursesController>(() => CoursesController());
@@ -39,10 +56,11 @@ void setupLocator() {
   }
 }
 
-/// Warms up all singleton controllers on app start so local storage is hydrated
-/// and Firestore streams are active before the user arrives on the home screen.
+/// Warms up all singleton controllers on app start so local SQLite storage is hydrated
+/// and streams are active before the user arrives on the home screen.
 Future<void> warmupControllers() async {
   try {
+    await DatabaseService.instance.init();
     final courses = getIt<CoursesController>();
     final ongoing = getIt<OngoingModulesController>();
     final revision = getIt<RevisionController>();

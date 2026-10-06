@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// The R1 -> R5 spaced repetition ladder.
 ///
 /// R1 -> +1 day, R2 -> +3 days, R3 -> +7 days, R4 -> +14 days, R5 -> +30 days.
@@ -33,11 +31,12 @@ enum RevisionStatus {
 
 /// A spaced repetition record for a single completed Module.
 ///
-/// Firestore shape:
+/// SQLite schema:
 /// ```
-/// revisions/{revisionId}
+/// revisions (
 ///   id, courseId, moduleId, currentLevel, status,
 ///   nextRevisionAt, completedAt, createdAt, updatedAt
+/// )
 /// ```
 class RevisionModule {
   final String id;
@@ -166,20 +165,10 @@ class RevisionModule {
       'moduleId': moduleId,
       'currentLevel': currentLevel,
       'status': status.name,
-      'nextRevisionAt': forLocalJson
-          ? nextRevisionAt.toIso8601String()
-          : Timestamp.fromDate(nextRevisionAt),
-      'completedAt': completedAt == null
-          ? null
-          : (forLocalJson
-              ? completedAt!.toIso8601String()
-              : Timestamp.fromDate(completedAt!)),
-      'createdAt': forLocalJson
-          ? createdAt.toIso8601String()
-          : Timestamp.fromDate(createdAt),
-      'updatedAt': forLocalJson
-          ? updatedAt.toIso8601String()
-          : Timestamp.fromDate(updatedAt),
+      'nextRevisionAt': nextRevisionAt.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -205,7 +194,6 @@ class RevisionModule {
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-    if (value is Timestamp) return value.toDate();
     if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
     return DateTime.tryParse(value.toString());
   }

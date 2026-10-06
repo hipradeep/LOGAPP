@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Study status of a single topic inside a Module.
 enum TopicStatus {
   completed,
@@ -66,10 +64,6 @@ class Topic {
     );
   }
 
-  /// Serialises for either backend.
-  ///
-  /// [forLocalJson] writes ISO-8601 dates for the on-disk cache; otherwise dates
-  /// become Firestore [Timestamp]s.
   Map<String, dynamic> toMap({bool forLocalJson = false}) {
     return {
       'id': id,
@@ -81,18 +75,11 @@ class Topic {
       'orderIndex': orderIndex,
       'iconCodePoint': iconCodePoint,
       'colorValue': colorValue,
-      'completedAt': completedAt == null
-          ? null
-          : (forLocalJson
-              ? completedAt!.toIso8601String()
-              : Timestamp.fromDate(completedAt!)),
+      'completedAt': completedAt?.toIso8601String(),
     };
   }
 
-  /// Reads a record from the on-disk cache or from Firestore.
-  ///
-  /// [documentId] wins over the stored `id` so a Firestore document whose id
-  /// field is missing or stale still resolves to its real document key.
+  /// Reads a record from the on-disk cache or SQLite.
   factory Topic.fromMap(Map<String, dynamic> map, {String? documentId}) {
     return Topic(
       id: (documentId != null && documentId.isNotEmpty)
@@ -127,7 +114,6 @@ class Topic {
   static DateTime? parseDateTime(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-    if (value is Timestamp) return value.toDate();
     if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
     return DateTime.tryParse(value.toString());
   }

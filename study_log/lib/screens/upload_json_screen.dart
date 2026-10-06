@@ -14,7 +14,7 @@ import '../models/study_log.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/service_locator.dart';
-import '../services/firestore_service.dart';
+import '../services/database_service.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -111,24 +111,12 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       final dynamic data = jsonDecode(content);
 
       final stats = await _importData(data);
-      final bool fbSynced = stats['firebaseSynced'] == true;
-      final String? fbError = stats['firebaseError'] as String?;
-
       setState(() {
         _isSuccess = true;
-        final baseMsg =
+        _resultMessage =
             'Imported ${stats['courses']} course(s), '
             '${stats['modules']} module(s), '
-            '${stats['topics']} topic(s) successfully.';
-        if (fbSynced) {
-          _resultMessage =
-              '$baseMsg\n\n☁️ Synced to Firebase Firestore successfully.';
-        } else if (fbError != null) {
-          _resultMessage =
-              '$baseMsg\n\n⚠️ Saved locally, but Firebase sync failed: $fbError';
-        } else {
-          _resultMessage = '$baseMsg\n\n💾 Saved to local database.';
-        }
+            '${stats['topics']} topic(s) successfully.\n\n💾 Saved to local SQLite database.';
       });
     } catch (e) {
       setState(() {
@@ -449,31 +437,13 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       }
     }
 
-    // Sync imported course tree and study logs to Firestore atomically via high-speed batch commit
-    bool firestoreSynced = false;
-    String? firestoreError;
-
-    if (getIt.isRegistered<FirestoreService>()) {
-      final firestore = getIt<FirestoreService>();
-      if (firestore.isAvailable) {
-        try {
-          await firestore.batchSave(
-            courses: newCourses,
-            modules: allImportedModules,
-            topics: allImportedTopics,
-            studyLogs: importedStudyLogs.isNotEmpty ? importedStudyLogs : null,
-          );
-          firestoreSynced = true;
-        } catch (e) {
-          firestoreError = e.toString();
-          debugPrint('Error syncing imported data to Firestore: $e');
-        }
-      } else {
-        firestoreError = 'Firestore offline / not initialized on this platform';
-      }
-    } else {
-      firestoreError = 'FirestoreService not registered';
-    }
+    // Save imported course tree and study logs to SQLite atomically via batch commit
+    await DatabaseService.instance.batchSave(
+      courses: newCourses,
+      modules: allImportedModules,
+      topics: allImportedTopics,
+      studyLogs: importedStudyLogs.isNotEmpty ? importedStudyLogs : null,
+    );
 
     if (getIt.isRegistered<CoursesController>()) {
       await getIt<CoursesController>().loadCourses();
@@ -489,8 +459,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       'courses': courseCount,
       'modules': moduleCount,
       'topics': topicCount,
-      'firebaseSynced': firestoreSynced,
-      'firebaseError': firestoreError,
+      'dbSaved': true,
     };
   }
 

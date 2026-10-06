@@ -1,4 +1,4 @@
-package com.logapp.studylog
+package com.logapp.studylog.firebase
 
 import io.flutter.embedding.android.FlutterActivity
 

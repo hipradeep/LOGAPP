@@ -7,7 +7,6 @@ import '../widgets/module_context_pill.dart';
 import '../widgets/study_text_fields.dart';
 import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
-import '../services/firestore_service.dart';
 import '../models/topic.dart';
 import '../controllers/ongoing_modules_controller.dart';
 
@@ -157,16 +156,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
         final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
         await LocalTopicStorage.saveTopics(key, updated);
 
-        if (getIt.isRegistered<FirestoreService>()) {
-          final firestore = getIt<FirestoreService>();
-          if (firestore.isAvailable && savedTopic.id.isNotEmpty) {
-            try {
-              await firestore
-                  .updateTopic(savedTopic)
-                  .timeout(const Duration(seconds: 3), onTimeout: () {});
-            } catch (_) {}
-          }
-        }
+
       } else {
         final now = DateTime.now();
         final newId = 'topic_${now.millisecondsSinceEpoch}';
@@ -194,16 +184,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
         final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
         await LocalTopicStorage.saveTopics(key, updated);
 
-        if (getIt.isRegistered<FirestoreService>()) {
-          final firestore = getIt<FirestoreService>();
-          if (firestore.isAvailable) {
-            try {
-              await firestore
-                  .addTopic(savedTopic)
-                  .timeout(const Duration(seconds: 3), onTimeout: () {});
-            } catch (_) {}
-          }
-        }
+
       }
 
       if (getIt.isRegistered<OngoingModulesController>()) {

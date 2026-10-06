@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Complete User Profile document combining user identity & aggregated study statistics.
 ///
 /// Stores profile details (name, role/headline, avatar) alongside lifetime progress stats
@@ -83,11 +81,9 @@ class UserProfile {
       'totalTopicsFinished': totalTopicsFinished,
       'totalTopicRevisions': totalTopicRevisions,
       if (lastActiveDate != null)
-        'lastActiveDate': forLocalJson
-            ? lastActiveDate!.toIso8601String()
-            : Timestamp.fromDate(lastActiveDate!),
-      'createdAt': forLocalJson ? createdAt.toIso8601String() : Timestamp.fromDate(createdAt),
-      'updatedAt': forLocalJson ? updatedAt.toIso8601String() : Timestamp.fromDate(updatedAt),
+        'lastActiveDate': lastActiveDate!.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -123,7 +119,6 @@ class UserProfile {
   static DateTime? _parseDateTime(dynamic val) {
     if (val == null) return null;
     if (val is DateTime) return val;
-    if (val is Timestamp) return val.toDate();
     if (val is String) return DateTime.tryParse(val);
     return null;
   }
