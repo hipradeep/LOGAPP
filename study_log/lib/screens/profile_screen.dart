@@ -6,6 +6,7 @@ import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
+import '../controllers/cloud_sync_controller.dart';
 import 'my_progress_screen.dart';
 import 'activity_screen.dart';
 import 'courses_screen.dart';
@@ -134,8 +135,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _UserProfileCard extends StatelessWidget {
   const _UserProfileCard();
 
+  Future<void> _handleSignIn(BuildContext context, CloudSyncController? ctrl) async {
+    if (ctrl == null || ctrl.isBusy) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: AppTheme.surface(context),
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+              border: Border.all(color: AppTheme.borderColor(context)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.shadowColor(context),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                const HGapMd(),
+                Text(
+                  'Connecting to Google...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    bool success = false;
+    try {
+      success = await ctrl.signIn();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
+    if (!context.mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Signed in as ${ctrl.displayName ?? ctrl.userEmail ?? "User"}!'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    } else if (ctrl.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ctrl.errorMessage!),
+          backgroundColor: AppTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final syncCtrl = getIt.isRegistered<CloudSyncController>()
+        ? getIt<CloudSyncController>()
+        : null;
     final coursesCtrl = getIt.isRegistered<CoursesController>()
         ? getIt<CoursesController>()
         : null;
@@ -148,14 +239,117 @@ class _UserProfileCard extends StatelessWidget {
 
     return ListenableBuilder(
       listenable: Listenable.merge([
+        if (syncCtrl != null) syncCtrl,
         if (coursesCtrl != null) coursesCtrl,
         if (revisionCtrl != null) revisionCtrl,
         if (progressCtrl != null) progressCtrl,
       ]),
       builder: (context, _) {
+        final isSignedIn = syncCtrl?.isSignedIn ?? false;
         final courseCount = coursesCtrl?.courses.length ?? 0;
         final revisionCount = revisionCtrl?.revisions.length ?? 0;
         final streak = progressCtrl?.currentStreak ?? 0;
+
+        if (!isSignedIn) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 14.0),
+            decoration: BoxDecoration(
+              color: AppTheme.surface(context),
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+              border: Border.all(color: AppTheme.borderColor(context)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.shadowColor(context),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.person_outline_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 20,
+                  ),
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Guest Learner',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor(context),
+                        ),
+                      ),
+                      const VGapXs(),
+                      Text(
+                        'Sign in to sync your progress',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondaryColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const HGapSm(),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: syncCtrl == null || syncCtrl.isBusy
+                        ? null
+                        : () => _handleSignIn(context, syncCtrl),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.cloud_upload_outlined,
+                            size: 16,
+                            color: AppTheme.primaryColor,
+                          ),
+                          const HGapXs(),
+                          Text(
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
         return Container(
           width: double.infinity,

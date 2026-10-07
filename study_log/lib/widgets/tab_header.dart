@@ -1,74 +1,74 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import 'app_back_button.dart';
 import 'app_spacers.dart';
 
-/// Reusable top header for root Bottom Navigation Bar (BNV) tab screens
-/// (Home, Revision, Profile), adopting the Home screen header design:
-/// - 26px bold title
-/// - 13px medium subtitle below title
-/// - Optional back button (when a tab screen is pushed with back navigation)
-/// - Optional trailing action buttons (info, settings, etc.)
+/// Reusable dedicated top header for Bottom Navigation Bar (BNV) tab screens
+/// (Home, Revision, Profile) matching [AppTheme] design guidelines:
+/// - 26px bold primary title
+/// - 12px medium secondary subtitle positioned directly below title
+/// - Optional right-aligned action buttons (Settings ⚙️, Info ℹ️, Notifications 🔔)
+///   vertically centered directly with the main title line.
 class TabHeader extends StatelessWidget {
   final String title;
+  final Widget? titleWidget;
   final String? subtitle;
-  final VoidCallback? onBack;
   final List<Widget>? actions;
   final EdgeInsetsGeometry padding;
 
   const TabHeader({
     super.key,
-    required this.title,
+    this.title = '',
+    this.titleWidget,
     this.subtitle,
-    this.onBack,
     this.actions,
-    this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 8),
+    this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 8),
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: padding,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (onBack != null) ...[
-            AppBackButton(onPressed: onBack),
-            const HGapSm(),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 36),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                    letterSpacing: -0.3,
-                  ),
+                Expanded(
+                  child: titleWidget ??
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor(context),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
                 ),
-                if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const VGapXs(),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondaryColor(context),
-                      fontWeight: FontWeight.w500,
-                    ),
+                if (actions != null && actions!.isNotEmpty) ...[
+                  const HGapSm(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: actions!,
                   ),
                 ],
               ],
             ),
           ),
-          if (actions != null && actions!.isNotEmpty) ...[
-            const HGapSm(),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: actions!,
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
+            const VGapXs(),
+            Text(
+              subtitle!,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondaryColor(context),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ],

@@ -7,6 +7,8 @@ import '../widgets/appearance_sheet.dart';
 import '../services/service_locator.dart';
 import '../controllers/theme_controller.dart';
 import '../controllers/cloud_sync_controller.dart';
+import '../widgets/study_confirmation_dialog.dart';
+import '../services/database_backup_service.dart';
 import 'upload_json_screen.dart';
 import 'notification_settings_screen.dart';
 
@@ -23,6 +25,154 @@ class SettingsScreen extends StatelessWidget {
       context,
       MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
     );
+  }
+
+  Future<void> _handleExportBackup(BuildContext context) async {
+    final backupService = getIt.isRegistered<DatabaseBackupService>()
+        ? getIt<DatabaseBackupService>()
+        : null;
+    if (backupService == null) return;
+
+    _showBlockingLoadingDialog(context, 'Exporting backup file...');
+    try {
+      final path = await backupService.exportToFile();
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        if (path != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Backup exported successfully!'),
+              backgroundColor: AppTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export backup: $e'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleImportBackup(BuildContext context) async {
+    final backupService = getIt.isRegistered<DatabaseBackupService>()
+        ? getIt<DatabaseBackupService>()
+        : null;
+    if (backupService == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Restore Database Backup?'),
+        content: const Text(
+          'Restoring from a backup will replace your current courses, topics, logs, and progress with the data from the backup file.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Select File & Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    _showBlockingLoadingDialog(context, 'Restoring database...');
+    try {
+      final imported = await backupService.importFromFile();
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        if (imported) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Database restored successfully!'),
+              backgroundColor: AppTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to restore backup: $e'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleDeleteAccount(BuildContext context) async {
+    final confirmed = await StudyConfirmationDialog.showDeleteAccountAndData(context);
+    if (!confirmed || !context.mounted) return;
+
+    final syncCtrl = getIt.isRegistered<CloudSyncController>()
+        ? getIt<CloudSyncController>()
+        : null;
+
+    if (syncCtrl != null) {
+      _showBlockingLoadingDialog(context, 'Deleting account & data...');
+      try {
+        await syncCtrl.deleteAccountAndClearData();
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Account and all data have been completely deleted.'),
+              backgroundColor: AppTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete all data: $e'),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _showAboutDialog(BuildContext context) {
@@ -142,6 +292,29 @@ class SettingsScreen extends StatelessWidget {
                     const _SectionHeader(title: 'CLOUD BACKUP & SYNC'),
                     const _CloudSyncCard(),
                     const VGapMd(),
+                    const _SectionHeader(title: 'LOCAL BACKUP & RESTORE'),
+                    _SettingsCard(
+                      children: [
+                        _SettingsTile(
+                          icon: Icons.file_download_outlined,
+                          iconBgColor: const Color(0xFFE0F2FE),
+                          iconColor: const Color(0xFF0284C7),
+                          title: 'Export Backup',
+                          subtitle: 'Save database backup to JSON file',
+                          onTap: () => _handleExportBackup(context),
+                        ),
+                        _TileDivider(),
+                        _SettingsTile(
+                          icon: Icons.file_upload_outlined,
+                          iconBgColor: const Color(0xFFFEF3C7),
+                          iconColor: const Color(0xFFD97706),
+                          title: 'Import Backup',
+                          subtitle: 'Restore database from JSON file',
+                          onTap: () => _handleImportBackup(context),
+                        ),
+                      ],
+                    ),
+                    const VGapMd(),
                     const _SectionHeader(title: 'CURRICULUM'),
                     _SettingsCard(
                       children: [
@@ -169,6 +342,9 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                    _AccountAndDataSection(
+                      onDeleteAccount: _handleDeleteAccount,
+                    ),
                     const VGapLg(),
                   ],
                 ),
@@ -177,6 +353,51 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AccountAndDataSection extends StatelessWidget {
+  final Future<void> Function(BuildContext) onDeleteAccount;
+
+  const _AccountAndDataSection({required this.onDeleteAccount});
+
+  @override
+  Widget build(BuildContext context) {
+    final syncCtrl = getIt.isRegistered<CloudSyncController>()
+        ? getIt<CloudSyncController>()
+        : null;
+
+    if (syncCtrl == null) return const SizedBox.shrink();
+
+    return ListenableBuilder(
+      listenable: syncCtrl,
+      builder: (context, _) {
+        if (!syncCtrl.isSignedIn) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const VGapMd(),
+            const _SectionHeader(title: 'ACCOUNT & DATA'),
+            _SettingsCard(
+              children: [
+                _SettingsTile(
+                  icon: Icons.delete_forever_rounded,
+                  iconBgColor: const Color(0xFFFEE2E2),
+                  iconColor: AppTheme.errorColor,
+                  title: 'Delete Account & Clear Data',
+                  subtitle: 'Permanently erase all data',
+                  isDestructive: true,
+                  onTap: () => onDeleteAccount(context),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -347,7 +568,15 @@ class _CloudSyncCard extends StatelessWidget {
 
   Future<void> _handleSignIn(BuildContext context, CloudSyncController ctrl) async {
     debugPrint('👉 [_CloudSyncCard] Sign In tapped!');
-    final success = await ctrl.signIn();
+    _showBlockingLoadingDialog(context, 'Connecting to Google...');
+    bool success = false;
+    try {
+      success = await ctrl.signIn();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
     debugPrint('👉 [_CloudSyncCard] signIn result: $success, error: ${ctrl.errorMessage}');
     if (!context.mounted) return;
     if (!success && ctrl.errorMessage != null) {
@@ -373,7 +602,15 @@ class _CloudSyncCard extends StatelessWidget {
   }
 
   Future<void> _handleBackup(BuildContext context, CloudSyncController ctrl) async {
-    final success = await ctrl.backupToDrive();
+    _showBlockingLoadingDialog(context, 'Backing up to Google Drive...');
+    bool success = false;
+    try {
+      success = await ctrl.backupToDrive();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
     if (!context.mounted) return;
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -419,7 +656,14 @@ class _CloudSyncCard extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      await ctrl.signOut();
+      _showBlockingLoadingDialog(context, 'Backing up and logging out...');
+      try {
+        await ctrl.signOut();
+      } finally {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -541,4 +785,50 @@ class _TileDivider extends StatelessWidget {
       color: AppTheme.borderColor(context),
     );
   }
+}
+
+/// Non-dismissible loading dialog that prevents user interaction while operations run
+void _showBlockingLoadingDialog(BuildContext context, String message) {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    useRootNavigator: true,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: AppTheme.surface(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                ),
+              ),
+              const HGapMd(),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

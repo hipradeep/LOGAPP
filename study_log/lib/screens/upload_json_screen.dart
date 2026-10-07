@@ -11,8 +11,6 @@ import '../services/local_course_storage.dart';
 import '../services/local_module_storage.dart';
 import '../models/topic.dart';
 import '../models/study_log.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_study_log_storage.dart';
 import '../services/service_locator.dart';
 import '../services/database_service.dart';
 import '../controllers/courses_controller.dart';
@@ -98,6 +96,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         type: FileType.custom,
         allowedExtensions: ['json'],
         allowMultiple: false,
+        withData: true,
       );
 
       if (result == null || result.files.isEmpty) {
@@ -105,13 +104,44 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         return;
       }
 
-      final path = result.files.single.path;
-      if (path == null) throw Exception('Could not read file path.');
+      final file = result.files.single;
+      String content;
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        content = utf8.decode(file.bytes!);
+      } else if (file.path != null) {
+        content = await File(file.path!).readAsString();
+      } else {
+        throw Exception('Could not read the selected file.');
+      }
 
-      final content = await File(path).readAsString();
-      final dynamic data = jsonDecode(content);
+      // Sanitize JSON content (strip UTF-8 BOM, markdown fences from AI chat)
+      String cleaned = content.trim();
+      if (cleaned.startsWith('\uFEFF')) {
+        cleaned = cleaned.substring(1).trim();
+      }
+      if (cleaned.startsWith('```')) {
+        final firstNewline = cleaned.indexOf('\n');
+        if (firstNewline != -1) {
+          cleaned = cleaned.substring(firstNewline + 1);
+        }
+        if (cleaned.endsWith('```')) {
+          cleaned = cleaned.substring(0, cleaned.length - 3).trim();
+        }
+      }
+
+      final dynamic data = jsonDecode(cleaned);
 
       final stats = await _importData(data);
+      if (stats['courses'] == 0 && stats['modules'] == 0 && stats['topics'] == 0) {
+        setState(() {
+          _isSuccess = false;
+          _resultMessage =
+              'No valid courses, modules, or topics found in the uploaded JSON file.\n'
+              'Please verify that the file matches the expected AI Course Prompt format.';
+        });
+        return;
+      }
+
       setState(() {
         _isSuccess = true;
         _resultMessage =
@@ -141,8 +171,12 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     } else if (data is Map) {
       if (data['courses'] is List) {
         coursesList = data['courses'] as List<dynamic>;
-      }
-      if (data['modules'] is List) {
+      } else if (data['course'] is Map) {
+        coursesList = [data['course']];
+      } else if (data['modules'] is List &&
+          (data['title'] != null || data['courseTitle'] != null)) {
+        coursesList = [data];
+      } else if (data['modules'] is List) {
         standaloneModules = data['modules'] as List<dynamic>;
       } else if (data['sections'] is List) {
         standaloneModules = data['sections'] as List<dynamic>;
@@ -153,7 +187,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     final existingCourses = await LocalCourseStorage.loadCourses();
     final existingIds = existingCourses.map((c) => c.id).toSet();
 
-    final newCourses = List<Course>.from(existingCourses);
+    final coursesToSave = <Course>[];
     final allImportedModules = <Module>[];
     final allImportedTopics = <Topic>[];
 
@@ -177,17 +211,14 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         updatedAt: now,
       );
 
-      if (!existingIds.contains(courseId)) {
-        newCourses.add(course);
-        existingIds.add(courseId);
-      }
+      coursesToSave.add(course);
+      existingIds.add(courseId);
       courseCount++;
 
       // "sections" is the pre-rename key; still accepted so older exports import.
       final rawModules = (courseMap['modules'] ?? courseMap['sections'])
               as List<dynamic>? ??
           [];
-      final courseModules = <Module>[];
 
       int sIdx = 0;
       for (final rawModule in rawModules) {
@@ -206,7 +237,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
           createdAt: now,
           updatedAt: now,
         );
-        courseModules.add(module);
         allImportedModules.add(module);
         moduleCount++;
 
@@ -214,7 +244,6 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         final rawTopics = (moduleMap['topics'] ?? moduleMap['subsections'])
                 as List<dynamic>? ??
             [];
-        final topicItems = <Topic>[];
 
         int ssIdx = 0;
         for (final rawSub in rawTopics) {
@@ -236,25 +265,12 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             iconCodePoint: (subMap['iconCodePoint'] as num?)?.toInt(),
             colorValue: (subMap['colorValue'] as num?)?.toInt(),
           );
-          topicItems.add(subItem);
           allImportedTopics.add(subItem);
           topicCount++;
           ssIdx++;
         }
 
-        if (topicItems.isNotEmpty) {
-          await LocalTopicStorage.saveTopics(moduleId, topicItems);
-          if (module.title.isNotEmpty) {
-            await LocalTopicStorage.saveTopics(module.title, topicItems);
-          }
-        }
-
         sIdx++;
-      }
-
-      if (courseModules.isNotEmpty) {
-        await LocalModuleStorage.saveModulesForCourse(
-            courseId, courseModules);
       }
     }
 
@@ -298,7 +314,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             createdAt: now,
             updatedAt: now,
           );
-          newCourses.add(newCourse);
+          coursesToSave.add(newCourse);
           existingIds.add(courseId);
           courseCount++;
         } else if (existingCourses.isNotEmpty) {
@@ -315,7 +331,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             createdAt: now,
             updatedAt: now,
           );
-          newCourses.add(newCourse);
+          coursesToSave.add(newCourse);
           existingIds.add(courseId);
           courseCount++;
         }
@@ -328,16 +344,14 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
           createdAt: now,
           updatedAt: now,
         );
-        newCourses.add(newCourse);
+        coursesToSave.add(newCourse);
         existingIds.add(courseId);
         courseCount++;
       }
 
       final existingModules = await LocalModuleStorage.loadModules(courseId);
-      final existingModuleIds = existingModules.map((m) => m.id).toSet();
-      final courseModules = List<Module>.from(existingModules);
-
       int sIdx = existingModules.length;
+
       for (final rawModule in standaloneModules) {
         if (rawModule is! Map) continue;
         final moduleMap = Map<String, dynamic>.from(rawModule);
@@ -354,17 +368,12 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
           updatedAt: now,
         );
 
-        if (!existingModuleIds.contains(moduleId)) {
-          courseModules.add(module);
-          existingModuleIds.add(moduleId);
-        }
         allImportedModules.add(module);
         moduleCount++;
 
         final rawTopics = (moduleMap['topics'] ?? moduleMap['subsections'])
                 as List<dynamic>? ??
             [];
-        final topicItems = <Topic>[];
 
         int ssIdx = 0;
         for (final rawSub in rawTopics) {
@@ -386,28 +395,14 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             iconCodePoint: (subMap['iconCodePoint'] as num?)?.toInt(),
             colorValue: (subMap['colorValue'] as num?)?.toInt(),
           );
-          topicItems.add(subItem);
           allImportedTopics.add(subItem);
           topicCount++;
           ssIdx++;
         }
 
-        if (topicItems.isNotEmpty) {
-          await LocalTopicStorage.saveTopics(moduleId, topicItems);
-          if (module.title.isNotEmpty) {
-            await LocalTopicStorage.saveTopics(module.title, topicItems);
-          }
-        }
-
         sIdx++;
       }
-
-      if (courseModules.isNotEmpty) {
-        await LocalModuleStorage.saveModulesForCourse(courseId, courseModules);
-      }
     }
-
-    await LocalCourseStorage.saveCourses(newCourses);
 
     // Create StudyLog entries for all completed topics in the import
     final List<StudyLog> importedStudyLogs = [];
@@ -429,20 +424,11 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       }
     }
 
-    if (importedStudyLogs.isNotEmpty) {
-      final currentLogs = await LocalStudyLogStorage.loadAll();
-      final currentIds = currentLogs.map((e) => e.id).toSet();
-      final newLogs = importedStudyLogs.where((l) => !currentIds.contains(l.id)).toList();
-      if (newLogs.isNotEmpty) {
-        await LocalStudyLogStorage.saveAll([...currentLogs, ...newLogs]);
-      }
-    }
-
     // Save imported course tree and study logs to SQLite atomically via batch commit
     await DatabaseService.instance.batchSave(
-      courses: newCourses,
-      modules: allImportedModules,
-      topics: allImportedTopics,
+      courses: coursesToSave.isNotEmpty ? coursesToSave : null,
+      modules: allImportedModules.isNotEmpty ? allImportedModules : null,
+      topics: allImportedTopics.isNotEmpty ? allImportedTopics : null,
       studyLogs: importedStudyLogs.isNotEmpty ? importedStudyLogs : null,
     );
 

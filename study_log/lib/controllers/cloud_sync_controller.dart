@@ -262,6 +262,50 @@ class CloudSyncController extends ChangeNotifier {
     }
   }
 
+  /// Completely deletes all user account data, resets local database,
+  /// removes cloud backup (if active), and disconnects authentication session.
+  Future<void> deleteAccountAndClearData() async {
+    _isSyncing = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // 1. Delete Google Drive cloud backup if signed in
+      if (isSignedIn) {
+        try {
+          await _driveService.deleteBackup();
+          debugPrint('[CloudSyncController] Drive cloud backup deleted.');
+        } catch (e) {
+          debugPrint('[CloudSyncController] Drive backup deletion non-fatal: $e');
+        }
+      }
+
+      // 2. Clear local SQLite database completely
+      await _dbService.clearAllData();
+      await _dbService.deleteSetting('active_account_email');
+
+      // 3. Clear in-memory controller states & refresh
+      _resetControllersInMemory();
+      await _refreshAllControllers();
+
+      // 4. Disconnect and sign out Google account
+      if (_authService.isSignedIn) {
+        try {
+          await _authService.signOut();
+        } catch (_) {}
+      }
+
+      _lastBackupDate = null;
+      _isSyncing = false;
+      notifyListeners();
+    } catch (e) {
+      _isSyncing = false;
+      _errorMessage = 'Failed to delete account & clear data: $e';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   /// Backs up the local SQLite database to Google Drive `appDataFolder`.
   Future<bool> backupToDrive() async {
     if (!isSignedIn) {

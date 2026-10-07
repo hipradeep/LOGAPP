@@ -8,8 +8,9 @@ import 'study_confirmation_dialog.dart';
 import '../screens/add_course_screen.dart';
 import 'course_icon_chip.dart';
 import 'sheet_action_widgets.dart';
+import 'share_course_json_sheet.dart';
 
-enum CourseOptionAction { edit, duplicate, archive, delete }
+enum CourseOptionAction { edit, shareJson, archive, delete }
 
 /// Bottom action sheet presented when tapping options or long-pressing a Course card.
 /// Matches the reference design with squircle header, clean action rows, red delete button, and cancel button.
@@ -40,26 +41,8 @@ class CourseOptionsSheet extends StatelessWidget {
           ),
         );
         break;
-      case CourseOptionAction.duplicate:
-        await getIt<CoursesController>().addCourse(
-          title: '${course.title} (Copy)',
-          description: course.description,
-          deadline: course.deadline,
-          iconCodePoint: course.iconCodePoint,
-          colorValue: course.colorValue,
-        );
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Course "${course.title}" duplicated'),
-              backgroundColor: AppTheme.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              ),
-            ),
-          );
-        }
+      case CourseOptionAction.shareJson:
+        await ShareCourseJsonSheet.show(context, course: course);
         break;
       case CourseOptionAction.archive:
         final confirmed = await StudyConfirmationDialog.showArchiveCourse(
@@ -136,9 +119,9 @@ class CourseOptionsSheet extends StatelessWidget {
           onTap: () => Navigator.pop(context, CourseOptionAction.edit),
         ),
         SheetActionRow(
-          icon: Icons.copy_rounded,
-          title: 'Duplicate Course',
-          onTap: () => Navigator.pop(context, CourseOptionAction.duplicate),
+          icon: Icons.share_rounded,
+          title: 'Share Course',
+          onTap: () => Navigator.pop(context, CourseOptionAction.shareJson),
         ),
         SheetActionRow(
           icon: Icons.archive_outlined,

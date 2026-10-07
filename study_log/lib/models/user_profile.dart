@@ -20,8 +20,8 @@ class UserProfile {
 
   const UserProfile({
     this.id = 'profile',
-    this.name = 'Pradeep Maurya',
-    this.headline = 'Software Developer',
+    this.name = 'Learner',
+    this.headline = 'Student',
     this.email,
     this.avatarUrl,
     this.currentStreak = 0,
@@ -93,8 +93,8 @@ class UserProfile {
       id: (documentId != null && documentId.isNotEmpty)
           ? documentId
           : (map['id']?.toString() ?? 'profile'),
-      name: map['name']?.toString() ?? 'Pradeep Maurya',
-      headline: map['headline']?.toString() ?? 'Software Developer',
+      name: map['name']?.toString() ?? 'Learner',
+      headline: map['headline']?.toString() ?? 'Student',
       email: map['email']?.toString(),
       avatarUrl: map['avatarUrl']?.toString(),
       currentStreak: _parseInt(map['currentStreak']),

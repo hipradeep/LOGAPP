@@ -74,23 +74,29 @@ class DatabaseBackupService {
       type: FileType.custom,
       allowedExtensions: ['json'],
       allowMultiple: false,
+      withData: true,
     );
 
     if (result == null || result.files.isEmpty) return false;
 
-    final path = result.files.single.path;
+    final file = result.files.single;
     String content;
-    if (path != null) {
-      content = await File(path).readAsString();
-    } else if (result.files.single.bytes != null) {
-      content = utf8.decode(result.files.single.bytes!);
+    if (file.bytes != null && file.bytes!.isNotEmpty) {
+      content = utf8.decode(file.bytes!);
+    } else if (file.path != null) {
+      content = await File(file.path!).readAsString();
     } else {
       return false;
     }
 
-    final decoded = jsonDecode(content);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid backup file format');
+    String cleaned = content.trim();
+    if (cleaned.startsWith('\uFEFF')) {
+      cleaned = cleaned.substring(1).trim();
+    }
+
+    final decoded = jsonDecode(cleaned);
+    if (decoded is! Map<String, dynamic> || !decoded.containsKey('courses')) {
+      throw const FormatException('Invalid backup file format: Missing database tables');
     }
 
     await importAllFromJson(decoded);

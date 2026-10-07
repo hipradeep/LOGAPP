@@ -50,6 +50,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   StreamSubscription<List<Topic>>? _topicsSubscription;
   DateTime? _lastUpdatedAt;
   int _totalMinutesExpended = 0;
+  final _togglingTopicIndices = <int>{};
 
   @override
   void initState() {
@@ -140,21 +141,14 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       _topicsSubscription?.cancel();
       _topicsSubscription = dbService
           .streamTopics(moduleId: widget.moduleId)
-          .listen((remoteTopics) async {
+          .listen((remoteTopics) {
         if (!mounted) return;
         if (remoteTopics.isNotEmpty) {
           final merged = _mergeTopics(_topics, remoteTopics);
           setState(() => _topics = merged);
           unawaited(_loadModuleStats());
-          final key = widget.moduleId.isNotEmpty
-              ? widget.moduleId
-              : widget.moduleTitle;
-          await LocalTopicStorage.saveTopics(key, merged);
           if (merged.every((t) => t.isCompleted)) {
-            await _syncModuleCompletion();
-          }
-          if (getIt.isRegistered<OngoingModulesController>()) {
-            getIt<OngoingModulesController>().refresh();
+            unawaited(_syncModuleCompletion());
           }
         }
       }, onError: (e) {
@@ -341,9 +335,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       });
       final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
       await LocalTopicStorage.saveTopics(key, merged);
-      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-        await LocalTopicStorage.saveTopics(widget.moduleTitle, merged);
-      }
       await _syncModuleCompletion();
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
@@ -352,87 +343,92 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   }
 
   Future<void> _toggleTopicStatus(int index) async {
-    final current = _topics[index];
-    final TopicStatus next;
-    switch (current.status) {
-      case TopicStatus.notStarted:
-        next = TopicStatus.inProgress;
-        break;
-      case TopicStatus.inProgress:
-        next = TopicStatus.completed;
-        break;
-      case TopicStatus.completed:
-        next = TopicStatus.notStarted;
-        break;
-    }
-    final topicId = current.id.isNotEmpty
-        ? current.id
-        : 'topic_${widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle.toLowerCase().replaceAll(' ', '_')}_$index';
-    final courseId =
-        current.courseId.isNotEmpty ? current.courseId : widget.courseId;
-    final moduleId =
-        current.moduleId.isNotEmpty ? current.moduleId : widget.moduleId;
+    if (index < 0 || index >= _topics.length) return;
+    if (_togglingTopicIndices.contains(index)) return;
+    _togglingTopicIndices.add(index);
 
-    final updated = next == TopicStatus.completed
-        ? current.copyWith(
-            id: topicId,
-            courseId: courseId,
-            moduleId: moduleId,
-            status: next,
-            completedAt: DateTime.now(),
-          )
-        : current.copyWith(
-            id: topicId,
-            courseId: courseId,
-            moduleId: moduleId,
-            status: next,
-            clearCompletedAt: true,
-          );
+    try {
+      final current = _topics[index];
+      final TopicStatus next;
+      switch (current.status) {
+        case TopicStatus.notStarted:
+          next = TopicStatus.inProgress;
+          break;
+        case TopicStatus.inProgress:
+          next = TopicStatus.completed;
+          break;
+        case TopicStatus.completed:
+          next = TopicStatus.notStarted;
+          break;
+      }
+      final topicId = current.id.isNotEmpty
+          ? current.id
+          : 'topic_${widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle.toLowerCase().replaceAll(' ', '_')}_$index';
+      final courseId =
+          current.courseId.isNotEmpty ? current.courseId : widget.courseId;
+      final moduleId =
+          current.moduleId.isNotEmpty ? current.moduleId : widget.moduleId;
 
-    setState(() {
-      _topics[index] = updated;
-    });
+      final updated = next == TopicStatus.completed
+          ? current.copyWith(
+              id: topicId,
+              courseId: courseId,
+              moduleId: moduleId,
+              status: next,
+              completedAt: DateTime.now(),
+            )
+          : current.copyWith(
+              id: topicId,
+              courseId: courseId,
+              moduleId: moduleId,
+              status: next,
+              clearCompletedAt: true,
+            );
 
-    final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-    await LocalTopicStorage.saveTopics(key, _topics);
-    if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
-    }
-    await _syncModuleCompletion();
+      setState(() {
+        _topics[index] = updated;
+      });
 
-    if (updated.isCompleted) {
-      final studyLog = StudyLog(
-        id: '${updated.id}_${DateTime.now().millisecondsSinceEpoch}',
-        type: StudyLogType.topicCompleted,
-        courseId: widget.courseId,
-        courseTitle: widget.courseTitle,
-        moduleId: widget.moduleId,
-        moduleTitle: widget.moduleTitle,
-        topicId: updated.id,
-        topicTitle: updated.title,
-        timestamp: updated.completedAt ?? DateTime.now(),
-        createdAt: DateTime.now(),
-      );
-      await LocalStudyLogStorage.addLog(studyLog);
+      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
+      await LocalTopicStorage.saveTopics(key, _topics);
+      await _syncModuleCompletion();
+
+      if (updated.isCompleted) {
+        final studyLog = StudyLog(
+          id: '${updated.id}_${DateTime.now().millisecondsSinceEpoch}',
+          type: StudyLogType.topicCompleted,
+          courseId: widget.courseId,
+          courseTitle: widget.courseTitle,
+          moduleId: widget.moduleId,
+          moduleTitle: widget.moduleTitle,
+          topicId: updated.id,
+          topicTitle: updated.title,
+          timestamp: updated.completedAt ?? DateTime.now(),
+          createdAt: DateTime.now(),
+        );
+        await LocalStudyLogStorage.addLog(studyLog);
+        if (getIt.isRegistered<ProgressController>()) {
+          unawaited(getIt<ProgressController>().refresh());
+        }
+      } else {
+        if (getIt.isRegistered<ProgressController>()) {
+          unawaited(getIt<ProgressController>().refresh());
+        }
+      }
+
+      if (getIt.isRegistered<OngoingModulesController>()) {
+        await getIt<OngoingModulesController>().refresh();
+      }
+      if (getIt.isRegistered<RevisionController>()) {
+        await getIt<RevisionController>().reconcile();
+      }
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());
       }
-    } else {
-      if (getIt.isRegistered<ProgressController>()) {
-        unawaited(getIt<ProgressController>().refresh());
-      }
+      unawaited(_loadModuleStats());
+    } finally {
+      _togglingTopicIndices.remove(index);
     }
-
-    if (getIt.isRegistered<OngoingModulesController>()) {
-      await getIt<OngoingModulesController>().refresh();
-    }
-    if (getIt.isRegistered<RevisionController>()) {
-      await getIt<RevisionController>().reconcile();
-    }
-    if (getIt.isRegistered<ProgressController>()) {
-      unawaited(getIt<ProgressController>().refresh());
-    }
-    unawaited(_loadModuleStats());
   }
 
   Future<void> _handleDeleteTopic(int index) async {
@@ -1068,7 +1064,6 @@ class _TopicsListView extends StatelessWidget {
 
         return TopicListItem(
           topic: item,
-          onCheckboxTap: () => onToggle(index),
           onTap: () => onToggle(index),
           onLongPress: openOptions,
           onOptionsTap: openOptions,

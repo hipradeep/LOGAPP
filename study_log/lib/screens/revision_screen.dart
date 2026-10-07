@@ -167,13 +167,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
             TabHeader(
               title: 'Revision',
               subtitle: 'Review due & upcoming topics',
-              onBack: widget.onBack,
-              padding: EdgeInsets.fromLTRB(
-                widget.onBack != null ? 12.0 : 20.0,
-                16.0,
-                20.0,
-                8.0,
-              ),
               actions: [
                 IconButton(
                   icon: Icon(

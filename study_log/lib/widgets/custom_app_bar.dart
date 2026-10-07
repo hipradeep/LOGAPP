@@ -57,64 +57,71 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       );
     }
 
-    Widget? titleContent;
-    if (titleWidget != null) {
-      titleContent = titleWidget;
-    } else if (title != null) {
-      titleContent = Column(
-        crossAxisAlignment:
-            centerTitle ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+    Widget finalActions = const SizedBox.shrink();
+    if (actions != null && actions!.isNotEmpty) {
+      finalActions = Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          if (subtitle != null && subtitle!.isNotEmpty) ...[
-            Text(
-              subtitle!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondaryColor(context),
-                letterSpacing: 0.2,
-              ),
-            ),
-            const SizedBox(height: 1),
-          ],
-          Text(
-            title!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: actions!,
       );
     }
 
     return Container(
       color: backgroundColor,
       padding: padding,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (hasLeading && leadingWidget != null) ...[
-            leadingWidget,
-            const HGapXs(),
-          ],
-          if (titleContent != null)
-            Expanded(
-              child: titleContent,
-            )
-          else
-            const Spacer(),
-          if (actions != null && actions!.isNotEmpty) ...[
-            const HGapSm(),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: actions!,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (hasLeading && leadingWidget != null) ...[
+                leadingWidget,
+                const HGapXs(),
+              ],
+              if (titleWidget != null)
+                Expanded(child: titleWidget!)
+              else if (title != null)
+                Expanded(
+                  child: Text(
+                    title!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: centerTitle ? TextAlign.center : TextAlign.start,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor(context),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+              if (actions != null && actions!.isNotEmpty) ...[
+                const HGapSm(),
+                finalActions,
+              ],
+            ],
+          ),
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Padding(
+              padding: EdgeInsets.only(
+                left: (hasLeading && leadingWidget != null) ? 36.0 : 0.0,
+              ),
+              child: Text(
+                subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondaryColor(context),
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
           ],
         ],

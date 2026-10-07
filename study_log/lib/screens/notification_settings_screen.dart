@@ -243,7 +243,6 @@ class _NotificationOptionTile extends StatelessWidget {
   final Color iconColor;
   final Color iconBgColor;
   final String title;
-  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
   final Widget? child;
@@ -253,7 +252,6 @@ class _NotificationOptionTile extends StatelessWidget {
     required this.iconColor,
     required this.iconBgColor,
     required this.title,
-    this.subtitle,
     required this.value,
     required this.onChanged,
     this.child,
@@ -279,28 +277,13 @@ class _NotificationOptionTile extends StatelessWidget {
               ),
               const HGapSm(),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimaryColor(context),
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const VGapXs(),
-                      Text(
-                        subtitle!,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ],
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
                 ),
               ),
               _CompactSwitch(

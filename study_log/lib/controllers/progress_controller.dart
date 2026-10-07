@@ -86,9 +86,13 @@ class ProgressController extends ChangeNotifier {
   int get totalTopicsFinished => _totalTopicsFinished;
   int get totalTopicRevisions => _totalTopicRevisions;
   UserProfile? get userProfile => _userProfile;
-  String get userName => _userProfile?.name ?? 'Pradeep Maurya';
-  String get userHeadline => _userProfile?.headline ?? 'Software Developer';
-  String get userInitial => _userProfile?.initial ?? 'P';
+  String get userName => (_userProfile?.name?.isNotEmpty == true && _userProfile!.name != 'Pradeep Maurya') ? _userProfile!.name : 'Learner';
+  String get userHeadline => (_userProfile?.headline?.isNotEmpty == true && _userProfile!.headline != 'Software Developer') ? _userProfile!.headline : 'Student';
+  String get userInitial {
+    final name = userName;
+    final trimmed = name.trim();
+    return trimmed.isNotEmpty ? trimmed[0].toUpperCase() : 'L';
+  }
   String? get userEmail => _userProfile?.email;
   String? get userAvatarUrl => _userProfile?.avatarUrl;
 

@@ -890,44 +890,76 @@ class DatabaseService {
     await db.transaction((txn) async {
       if (courses != null) {
         for (final c in courses) {
-          await txn.insert(
+          final count = await txn.update(
             'courses',
             c.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace,
+            where: 'id = ?',
+            whereArgs: [c.id],
           );
+          if (count == 0) {
+            await txn.insert('courses', c.toMap());
+          }
         }
       }
       if (modules != null) {
         for (final m in modules) {
-          await txn.insert(
+          final count = await txn.update(
             'modules',
             m.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace,
+            where: 'id = ?',
+            whereArgs: [m.id],
           );
+          if (count == 0) {
+            await txn.insert('modules', m.toMap());
+          }
         }
       }
       if (topics != null) {
         for (final t in topics) {
-          await txn.insert(
+          final count = await txn.update(
             'topics',
             t.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace,
+            where: 'id = ?',
+            whereArgs: [t.id],
           );
+          if (count == 0) {
+            await txn.insert('topics', t.toMap());
+          }
         }
       }
       if (studyLogs != null) {
         for (final l in studyLogs) {
-          await txn.insert(
+          final count = await txn.update(
             'study_logs',
             l.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace,
+            where: 'id = ?',
+            whereArgs: [l.id],
           );
+          if (count == 0) {
+            await txn.insert('study_logs', l.toMap());
+          }
         }
       }
     });
 
     if (courses != null && courses.isNotEmpty) {
       _coursesStreamController.add(await getCourses());
+    }
+    if (modules != null && modules.isNotEmpty) {
+      final courseIds = modules.map((m) => m.courseId).toSet();
+      for (final cid in courseIds) {
+        if (_modulesStreamControllers.containsKey(cid)) {
+          _modulesStreamControllers[cid]?.add(await getModules(courseId: cid));
+        }
+      }
+    }
+    if (topics != null && topics.isNotEmpty) {
+      final moduleIds = topics.map((t) => t.moduleId).toSet();
+      for (final mid in moduleIds) {
+        if (_topicsStreamControllers.containsKey(mid)) {
+          _topicsStreamControllers[mid]?.add(await getTopics(moduleId: mid));
+        }
+      }
     }
     if (studyLogs != null && studyLogs.isNotEmpty) {
       _studyLogsStreamController.add(await getStudyLogs());

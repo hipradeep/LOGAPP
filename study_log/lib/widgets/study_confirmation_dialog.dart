@@ -130,6 +130,24 @@ class StudyConfirmationDialog extends StatelessWidget {
     return result ?? false;
   }
 
+  /// Displays the "Delete Account & Clean All Data?" dialog with strong warning
+  static Future<bool> showDeleteAccountAndData(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => const StudyConfirmationDialog(
+        icon: Icons.warning_amber_rounded,
+        iconColor: AppTheme.errorColor,
+        title: 'Delete Account & Clear Data?',
+        message:
+            'This will permanently delete your account, all courses, progress, and backups. This action cannot be undone.',
+        confirmText: 'Delete All',
+        confirmColor: AppTheme.errorColor,
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(

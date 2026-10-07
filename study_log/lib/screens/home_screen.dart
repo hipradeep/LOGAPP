@@ -5,12 +5,14 @@ import '../widgets/app_spacers.dart';
 import '../widgets/study_schedule_card.dart';
 import '../widgets/today_progress_card.dart';
 import '../widgets/your_courses_carousel.dart';
+import '../widgets/tab_header.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/notification_controller.dart';
+import '../controllers/cloud_sync_controller.dart';
 import '../services/notification_service.dart';
 import '../models/course.dart';
 import 'activity_screen.dart';
@@ -20,7 +22,7 @@ import 'module_detail_screen.dart';
 import '../widgets/recent_activity_card.dart';
 
 /// Redesigned Home Screen matching the reference design:
-/// - "Hi, Pradeep 👋" greeting & notification bell with badge dot
+/// - "Hi, <UserName>" / "Study/Log" greeting
 /// - "Your Courses" horizontal carousel with progress bars and indicator dots
 /// - "Today's Progress" with formatted date and 4 statistics
 /// - "Current Modules" fetching ongoing courses and active ongoing modules
@@ -73,16 +75,6 @@ class _HomeScreenState extends State<HomeScreen> {
         progressCtrl.load();
       }
     }
-  }
-
-  Future<void> _handleRefresh() async {
-    await Future.wait([
-      getIt<CoursesController>().loadCourses(),
-      getIt<OngoingModulesController>().refresh(),
-      getIt<RevisionController>().reconcile(),
-      if (getIt.isRegistered<ProgressController>())
-        getIt<ProgressController>().refresh(),
-    ]);
   }
 
   void _openActivity(BuildContext context) {
@@ -156,70 +148,45 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
-              sliver: SliverToBoxAdapter(
-                child: _HomeTopModule(
-                  ongoingController: ongoingController,
-                  onViewAll: _handleViewAll,
-                  onCourseTap: _openCourseByTitle,
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-              sliver: _CurrentModulesSliverList(
-                ongoingController: ongoingController,
-                onModuleTap: _openModuleDetail,
-                onViewAll: _handleViewAll,
-              ),
-            ),
-            SliverPadding(
-              padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
-              sliver: SliverToBoxAdapter(
-                child: _HomeRecentActivitySection(
-                  onOpenActivity: () => _openActivity(context),
-                ),
+        child: Column(
+          children: [
+            const _HomeGreetingHeader(),
+            Expanded(
+              child: CustomScrollView(
+                physics: const ClampingScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.only(left: 20, right: 20, top: 4, bottom: 8),
+                    sliver: SliverToBoxAdapter(
+                      child: _HomeTopModule(
+                        ongoingController: ongoingController,
+                        onViewAll: _handleViewAll,
+                        onCourseTap: _openCourseByTitle,
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+                    sliver: _CurrentModulesSliverList(
+                      ongoingController: ongoingController,
+                      onModuleTap: _openModuleDetail,
+                      onViewAll: _handleViewAll,
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomSafe + 32),
+                    sliver: SliverToBoxAdapter(
+                      child: _HomeRecentActivitySection(
+                        onOpenActivity: () => _openActivity(context),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _GreetingHeader extends StatelessWidget {
-  const _GreetingHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Hi, Pradeep 👋',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-            letterSpacing: -0.3,
-          ),
-        ),
-        const VGapXs(),
-        Text(
-          'Keep learning, keep growing!',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondaryColor(context),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -236,6 +203,202 @@ class _CurrentModulesHeader extends StatelessWidget {
         fontWeight: FontWeight.bold,
         color: AppTheme.textPrimaryColor(context),
       ),
+    );
+  }
+}
+
+class _HomeGreetingHeader extends StatelessWidget {
+  const _HomeGreetingHeader();
+
+  Future<void> _handleCloudSignIn(BuildContext context, CloudSyncController? ctrl) async {
+    if (ctrl == null || ctrl.isBusy) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: AppTheme.surface(context),
+              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+              border: Border.all(color: AppTheme.borderColor(context)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.shadowColor(context),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                const HGapMd(),
+                Text(
+                  'Connecting to Google...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    bool success = false;
+    try {
+      success = await ctrl.signIn();
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
+    if (!context.mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Signed in as ${ctrl.displayName ?? ctrl.userEmail ?? "User"}!'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    } else if (ctrl.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ctrl.errorMessage!),
+          backgroundColor: AppTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final syncCtrl = getIt.isRegistered<CloudSyncController>()
+        ? getIt<CloudSyncController>()
+        : null;
+    final progressCtrl = getIt.isRegistered<ProgressController>()
+        ? getIt<ProgressController>()
+        : null;
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([?syncCtrl, ?progressCtrl]),
+      builder: (context, _) {
+        final isSignedIn = syncCtrl?.isSignedIn ?? false;
+
+        final String titleText;
+        if (isSignedIn) {
+          final rawName = syncCtrl?.displayName?.trim().isNotEmpty == true
+              ? syncCtrl!.displayName!.trim()
+              : (progressCtrl?.userName.trim().isNotEmpty == true
+                  ? progressCtrl!.userName.trim()
+                  : 'Learner');
+          final firstName = rawName.split(RegExp(r'\s+')).first;
+          titleText = 'Hi, $firstName';
+        } else {
+          titleText = 'Study/Log';
+        }
+
+        return TabHeader(
+          titleWidget: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  titleText,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor(context),
+                    letterSpacing: -0.3,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const HGapSm(),
+              if (isSignedIn)
+                Tooltip(
+                  message: 'Cloud Sync Connected (${syncCtrl?.userEmail ?? ""})',
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.cloud_done_rounded,
+                      size: 18,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                )
+              else
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _handleCloudSignIn(context, syncCtrl),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.cloud_upload_outlined,
+                            size: 16,
+                            color: AppTheme.primaryColor,
+                          ),
+                          const HGapXs(),
+                          Text(
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          subtitle: 'Keep learning, keep growing!',
+        );
+      },
     );
   }
 }
@@ -257,8 +420,6 @@ class _HomeTopModule extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const _GreetingHeader(),
-        const VGapLg(),
         YourCoursesCarousel(
           onMoreTap: onViewAll,
           onCourseTap: onCourseTap,

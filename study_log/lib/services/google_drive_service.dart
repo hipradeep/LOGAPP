@@ -164,4 +164,29 @@ class GoogleDriveService {
       return null;
     }
   }
+
+  /// Deletes the backup file from the Drive `appDataFolder` if it exists.
+  Future<void> deleteBackup() async {
+    try {
+      final driveApi = await _getDriveApi();
+      final query =
+          "name = '$backupFileName' and 'appDataFolder' in parents and trashed = false";
+
+      final fileList = await driveApi.files.list(
+        spaces: 'appDataFolder',
+        q: query,
+        $fields: 'files(id)',
+      );
+
+      if (fileList.files != null) {
+        for (final file in fileList.files!) {
+          if (file.id != null) {
+            await driveApi.files.delete(file.id!);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[GoogleDriveService] Error deleting Drive backup: $e');
+    }
+  }
 }

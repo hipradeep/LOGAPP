@@ -1,32 +1,12 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Outcome of attempting to deliver a test notification, so the UI can report
-/// the real outcome instead of assuming success.
-enum TestNotificationResult {
-  /// Delivered immediately via `show()`.
-  instantSent,
-
-  /// Scheduled and will fire with exact timing.
-  scheduledExact,
-
-  /// Scheduled without exact-alarm permission; Android may batch and delay it.
-  scheduledInexact,
-
-  /// The user has not granted the Android 13+ notification permission.
-  permissionDenied,
-
-  /// The plugin or platform channel threw.
-  failed,
-}
-
 /// Thin wrapper over `flutter_local_notifications` that owns plugin
 /// initialization, Android permission negotiation, timezone resolution,
-/// production recurring schedules, and test-notification delivery.
+/// and production recurring schedules.
 ///
 /// All methods are defensive: a missing plugin (tests, unsupported platforms)
 /// must never crash the app, so failures are swallowed, logged via
@@ -64,11 +44,6 @@ class NotificationService {
   static const String _deadlineChannelName = 'Deadline Alerts';
   static const String _deadlineChannelDescription =
       'Alerts for course deadlines due today.';
-
-  static const String _testChannelId = 'study_test_channel';
-  static const String _testChannelName = 'Test Notifications';
-  static const String _testChannelDescription =
-      'Diagnostics notifications used to verify reminder delivery.';
 
   static const int courseNotificationId = 1001;
   static const int streakNotificationId = 1002;
@@ -133,18 +108,6 @@ class NotificationService {
     ),
   );
 
-  static const NotificationDetails _testDetails = NotificationDetails(
-    android: AndroidNotificationDetails(
-      _testChannelId,
-      _testChannelName,
-      channelDescription: _testChannelDescription,
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-    ),
-  );
-
   /// Whether [init] has already completed successfully.
   bool get isInitialized => _initFuture != null;
 
@@ -202,14 +165,6 @@ class NotificationService {
           _deadlineChannelName,
           description: _deadlineChannelDescription,
           importance: Importance.high,
-        ),
-      );
-      await android.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _testChannelId,
-          _testChannelName,
-          description: _testChannelDescription,
-          importance: Importance.max,
         ),
       );
     }
@@ -281,81 +236,6 @@ class NotificationService {
     }
   }
 
-  /// Posts a dummy notification immediately, requesting permission if needed.
-  ///
-  /// [id] is reused to replace any previously shown test notification instead
-  /// of stacking duplicates.
-  Future<TestNotificationResult> showInstantNotification({
-    int id = 9999,
-    required String title,
-    required String body,
-  }) async {
-    try {
-      await init();
-      if (!await requestPermission()) {
-        return TestNotificationResult.permissionDenied;
-      }
-
-      await _plugin.show(
-        id: id,
-        title: title,
-        body: body,
-        notificationDetails: _testDetails,
-        payload: 'test_instant',
-      );
-      return TestNotificationResult.instantSent;
-    } catch (error, stack) {
-      debugPrint('NotificationService showInstantNotification error: $error\n$stack');
-      return TestNotificationResult.failed;
-    }
-  }
-
-  /// Schedules a dummy notification to fire after [delay].
-  ///
-  /// Uses exact timing when the `SCHEDULE_EXACT_ALARM` grant is held so the
-  /// alarm actually lands on time; otherwise falls back to inexact mode, which
-  /// Android is free to batch. The returned enum lets the caller surface that
-  /// caveat rather than promising a precise fire time.
-  Future<TestNotificationResult> scheduleTestNotification({
-    int id = 9998,
-    required String title,
-    required String body,
-    Duration delay = const Duration(seconds: 10),
-  }) async {
-    try {
-      await init();
-      if (!await requestPermission()) {
-        return TestNotificationResult.permissionDenied;
-      }
-
-      final android = _android ??= _resolveAndroid();
-
-      // Don't open the system alarm settings screen unprompted; just report
-      // whether exact timing is available.
-      final canScheduleExact = await _canScheduleExact(android);
-      final scheduleMode = canScheduleExact
-          ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexactAllowWhileIdle;
-
-      await _plugin.zonedSchedule(
-        id: id,
-        title: title,
-        body: body,
-        scheduledDate: tz.TZDateTime.now(tz.local).add(delay),
-        notificationDetails: _testDetails,
-        androidScheduleMode: scheduleMode,
-        payload: 'test_scheduled',
-      );
-
-      return canScheduleExact
-          ? TestNotificationResult.scheduledExact
-          : TestNotificationResult.scheduledInexact;
-    } catch (error, stack) {
-      debugPrint('NotificationService scheduleTestNotification error: $error\n$stack');
-      return TestNotificationResult.failed;
-    }
-  }
-
   static Future<bool> _canScheduleExact(
       AndroidFlutterLocalNotificationsPlugin? android) async {
     if (android == null) return false;
@@ -364,16 +244,6 @@ class NotificationService {
     } catch (error) {
       debugPrint('NotificationService canScheduleExactNotifications error: $error');
       return false;
-    }
-  }
-
-  /// Cancels a pending or displayed test notification.
-  Future<void> cancelTestNotification(int id) async {
-    try {
-      await init();
-      await _plugin.cancel(id: id);
-    } catch (error, stack) {
-      debugPrint('NotificationService cancelTestNotification error: $error\n$stack');
     }
   }
 
