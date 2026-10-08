@@ -128,20 +128,38 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
     }
 
     // Synthesize completed modules if all topics are completed and no log exists yet
-    final existingModuleLogs = directLogs
-        .where((l) => l.isModuleCompleted)
-        .map((l) => l.moduleId)
-        .toSet();
+    final existingModuleKeys = <String>{};
+    for (final l in directLogs) {
+      if (l.isModuleCompleted) {
+        if (l.moduleId.isNotEmpty) existingModuleKeys.add(l.moduleId);
+        if (l.moduleTitle.isNotEmpty) existingModuleKeys.add(l.moduleTitle.trim().toLowerCase());
+      }
+    }
 
     for (final entry in topicBuckets.entries) {
-      final moduleId = entry.key;
+      final bucketKey = entry.key;
       final list = entry.value;
       if (list.isNotEmpty && list.every((t) => t.isCompleted)) {
-        if (!existingModuleLogs.contains(moduleId)) {
-          final first = list.first;
+        final first = list.first;
+        final resolvedModuleId = first.moduleId.isNotEmpty ? first.moduleId : bucketKey;
+        String resolvedModuleTitle = ongoing?.moduleTitleFor(resolvedModuleId) ?? '';
+        if (resolvedModuleTitle.isEmpty) {
+          resolvedModuleTitle = ongoing?.moduleTitleFor(bucketKey) ?? '';
+        }
+        if (resolvedModuleTitle.isEmpty && !bucketKey.startsWith('module_') && !bucketKey.startsWith('mod_')) {
+          resolvedModuleTitle = bucketKey;
+        }
+        if (resolvedModuleTitle.isEmpty) {
+          resolvedModuleTitle = 'Module Completed';
+        }
+
+        final bool alreadyHasLog = existingModuleKeys.contains(resolvedModuleId) ||
+            existingModuleKeys.contains(bucketKey) ||
+            existingModuleKeys.contains(resolvedModuleTitle.trim().toLowerCase());
+
+        if (!alreadyHasLog) {
           final courseTitle =
               courses?.getCourseById(first.courseId)?.title ?? '';
-          final moduleTitle = ongoing?.moduleTitleFor(moduleId) ?? '';
           final latestCompletedAt = list
                   .map((t) => t.completedAt)
                   .whereType<DateTime>()
@@ -153,12 +171,12 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
               DateTime.now();
 
           final synthModLog = StudyLog(
-            id: 'synth_mod_$moduleId',
+            id: 'synth_mod_$resolvedModuleId',
             type: StudyLogType.moduleCompleted,
             courseId: first.courseId,
             courseTitle: courseTitle,
-            moduleId: moduleId,
-            moduleTitle: moduleTitle.isNotEmpty ? moduleTitle : first.title,
+            moduleId: resolvedModuleId,
+            moduleTitle: resolvedModuleTitle,
             timestamp: latestCompletedAt,
             createdAt: latestCompletedAt,
           );

@@ -235,11 +235,118 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _recordModuleCompletionLog({DateTime? timestamp}) async {
+    final now = timestamp ?? DateTime.now();
+
+    // 1. Resolve moduleId
+    String resolvedModuleId = widget.moduleId;
+    if (resolvedModuleId.isEmpty && _topics.isNotEmpty) {
+      resolvedModuleId = _topics
+          .firstWhere((t) => t.moduleId.isNotEmpty, orElse: () => _topics.first)
+          .moduleId;
+    }
+    if (resolvedModuleId.isEmpty) {
+      resolvedModuleId = widget.moduleTitle;
+    }
+
+    // 2. Resolve moduleTitle
+    String resolvedModuleTitle = widget.moduleTitle;
+    if (resolvedModuleTitle.isEmpty && getIt.isRegistered<OngoingModulesController>()) {
+      resolvedModuleTitle =
+          getIt<OngoingModulesController>().moduleTitleFor(resolvedModuleId);
+    }
+    if (resolvedModuleTitle.isEmpty && _topics.isNotEmpty) {
+      resolvedModuleTitle = _topics.first.title;
+    }
+
+    // 3. Resolve courseId
+    String resolvedCourseId = widget.courseId;
+    if (resolvedCourseId.isEmpty && _topics.isNotEmpty) {
+      resolvedCourseId = _topics
+          .firstWhere((t) => t.courseId.isNotEmpty, orElse: () => _topics.first)
+          .courseId;
+    }
+
+    // 4. Resolve courseTitle
+    String resolvedCourseTitle = widget.courseTitle;
+    if (resolvedCourseTitle.isEmpty &&
+        resolvedCourseId.isNotEmpty &&
+        getIt.isRegistered<CoursesController>()) {
+      resolvedCourseTitle =
+          getIt<CoursesController>().getCourseById(resolvedCourseId)?.title ?? '';
+    }
+
+    // Avoid duplicate module completion logs on the same calendar day
+    final existingLogs = await LocalStudyLogStorage.loadAll();
+    final alreadyLoggedToday = existingLogs.any((l) {
+      if (!l.isModuleCompleted) return false;
+      final sameModule = (resolvedModuleId.isNotEmpty && l.moduleId == resolvedModuleId) ||
+          (resolvedModuleTitle.isNotEmpty &&
+              l.moduleTitle.toLowerCase() == resolvedModuleTitle.toLowerCase());
+      final sameDay = l.timestamp.year == now.year &&
+          l.timestamp.month == now.month &&
+          l.timestamp.day == now.day;
+      return sameModule && sameDay;
+    });
+
+    if (!alreadyLoggedToday) {
+      final modLog = StudyLog(
+        id: 'mod_complete_${resolvedModuleId.isNotEmpty ? resolvedModuleId : now.millisecondsSinceEpoch}_${now.millisecondsSinceEpoch}',
+        type: StudyLogType.moduleCompleted,
+        courseId: resolvedCourseId,
+        courseTitle: resolvedCourseTitle,
+        moduleId: resolvedModuleId,
+        moduleTitle: resolvedModuleTitle,
+        timestamp: now,
+        createdAt: now,
+      );
+      await LocalStudyLogStorage.addLog(modLog);
+    }
+  }
+
+  Future<void> _removeModuleCompletionLog() async {
+    String resolvedModuleId = widget.moduleId;
+    if (resolvedModuleId.isEmpty && _topics.isNotEmpty) {
+      resolvedModuleId = _topics
+          .firstWhere((t) => t.moduleId.isNotEmpty, orElse: () => _topics.first)
+          .moduleId;
+    }
+    if (resolvedModuleId.isNotEmpty) {
+      await LocalStudyLogStorage.deleteLogForModule(
+        moduleId: resolvedModuleId,
+        type: StudyLogType.moduleCompleted.value,
+      );
+    }
+    if (widget.moduleId.isNotEmpty && widget.moduleId != resolvedModuleId) {
+      await LocalStudyLogStorage.deleteLogForModule(
+        moduleId: widget.moduleId,
+        type: StudyLogType.moduleCompleted.value,
+      );
+    }
+    if (widget.moduleTitle.isNotEmpty) {
+      await LocalStudyLogStorage.deleteLogForModule(
+        moduleId: widget.moduleTitle,
+        type: StudyLogType.moduleCompleted.value,
+      );
+    }
+  }
+
   Future<void> _syncModuleCompletion() async {
     String courseId = widget.courseId;
     String moduleId = widget.moduleId;
 
-    // Resolve courseId and moduleId from disk cache if either is empty
+    // Resolve courseId and moduleId from topics or disk cache if either is empty
+    if (courseId.isEmpty && _topics.isNotEmpty) {
+      courseId = _topics
+          .firstWhere((t) => t.courseId.isNotEmpty, orElse: () => _topics.first)
+          .courseId;
+    }
+    if (moduleId.isEmpty && _topics.isNotEmpty) {
+      moduleId = _topics
+          .firstWhere((t) => t.moduleId.isNotEmpty, orElse: () => _topics.first)
+          .moduleId;
+    }
+
     if (courseId.isEmpty || moduleId.isEmpty) {
       final all = await LocalModuleStorage.loadAllModules();
       final match = all.firstWhere(
@@ -253,6 +360,16 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       }
     }
 
+    final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
+    final newStatus = allDone ? 'completed' : 'active';
+    final now = DateTime.now();
+
+    if (allDone) {
+      await _recordModuleCompletionLog(timestamp: now);
+    } else {
+      await _removeModuleCompletionLog();
+    }
+
     if (courseId.isEmpty) return;
     try {
       final modules = await LocalModuleStorage.loadModules(courseId);
@@ -260,9 +377,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         (m) => (moduleId.isNotEmpty && m.id == moduleId) ||
                (widget.moduleTitle.isNotEmpty && m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
       );
-      final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
-      final newStatus = allDone ? 'completed' : 'active';
-      final now = DateTime.now();
 
       final Module targetModule;
       if (idx != -1) {
@@ -274,45 +388,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           );
           modules[idx] = targetModule;
           await LocalModuleStorage.saveModulesForCourse(courseId, modules);
-
-          if (newStatus == 'completed') {
-            final modLog = StudyLog(
-              id: 'mod_complete_${targetModule.id}_${now.millisecondsSinceEpoch}',
-              type: StudyLogType.moduleCompleted,
-              courseId: courseId,
-              courseTitle: widget.courseTitle,
-              moduleId: targetModule.id,
-              moduleTitle: targetModule.title,
-              timestamp: now,
-              createdAt: now,
-            );
-            await LocalStudyLogStorage.addLog(modLog);
-          } else {
-            await LocalStudyLogStorage.deleteLogForModule(
-              moduleId: targetModule.id,
-              type: StudyLogType.moduleCompleted.value,
-            );
-          }
-        } else {
-          targetModule = modules[idx];
-          if (allDone && newStatus == 'completed') {
-            final existingLogs = await LocalStudyLogStorage.loadAll();
-            final hasLog = existingLogs.any(
-                (l) => l.moduleId == targetModule.id && l.isModuleCompleted);
-            if (!hasLog) {
-              final modLog = StudyLog(
-                id: 'mod_complete_${targetModule.id}_${now.millisecondsSinceEpoch}',
-                type: StudyLogType.moduleCompleted,
-                courseId: courseId,
-                courseTitle: widget.courseTitle,
-                moduleId: targetModule.id,
-                moduleTitle: targetModule.title,
-                timestamp: now,
-                createdAt: now,
-              );
-              await LocalStudyLogStorage.addLog(modLog);
-            }
-          }
         }
       } else {
         // Module not cached yet for this course — create and store it
@@ -328,20 +403,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         );
         modules.add(targetModule);
         await LocalModuleStorage.saveModulesForCourse(courseId, modules);
-
-        if (allDone && newStatus == 'completed') {
-          final modLog = StudyLog(
-            id: 'mod_complete_${targetModule.id}_${now.millisecondsSinceEpoch}',
-            type: StudyLogType.moduleCompleted,
-            courseId: courseId,
-            courseTitle: widget.courseTitle,
-            moduleId: targetModule.id,
-            moduleTitle: targetModule.title,
-            timestamp: now,
-            createdAt: now,
-          );
-          await LocalStudyLogStorage.addLog(modLog);
-        }
       }
 
       // If all modules in this course are now completed, also update course to completed
@@ -459,10 +520,16 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           createdAt: DateTime.now(),
         );
         await LocalStudyLogStorage.addLog(studyLog);
+
+        final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
+        if (allDone) {
+          await _recordModuleCompletionLog(timestamp: updated.completedAt);
+        }
         if (getIt.isRegistered<ProgressController>()) {
           unawaited(getIt<ProgressController>().refresh());
         }
       } else {
+        await _removeModuleCompletionLog();
         if (getIt.isRegistered<ProgressController>()) {
           unawaited(getIt<ProgressController>().refresh());
         }
@@ -797,12 +864,22 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 final allDone = (result == true) ||
                     (result is Map && result['allCompleted'] == true) ||
                     (_topics.isNotEmpty && _topics.every((t) => t.isCompleted));
-                if (allDone && mounted) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      _showModuleCompletedDialog(isInRevision: result is Map && result['isRevision'] == true);
-                    }
-                  });
+                if (allDone) {
+                  await _recordModuleCompletionLog();
+                  await _syncModuleCompletion();
+                  if (getIt.isRegistered<OngoingModulesController>()) {
+                    await getIt<OngoingModulesController>().refresh();
+                  }
+                  if (getIt.isRegistered<ProgressController>()) {
+                    unawaited(getIt<ProgressController>().refresh());
+                  }
+                  if (mounted) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        _showModuleCompletedDialog(isInRevision: result is Map && result['isRevision'] == true);
+                      }
+                    });
+                  }
                 }
               },
               backgroundColor: AppTheme.primaryColor,
