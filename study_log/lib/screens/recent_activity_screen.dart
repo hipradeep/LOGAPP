@@ -127,21 +127,64 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
       }
     }
 
+    // Synthesize completed modules if all topics are completed and no log exists yet
+    final existingModuleLogs = directLogs
+        .where((l) => l.isModuleCompleted)
+        .map((l) => l.moduleId)
+        .toSet();
+
+    for (final entry in topicBuckets.entries) {
+      final moduleId = entry.key;
+      final list = entry.value;
+      if (list.isNotEmpty && list.every((t) => t.isCompleted)) {
+        if (!existingModuleLogs.contains(moduleId)) {
+          final first = list.first;
+          final courseTitle =
+              courses?.getCourseById(first.courseId)?.title ?? '';
+          final moduleTitle = ongoing?.moduleTitleFor(moduleId) ?? '';
+          final latestCompletedAt = list
+                  .map((t) => t.completedAt)
+                  .whereType<DateTime>()
+                  .fold<DateTime?>(
+                      null,
+                      (prev, curr) => prev == null || curr.isAfter(prev)
+                          ? curr
+                          : prev) ??
+              DateTime.now();
+
+          final synthModLog = StudyLog(
+            id: 'synth_mod_$moduleId',
+            type: StudyLogType.moduleCompleted,
+            courseId: first.courseId,
+            courseTitle: courseTitle,
+            moduleId: moduleId,
+            moduleTitle: moduleTitle.isNotEmpty ? moduleTitle : first.title,
+            timestamp: latestCompletedAt,
+            createdAt: latestCompletedAt,
+          );
+          logsById[synthModLog.id] = synthModLog;
+        }
+      }
+    }
+
     final revisions = await LocalRevisionStorage.loadAll();
     final existingRevisionKeys = directLogs
-        .where((l) => l.type == StudyLogType.revisionCompleted)
-        .map((l) => '${l.moduleId}_${l.timestamp.year}_${l.timestamp.month}_${l.timestamp.day}')
+        .where((l) => l.isRevisionModuleCompleted)
+        .map((l) =>
+            '${l.moduleId}_${l.timestamp.year}_${l.timestamp.month}_${l.timestamp.day}')
         .toSet();
 
     for (final r in revisions) {
       final revDate = r.lastRevisionAt ?? r.updatedAt;
-      final key = '${r.moduleId}_${revDate.year}_${revDate.month}_${revDate.day}';
-      if (!existingRevisionKeys.contains(key) && (r.currentLevel > 1 || r.isFinished)) {
+      final key =
+          '${r.moduleId}_${revDate.year}_${revDate.month}_${revDate.day}';
+      if (!existingRevisionKeys.contains(key) &&
+          (r.currentLevel > 1 || r.isFinished)) {
         final courseTitle = courses?.getCourseById(r.courseId)?.title ?? '';
         final moduleTitle = ongoing?.moduleTitleFor(r.moduleId) ?? '';
         final synthRevLog = StudyLog(
           id: 'synth_rev_${r.id}_${revDate.millisecondsSinceEpoch}',
-          type: StudyLogType.revisionCompleted,
+          type: StudyLogType.revisionModuleCompleted,
           courseId: r.courseId,
           courseTitle: courseTitle,
           moduleId: r.moduleId,
@@ -158,30 +201,39 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
     final Map<String, int> sessionMinutesByTopic = {};
     final Map<String, int> sessionMinutesByTitle = {};
     for (final l in directLogs) {
-      if (l.type == StudyLogType.studySession && l.durationMinutes != null && l.durationMinutes! > 0) {
-        final dayKey = '${l.timestamp.year}_${l.timestamp.month}_${l.timestamp.day}';
+      if (l.type == StudyLogType.studySession &&
+          l.durationMinutes != null &&
+          l.durationMinutes! > 0) {
+        final dayKey =
+            '${l.timestamp.year}_${l.timestamp.month}_${l.timestamp.day}';
         if (l.topicId != null && l.topicId!.isNotEmpty) {
           final tKey = '${l.topicId}_$dayKey';
-          sessionMinutesByTopic[tKey] = (sessionMinutesByTopic[tKey] ?? 0) + l.durationMinutes!;
+          sessionMinutesByTopic[tKey] =
+              (sessionMinutesByTopic[tKey] ?? 0) + l.durationMinutes!;
         }
         if (l.topicTitle != null && l.topicTitle!.isNotEmpty) {
           final titleKey = '${l.topicTitle!.trim().toLowerCase()}_$dayKey';
-          sessionMinutesByTitle[titleKey] = (sessionMinutesByTitle[titleKey] ?? 0) + l.durationMinutes!;
+          sessionMinutesByTitle[titleKey] =
+              (sessionMinutesByTitle[titleKey] ?? 0) + l.durationMinutes!;
         }
       }
     }
 
     for (final entry in logsById.entries) {
       final l = entry.value;
-      if ((l.type == StudyLogType.topicCompleted || l.type == StudyLogType.revisionCompleted) &&
+      if ((l.isTopicCompleted || l.isRevisionTopicCompleted) &&
           (l.durationMinutes == null || l.durationMinutes == 0)) {
-        final dayKey = '${l.timestamp.year}_${l.timestamp.month}_${l.timestamp.day}';
+        final dayKey =
+            '${l.timestamp.year}_${l.timestamp.month}_${l.timestamp.day}';
         int? matchedMinutes;
         if (l.topicId != null && l.topicId!.isNotEmpty) {
           matchedMinutes = sessionMinutesByTopic['${l.topicId}_$dayKey'];
         }
-        if (matchedMinutes == null && l.topicTitle != null && l.topicTitle!.isNotEmpty) {
-          matchedMinutes = sessionMinutesByTitle['${l.topicTitle!.trim().toLowerCase()}_$dayKey'];
+        if (matchedMinutes == null &&
+            l.topicTitle != null &&
+            l.topicTitle!.isNotEmpty) {
+          matchedMinutes =
+              sessionMinutesByTitle['${l.topicTitle!.trim().toLowerCase()}_$dayKey'];
         }
         if (matchedMinutes != null && matchedMinutes > 0) {
           logsById[entry.key] = l.copyWith(durationMinutes: matchedMinutes);
@@ -312,19 +364,27 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
     int revisions = act?.revisionsDone ?? 0;
     int minutes = act?.studyMinutes ?? 0;
 
+    // Cross-verify with logs on the selected date to ensure instant accuracy
+    // Note: Strictly count unique topics and revision topics only (not module completions).
+    final Set<String> topicIdsForDate = <String>{};
+    final Set<String> revTopicIdsForDate = <String>{};
     int logMinutes = 0;
     for (final l in _allLogs) {
       final lNorm = DateTime(l.timestamp.year, l.timestamp.month, l.timestamp.day);
       if (lNorm == norm) {
-        if (act == null) {
-          if (l.type == StudyLogType.topicCompleted) topics++;
-          if (l.type == StudyLogType.revisionCompleted) revisions++;
+        if (l.isTopicCompleted && l.topicId != null && l.topicId!.isNotEmpty) {
+          topicIdsForDate.add(l.topicId!);
+        }
+        if (l.isRevisionTopicCompleted && l.topicId != null && l.topicId!.isNotEmpty) {
+          revTopicIdsForDate.add(l.topicId!);
         }
         if (l.durationMinutes != null && l.durationMinutes! > 0) {
           logMinutes += l.durationMinutes!;
         }
       }
     }
+    if (topicIdsForDate.length > topics) topics = topicIdsForDate.length;
+    if (revTopicIdsForDate.length > revisions) revisions = revTopicIdsForDate.length;
     if (logMinutes > minutes) minutes = logMinutes;
 
     return DayActivityItem(
@@ -768,7 +828,7 @@ class _SelectedDateSummaryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '$logCount ${logCount == 1 ? 'log' : 'logs'}',
+                  '${activity.topicsFinished} ${activity.topicsFinished == 1 ? 'topic' : 'topics'}',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -1005,33 +1065,78 @@ class _StudyLogListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = (log.topicTitle != null && log.topicTitle!.isNotEmpty)
-        ? log.topicTitle!
-        : (log.moduleTitle.isNotEmpty ? log.moduleTitle : 'Study Activity');
-    final isRevision = log.type == StudyLogType.revisionCompleted;
-    final isSession = log.type == StudyLogType.studySession;
+    final bool isRevModule = log.isRevisionModuleCompleted;
+    final bool isRevTopic = log.isRevisionTopicCompleted;
+    final bool isModComplete = log.isModuleCompleted;
+    final bool isSession = log.isStudySession;
 
-    final icon = isRevision
-        ? Icons.sync_rounded
-        : (isSession ? Icons.timer_outlined : Icons.menu_book_rounded);
-    final iconColor = isRevision
-        ? AppTheme.pastelPurpleText(context)
-        : (isSession ? AppTheme.pastelOrangeText(context) : AppTheme.pastelGreenText(context));
-    final iconBg = isRevision
-        ? AppTheme.pastelPurple(context)
-        : (isSession ? AppTheme.pastelOrange(context) : AppTheme.pastelGreen(context));
+    final String title;
+    final IconData icon;
+    final Color iconColor;
+    final Color iconBg;
+    final String badgeLabel;
+    final String breadcrumb;
 
-    final badgeLabel = isRevision
-        ? (log.revisionLevel != null ? 'R${log.revisionLevel}' : 'Revision')
-        : (isSession ? 'Session' : 'Completed');
+    if (isModComplete) {
+      title = log.moduleTitle.isNotEmpty ? log.moduleTitle : 'Module Completed';
+      icon = Icons.layers_rounded;
+      iconColor = AppTheme.pastelIndigoText(context);
+      iconBg = AppTheme.pastelIndigo(context);
+      badgeLabel = 'Module Done';
+      breadcrumb = log.courseTitle.isNotEmpty
+          ? '${log.courseTitle} • Module Completed'
+          : 'Module Completed';
+    } else if (isRevModule) {
+      title = log.moduleTitle.isNotEmpty ? log.moduleTitle : 'Revision Module';
+      icon = Icons.workspace_premium_rounded;
+      iconColor = AppTheme.pastelPurpleText(context);
+      iconBg = AppTheme.pastelPurple(context);
+      badgeLabel = log.revisionLevel != null
+          ? 'R${log.revisionLevel} Cleared'
+          : 'Revision Cleared';
+      breadcrumb = log.courseTitle.isNotEmpty
+          ? '${log.courseTitle} • Revision Module'
+          : 'Revision Cleared';
+    } else if (isRevTopic) {
+      title = (log.topicTitle != null && log.topicTitle!.isNotEmpty)
+          ? log.topicTitle!
+          : (log.moduleTitle.isNotEmpty ? log.moduleTitle : 'Revision Topic');
+      icon = Icons.sync_rounded;
+      iconColor = AppTheme.pastelPurpleText(context);
+      iconBg = AppTheme.pastelPurple(context);
+      badgeLabel = log.revisionLevel != null ? 'R${log.revisionLevel}' : 'Revision';
+      breadcrumb = [log.courseTitle, log.moduleTitle]
+          .where((s) => s.isNotEmpty)
+          .join(' › ');
+    } else if (isSession) {
+      title = (log.topicTitle != null && log.topicTitle!.isNotEmpty)
+          ? log.topicTitle!
+          : (log.moduleTitle.isNotEmpty ? log.moduleTitle : 'Study Session');
+      icon = Icons.timer_outlined;
+      iconColor = AppTheme.pastelOrangeText(context);
+      iconBg = AppTheme.pastelOrange(context);
+      badgeLabel = 'Session';
+      breadcrumb = [log.courseTitle, log.moduleTitle]
+          .where((s) => s.isNotEmpty)
+          .join(' › ');
+    } else {
+      // Individual topic completed
+      title = (log.topicTitle != null && log.topicTitle!.isNotEmpty)
+          ? log.topicTitle!
+          : (log.moduleTitle.isNotEmpty ? log.moduleTitle : 'Topic Completed');
+      icon = Icons.menu_book_rounded;
+      iconColor = AppTheme.pastelGreenText(context);
+      iconBg = AppTheme.pastelGreen(context);
+      badgeLabel = 'Completed';
+      breadcrumb = [log.courseTitle, log.moduleTitle]
+          .where((s) => s.isNotEmpty)
+          .join(' › ');
+    }
 
     final int? minutes = (log.durationMinutes != null && log.durationMinutes! > 0)
         ? log.durationMinutes
         : null;
     final durationLabel = (minutes != null && minutes > 0) ? _formatDuration(minutes) : null;
-    final breadcrumb = [log.courseTitle, log.moduleTitle]
-        .where((s) => s.isNotEmpty)
-        .join(' › ');
 
     return Container(
       padding: const EdgeInsets.all(12),

@@ -407,6 +407,7 @@ class _MonthBlock extends StatelessWidget {
   });
 
   static final DateFormat _monthFormat = DateFormat('MMM');
+  static final DateFormat _tooltipDateFormat = DateFormat('EEE, d MMM yyyy');
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +446,7 @@ class _MonthBlock extends StatelessWidget {
 
                   return Tooltip(
                     message:
-                        '${DateFormat('EEE, d MMM yyyy').format(activity.date)}\n'
+                        '${_tooltipDateFormat.format(activity.date)}\n'
                         '${activity.topicsFinished} topics finished • ${activity.revisionsDone} revisions',
                     child: Container(
                       width: cellSize,
@@ -771,41 +772,91 @@ class _MetricTile extends StatelessWidget {
     );
   }
 }
+// =============================================================================
+// Card 3: Activity Breakdown Stacked Bar Chart (Weekly Wise)
+// =============================================================================
+class WeeklyProgressActivity {
+  final DateTime startDate;
+  final DateTime endDate;
+  final int topicsFinished;
+  final int revisionsDone;
+  final bool isCurrentWeek;
 
-// =============================================================================
-// Card 3: Activity Breakdown Stacked Bar Chart
-// =============================================================================
+  const WeeklyProgressActivity({
+    required this.startDate,
+    required this.endDate,
+    required this.topicsFinished,
+    required this.revisionsDone,
+    required this.isCurrentWeek,
+  });
+
+  int get totalActivity => topicsFinished + revisionsDone;
+}
+
 class ActivityBreakdownCard extends StatelessWidget {
   final ProgressController controller;
 
-  const ActivityBreakdownCard({required this.controller});
+  const ActivityBreakdownCard({super.key, required this.controller});
 
-  List<DailyProgressActivity> _aggregateActivities(List<DailyProgressActivity> raw) {
-    if (raw.length <= 31) return raw;
+  static final DateFormat _rangeFormat = DateFormat('d MMM');
 
-    // Aggregate into weekly buckets (7 days each)
-    final List<DailyProgressActivity> weekly = [];
-    for (int i = 0; i < raw.length; i += 7) {
-      final end = (i + 7 < raw.length) ? i + 7 : raw.length;
-      final chunk = raw.sublist(i, end);
+  List<WeeklyProgressActivity> _getWeeklyActivities(List<DailyProgressActivity> allActivities) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Monday of current week
+    final currentMonday = today.subtract(Duration(days: today.weekday - 1));
+
+    final Map<DateTime, DailyProgressActivity> map = {};
+    for (final a in allActivities) {
+      final d = DateTime(a.date.year, a.date.month, a.date.day);
+      map[d] = a;
+    }
+
+    const int weekCount = 7;
+    final List<WeeklyProgressActivity> weeks = [];
+
+    for (int i = weekCount - 1; i >= 0; i--) {
+      final weekStart = currentMonday.subtract(Duration(days: i * 7));
+      final weekEnd = weekStart.add(const Duration(days: 6));
+      final isCurrent = i == 0;
+
       int finished = 0;
       int revisions = 0;
-      for (final a in chunk) {
-        finished += a.topicsFinished;
-        revisions += a.revisionsDone;
+
+      for (int d = 0; d < 7; d++) {
+        final day = weekStart.add(Duration(days: d));
+        // Only count days up to today if current week
+        if (isCurrent && day.isAfter(today)) break;
+
+        final act = map[day];
+        if (act != null) {
+          finished += act.topicsFinished;
+          revisions += act.revisionsDone;
+        }
       }
-      weekly.add(DailyProgressActivity(
-        date: chunk.first.date,
+
+      weeks.add(WeeklyProgressActivity(
+        startDate: weekStart,
+        endDate: weekEnd,
         topicsFinished: finished,
         revisionsDone: revisions,
+        isCurrentWeek: isCurrent,
       ));
     }
-    return weekly;
+
+    return weeks;
   }
 
   @override
   Widget build(BuildContext context) {
-    final chartActivities = _aggregateActivities(controller.activitiesInRange);
+    final weeklyActivities = _getWeeklyActivities(controller.activitiesInRange);
+
+    int finishedTotal = 0;
+    int revisionsTotal = 0;
+    for (final w in weeklyActivities) {
+      finishedTotal += w.topicsFinished;
+      revisionsTotal += w.revisionsDone;
+    }
 
     return Container(
       width: double.infinity,
@@ -825,24 +876,59 @@ class ActivityBreakdownCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Activity Breakdown',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Activity Breakdown',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor(context),
+                    ),
+                  ),
+                  const VGapXs(),
+                  Text(
+                    'Weekly • Last 7 Weeks',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _BreakdownLegendIndicator(
+                    color: const Color(0xFF10B981),
+                    label: 'Finished ($finishedTotal)',
+                  ),
+                  const HGapSm(),
+                  _BreakdownLegendIndicator(
+                    color: const Color(0xFF7A6EFC),
+                    label: 'Revised ($revisionsTotal)',
+                  ),
+                ],
+              ),
+            ],
           ),
-          const VGapSm(),
+          const VGapMd(),
           RepaintBoundary(
             child: SizedBox(
-              height: 140,
+              height: 145,
               width: double.infinity,
               child: CustomPaint(
                 painter: _ActivityBreakdownPainter(
-                  activities: chartActivities,
+                  activities: weeklyActivities,
                   gridColor: AppTheme.borderColor(context),
                   textColor: AppTheme.textSecondaryColor(context),
+                  primaryColor: AppTheme.primaryColor,
                 ),
               ),
             ),
@@ -853,15 +939,53 @@ class ActivityBreakdownCard extends StatelessWidget {
   }
 }
 
+class _BreakdownLegendIndicator extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _BreakdownLegendIndicator({
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const HGapXs(),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textSecondaryColor(context),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ActivityBreakdownPainter extends CustomPainter {
-  final List<DailyProgressActivity> activities;
+  final List<WeeklyProgressActivity> activities;
   final Color gridColor;
   final Color textColor;
+  final Color primaryColor;
 
   _ActivityBreakdownPainter({
     required this.activities,
     required this.gridColor,
     required this.textColor,
+    required this.primaryColor,
   });
 
   static final DateFormat _dayFormat = DateFormat('d MMM');
@@ -870,18 +994,32 @@ class _ActivityBreakdownPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (activities.isEmpty) return;
 
-    const double leftPadding = 24.0;
-    const double bottomPadding = 24.0;
+    const double leftPadding = 20.0;
+    const double bottomPadding = 28.0;
     final double chartWidth = size.width - leftPadding;
     final double chartHeight = size.height - bottomPadding;
 
-    // Determine max value for Y-axis scale (at least 10, or up to 30)
-    int maxVal = 10;
+    // Determine max value for Y-axis scale based on weekly activity
+    int maxVal = 0;
     for (final a in activities) {
       if (a.totalActivity > maxVal) maxVal = a.totalActivity;
     }
-    // Round up to nearest multiple of 10
-    final int topY = ((maxVal + 9) ~/ 10) * 10;
+
+    final int topY;
+    final int stepCount;
+    if (maxVal <= 0) {
+      topY = 10;
+      stepCount = 2;
+    } else if (maxVal <= 10) {
+      topY = 10;
+      stepCount = 2;
+    } else if (maxVal <= 20) {
+      topY = 20;
+      stepCount = 2;
+    } else {
+      topY = ((maxVal + 9) ~/ 10) * 10;
+      stepCount = 3;
+    }
 
     final Paint gridPaint = Paint()
       ..color = gridColor
@@ -893,8 +1031,7 @@ class _ActivityBreakdownPainter extends CustomPainter {
       textAlign: TextAlign.right,
     );
 
-    // Draw Y-axis reference lines & labels (e.g. 0, 10, 20, 30)
-    const int stepCount = 3;
+    // Draw Y-axis reference lines & labels
     for (int i = 0; i <= stepCount; i++) {
       final val = (topY / stepCount * i).round();
       final y = chartHeight - (chartHeight / stepCount * i);
@@ -918,28 +1055,38 @@ class _ActivityBreakdownPainter extends CustomPainter {
       );
     }
 
-    // Draw Stacked Bars
+    // Draw 7 Weekly Bars
     final int count = activities.length;
     final double slotWidth = chartWidth / count;
-    final double barWidth = (slotWidth * 0.55).clamp(4.0, 10.0);
+    final double barWidth = (slotWidth * 0.45).clamp(12.0, 20.0);
+
+    final Paint emptyTrackPaint = Paint()
+      ..color = gridColor.withValues(alpha: 0.35)
+      ..style = PaintingStyle.fill;
 
     final Paint finishedPaint = Paint()..color = const Color(0xFF10B981);
     final Paint revisionPaint = Paint()..color = const Color(0xFF7A6EFC);
-
-    final int labelStep = count > 30 ? 7 : (count > 15 ? 4 : 2);
+    final Paint todayDotPaint = Paint()..color = primaryColor;
 
     for (int i = 0; i < count; i++) {
       final act = activities[i];
       final double x = leftPadding + (i * slotWidth) + (slotWidth - barWidth) / 2;
 
+      // Background subtle slot track
+      final trackRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, 0, barWidth, chartHeight),
+        const Radius.circular(4),
+      );
+      canvas.drawRRect(trackRect, emptyTrackPaint);
+
       final double finishedHeight = (act.topicsFinished / topY) * chartHeight;
       final double revisionHeight = (act.revisionsDone / topY) * chartHeight;
-      final double totalHeight = finishedHeight + revisionHeight;
+      final double totalHeight = (finishedHeight + revisionHeight).clamp(0.0, chartHeight);
 
       if (totalHeight > 0) {
         final double baseY = chartHeight;
 
-        // Bottom green segment
+        // Bottom green segment (Topics Finished)
         if (finishedHeight > 0) {
           final rect = Rect.fromLTWH(
             x,
@@ -947,20 +1094,23 @@ class _ActivityBreakdownPainter extends CustomPainter {
             barWidth,
             finishedHeight,
           );
-          // If no revision on top, round top corners
           if (revisionHeight <= 0) {
-            final rrect = RRect.fromRectAndCorners(
+            final rrect = RRect.fromRectAndRadius(
               rect,
-              topLeft: const Radius.circular(3),
-              topRight: const Radius.circular(3),
+              const Radius.circular(4),
             );
             canvas.drawRRect(rrect, finishedPaint);
           } else {
-            canvas.drawRect(rect, finishedPaint);
+            final rrect = RRect.fromRectAndCorners(
+              rect,
+              bottomLeft: const Radius.circular(4),
+              bottomRight: const Radius.circular(4),
+            );
+            canvas.drawRRect(rrect, finishedPaint);
           }
         }
 
-        // Top purple segment
+        // Top purple segment (Topic Revisions)
         if (revisionHeight > 0) {
           final rect = Rect.fromLTWH(
             x,
@@ -968,29 +1118,46 @@ class _ActivityBreakdownPainter extends CustomPainter {
             barWidth,
             revisionHeight,
           );
-          final rrect = RRect.fromRectAndCorners(
-            rect,
-            topLeft: const Radius.circular(3),
-            topRight: const Radius.circular(3),
-          );
-          canvas.drawRRect(rrect, revisionPaint);
+          if (finishedHeight <= 0) {
+            final rrect = RRect.fromRectAndRadius(
+              rect,
+              const Radius.circular(4),
+            );
+            canvas.drawRRect(rrect, revisionPaint);
+          } else {
+            final rrect = RRect.fromRectAndCorners(
+              rect,
+              topLeft: const Radius.circular(4),
+              topRight: const Radius.circular(4),
+            );
+            canvas.drawRRect(rrect, revisionPaint);
+          }
         }
       }
 
       // X-axis label
-      if (i % labelStep == 0 || i == count - 1) {
-        textPainter.text = TextSpan(
-          text: _dayFormat.format(act.date),
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-            color: textColor,
-          ),
-        );
-        textPainter.layout();
-        textPainter.paint(
-          canvas,
-          Offset(x + barWidth / 2 - textPainter.width / 2, chartHeight + 6),
+      final String label = act.isCurrentWeek ? 'This Wk' : _dayFormat.format(act.startDate);
+      textPainter.text = TextSpan(
+        text: label,
+        style: TextStyle(
+          fontSize: 9,
+          letterSpacing: -0.2,
+          fontWeight: act.isCurrentWeek ? FontWeight.bold : FontWeight.w500,
+          color: act.isCurrentWeek ? primaryColor : textColor,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(x + barWidth / 2 - textPainter.width / 2, chartHeight + 6),
+      );
+
+      // Indicator dot for current week
+      if (act.isCurrentWeek) {
+        canvas.drawCircle(
+          Offset(x + barWidth / 2, chartHeight + 21),
+          2.0,
+          todayDotPaint,
         );
       }
     }
@@ -1014,6 +1181,7 @@ class _ActivityBreakdownPainter extends CustomPainter {
   bool shouldRepaint(covariant _ActivityBreakdownPainter oldDelegate) {
     return oldDelegate.activities != activities ||
         oldDelegate.gridColor != gridColor ||
-        oldDelegate.textColor != textColor;
+        oldDelegate.textColor != textColor ||
+        oldDelegate.primaryColor != primaryColor;
   }
 }

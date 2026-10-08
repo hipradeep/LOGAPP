@@ -3,7 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:sqflite/sqflite.dart';
+import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import '../controllers/progress_controller.dart';
+import '../controllers/revision_controller.dart';
 import 'database_service.dart';
+import 'service_locator.dart';
 
 /// Dedicated service handling full JSON export and import of the SQLite database
 /// for Google Drive cloud sync, local backup files, and database restoration.
@@ -107,6 +112,7 @@ class DatabaseBackupService {
   /// replacing current data transactionally and refreshing all reactive streams.
   Future<void> importAllFromJson(Map<String, dynamic> data) async {
     final db = await _dbService.database;
+    final nowIso = DateTime.now().toIso8601String();
 
     await db.transaction((txn) async {
       await txn.delete('courses');
@@ -118,69 +124,184 @@ class DatabaseBackupService {
       await txn.delete('user_profile');
       await txn.delete('notification_settings');
 
+      // 1. Courses
       if (data['courses'] is List) {
         for (final row in (data['courses'] as List)) {
           if (row is Map) {
-            await txn.insert('courses', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final title = (raw['title'] ?? raw['courseTitle'] ?? raw['courseName'] ?? raw['name'] ?? 'Untitled Course').toString();
+            final courseMap = <String, dynamic>{
+              'id': (raw['id'] ?? 'course_${DateTime.now().millisecondsSinceEpoch}').toString(),
+              'title': title,
+              'description': (raw['description'] ?? raw['desc'] ?? '').toString(),
+              'status': (raw['status'] ?? 'active').toString(),
+              'deadline': raw['deadline']?.toString(),
+              'iconCodePoint': (raw['iconCodePoint'] as num?)?.toInt(),
+              'colorValue': (raw['colorValue'] as num?)?.toInt(),
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('courses', courseMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
       }
 
+      // 2. Modules
       if (data['modules'] is List) {
+        int mIdx = 0;
         for (final row in (data['modules'] as List)) {
           if (row is Map) {
-            await txn.insert('modules', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final title = (raw['title'] ?? raw['name'] ?? raw['moduleTitle'] ?? 'Untitled Module').toString();
+            final moduleMap = <String, dynamic>{
+              'id': (raw['id'] ?? 'module_${DateTime.now().millisecondsSinceEpoch}_$mIdx').toString(),
+              'courseId': (raw['courseId'] ?? '').toString(),
+              'title': title,
+              'description': (raw['description'] ?? raw['desc'] ?? '').toString(),
+              'orderIndex': (raw['orderIndex'] as num?)?.toInt() ?? mIdx,
+              'status': (raw['status'] ?? 'active').toString(),
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('modules', moduleMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
+            mIdx++;
           }
         }
       }
 
+      // 3. Topics
       if (data['topics'] is List) {
+        int tIdx = 0;
         for (final row in (data['topics'] as List)) {
           if (row is Map) {
-            await txn.insert('topics', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final title = (raw['title'] ?? raw['name'] ?? raw['topicTitle'] ?? 'Untitled Topic').toString();
+            final topicMap = <String, dynamic>{
+              'id': (raw['id'] ?? 'topic_${DateTime.now().millisecondsSinceEpoch}_$tIdx').toString(),
+              'courseId': (raw['courseId'] ?? '').toString(),
+              'moduleId': (raw['moduleId'] ?? '').toString(),
+              'title': title,
+              'status': (raw['status'] ?? 'notStarted').toString(),
+              'description': (raw['description'] ?? raw['desc'] ?? '').toString(),
+              'orderIndex': (raw['orderIndex'] as num?)?.toInt() ?? tIdx,
+              'iconCodePoint': (raw['iconCodePoint'] as num?)?.toInt(),
+              'colorValue': (raw['colorValue'] as num?)?.toInt(),
+              'completedAt': raw['completedAt']?.toString(),
+            };
+            await txn.insert('topics', topicMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
+            tIdx++;
           }
         }
       }
 
+      // 4. Revisions
       if (data['revisions'] is List) {
         for (final row in (data['revisions'] as List)) {
           if (row is Map) {
-            await txn.insert('revisions', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final revMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'courseId': (raw['courseId'] ?? '').toString(),
+              'moduleId': (raw['moduleId'] ?? '').toString(),
+              'currentLevel': (raw['currentLevel'] as num?)?.toInt() ?? 1,
+              'status': (raw['status'] ?? 'active').toString(),
+              'nextRevisionAt': (raw['nextRevisionAt'] ?? nowIso).toString(),
+              'completedAt': raw['completedAt']?.toString(),
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('revisions', revMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
       }
 
+      // 5. Revision Topics
       if (data['revisionTopics'] is List) {
+        int rtIdx = 0;
         for (final row in (data['revisionTopics'] as List)) {
           if (row is Map) {
-            await txn.insert('revision_topics', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final revTopicMap = <String, dynamic>{
+              'id': (raw['id'] ?? 'rev_topic_$rtIdx').toString(),
+              'revisionId': (raw['revisionId'] ?? '').toString(),
+              'courseId': (raw['courseId'] ?? '').toString(),
+              'topicId': (raw['topicId'] ?? '').toString(),
+              'title': (raw['title'] ?? '').toString(),
+              'status': (raw['status'] ?? 'notStarted').toString(),
+              'orderIndex': (raw['orderIndex'] as num?)?.toInt() ?? rtIdx,
+              'completedAt': raw['completedAt']?.toString(),
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('revision_topics', revTopicMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
+            rtIdx++;
           }
         }
       }
 
+      // 6. Study Logs
       if (data['studyLogs'] is List) {
         for (final row in (data['studyLogs'] as List)) {
           if (row is Map) {
-            await txn.insert('study_logs', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final logMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'type': (raw['type'] ?? 'sessionCompleted').toString(),
+              'courseId': (raw['courseId'] ?? '').toString(),
+              'courseTitle': (raw['courseTitle'] ?? '').toString(),
+              'moduleId': (raw['moduleId'] ?? '').toString(),
+              'moduleTitle': (raw['moduleTitle'] ?? '').toString(),
+              'topicId': raw['topicId']?.toString(),
+              'topicTitle': raw['topicTitle']?.toString(),
+              'revisionLevel': (raw['revisionLevel'] as num?)?.toInt(),
+              'durationMinutes': (raw['durationMinutes'] as num?)?.toInt(),
+              'timestamp': (raw['timestamp'] ?? nowIso).toString(),
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('study_logs', logMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
       }
 
+      // 7. User Profile
       if (data['userProfile'] is Map) {
-        await txn.insert('user_profile', Map<String, dynamic>.from(data['userProfile']),
+        final raw = Map<String, dynamic>.from(data['userProfile'] as Map);
+        final profileMap = <String, dynamic>{
+          'id': (raw['id'] ?? 'user_profile').toString(),
+          'name': (raw['name'] ?? 'Scholar').toString(),
+          'headline': (raw['headline'] ?? '').toString(),
+          'email': raw['email']?.toString(),
+          'avatarUrl': raw['avatarUrl']?.toString(),
+          'currentStreak': (raw['currentStreak'] as num?)?.toInt() ?? 0,
+          'longestStreak': (raw['longestStreak'] as num?)?.toInt() ?? 0,
+          'totalActiveDays': (raw['totalActiveDays'] as num?)?.toInt() ?? 0,
+          'totalStudyMinutes': (raw['totalStudyMinutes'] as num?)?.toInt() ?? 0,
+          'totalTopicsFinished': (raw['totalTopicsFinished'] as num?)?.toInt() ?? 0,
+          'totalTopicRevisions': (raw['totalTopicRevisions'] as num?)?.toInt() ?? 0,
+          'lastActiveDate': raw['lastActiveDate']?.toString(),
+          'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+          'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+        };
+        await txn.insert('user_profile', profileMap,
             conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
+      // 8. Notification Settings
       if (data['notificationSettings'] is List) {
         for (final row in (data['notificationSettings'] as List)) {
           if (row is Map) {
-            await txn.insert('notification_settings', Map<String, dynamic>.from(row),
+            final raw = Map<String, dynamic>.from(row);
+            final notifMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'data': (raw['data'] ?? '').toString(),
+            };
+            await txn.insert('notification_settings', notifMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
@@ -189,6 +310,21 @@ class DatabaseBackupService {
 
     // Notify all active broadcast streams with freshly restored data
     await _dbService.reloadAllStreams();
+
+    // Immediately refresh all registered UI controllers
+    if (getIt.isRegistered<CoursesController>()) {
+      await getIt<CoursesController>().loadCourses();
+    }
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      await getIt<OngoingModulesController>().refresh();
+    }
+    if (getIt.isRegistered<RevisionController>()) {
+      await getIt<RevisionController>().reconcile();
+    }
+    if (getIt.isRegistered<ProgressController>()) {
+      await getIt<ProgressController>().load();
+    }
   }
 }
+
 

@@ -69,11 +69,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ongoingCtrl.refresh();
     }
 
+    if (getIt.isRegistered<RevisionController>()) {
+      getIt<RevisionController>().reconcile();
+    }
+
     if (getIt.isRegistered<ProgressController>()) {
-      final progressCtrl = getIt<ProgressController>();
-      if (progressCtrl.recentActivities.isEmpty) {
-        progressCtrl.load();
-      }
+      getIt<ProgressController>().refresh();
     }
   }
 
@@ -208,6 +209,8 @@ class _CurrentModulesHeader extends StatelessWidget {
 }
 
 class _HomeGreetingHeader extends StatelessWidget {
+  static final _whitespaceRegex = RegExp(r'\s+');
+
   const _HomeGreetingHeader();
 
   Future<void> _handleCloudSignIn(BuildContext context, CloudSyncController? ctrl) async {
@@ -318,7 +321,7 @@ class _HomeGreetingHeader extends StatelessWidget {
               : (progressCtrl?.userName.trim().isNotEmpty == true
                   ? progressCtrl!.userName.trim()
                   : 'Learner');
-          final firstName = rawName.split(RegExp(r'\s+')).first;
+          final firstName = rawName.split(_whitespaceRegex).first;
           titleText = 'Hi, $firstName';
         } else {
           titleText = 'Study/Log';
@@ -336,6 +339,7 @@ class _HomeGreetingHeader extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimaryColor(context),
                     letterSpacing: -0.3,
+                    height: 1.15,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -428,14 +432,44 @@ class _HomeTopModule extends StatelessWidget {
         ListenableBuilder(
           listenable: Listenable.merge([
             ongoingController,
-            getIt<RevisionController>(),
+            if (getIt.isRegistered<RevisionController>()) getIt<RevisionController>(),
+            if (getIt.isRegistered<ProgressController>()) getIt<ProgressController>(),
           ]),
-          builder: (context, _) => TodayProgressCard(
-            completedToday: ongoingController.completedTodayCount,
-            pendingCount: getIt<RevisionController>().dueCount,
-            dayStreak: ongoingController.dayStreakCount,
-            goalProgress: ongoingController.goalProgress,
-          ),
+          builder: (context, _) {
+            final revisionCtrl = getIt.isRegistered<RevisionController>()
+                ? getIt<RevisionController>()
+                : null;
+            final progressCtrl = getIt.isRegistered<ProgressController>()
+                ? getIt<ProgressController>()
+                : null;
+            final streak = (progressCtrl != null && progressCtrl.currentStreak > 0)
+                ? progressCtrl.currentStreak
+                : ongoingController.dayStreakCount;
+            final revisionsDue = revisionCtrl?.dueCount ?? 0;
+
+            int completedToday = ongoingController.completedTodayCount;
+            if (progressCtrl != null) {
+              final now = DateTime.now();
+              for (final a in progressCtrl.activitiesInRange) {
+                if (a.date.year == now.year &&
+                    a.date.month == now.month &&
+                    a.date.day == now.day) {
+                  final sum = a.topicsFinished + a.revisionsDone;
+                  if (sum > completedToday) {
+                    completedToday = sum;
+                  }
+                  break;
+                }
+              }
+            }
+
+            return TodayProgressCard(
+              completedToday: completedToday,
+              pendingCount: revisionsDue,
+              dayStreak: streak,
+              goalProgress: ongoingController.goalProgress,
+            );
+          },
         ),
         const VGapLg(),
         const _CurrentModulesHeader(),

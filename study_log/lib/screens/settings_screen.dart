@@ -20,12 +20,123 @@ import 'notification_settings_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  void _openUploadJson(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
+  void _handleBack(BuildContext context) => Navigator.of(context).pop();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: AppTheme.background(context),
+      body: SafeArea(
+        child: Column(
+          children: [
+            CustomAppBar(
+              title: 'Settings',
+              onBack: () => _handleBack(context),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _PreferencesSection(),
+                    VGapMd(),
+                    _SectionHeader(title: 'CLOUD BACKUP & SYNC'),
+                    _CloudSyncCard(),
+                    VGapMd(),
+                    _LocalBackupSection(),
+                    VGapMd(),
+                    _CurriculumSection(),
+                    VGapMd(),
+                    _AboutSection(),
+                    _AccountAndDataSection(),
+                    VGapLg(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+class _PreferencesSection extends StatelessWidget {
+  const _PreferencesSection({super.key});
+
+  void _onAppearance(BuildContext context) => AppearanceSheet.show(context);
+
+  void _onNotifications(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const NotificationSettingsScreen(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeCtrl = getIt.isRegistered<ThemeController>()
+        ? getIt<ThemeController>()
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'PREFERENCES'),
+        _SettingsCard(
+          children: [
+            if (themeCtrl != null)
+              ListenableBuilder(
+                listenable: themeCtrl,
+                builder: (context, _) {
+                  final themeLabel = switch (themeCtrl.themeMode) {
+                    ThemeMode.light => 'Light',
+                    ThemeMode.dark => 'Dark',
+                    ThemeMode.system => 'System',
+                  };
+                  return _SettingsTile(
+                    icon: Icons.palette_outlined,
+                    iconBgColor: const Color(0xFFFFEDD5),
+                    iconColor: const Color(0xFFEA580C),
+                    title: 'Appearance',
+                    badgeText: themeLabel,
+                    onTap: () => _onAppearance(context),
+                  );
+                },
+              )
+            else
+              _SettingsTile(
+                icon: Icons.palette_outlined,
+                iconBgColor: const Color(0xFFFFEDD5),
+                iconColor: const Color(0xFFEA580C),
+                title: 'Appearance',
+                badgeText: 'System',
+                onTap: () => _onAppearance(context),
+              ),
+            const _TileDivider(),
+            _SettingsTile(
+              icon: Icons.notifications_none_rounded,
+              iconBgColor: const Color(0xFFE0E7FF),
+              iconColor: const Color(0xFF4F46E5),
+              title: 'Notifications',
+              onTap: () => _onNotifications(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LocalBackupSection extends StatelessWidget {
+  const _LocalBackupSection({super.key});
 
   Future<void> _handleExportBackup(BuildContext context) async {
     final backupService = getIt.isRegistered<DatabaseBackupService>()
@@ -134,46 +245,73 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _handleDeleteAccount(BuildContext context) async {
-    final confirmed = await StudyConfirmationDialog.showDeleteAccountAndData(context);
-    if (!confirmed || !context.mounted) return;
-
-    final syncCtrl = getIt.isRegistered<CloudSyncController>()
-        ? getIt<CloudSyncController>()
-        : null;
-
-    if (syncCtrl != null) {
-      _showBlockingLoadingDialog(context, 'Deleting account & data...');
-      try {
-        await syncCtrl.deleteAccountAndClearData();
-        if (context.mounted) {
-          Navigator.of(context, rootNavigator: true).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Account and all data have been completely deleted.'),
-              backgroundColor: AppTheme.successColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(16),
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'LOCAL BACKUP & RESTORE'),
+        _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.file_download_outlined,
+              iconBgColor: const Color(0xFFE0F2FE),
+              iconColor: const Color(0xFF0284C7),
+              title: 'Export Backup',
+              subtitle: 'Save database backup to JSON file',
+              onTap: () => _handleExportBackup(context),
             ),
-          );
-        }
-      } catch (e) {
-        if (context.mounted) {
-          Navigator.of(context, rootNavigator: true).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to delete all data: $e'),
-              backgroundColor: AppTheme.errorColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(16),
+            const _TileDivider(),
+            _SettingsTile(
+              icon: Icons.file_upload_outlined,
+              iconBgColor: const Color(0xFFFEF3C7),
+              iconColor: const Color(0xFFD97706),
+              title: 'Import Backup',
+              subtitle: 'Restore database from JSON file',
+              onTap: () => _handleImportBackup(context),
             ),
-          );
-        }
-      }
-    }
+          ],
+        ),
+      ],
+    );
   }
+}
+
+class _CurriculumSection extends StatelessWidget {
+  const _CurriculumSection({super.key});
+
+  void _openUploadJson(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UploadJsonScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'CURRICULUM'),
+        _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.upload_file_rounded,
+              iconBgColor: const Color(0xFFEDE9FE),
+              iconColor: const Color(0xFF7C3AED),
+              title: 'Import Curriculum (JSON)',
+              subtitle: 'Load syllabus from course JSON file',
+              onTap: () => _openUploadJson(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutSection extends StatelessWidget {
+  const _AboutSection({super.key});
 
   void _showAboutDialog(BuildContext context) {
     showDialog<void>(
@@ -226,141 +364,70 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeCtrl = getIt.isRegistered<ThemeController>()
-        ? getIt<ThemeController>()
-        : null;
-
-    final String themeLabel;
-    if (themeCtrl != null) {
-      themeLabel = switch (themeCtrl.themeMode) {
-        ThemeMode.light => 'Light',
-        ThemeMode.dark => 'Dark',
-        ThemeMode.system => 'System',
-      };
-    } else {
-      themeLabel = 'System';
-    }
-
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
-
-    return Scaffold(
-      backgroundColor: AppTheme.background(context),
-      body: SafeArea(
-        child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'ABOUT'),
+        _SettingsCard(
           children: [
-            CustomAppBar(
-              title: 'Settings',
-              onBack: () => Navigator.of(context).pop(),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _SectionHeader(title: 'PREFERENCES'),
-                    _SettingsCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.palette_outlined,
-                          iconBgColor: const Color(0xFFFFEDD5),
-                          iconColor: const Color(0xFFEA580C),
-                          title: 'Appearance',
-                          badgeText: themeLabel,
-                          onTap: () => AppearanceSheet.show(context),
-                        ),
-                        _TileDivider(),
-                        _SettingsTile(
-                          icon: Icons.notifications_none_rounded,
-                          iconBgColor: const Color(0xFFE0E7FF),
-                          iconColor: const Color(0xFF4F46E5),
-                          title: 'Notifications',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const NotificationSettingsScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const VGapMd(),
-                    const _SectionHeader(title: 'CLOUD BACKUP & SYNC'),
-                    const _CloudSyncCard(),
-                    const VGapMd(),
-                    const _SectionHeader(title: 'LOCAL BACKUP & RESTORE'),
-                    _SettingsCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.file_download_outlined,
-                          iconBgColor: const Color(0xFFE0F2FE),
-                          iconColor: const Color(0xFF0284C7),
-                          title: 'Export Backup',
-                          subtitle: 'Save database backup to JSON file',
-                          onTap: () => _handleExportBackup(context),
-                        ),
-                        _TileDivider(),
-                        _SettingsTile(
-                          icon: Icons.file_upload_outlined,
-                          iconBgColor: const Color(0xFFFEF3C7),
-                          iconColor: const Color(0xFFD97706),
-                          title: 'Import Backup',
-                          subtitle: 'Restore database from JSON file',
-                          onTap: () => _handleImportBackup(context),
-                        ),
-                      ],
-                    ),
-                    const VGapMd(),
-                    const _SectionHeader(title: 'CURRICULUM'),
-                    _SettingsCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.upload_file_rounded,
-                          iconBgColor: const Color(0xFFEDE9FE),
-                          iconColor: const Color(0xFF7C3AED),
-                          title: 'Import Curriculum (JSON)',
-                          subtitle: 'Load syllabus from course JSON file',
-                          onTap: () => _openUploadJson(context),
-                        ),
-                      ],
-                    ),
-                    const VGapMd(),
-                    const _SectionHeader(title: 'ABOUT'),
-                    _SettingsCard(
-                      children: [
-                        _SettingsTile(
-                          icon: Icons.info_outline_rounded,
-                          iconBgColor: const Color(0xFFF1F5F9),
-                          iconColor: const Color(0xFF475569),
-                          title: 'About Study Log',
-                          badgeText: 'v1.0.0',
-                          onTap: () => _showAboutDialog(context),
-                        ),
-                      ],
-                    ),
-                    _AccountAndDataSection(
-                      onDeleteAccount: _handleDeleteAccount,
-                    ),
-                    const VGapLg(),
-                  ],
-                ),
-              ),
+            _SettingsTile(
+              icon: Icons.info_outline_rounded,
+              iconBgColor: const Color(0xFFF1F5F9),
+              iconColor: const Color(0xFF475569),
+              title: 'About Study Log',
+              badgeText: 'v1.0.0',
+              onTap: () => _showAboutDialog(context),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
 
 class _AccountAndDataSection extends StatelessWidget {
-  final Future<void> Function(BuildContext) onDeleteAccount;
+  const _AccountAndDataSection({super.key});
 
-  const _AccountAndDataSection({required this.onDeleteAccount});
+  Future<void> _handleDeleteAccount(BuildContext context) async {
+    final confirmed = await StudyConfirmationDialog.showDeleteAccountAndData(context);
+    if (!confirmed || !context.mounted) return;
+
+    final syncCtrl = getIt.isRegistered<CloudSyncController>()
+        ? getIt<CloudSyncController>()
+        : null;
+
+    if (syncCtrl != null) {
+      _showBlockingLoadingDialog(context, 'Deleting account & data...');
+      try {
+        await syncCtrl.deleteAccountAndClearData();
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Account and all data have been completely deleted.'),
+              backgroundColor: AppTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete all data: $e'),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -391,7 +458,7 @@ class _AccountAndDataSection extends StatelessWidget {
                   title: 'Delete Account & Clear Data',
                   subtitle: 'Permanently erase all data',
                   isDestructive: true,
-                  onTap: () => onDeleteAccount(context),
+                  onTap: () => _handleDeleteAccount(context),
                 ),
               ],
             ),
@@ -405,7 +472,7 @@ class _AccountAndDataSection extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final String title;
 
-  const _SectionHeader({required this.title});
+  const _SectionHeader({super.key, required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -427,7 +494,7 @@ class _SectionHeader extends StatelessWidget {
 class _SettingsCard extends StatelessWidget {
   final List<Widget> children;
 
-  const _SettingsCard({required this.children});
+  const _SettingsCard({super.key, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -464,6 +531,7 @@ class _SettingsTile extends StatelessWidget {
   final bool isDestructive;
 
   const _SettingsTile({
+    super.key,
     required this.icon,
     required this.iconBgColor,
     required this.iconColor,
@@ -564,10 +632,9 @@ class _SettingsTile extends StatelessWidget {
 class _CloudSyncCard extends StatelessWidget {
   static final _dateFormat = DateFormat('MMM d, h:mm a');
 
-  const _CloudSyncCard();
+  const _CloudSyncCard({super.key});
 
   Future<void> _handleSignIn(BuildContext context, CloudSyncController ctrl) async {
-    debugPrint('👉 [_CloudSyncCard] Sign In tapped!');
     _showBlockingLoadingDialog(context, 'Connecting to Google...');
     bool success = false;
     try {
@@ -577,7 +644,6 @@ class _CloudSyncCard extends StatelessWidget {
         Navigator.of(context, rootNavigator: true).pop();
       }
     }
-    debugPrint('👉 [_CloudSyncCard] signIn result: $success, error: ${ctrl.errorMessage}');
     if (!context.mounted) return;
     if (!success && ctrl.errorMessage != null) {
       showDialog(
@@ -695,62 +761,29 @@ class _CloudSyncCard extends StatelessWidget {
               iconColor: isSignedIn ? const Color(0xFF16A34A) : const Color(0xFF4F46E5),
               title: isSignedIn
                   ? (syncCtrl.displayName ?? syncCtrl.userEmail ?? 'Google Connected')
-                  : 'Google Drive Account',
+                  : (syncCtrl.isCheckingAuth ? 'Connecting to Google...' : 'Google Drive Account'),
               subtitle: isSignedIn
                   ? (syncCtrl.userEmail ?? 'Connected to private AppData folder')
-                  : 'Sign in to back up data across devices',
-              trailing: syncCtrl.isSigningIn
+                  : (syncCtrl.isCheckingAuth ? 'Verifying account status...' : 'Sign in to back up data across devices'),
+              trailing: (syncCtrl.isSigningIn || (syncCtrl.isCheckingAuth && !isSignedIn))
                   ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : (isSignedIn
-                      ? InkWell(
-                          onTap: isBusy ? null : () => _handleSignOut(context, syncCtrl),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppTheme.errorColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Log Out',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.errorColor,
-                              ),
-                            ),
-                          ),
-                        )
-                      : InkWell(
-                          onTap: isBusy ? null : () => _handleSignIn(context, syncCtrl),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          ),
-                        )),
+                  : _AccountAuthButton(
+                      isSignedIn: isSignedIn,
+                      isBusy: isBusy,
+                      onSignIn: () => _handleSignIn(context, syncCtrl),
+                      onSignOut: () => _handleSignOut(context, syncCtrl),
+                    ),
               onTap: isBusy
                   ? null
                   : () => isSignedIn
                       ? _handleSignOut(context, syncCtrl)
                       : _handleSignIn(context, syncCtrl),
             ),
-            _TileDivider(),
+            const _TileDivider(),
             _SettingsTile(
               icon: Icons.cloud_upload_rounded,
               iconBgColor: const Color(0xFFE0F2FE),
@@ -775,7 +808,68 @@ class _CloudSyncCard extends StatelessWidget {
   }
 }
 
+class _AccountAuthButton extends StatelessWidget {
+  final bool isSignedIn;
+  final bool isBusy;
+  final VoidCallback onSignIn;
+  final VoidCallback onSignOut;
+
+  const _AccountAuthButton({
+    super.key,
+    required this.isSignedIn,
+    required this.isBusy,
+    required this.onSignIn,
+    required this.onSignOut,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isSignedIn) {
+      return InkWell(
+        onTap: isBusy ? null : onSignOut,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppTheme.errorColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            'Log Out',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.errorColor,
+            ),
+          ),
+        ),
+      );
+    }
+    return InkWell(
+      onTap: isBusy ? null : onSignIn,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          'Sign In',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.primaryColor,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TileDivider extends StatelessWidget {
+  const _TileDivider({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Divider(

@@ -39,10 +39,6 @@ class RevisionController extends ChangeNotifier {
   bool _isLoading = true;
   bool _isReconciling = false;
 
-  /// ModuleIds whose revisions were manually removed by the user.
-  /// Reconcile skips these so a still-complete module is not re-added.
-  final Set<String> _suppressedModuleIds = {};
-
   RevisionController({
     CoursesController? coursesController,
     OngoingModulesController? ongoingController,
@@ -152,13 +148,16 @@ class RevisionController extends ChangeNotifier {
     await LocalRevisionStorage.saveAll(_revisions);
     await LocalRevisionStorage.recordRevisionEvent(now);
 
+    final courseTitle = _coursesController.getCourseById(current.courseId)?.title ?? '';
+    final moduleTitle = _ongoingController.moduleTitleFor(current.moduleId);
+
     final log = StudyLog(
       id: 'rev_${current.id}_${now.millisecondsSinceEpoch}',
-      type: StudyLogType.revisionCompleted,
+      type: StudyLogType.revisionModuleCompleted,
       courseId: current.courseId,
-      courseTitle: '',
+      courseTitle: courseTitle,
       moduleId: current.moduleId,
-      moduleTitle: '',
+      moduleTitle: moduleTitle,
       revisionLevel: current.currentLevel,
       timestamp: now,
       createdAt: now,
@@ -194,6 +193,12 @@ class RevisionController extends ChangeNotifier {
   Revision? revisionForModule(String moduleId, {String? moduleTitle}) {
     for (final revision in _revisions) {
       if (moduleId.isNotEmpty && revision.moduleId == moduleId) return revision;
+      if (moduleTitle != null && moduleTitle.trim().isNotEmpty) {
+        final mod = _ongoingController.getModuleById(revision.moduleId);
+        if (mod != null && mod.title.trim().toLowerCase() == moduleTitle.trim().toLowerCase()) {
+          return revision;
+        }
+      }
     }
     return null;
   }
@@ -207,10 +212,6 @@ class RevisionController extends ChangeNotifier {
   }
 
   Future<void> _load() async {
-    // Load suppress list before first reconcile so no deleted module is re-created.
-    final suppressed = await LocalRevisionStorage.loadSuppressedModuleIds();
-    _suppressedModuleIds.addAll(suppressed);
-
     final cached = await LocalRevisionStorage.loadAll();
     if (_revisions.isEmpty && cached.isNotEmpty) {
       _revisions = _sorted(cached);
@@ -238,39 +239,8 @@ class RevisionController extends ChangeNotifier {
   }
 
   void _mergeRemote(List<Revision> remote) {
-    // Build a lookup of what the database stream currently provides.
-    final remoteById = <String, Revision>{
-      for (final r in remote) r.id: r,
-    };
-
-    final merged = <String, Revision>{};
-
-    // For every local record:
-    //  - If database stream still has it, pick whichever copy is newer.
-    //  - If database stream no longer has it (was deleted), drop it.
-    for (final local in _revisions) {
-      if (_suppressedModuleIds.contains(local.moduleId)) continue;
-      final remoteVersion = remoteById[local.id];
-      if (remoteVersion == null) {
-        // Record was deleted in database (or never pushed) — keep local only
-        // if it is strictly newer than any update we can find.
-        merged[local.id] = local;
-      } else if (!local.updatedAt.isBefore(remoteVersion.updatedAt)) {
-        merged[local.id] = local; // local is newer, keep it
-      } else {
-        merged[local.id] = remoteVersion; // stream version is newer
-      }
-    }
-
-    // Add any records that exist only in database stream.
-    for (final r in remote) {
-      if (!_suppressedModuleIds.contains(r.moduleId)) {
-        merged.putIfAbsent(r.id, () => r);
-      }
-    }
-
-    _revisions = _sorted(merged.values.toList());
-    unawaited(LocalRevisionStorage.saveAll(_revisions));
+    _revisions = _sorted(remote);
+    _isLoading = false;
     notifyListeners();
   }
 
@@ -307,6 +277,7 @@ class RevisionController extends ChangeNotifier {
   }
 
   /// Creates R1 for a specific completed module immediately and ensures it is persisted.
+  /// Enforces that a module can only be added to revision ONE time (no duplicates).
   Future<Revision> createOrEnsureRevision({
     required String courseId,
     required String moduleId,
@@ -316,19 +287,47 @@ class RevisionController extends ChangeNotifier {
   }) async {
     final now = DateTime.now();
 
-    // Un-suppress so manual add takes effect immediately
-    if (_suppressedModuleIds.remove(moduleId)) {
-      unawaited(LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds));
-    }
-
+    // 1. Check in-memory list first by moduleId or title
     final existingIndex = _revisions.indexWhere(
-      (r) => moduleId.isNotEmpty && r.moduleId == moduleId,
+      (r) => (moduleId.isNotEmpty && r.moduleId == moduleId) ||
+          (moduleTitle != null && moduleTitle.trim().isNotEmpty &&
+              r.moduleId.isNotEmpty &&
+              _ongoingController.getModuleById(r.moduleId)?.title.trim().toLowerCase() == moduleTitle.trim().toLowerCase()),
     );
 
     if (existingIndex != -1) {
       return _revisions[existingIndex];
     }
 
+    // 2. Check cached storage
+    final cached = await LocalRevisionStorage.loadAll();
+    final cachedIndex = cached.indexWhere(
+      (r) => moduleId.isNotEmpty && r.moduleId == moduleId,
+    );
+    if (cachedIndex != -1) {
+      final existingRev = cached[cachedIndex];
+      if (!_revisions.any((r) => r.id == existingRev.id)) {
+        _revisions = _sorted(List<Revision>.of(_revisions)..add(existingRev));
+        notifyListeners();
+      }
+      return existingRev;
+    }
+
+    // 3. Check database
+    try {
+      final dbRevisions = await _dbService.getRevisions();
+      final existingInDb = dbRevisions.where((r) => r.moduleId == moduleId).toList();
+      if (existingInDb.isNotEmpty) {
+        final existingRev = existingInDb.first;
+        if (!_revisions.any((r) => r.id == existingRev.id)) {
+          _revisions = _sorted(List<Revision>.of(_revisions)..add(existingRev));
+          notifyListeners();
+        }
+        return existingRev;
+      }
+    } catch (_) {}
+
+    // 4. Create revision ONLY once on explicit manual user request
     final newRevision = Revision(
       id: 'revision_${moduleId.isNotEmpty ? moduleId : 'module'}_${now.millisecondsSinceEpoch}',
       courseId: courseId,
@@ -342,7 +341,6 @@ class RevisionController extends ChangeNotifier {
 
     _revisions = _sorted(List<Revision>.of(_revisions)..add(newRevision));
     _isLoading = false;
-    await LocalRevisionStorage.saveAll(_revisions);
     notifyListeners();
     await _pushToDatabase(newRevision, isNew: true);
     unawaited(_ongoingController.refresh());
@@ -350,16 +348,13 @@ class RevisionController extends ChangeNotifier {
   }
 
   Future<void> _performReconcile() async {
-    final now = DateTime.now();
     final working = List<Revision>.of(_revisions);
     var changed = false;
 
-    // 1. Purge any revisions whose module is NOT complete!
-    // Revision list should ONLY contain completed modules.
+    // Only purge revisions belonging to archived courses
     final toRemove = <String>[];
     for (final revision in working) {
-      final isComplete = await _isRevisionComplete(revision);
-      if (!isComplete) {
+      if (_isCourseArchived(revision.courseId)) {
         toRemove.add(revision.id);
       }
     }
@@ -374,108 +369,29 @@ class RevisionController extends ChangeNotifier {
       }
     }
 
-    final byModuleId = <String, Revision>{
-      for (final revision in working)
-        if (revision.moduleId.isNotEmpty) revision.moduleId: revision,
-    };
-
-    // Build course map for fast lookup and fallback to local disk if needed
-    final coursesMap = <String, Course>{};
-    for (final c in _coursesController.allCourses) {
-      coursesMap[c.id] = c;
-    }
-    if (coursesMap.isEmpty) {
-      final cachedCourses = await LocalCourseStorage.loadCourses();
-      for (final c in cachedCourses) {
-        coursesMap[c.id] = c;
-      }
-    }
-
-    // Collect all modules from both local disk and all active courses
-    final allModules = <Module>[];
-    final seenModuleKeys = <String>{};
-
-    void addModuleCandidate(Module m) {
-      final key = m.id.isNotEmpty ? m.id : m.title.trim().toLowerCase();
-      if (key.isNotEmpty && seenModuleKeys.add(key)) {
-        allModules.add(m);
-      }
-    }
-
-    final cachedAll = await LocalModuleStorage.loadAllModules();
-    for (final m in cachedAll) {
-      addModuleCandidate(m);
-    }
-
-    for (final course in coursesMap.values) {
-      if (course.status.toLowerCase() == 'archived') continue;
-      final courseModules = await LocalModuleStorage.loadModules(course.id);
-      for (final m in courseModules) {
-        addModuleCandidate(m);
-      }
-      for (final m in courseModules) {
-        addModuleCandidate(m);
-      }
-    }
-
-    for (final module in allModules) {
-      if (module.id.isEmpty && module.title.isEmpty) continue;
-
-      final course = coursesMap[module.courseId] ??
-          Course(
-            id: module.courseId,
-            title: module.courseId.isNotEmpty ? module.courseId : 'Course',
-            description: '',
-            status: 'active',
-            createdAt: now,
-            updatedAt: now,
-          );
-
-      if (course.status.toLowerCase() == 'archived') continue;
-
-      final existing = byModuleId[module.id];
-
-      if (existing != null) {
-        // No metadata to sync — titles/descriptions are looked up from Module at display time
-      }
-    }
-
     if (changed) {
       _revisions = _sorted(working);
-      await LocalRevisionStorage.saveAll(_revisions);
       notifyListeners();
       unawaited(_ongoingController.refresh());
     }
   }
 
-  /// Deletes a revision record entirely and suppresses re-creation for that
-  /// module so reconcile does not immediately add it back.
+  /// Deletes a single revision record entirely from memory and SQLite database.
   Future<void> deleteRevision(String revisionId) async {
-    // Find the revision first so we can record its moduleId.
-    final toDelete = _revisions.firstWhere(
-      (r) => r.id == revisionId,
-      orElse: () => Revision(
-        id: '', courseId: '', moduleId: '',
-        currentLevel: 1, status: RevisionStatus.active,
-        nextRevisionAt: DateTime.now(), createdAt: DateTime.now(), updatedAt: DateTime.now(),
-      ),
-    );
+    if (revisionId.isEmpty) return;
 
+    // 1. Immediately remove from local list for surgical UI update
     _revisions = _revisions.where((r) => r.id != revisionId).toList();
-    await LocalRevisionStorage.saveAll(_revisions);
-
-    // Clean up local revision topics for this revision ID
-    unawaited(LocalRevisionTopicStorage.deleteTopicsForRevision(revisionId));
-
-    // Suppress by moduleId so reconcile skips it.
-    if (toDelete.moduleId.isNotEmpty) {
-      _suppressedModuleIds.add(toDelete.moduleId);
-    }
-    await LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds);
-
     notifyListeners();
-    unawaited(_ongoingController.refresh());
 
+    // 2. Clean up revision topics belonging strictly to this revision
+    try {
+      await LocalRevisionTopicStorage.deleteTopicsForRevision(revisionId);
+    } catch (e) {
+      debugPrint('Error cleaning up revision topics: $e');
+    }
+
+    // 3. Delete ONLY the target revision row from SQLite
     try {
       await _dbService.deleteRevision(revisionId);
     } catch (e) {
@@ -492,15 +408,6 @@ class RevisionController extends ChangeNotifier {
     if (toRemove.isEmpty) return;
 
     _revisions = _revisions.where((r) => r.courseId != courseId).toList();
-    await LocalRevisionStorage.saveAll(_revisions);
-
-    for (final r in toRemove) {
-      if (r.moduleId.isNotEmpty) {
-        _suppressedModuleIds.remove(r.moduleId);
-      }
-    }
-    await LocalRevisionStorage.saveSuppressedModuleIds(_suppressedModuleIds);
-
     notifyListeners();
     unawaited(_ongoingController.refresh());
 
@@ -520,106 +427,7 @@ class RevisionController extends ChangeNotifier {
     }).toList();
   }
 
-  /// Checks if a revision's module has completed all its topics.
-  Future<bool> _isRevisionComplete(Revision revision) async {
-    final moduleId = revision.moduleId;
-    if (moduleId.isEmpty) return false;
 
-    // 1. Check OngoingModulesController in-memory first
-    final total = _ongoingController.topicCountForModule(moduleId);
-    final done = _ongoingController.completedTopicCountForModule(moduleId);
-    if (total > 0) {
-      return done >= total;
-    }
-
-    // 2. Load topics from local disk cache
-    var topics = await LocalTopicStorage.loadTopicsForModule(
-      moduleId: moduleId,
-    );
-
-    // 3. Fallback to DatabaseService if local topics empty
-    if (topics.isEmpty) {
-      try {
-        topics = await _dbService.getTopics(moduleId: moduleId);
-        if (topics.isNotEmpty) {
-          await LocalTopicStorage.saveTopics(moduleId, topics);
-        }
-      } catch (_) {}
-    }
-
-    // If topics exist, ALL must be completed!
-    if (topics.isNotEmpty) {
-      return topics.every((t) => t.isCompleted);
-    }
-
-    // 4. If no topics found, check module record itself
-    if (revision.courseId.isNotEmpty) {
-      final modules = await LocalModuleStorage.loadModules(revision.courseId);
-      final match = modules.firstWhere(
-        (m) => m.id == moduleId,
-        orElse: () => Module(
-          id: '',
-          courseId: '',
-          title: '',
-          description: '',
-          orderIndex: 0,
-          status: '',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
-      if (match.id.isNotEmpty) {
-        return match.status.toLowerCase() == 'completed';
-      }
-    }
-
-    return false;
-  }
-
-  /// A module counts as complete when all its topics are completed.
-  Future<bool> _isModuleComplete(Module module) async {
-    if (module.id.isEmpty && module.title.isEmpty) return false;
-
-    // Check with in-memory OngoingModulesController
-    if (module.id.isNotEmpty) {
-      final total = _ongoingController.topicCountForModule(module.id);
-      final done = _ongoingController.completedTopicCountForModule(module.id);
-      if (total > 0) return done >= total;
-    }
-
-    var topics = await LocalTopicStorage.loadTopicsForModule(
-      moduleId: module.id,
-      fallbackTitle: module.title,
-    );
-    if (topics.isEmpty && module.id.isNotEmpty) {
-      try {
-        topics = await _dbService.getTopics(moduleId: module.id);
-        if (topics.isNotEmpty) {
-          final key = module.id.isNotEmpty ? module.id : module.title;
-          await LocalTopicStorage.saveTopics(key, topics);
-        }
-      } catch (_) {}
-    }
-
-    if (topics.isNotEmpty) {
-      return topics.every((topic) => topic.isCompleted);
-    }
-
-    return module.status.toLowerCase() == 'completed';
-  }
-
-  Revision _createRevision(Course course, Module module, DateTime now) {
-    return Revision(
-      id: 'revision_${module.id}_${now.millisecondsSinceEpoch}',
-      courseId: course.id,
-      moduleId: module.id,
-      currentLevel: 1,
-      status: RevisionStatus.active,
-      nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),
-      createdAt: now,
-      updatedAt: now,
-    );
-  }
 
   Future<void> _pushToDatabase(Revision revision, {required bool isNew}) async {
     try {

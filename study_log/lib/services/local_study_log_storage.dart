@@ -33,4 +33,26 @@ class LocalStudyLogStorage {
   static Future<void> clearAll() {
     return DatabaseService.instance.clearStudyLogs();
   }
+
+  /// Deletes study log entries for a specific topic and log type.
+  static Future<void> deleteLogForTopic({
+    required String topicId,
+    required String type,
+  }) {
+    return DatabaseService.instance.deleteStudyLogForTopic(
+      topicId: topicId,
+      type: type,
+    );
+  }
+
+  /// Deletes study log entries for a specific module and log type.
+  static Future<void> deleteLogForModule({
+    required String moduleId,
+    required String type,
+  }) {
+    return DatabaseService.instance.deleteStudyLogForModule(
+      moduleId: moduleId,
+      type: type,
+    );
+  }
 }

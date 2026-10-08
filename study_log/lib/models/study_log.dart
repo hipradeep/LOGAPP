@@ -1,7 +1,9 @@
 enum StudyLogType {
   topicCompleted,
   revisionCompleted,
-  studySession;
+  studySession,
+  moduleCompleted,
+  revisionModuleCompleted;
 
   String get value => name;
 
@@ -16,6 +18,14 @@ enum StudyLogType {
       case 'revision_completed':
       case 'revision':
         return StudyLogType.revisionCompleted;
+      case 'modulecompleted':
+      case 'module_completed':
+      case 'module':
+        return StudyLogType.moduleCompleted;
+      case 'revisionmodulecompleted':
+      case 'revision_module_completed':
+      case 'revision_module':
+        return StudyLogType.revisionModuleCompleted;
       case 'studysession':
       case 'study_session':
       case 'session':
@@ -54,6 +64,27 @@ class StudyLog {
     required this.timestamp,
     required this.createdAt,
   });
+
+  /// True if this log represents an individual topic completion.
+  bool get isTopicCompleted =>
+      type == StudyLogType.topicCompleted && topicId != null && topicId!.isNotEmpty;
+
+  /// True if this log represents an individual revision topic completion.
+  bool get isRevisionTopicCompleted =>
+      type == StudyLogType.revisionCompleted && topicId != null && topicId!.isNotEmpty;
+
+  /// True if this log represents a whole module completion.
+  bool get isModuleCompleted =>
+      type == StudyLogType.moduleCompleted ||
+      (type == StudyLogType.topicCompleted && (topicId == null || topicId!.isEmpty));
+
+  /// True if this log represents a whole revision module / ladder completion.
+  bool get isRevisionModuleCompleted =>
+      type == StudyLogType.revisionModuleCompleted ||
+      (type == StudyLogType.revisionCompleted && (topicId == null || topicId!.isEmpty));
+
+  /// True if this log represents a timer study session.
+  bool get isStudySession => type == StudyLogType.studySession;
 
   Map<String, dynamic> toMap({bool forLocalJson = false}) {
     return {

@@ -75,6 +75,11 @@ Future<void> warmupControllers() async {
     if (getIt.isRegistered<NotificationController>()) {
       await getIt<NotificationController>().syncAllNotifications();
     }
+    // Warm up CloudSyncController so silent sign-in and cloud metadata handshake
+    // run in the background during app startup rather than delaying until Settings is opened.
+    if (getIt.isRegistered<CloudSyncController>()) {
+      getIt<CloudSyncController>();
+    }
   } catch (e) {
     debugPrint('warmupControllers error: $e');
     try {

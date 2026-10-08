@@ -11,7 +11,7 @@ import 'recent_activity_screen.dart';
 /// Activity Screen:
 /// Displays detailed activity metrics moved from the profile:
 /// - Summary Stats Card (Study Volume: Topics Finished vs Topic Revisions)
-/// - Activity Breakdown Card (Daily Breakdown stacked bar chart 7D/14D/30D)
+/// - Activity Breakdown Card (Weekly Breakdown stacked bar chart - Monday to Sunday)
 /// - Recent Activity Card (Day-by-day activity log)
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});

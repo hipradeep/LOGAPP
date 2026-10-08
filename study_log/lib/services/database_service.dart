@@ -434,13 +434,36 @@ class DatabaseService {
   Future<void> saveModules(String courseId, List<Module> modules) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete('modules', where: 'courseId = ?', whereArgs: [courseId]);
+      // Do not delete existing modules wholesale! In SQLite, deleting modules activates
+      // FOREIGN KEY (moduleId) REFERENCES modules(id) ON DELETE CASCADE, which wipes out
+      // all topics and revisions belonging to these modules.
+      final newIds = modules.map((m) => m.id).toSet();
+      final existing = await txn.query(
+        'modules',
+        columns: ['id'],
+        where: 'courseId = ?',
+        whereArgs: [courseId],
+      );
+      for (final row in existing) {
+        final id = row['id'] as String;
+        if (!newIds.contains(id)) {
+          await txn.delete('modules', where: 'id = ?', whereArgs: [id]);
+        }
+      }
       for (final m in modules) {
-        await txn.insert(
+        final count = await txn.update(
           'modules',
           m.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          where: 'id = ?',
+          whereArgs: [m.id],
         );
+        if (count == 0) {
+          await txn.insert(
+            'modules',
+            m.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
     });
     _getModuleController(courseId).add(await getModules(courseId: courseId));
@@ -540,13 +563,33 @@ class DatabaseService {
   Future<void> saveTopics(String moduleId, List<Topic> topics) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete('topics', where: 'moduleId = ?', whereArgs: [moduleId]);
+      final newIds = topics.map((t) => t.id).toSet();
+      final existing = await txn.query(
+        'topics',
+        columns: ['id'],
+        where: 'moduleId = ?',
+        whereArgs: [moduleId],
+      );
+      for (final row in existing) {
+        final id = row['id'] as String;
+        if (!newIds.contains(id)) {
+          await txn.delete('topics', where: 'id = ?', whereArgs: [id]);
+        }
+      }
       for (final t in topics) {
-        await txn.insert(
+        final count = await txn.update(
           'topics',
           t.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          where: 'id = ?',
+          whereArgs: [t.id],
         );
+        if (count == 0) {
+          await txn.insert(
+            'topics',
+            t.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
     });
     _getTopicController(moduleId).add(await getTopics(moduleId: moduleId));
@@ -612,13 +655,31 @@ class DatabaseService {
   Future<void> saveRevisions(List<RevisionModule> revisions) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete('revisions');
+      // Do not delete all revisions wholesale! In SQLite, deleting revisions activates
+      // FOREIGN KEY (revisionId) REFERENCES revisions(id) ON DELETE CASCADE, which destroys
+      // all revision_topics belonging to those revisions.
+      final newIds = revisions.map((r) => r.id).toSet();
+      final existing = await txn.query('revisions', columns: ['id']);
+      for (final row in existing) {
+        final id = row['id'] as String;
+        if (!newIds.contains(id)) {
+          await txn.delete('revisions', where: 'id = ?', whereArgs: [id]);
+        }
+      }
       for (final rev in revisions) {
-        await txn.insert(
+        final count = await txn.update(
           'revisions',
           rev.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          where: 'id = ?',
+          whereArgs: [rev.id],
         );
+        if (count == 0) {
+          await txn.insert(
+            'revisions',
+            rev.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
     });
     _revisionsStreamController.add(await getRevisions());
@@ -704,17 +765,33 @@ class DatabaseService {
       String revisionId, List<RevisionTopic> topics) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete(
+      final newIds = topics.map((t) => t.id).toSet();
+      final existing = await txn.query(
         'revision_topics',
+        columns: ['id'],
         where: 'revisionId = ?',
         whereArgs: [revisionId],
       );
+      for (final row in existing) {
+        final id = row['id'] as String;
+        if (!newIds.contains(id)) {
+          await txn.delete('revision_topics', where: 'id = ?', whereArgs: [id]);
+        }
+      }
       for (final t in topics) {
-        await txn.insert(
+        final count = await txn.update(
           'revision_topics',
           t.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          where: 'id = ?',
+          whereArgs: [t.id],
         );
+        if (count == 0) {
+          await txn.insert(
+            'revision_topics',
+            t.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
     });
     _getRevisionTopicController(revisionId)
@@ -775,6 +852,32 @@ class DatabaseService {
     final db = await database;
     await db.delete('study_logs');
     _studyLogsStreamController.add([]);
+  }
+
+  Future<void> deleteStudyLogForTopic({
+    required String topicId,
+    required String type,
+  }) async {
+    final db = await database;
+    await db.delete(
+      'study_logs',
+      where: 'topicId = ? AND type = ?',
+      whereArgs: [topicId, type],
+    );
+    _studyLogsStreamController.add(await getStudyLogs());
+  }
+
+  Future<void> deleteStudyLogForModule({
+    required String moduleId,
+    required String type,
+  }) async {
+    final db = await database;
+    await db.delete(
+      'study_logs',
+      where: 'moduleId = ? AND type = ?',
+      whereArgs: [moduleId, type],
+    );
+    _studyLogsStreamController.add(await getStudyLogs());
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1015,7 +1118,8 @@ class DatabaseService {
     final maps = await db.query(
       'study_logs',
       columns: ['timestamp'],
-      where: "type = 'revisionCompleted'",
+      where:
+          "(type = 'revisionCompleted' OR type = 'revision_completed') AND topicId IS NOT NULL AND topicId != ''",
     );
     final result = <DateTime>[];
     for (final m in maps) {

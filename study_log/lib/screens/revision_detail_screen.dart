@@ -48,22 +48,33 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   bool _isLoadingTopics = true;
 
   String _resolvedModuleId = '';
+  String _cachedCourseTitle = '';
+  String _cachedModuleTitle = '';
 
   RevisionController get _controller => getIt<RevisionController>();
 
   /// Course title looked up dynamically from CoursesController
   String get _courseTitle {
+    if (_cachedCourseTitle.isNotEmpty) return _cachedCourseTitle;
     if (getIt.isRegistered<CoursesController>()) {
-      return getIt<CoursesController>().getCourseById(widget.revision.courseId)?.title ?? '';
+      final t = getIt<CoursesController>().getCourseById(widget.revision.courseId)?.title;
+      if (t != null && t.isNotEmpty) {
+        _cachedCourseTitle = t;
+        return t;
+      }
     }
     return '';
   }
 
   /// Module title looked up dynamically from OngoingModulesController
   String get _moduleTitle {
+    if (_cachedModuleTitle.isNotEmpty) return _cachedModuleTitle;
     if (getIt.isRegistered<OngoingModulesController>()) {
       final t = getIt<OngoingModulesController>().moduleTitleFor(widget.revision.moduleId);
-      if (t.isNotEmpty) return t;
+      if (t.isNotEmpty) {
+        _cachedModuleTitle = t;
+        return t;
+      }
     }
     return '';
   }
@@ -88,6 +99,22 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
   Future<void> _loadTopics() async {
     final revision = widget.revision;
+
+    // Resolve course and module titles if not yet populated
+    if (_cachedCourseTitle.isEmpty && revision.courseId.isNotEmpty) {
+      if (getIt.isRegistered<CoursesController>()) {
+        final c = getIt<CoursesController>().getCourseById(revision.courseId);
+        if (c != null && c.title.isNotEmpty) {
+          _cachedCourseTitle = c.title;
+        }
+      }
+    }
+    if (_cachedModuleTitle.isEmpty && revision.moduleId.isNotEmpty) {
+      final mod = await LocalModuleStorage.getModuleById(revision.moduleId);
+      if (mod != null && mod.title.isNotEmpty) {
+        _cachedModuleTitle = mod.title;
+      }
+    }
 
     // 1. Concurrently load cached revision topics and local base topics
     final cachedRevFuture = LocalRevisionTopicStorage.loadTopicsForRevision(revision.id);
@@ -292,6 +319,8 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
 
 
+    final targetTopicId = updated.topicId.isNotEmpty ? updated.topicId : updated.id;
+
     if (next == TopicStatus.completed) {
       final now = DateTime.now();
       final topicTitle = updated.title.isNotEmpty
@@ -300,12 +329,12 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
       final studyLog = StudyLog(
         id: 'log_rev_topic_${updated.id}_${now.millisecondsSinceEpoch}',
-        type: StudyLogType.topicCompleted,
+        type: StudyLogType.revisionCompleted,
         courseId: _revision.courseId,
         courseTitle: _courseTitle,
         moduleId: _revision.moduleId,
         moduleTitle: _moduleTitle,
-        topicId: updated.topicId.isNotEmpty ? updated.topicId : updated.id,
+        topicId: targetTopicId,
         topicTitle: topicTitle,
         revisionLevel: _revision.currentLevel,
         timestamp: now,
@@ -313,11 +342,20 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       );
 
       await LocalStudyLogStorage.addLog(studyLog);
-
+      await LocalRevisionStorage.recordRevisionEvent(now);
 
       if (getIt.isRegistered<OngoingModulesController>()) {
         unawaited(getIt<OngoingModulesController>().refresh());
       }
+      if (getIt.isRegistered<ProgressController>()) {
+        unawaited(getIt<ProgressController>().refresh());
+      }
+    } else if (next == TopicStatus.notStarted) {
+      // If user unchecks the topic, remove the revision log entry
+      await LocalStudyLogStorage.deleteLogForTopic(
+        topicId: targetTopicId,
+        type: 'revisionCompleted',
+      );
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());
       }
@@ -382,7 +420,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
           final now = DateTime.now();
           final log = StudyLog(
             id: 'rev_${revision.id}_${now.millisecondsSinceEpoch}',
-            type: StudyLogType.revisionCompleted,
+            type: StudyLogType.revisionModuleCompleted,
             courseId: revision.courseId,
             courseTitle: _courseTitle,
             moduleId: revision.moduleId,

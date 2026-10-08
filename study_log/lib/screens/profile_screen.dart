@@ -28,6 +28,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late final ProgressController _progressController;
+  
 
   @override
   void initState() {
@@ -35,6 +36,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _progressController = getIt<ProgressController>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _progressController.refresh();
+      if (getIt.isRegistered<RevisionController>()) {
+        getIt<RevisionController>().reconcile();
+      }
+      if (getIt.isRegistered<CoursesController>()) {
+        getIt<CoursesController>().loadCourses();
+      }
     });
   }
 
@@ -247,108 +254,13 @@ class _UserProfileCard extends StatelessWidget {
       builder: (context, _) {
         final isSignedIn = syncCtrl?.isSignedIn ?? false;
         final courseCount = coursesCtrl?.courses.length ?? 0;
-        final revisionCount = revisionCtrl?.revisions.length ?? 0;
+        final int revisionCount = (progressCtrl != null && progressCtrl.totalTopicRevisions > 0)
+            ? progressCtrl.totalTopicRevisions
+            : (revisionCtrl?.revisions.length ?? 0);
         final streak = progressCtrl?.currentStreak ?? 0;
 
-        if (!isSignedIn) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 14.0),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor(context)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.shadowColor(context),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.person_outline_rounded,
-                    color: AppTheme.primaryColor,
-                    size: 20,
-                  ),
-                ),
-                const HGapMd(),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Guest Learner',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimaryColor(context),
-                        ),
-                      ),
-                      const VGapXs(),
-                      Text(
-                        'Sign in to sync your progress',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondaryColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const HGapSm(),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: syncCtrl == null || syncCtrl.isBusy
-                        ? null
-                        : () => _handleSignIn(context, syncCtrl),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.cloud_upload_outlined,
-                            size: 16,
-                            color: AppTheme.primaryColor,
-                          ),
-                          const HGapXs(),
-                          Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
+        if (!isSignedIn && syncCtrl?.isCheckingAuth == true) {
+          return const SizedBox.shrink();
         }
 
         return Container(
@@ -369,7 +281,8 @@ class _UserProfileCard extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                child: Row(
+                child: isSignedIn
+                    ? Row(
                   children: [
                     Container(
                       width: 40,
@@ -456,6 +369,88 @@ class _UserProfileCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.person_outline_rounded,
+                        color: AppTheme.primaryColor,
+                        size: 20,
+                      ),
+                    ),
+                    const HGapMd(),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Guest Learner',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimaryColor(context),
+                            ),
+                          ),
+                          const VGapXs(),
+                          Text(
+                            'Sign in to sync your progress',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondaryColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const HGapSm(),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: syncCtrl == null || syncCtrl.isBusy
+                            ? null
+                            : () => _handleSignIn(context, syncCtrl),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.cloud_upload_outlined,
+                                size: 16,
+                                color: AppTheme.primaryColor,
+                              ),
+                              const HGapXs(),
+                              Text(
+                                'Sign In',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],

@@ -260,9 +260,10 @@ class OngoingModulesController extends ChangeNotifier {
       final Map<String, CourseModuleProgress> courseProgress =
           <String, CourseModuleProgress>{};
       final Set<DateTime> completionDays = <DateTime>{};
+      final Set<String> completedTopicIdsToday = <String>{};
+      final Set<String> completedRevisionKeysToday = <String>{};
       int totalTopics = 0;
       int completedTopics = 0;
-      int completedToday = 0;
 
       for (final course in nonArchivedCourses) {
         int courseTotalModules = 0;
@@ -290,7 +291,9 @@ class OngoingModulesController extends ChangeNotifier {
             final doneAt = sub.completedAt;
             if (doneAt == null) continue;
             completionDays.add(_dayOnly(doneAt));
-            if (_isSameDay(doneAt, DateTime.now())) completedToday++;
+            if (_isSameDay(doneAt, DateTime.now())) {
+              completedTopicIdsToday.add(sub.id);
+            }
           }
           final int completedCount;
           final int totalCount;
@@ -381,20 +384,21 @@ class OngoingModulesController extends ChangeNotifier {
         );
       }
 
-      // Include study logs and revision completion events in streak tracking
+      // Include study logs in streak tracking and today's activity
       final studyLogs = await LocalStudyLogStorage.loadAll();
       for (final log in studyLogs) {
         completionDays.add(_dayOnly(log.timestamp));
         if (_isSameDay(log.timestamp, DateTime.now())) {
-          completedToday++;
-        }
-      }
-
-      final revisionEvents = await LocalRevisionStorage.loadRevisionEvents();
-      for (final event in revisionEvents) {
-        completionDays.add(_dayOnly(event));
-        if (_isSameDay(event, DateTime.now())) {
-          completedToday++;
+          // Strictly count individual topics and revision topics, do NOT count module completions!
+          if (log.isTopicCompleted &&
+              log.topicId != null &&
+              log.topicId!.isNotEmpty) {
+            completedTopicIdsToday.add(log.topicId!);
+          } else if (log.isRevisionTopicCompleted &&
+              log.topicId != null &&
+              log.topicId!.isNotEmpty) {
+            completedRevisionKeysToday.add(log.id);
+          }
         }
       }
 
@@ -421,7 +425,8 @@ class OngoingModulesController extends ChangeNotifier {
         ..addAll(courseProgress);
       _totalTopicCount = totalTopics;
       _completedTopicCount = completedTopics;
-      _completedTodayCount = completedToday;
+      _completedTodayCount =
+          completedTopicIdsToday.length + completedRevisionKeysToday.length;
       _dayStreak = _computeStreak(completionDays);
     } catch (e) {
       debugPrint('Error fetching ongoing modules: $e');

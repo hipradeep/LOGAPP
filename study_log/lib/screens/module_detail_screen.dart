@@ -266,15 +266,53 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
       final Module targetModule;
       if (idx != -1) {
-        if (modules[idx].status.toLowerCase() != newStatus) {
+        final prevStatus = modules[idx].status.toLowerCase();
+        if (prevStatus != newStatus) {
           targetModule = modules[idx].copyWith(
             status: newStatus,
             updatedAt: now,
           );
           modules[idx] = targetModule;
           await LocalModuleStorage.saveModulesForCourse(courseId, modules);
+
+          if (newStatus == 'completed') {
+            final modLog = StudyLog(
+              id: 'mod_complete_${targetModule.id}_${now.millisecondsSinceEpoch}',
+              type: StudyLogType.moduleCompleted,
+              courseId: courseId,
+              courseTitle: widget.courseTitle,
+              moduleId: targetModule.id,
+              moduleTitle: targetModule.title,
+              timestamp: now,
+              createdAt: now,
+            );
+            await LocalStudyLogStorage.addLog(modLog);
+          } else {
+            await LocalStudyLogStorage.deleteLogForModule(
+              moduleId: targetModule.id,
+              type: StudyLogType.moduleCompleted.value,
+            );
+          }
         } else {
           targetModule = modules[idx];
+          if (allDone && newStatus == 'completed') {
+            final existingLogs = await LocalStudyLogStorage.loadAll();
+            final hasLog = existingLogs.any(
+                (l) => l.moduleId == targetModule.id && l.isModuleCompleted);
+            if (!hasLog) {
+              final modLog = StudyLog(
+                id: 'mod_complete_${targetModule.id}_${now.millisecondsSinceEpoch}',
+                type: StudyLogType.moduleCompleted,
+                courseId: courseId,
+                courseTitle: widget.courseTitle,
+                moduleId: targetModule.id,
+                moduleTitle: targetModule.title,
+                timestamp: now,
+                createdAt: now,
+              );
+              await LocalStudyLogStorage.addLog(modLog);
+            }
+          }
         }
       } else {
         // Module not cached yet for this course — create and store it
@@ -290,6 +328,20 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         );
         modules.add(targetModule);
         await LocalModuleStorage.saveModulesForCourse(courseId, modules);
+
+        if (allDone && newStatus == 'completed') {
+          final modLog = StudyLog(
+            id: 'mod_complete_${targetModule.id}_${now.millisecondsSinceEpoch}',
+            type: StudyLogType.moduleCompleted,
+            courseId: courseId,
+            courseTitle: widget.courseTitle,
+            moduleId: targetModule.id,
+            moduleTitle: targetModule.title,
+            timestamp: now,
+            createdAt: now,
+          );
+          await LocalStudyLogStorage.addLog(modLog);
+        }
       }
 
       // If all modules in this course are now completed, also update course to completed
@@ -444,9 +496,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       });
       final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
       await LocalTopicStorage.saveTopics(key, _topics);
-      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
-      }
       await _syncModuleCompletion();
       unawaited(_loadModuleStats());
 
@@ -499,9 +548,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       });
       final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
       await LocalTopicStorage.saveTopics(key, _topics);
-      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
-      }
       await _syncModuleCompletion();
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
@@ -524,9 +570,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
     final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
     await LocalTopicStorage.saveTopics(key, _topics);
-    if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-      await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
-    }
     await _syncModuleCompletion();
 
     if (getIt.isRegistered<OngoingModulesController>()) {

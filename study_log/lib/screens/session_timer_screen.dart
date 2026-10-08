@@ -292,9 +292,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
 
       final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
       await LocalTopicStorage.saveTopics(key, _topics);
-      if (widget.moduleTitle.isNotEmpty && widget.moduleTitle != key) {
-        await LocalTopicStorage.saveTopics(widget.moduleTitle, _topics);
-      }
 
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
 

@@ -85,12 +85,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
         : null;
 
     final filtered = items.where((r) {
-      if (ongoing != null && r.moduleId.isNotEmpty) {
-        final total = ongoing.topicCountForModule(r.moduleId);
-        final done = ongoing.completedTopicCountForModule(r.moduleId);
-        if (total > 0 && done < total) return false;
-      }
-
       if (_levelFilter == null) {
         // Finished items will not show in "all" section
         if (r.isFinished) return false;
@@ -439,17 +433,7 @@ class _RevisionLevelFilterRow extends StatelessWidget {
     int finishedTotalCount = 0;
     final levelCounts = <int, int>{};
 
-    final ongoing = getIt.isRegistered<OngoingModulesController>()
-        ? getIt<OngoingModulesController>()
-        : null;
-
     for (final r in revisions) {
-      if (ongoing != null && r.moduleId.isNotEmpty) {
-        final total = ongoing.topicCountForModule(r.moduleId);
-        final done = ongoing.completedTopicCountForModule(r.moduleId);
-        if (total > 0 && done < total) continue;
-      }
-
       if (r.isFinished) {
         finishedTotalCount++;
       } else {

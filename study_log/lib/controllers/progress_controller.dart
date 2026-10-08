@@ -194,26 +194,26 @@ class ProgressController extends ChangeNotifier {
 
       final Set<DateTime> allActiveDates = <DateTime>{};
 
-      int finishedTopicsCount = 0;
+      int allTimeTopicsCount = 0;
       for (final date in completedTopicDates) {
         final norm = normalizeDate(date);
         if (!norm.isAfter(today)) {
           allActiveDates.add(norm);
+          allTimeTopicsCount++;
           if (!norm.isBefore(cutoffDate)) {
-            finishedTopicsCount++;
             _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
           }
         }
       }
 
-      int revisionsCount = 0;
+      int allTimeRevisionsCount = 0;
       for (final eventTime in recordedEvents) {
         final norm = normalizeDate(eventTime);
         if (!norm.isAfter(today)) {
           allActiveDates.add(norm);
+          allTimeRevisionsCount++;
           if (!norm.isBefore(cutoffDate)) {
             _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
-            revisionsCount++;
           }
         }
       }
@@ -231,36 +231,46 @@ class ProgressController extends ChangeNotifier {
           if (log.durationMinutes != null && log.durationMinutes! > 0) {
             _dailyStudyMinutes[norm] = (_dailyStudyMinutes[norm] ?? 0) + log.durationMinutes!;
           }
-          if (log.type == StudyLogType.revisionCompleted && recordedEvents.isEmpty) {
+        }
+        if (log.isRevisionTopicCompleted && recordedEvents.isEmpty) {
+          allTimeRevisionsCount++;
+          if (!norm.isBefore(cutoffDate)) {
             _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
-            revisionsCount++;
-          } else if (log.type == StudyLogType.studySession) {
-            _dailyTopicsFinished[norm] = (_dailyTopicsFinished[norm] ?? 0) + 1;
-            finishedTopicsCount++;
+          }
+        } else if (log.type == StudyLogType.studySession) {
+          if (log.revisionLevel != null &&
+              log.revisionLevel! > 0 &&
+              log.topicId != null &&
+              log.topicId!.isNotEmpty &&
+              recordedEvents.isEmpty) {
+            allTimeRevisionsCount++;
+            if (!norm.isBefore(cutoffDate)) {
+              _dailyRevisions[norm] = (_dailyRevisions[norm] ?? 0) + 1;
+            }
           }
         }
       }
       _totalStudyMinutes = totalMinutes;
 
       // Fallback: If no dedicated revision event logs exist, inspect cached revisions lazily
-      if (revisionsCount == 0) {
+      if (allTimeRevisionsCount == 0) {
         final List<RevisionModule> revisions = await LocalRevisionStorage.loadAll();
         for (final r in revisions) {
           final int timesRevised = r.isFinished ? RevisionSchedule.maxLevel : (r.currentLevel - 1);
           if (timesRevised > 0) {
+            allTimeRevisionsCount += timesRevised;
             final d = normalizeDate(r.lastRevisionAt ?? r.updatedAt);
             if (!d.isAfter(today)) {
               allActiveDates.add(d);
               if (!d.isBefore(cutoffDate)) {
-                revisionsCount += timesRevised;
                 _dailyRevisions[d] = (_dailyRevisions[d] ?? 0) + timesRevised;
               }
             }
           }
         }
       }
-      _totalTopicsFinished = finishedTopicsCount;
-      _totalTopicRevisions = revisionsCount;
+      _totalTopicsFinished = allTimeTopicsCount;
+      _totalTopicRevisions = allTimeRevisionsCount;
       _totalActiveDays = allActiveDates.length;
 
       // Compute streaks and highlights across all active dates

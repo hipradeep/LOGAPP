@@ -199,10 +199,18 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
       // Build Course entity (strip "modules" key — not part of Course model)
       final courseId = courseMap['id']?.toString() ??
           'course_${now.millisecondsSinceEpoch}_$courseCount';
+      final courseTitle = (courseMap['title'] ??
+              courseMap['courseTitle'] ??
+              courseMap['courseName'] ??
+              courseMap['name'])
+          ?.toString()
+          .trim();
       final course = Course(
         id: courseId,
-        title: courseMap['title']?.toString() ?? 'Untitled Course',
-        description: courseMap['description']?.toString() ?? '',
+        title: (courseTitle != null && courseTitle.isNotEmpty)
+            ? courseTitle
+            : 'Untitled Course',
+        description: (courseMap['description'] ?? courseMap['desc'])?.toString() ?? '',
         status: courseMap['status']?.toString() ?? 'active',
         deadline: null,
         iconCodePoint: (courseMap['iconCodePoint'] as num?)?.toInt(),
@@ -227,11 +235,18 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
 
         final moduleId = moduleMap['id']?.toString() ??
             '${courseId}_module_$sIdx';
+        final moduleTitle = (moduleMap['title'] ??
+                moduleMap['name'] ??
+                moduleMap['moduleTitle'])
+            ?.toString()
+            .trim();
         final module = Module(
           id: moduleId,
           courseId: courseId,
-          title: moduleMap['title']?.toString() ?? 'Untitled Module',
-          description: moduleMap['description']?.toString() ?? '',
+          title: (moduleTitle != null && moduleTitle.isNotEmpty)
+              ? moduleTitle
+              : 'Untitled Module',
+          description: (moduleMap['description'] ?? moduleMap['desc'])?.toString() ?? '',
           orderIndex: (moduleMap['orderIndex'] as num?)?.toInt() ?? sIdx,
           status: moduleMap['status']?.toString() ?? 'active',
           createdAt: now,
@@ -250,12 +265,19 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
           if (rawSub is! Map) continue;
           final subMap = Map<String, dynamic>.from(rawSub);
 
+          final topicTitle = (subMap['title'] ??
+                  subMap['name'] ??
+                  subMap['topicTitle'])
+              ?.toString()
+              .trim();
           final subItem = Topic(
             id: subMap['id']?.toString() ?? '${moduleId}_topic_$ssIdx',
             courseId: courseId,
             moduleId: moduleId,
-            title: subMap['title']?.toString() ?? 'Untitled Topic',
-            description: subMap['description']?.toString() ?? '',
+            title: (topicTitle != null && topicTitle.isNotEmpty)
+                ? topicTitle
+                : 'Untitled Topic',
+            description: (subMap['description'] ?? subMap['desc'])?.toString() ?? '',
             orderIndex: (subMap['orderIndex'] as num?)?.toInt() ?? ssIdx,
             status: Topic.parseStatus(subMap['status']?.toString() ?? 'notStarted'),
             completedAt: Topic.parseStatus(subMap['status']?.toString() ?? 'notStarted') ==
@@ -357,11 +379,18 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         final moduleMap = Map<String, dynamic>.from(rawModule);
 
         final moduleId = moduleMap['id']?.toString() ?? '${courseId}_module_$sIdx';
+        final moduleTitle = (moduleMap['title'] ??
+                moduleMap['name'] ??
+                moduleMap['moduleTitle'])
+            ?.toString()
+            .trim();
         final module = Module(
           id: moduleId,
           courseId: courseId,
-          title: moduleMap['title']?.toString() ?? 'Untitled Module',
-          description: moduleMap['description']?.toString() ?? '',
+          title: (moduleTitle != null && moduleTitle.isNotEmpty)
+              ? moduleTitle
+              : 'Untitled Module',
+          description: (moduleMap['description'] ?? moduleMap['desc'])?.toString() ?? '',
           orderIndex: (moduleMap['orderIndex'] as num?)?.toInt() ?? sIdx,
           status: moduleMap['status']?.toString() ?? 'active',
           createdAt: now,
@@ -380,12 +409,19 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
           if (rawSub is! Map) continue;
           final subMap = Map<String, dynamic>.from(rawSub);
 
+          final topicTitle = (subMap['title'] ??
+                  subMap['name'] ??
+                  subMap['topicTitle'])
+              ?.toString()
+              .trim();
           final subItem = Topic(
             id: subMap['id']?.toString() ?? '${moduleId}_topic_$ssIdx',
             courseId: courseId,
             moduleId: moduleId,
-            title: subMap['title']?.toString() ?? 'Untitled Topic',
-            description: subMap['description']?.toString() ?? '',
+            title: (topicTitle != null && topicTitle.isNotEmpty)
+                ? topicTitle
+                : 'Untitled Topic',
+            description: (subMap['description'] ?? subMap['desc'])?.toString() ?? '',
             orderIndex: (subMap['orderIndex'] as num?)?.toInt() ?? ssIdx,
             status: Topic.parseStatus(subMap['status']?.toString() ?? 'notStarted'),
             completedAt: Topic.parseStatus(subMap['status']?.toString() ?? 'notStarted') ==

@@ -30,6 +30,10 @@ class CloudSyncController extends ChangeNotifier {
   bool _isRestoring = false;
   bool _isExportingFile = false;
   bool _isImportingFile = false;
+  bool _isCheckingAuth = true;
+  String? _cachedActiveEmail;
+  String? _cachedDisplayName;
+  String? _cachedPhotoUrl;
   String? _errorMessage;
   DateTime? _lastBackupDate;
 
@@ -44,6 +48,9 @@ class CloudSyncController extends ChangeNotifier {
         _dbService = dbService ?? getIt<DatabaseService>() {
     _authService.onCurrentUserChanged.listen((account) {
       if (account != null) {
+        _cachedActiveEmail = account.email.trim().toLowerCase();
+        _cachedDisplayName = account.displayName?.trim();
+        _cachedPhotoUrl = account.photoUrl;
         _fetchLastBackupTime();
       } else {
         _lastBackupDate = null;
@@ -58,6 +65,7 @@ class CloudSyncController extends ChangeNotifier {
   bool get isRestoring => _isRestoring;
   bool get isExportingFile => _isExportingFile;
   bool get isImportingFile => _isImportingFile;
+  bool get isCheckingAuth => _isCheckingAuth;
   bool get isBusy =>
       _isSigningIn ||
       _isSyncing ||
@@ -67,16 +75,34 @@ class CloudSyncController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   DateTime? get lastBackupDate => _lastBackupDate;
 
-  bool get isSignedIn => _authService.isSignedIn;
-  String? get userEmail => _authService.currentUser?.email;
-  String? get displayName => _authService.currentUser?.displayName;
-  String? get photoUrl => _authService.currentUser?.photoUrl;
+  bool get isSignedIn =>
+      _authService.isSignedIn ||
+      (_cachedActiveEmail != null && _cachedActiveEmail!.isNotEmpty);
+  String? get userEmail =>
+      _authService.currentUser?.email ?? _cachedActiveEmail;
+  String? get displayName =>
+      _authService.currentUser?.displayName ?? _cachedDisplayName;
+  String? get photoUrl =>
+      _authService.currentUser?.photoUrl ?? _cachedPhotoUrl;
 
   Future<void> init() async {
     try {
+      // 1. Instantly hydrate cached session from SQLite so UI renders signed-in on frame 1
+      final activeEmail = await _getActiveEmail();
+      final profile = await _dbService.getUserProfile();
+      if (activeEmail != null && activeEmail.isNotEmpty) {
+        _cachedActiveEmail = activeEmail;
+        _cachedDisplayName = profile?.name;
+        _cachedPhotoUrl = profile?.avatarUrl;
+        notifyListeners();
+      }
+
+      // 2. Perform silent sign-in handshake over native Google Play Services
       final account = await _authService.signInSilently();
       if (account != null) {
-        final activeEmail = await _getActiveEmail();
+        _cachedActiveEmail = account.email.trim().toLowerCase();
+        _cachedDisplayName = account.displayName?.trim();
+        _cachedPhotoUrl = account.photoUrl;
         final newEmail = account.email.trim().toLowerCase();
         if (activeEmail != null && activeEmail.isNotEmpty && activeEmail != newEmail) {
           await _handlePostSignIn(account);
@@ -84,7 +110,11 @@ class CloudSyncController extends ChangeNotifier {
           await _fetchLastBackupTime();
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _isCheckingAuth = false;
+      notifyListeners();
+    }
   }
 
   Future<String?> _getActiveEmail() async {
@@ -190,6 +220,9 @@ class CloudSyncController extends ChangeNotifier {
 
     await _dbService.saveUserProfile(updatedProfile);
     await _dbService.setSetting('active_account_email', newEmail);
+    _cachedActiveEmail = newEmail;
+    _cachedDisplayName = updatedProfile.name;
+    _cachedPhotoUrl = updatedProfile.avatarUrl;
 
     // Refresh all reactive controllers so the UI updates instantly
     await _refreshAllControllers();
@@ -247,6 +280,9 @@ class CloudSyncController extends ChangeNotifier {
       // 2. Clear local SQLite data so device is clean
       await _dbService.clearAllData();
       await _dbService.deleteSetting('active_account_email');
+      _cachedActiveEmail = null;
+      _cachedDisplayName = null;
+      _cachedPhotoUrl = null;
       _resetControllersInMemory();
       await _refreshAllControllers();
 
@@ -283,6 +319,9 @@ class CloudSyncController extends ChangeNotifier {
       // 2. Clear local SQLite database completely
       await _dbService.clearAllData();
       await _dbService.deleteSetting('active_account_email');
+      _cachedActiveEmail = null;
+      _cachedDisplayName = null;
+      _cachedPhotoUrl = null;
 
       // 3. Clear in-memory controller states & refresh
       _resetControllersInMemory();
