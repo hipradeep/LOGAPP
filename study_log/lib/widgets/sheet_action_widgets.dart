@@ -105,58 +105,90 @@ class SheetHeader extends StatelessWidget {
 class SheetActionRow extends StatelessWidget {
   final IconData icon;
   final String title;
-  final VoidCallback onTap;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
 
   const SheetActionRow({
     super.key,
     required this.icon,
     required this.title,
-    required this.onTap,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 6.0),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceVariant(context),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: AppTheme.textPrimaryColor(context),
-                size: 16,
-              ),
+    final rowContent = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 6.0),
+      child: Row(
+        crossAxisAlignment: subtitle != null ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceVariant(context),
+              shape: BoxShape.circle,
             ),
-            const HGapSm(),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimaryColor(context),
-                  letterSpacing: -0.2,
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              color: AppTheme.textPrimaryColor(context),
+              size: 16,
+            ),
+          ),
+          const HGapSm(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
+                    letterSpacing: -0.2,
+                  ),
                 ),
-              ),
+                if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
+          ),
+          if (trailing != null)
+            trailing!
+          else if (onTap != null)
             Icon(
               Icons.chevron_right_rounded,
               color: AppTheme.textSecondaryColor(context),
               size: 18,
             ),
-          ],
-        ),
+        ],
       ),
+    );
+
+    if (onTap == null) {
+      return rowContent;
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: rowContent,
     );
   }
 }

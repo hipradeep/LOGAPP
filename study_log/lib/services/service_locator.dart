@@ -5,6 +5,7 @@ import '../controllers/theme_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/topic_revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/notification_controller.dart';
 import '../controllers/cloud_sync_controller.dart';
@@ -45,6 +46,9 @@ void setupLocator() {
   if (!getIt.isRegistered<RevisionController>()) {
     getIt.registerLazySingleton<RevisionController>(() => RevisionController());
   }
+  if (!getIt.isRegistered<TopicRevisionController>()) {
+    getIt.registerLazySingleton<TopicRevisionController>(() => TopicRevisionController());
+  }
   if (!getIt.isRegistered<ProgressController>()) {
     getIt.registerLazySingleton<ProgressController>(() => ProgressController());
   }
@@ -64,12 +68,14 @@ Future<void> warmupControllers() async {
     final courses = getIt<CoursesController>();
     final ongoing = getIt<OngoingModulesController>();
     final revision = getIt<RevisionController>();
+    final topicRevision = getIt<TopicRevisionController>();
     final progress = getIt<ProgressController>();
 
     await Future.wait([
       courses.loadCourses(),
       ongoing.refresh(),
       revision.reconcile(),
+      topicRevision.refresh(),
     ]);
     await progress.load();
     if (getIt.isRegistered<NotificationController>()) {

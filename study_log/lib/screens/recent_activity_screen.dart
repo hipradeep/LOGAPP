@@ -181,6 +181,9 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
             createdAt: latestCompletedAt,
           );
           logsById[synthModLog.id] = synthModLog;
+          existingModuleKeys.add(resolvedModuleId);
+          existingModuleKeys.add(bucketKey);
+          existingModuleKeys.add(resolvedModuleTitle.trim().toLowerCase());
         }
       }
     }
@@ -261,7 +264,34 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
 
     final merged = logsById.values.toList();
     merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return merged;
+
+    // Deduplicate module completion logs for the same module on the same calendar day
+    final List<StudyLog> deduplicated = [];
+    final Set<String> seenModuleDayKeys = <String>{};
+
+    for (final log in merged) {
+      if (log.isModuleCompleted) {
+        final dayKey = '${log.timestamp.year}_${log.timestamp.month}_${log.timestamp.day}';
+        final modKey = log.moduleId.isNotEmpty
+            ? log.moduleId
+            : log.moduleTitle.trim().toLowerCase();
+        final compositeKey = '${modKey}_$dayKey';
+        final titleKey = '${log.moduleTitle.trim().toLowerCase()}_$dayKey';
+
+        if (seenModuleDayKeys.contains(compositeKey) ||
+            (log.moduleTitle.isNotEmpty && seenModuleDayKeys.contains(titleKey))) {
+          // Already have a module completion log for this module on this date -> skip duplicate!
+          continue;
+        }
+        seenModuleDayKeys.add(compositeKey);
+        if (log.moduleTitle.isNotEmpty) {
+          seenModuleDayKeys.add(titleKey);
+        }
+      }
+      deduplicated.add(log);
+    }
+
+    return deduplicated;
   }
 
   void _handleBack() {

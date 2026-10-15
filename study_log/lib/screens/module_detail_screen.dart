@@ -520,16 +520,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           createdAt: DateTime.now(),
         );
         await LocalStudyLogStorage.addLog(studyLog);
-
-        final allDone = _topics.isNotEmpty && _topics.every((t) => t.isCompleted);
-        if (allDone) {
-          await _recordModuleCompletionLog(timestamp: updated.completedAt);
-        }
         if (getIt.isRegistered<ProgressController>()) {
           unawaited(getIt<ProgressController>().refresh());
         }
       } else {
-        await _removeModuleCompletionLog();
         if (getIt.isRegistered<ProgressController>()) {
           unawaited(getIt<ProgressController>().refresh());
         }

@@ -12,6 +12,7 @@ import '../models/revision_topic.dart';
 import '../models/study_log.dart';
 import '../models/user_profile.dart';
 import '../models/notification_settings.dart';
+import '../models/topic_revision.dart';
 
 /// Central SQLite Database Service for the Study app.
 ///
@@ -42,6 +43,8 @@ class DatabaseService {
       StreamController<List<RevisionModule>>.broadcast();
   final _revisionTopicsStreamControllers =
       <String, StreamController<List<RevisionTopic>>>{};
+  final _topicRevisionsStreamController =
+      StreamController<List<TopicRevision>>.broadcast();
   final _studyLogsStreamController =
       StreamController<List<StudyLog>>.broadcast();
 
@@ -95,6 +98,24 @@ class DatabaseService {
       onCreate: _onCreate,
       onOpen: (db) async {
         await db.rawQuery('PRAGMA journal_mode=WAL;');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS topic_revisions (
+            id             TEXT PRIMARY KEY,
+            courseId       TEXT NOT NULL,
+            moduleId       TEXT NOT NULL,
+            topicId        TEXT NOT NULL,
+            title          TEXT NOT NULL,
+            currentLevel   INTEGER NOT NULL DEFAULT 1,
+            status         TEXT NOT NULL DEFAULT 'active',
+            nextRevisionAt TEXT NOT NULL,
+            completedAt    TEXT,
+            createdAt      TEXT NOT NULL,
+            updatedAt      TEXT NOT NULL
+          );
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_topicId ON topic_revisions(topicId);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_due ON topic_revisions(nextRevisionAt, status);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_courseId ON topic_revisions(courseId);');
       },
     );
   }
@@ -182,7 +203,24 @@ class DatabaseService {
       );
     ''');
 
-    // 6. Study Logs Table
+    // 6. Topic Revisions Table
+    batch.execute('''
+      CREATE TABLE topic_revisions (
+        id             TEXT PRIMARY KEY,
+        courseId       TEXT NOT NULL,
+        moduleId       TEXT NOT NULL,
+        topicId        TEXT NOT NULL,
+        title          TEXT NOT NULL,
+        currentLevel   INTEGER NOT NULL DEFAULT 1,
+        status         TEXT NOT NULL DEFAULT 'active',
+        nextRevisionAt TEXT NOT NULL,
+        completedAt    TEXT,
+        createdAt      TEXT NOT NULL,
+        updatedAt      TEXT NOT NULL
+      );
+    ''');
+
+    // 7. Study Logs Table
     batch.execute('''
       CREATE TABLE study_logs (
         id              TEXT PRIMARY KEY,
@@ -236,6 +274,9 @@ class DatabaseService {
     batch.execute('CREATE INDEX idx_revisions_moduleId ON revisions(moduleId);');
     batch.execute('CREATE INDEX idx_revision_topics_revisionId ON revision_topics(revisionId);');
     batch.execute('CREATE INDEX idx_study_logs_timestamp ON study_logs(timestamp);');
+    batch.execute('CREATE INDEX idx_topic_revisions_topicId ON topic_revisions(topicId);');
+    batch.execute('CREATE INDEX idx_topic_revisions_due ON topic_revisions(nextRevisionAt, status);');
+    batch.execute('CREATE INDEX idx_topic_revisions_courseId ON topic_revisions(courseId);');
 
     await batch.commit(noResult: true);
   }
@@ -253,6 +294,7 @@ class DatabaseService {
       await txn.delete('topics');
       await txn.delete('revisions');
       await txn.delete('revision_topics');
+      await txn.delete('topic_revisions');
       await txn.delete('study_logs');
       await txn.delete('user_profile');
       await txn.delete('notification_settings');
@@ -260,6 +302,7 @@ class DatabaseService {
 
     _coursesStreamController.add([]);
     _revisionsStreamController.add([]);
+    _topicRevisionsStreamController.add([]);
     _studyLogsStreamController.add([]);
     for (final c in _modulesStreamControllers.values) {
       c.add([]);
@@ -804,6 +847,132 @@ class DatabaseService {
     for (final controller in _revisionTopicsStreamControllers.values) {
       controller.add([]);
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Topic Revision Operations (Individual Topic Spaced Repetition)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<List<TopicRevision>> getTopicRevisions({
+    String? courseId,
+    String? moduleId,
+  }) async {
+    final db = await database;
+    String? whereClause;
+    List<dynamic>? whereArgs;
+
+    if (courseId != null && moduleId != null) {
+      whereClause = 'courseId = ? AND moduleId = ?';
+      whereArgs = [courseId, moduleId];
+    } else if (courseId != null) {
+      whereClause = 'courseId = ?';
+      whereArgs = [courseId];
+    } else if (moduleId != null) {
+      whereClause = 'moduleId = ?';
+      whereArgs = [moduleId];
+    }
+
+    final maps = await db.query(
+      'topic_revisions',
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: 'nextRevisionAt ASC',
+    );
+    return maps.map((m) => TopicRevision.fromMap(m)).toList();
+  }
+
+  Stream<List<TopicRevision>> streamTopicRevisions() async* {
+    yield await getTopicRevisions();
+    yield* _topicRevisionsStreamController.stream;
+  }
+
+  Future<TopicRevision?> getTopicRevisionByTopicId(String topicId) async {
+    final db = await database;
+    final maps = await db.query(
+      'topic_revisions',
+      where: 'topicId = ?',
+      whereArgs: [topicId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return TopicRevision.fromMap(maps.first);
+  }
+
+  Future<void> addTopicRevision(TopicRevision topicRevision) async {
+    final db = await database;
+    await db.insert(
+      'topic_revisions',
+      topicRevision.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _topicRevisionsStreamController.add(await getTopicRevisions());
+  }
+
+  Future<void> updateTopicRevision(TopicRevision topicRevision) async {
+    final db = await database;
+    await db.update(
+      'topic_revisions',
+      topicRevision.toMap(),
+      where: 'id = ?',
+      whereArgs: [topicRevision.id],
+    );
+    _topicRevisionsStreamController.add(await getTopicRevisions());
+  }
+
+  Future<void> deleteTopicRevision(String id) async {
+    final db = await database;
+    await db.delete(
+      'topic_revisions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _topicRevisionsStreamController.add(await getTopicRevisions());
+  }
+
+  Future<void> deleteTopicRevisionByTopicId(String topicId) async {
+    final db = await database;
+    await db.delete(
+      'topic_revisions',
+      where: 'topicId = ?',
+      whereArgs: [topicId],
+    );
+    _topicRevisionsStreamController.add(await getTopicRevisions());
+  }
+
+  Future<void> saveTopicRevisions(List<TopicRevision> topicRevisions) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final newIds = topicRevisions.map((t) => t.id).toSet();
+      final existing = await txn.query('topic_revisions', columns: ['id']);
+      for (final row in existing) {
+        final id = row['id'] as String;
+        if (!newIds.contains(id)) {
+          await txn.delete('topic_revisions', where: 'id = ?', whereArgs: [id]);
+        }
+      }
+      for (final tr in topicRevisions) {
+        final count = await txn.update(
+          'topic_revisions',
+          tr.toMap(),
+          where: 'id = ?',
+          whereArgs: [tr.id],
+        );
+        if (count == 0) {
+          await txn.insert(
+            'topic_revisions',
+            tr.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+    });
+    _topicRevisionsStreamController.add(await getTopicRevisions());
+  }
+
+  Future<void> clearTopicRevisions() async {
+    final db = await database;
+    await db.delete('topic_revisions');
+    _topicRevisionsStreamController.add([]);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
