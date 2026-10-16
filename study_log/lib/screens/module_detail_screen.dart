@@ -21,6 +21,7 @@ import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/progress_controller.dart';
+import '../controllers/topic_revision_controller.dart';
 import '../widgets/topic_options_sheet.dart';
 import 'add_topic_screen.dart';
 import 'session_setup_screen.dart';
@@ -572,6 +573,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       }
       if (getIt.isRegistered<RevisionController>()) {
         await getIt<RevisionController>().reconcile();
+      }
+      if (getIt.isRegistered<TopicRevisionController>() && sub.id.isNotEmpty) {
+        unawaited(getIt<TopicRevisionController>().deleteByTopicId(sub.id));
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1148,42 +1152,62 @@ class _TopicsListView extends StatelessWidget {
     }
 
     final isModuleCompleted = topics.isNotEmpty && topics.every((t) => t.isCompleted);
+    final topicRevCtrl = getIt.isRegistered<TopicRevisionController>()
+        ? getIt<TopicRevisionController>()
+        : null;
 
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
-      itemCount: topics.length + (isModuleCompleted ? 1 : 0),
-      itemBuilder: (context, index) {
-        // "Add to Revision" footer button for completed modules
-        if (isModuleCompleted && index == topics.length) {
-          return _AddToRevisionFooter(
-            moduleTitle: moduleTitle,
-            courseTitle: courseTitle,
-            courseId: courseId,
-            moduleId: moduleId,
-          );
-        }
+    Widget buildList(BuildContext context) {
+      return ListView.builder(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
+        itemCount: topics.length + (isModuleCompleted ? 1 : 0),
+        itemBuilder: (context, index) {
+          // "Add to Revision" footer button for completed modules
+          if (isModuleCompleted && index == topics.length) {
+            return _AddToRevisionFooter(
+              moduleTitle: moduleTitle,
+              courseTitle: courseTitle,
+              courseId: courseId,
+              moduleId: moduleId,
+            );
+          }
 
-        final item = topics[index];
-        void openOptions() {
-          TopicOptionsSheet.show(
-            context,
+          final item = topics[index];
+          final topicRev = topicRevCtrl?.topicRevisionFor(item.id);
+
+          void openOptions() {
+            TopicOptionsSheet.show(
+              context,
+              topic: item,
+              moduleTitle: moduleTitle,
+              courseTitle: courseTitle,
+              courseId: courseId,
+              moduleId: moduleId,
+              onEdit: () => onEdit(index),
+              onDuplicate: () => onDuplicate(index),
+              onDelete: () => onDelete(index),
+            );
+          }
+
+          return TopicListItem(
             topic: item,
-            moduleTitle: moduleTitle,
-            onEdit: () => onEdit(index),
-            onDuplicate: () => onDuplicate(index),
-            onDelete: () => onDelete(index),
+            topicRevision: topicRev,
+            onTap: () => onToggle(index),
+            onLongPress: openOptions,
+            onOptionsTap: openOptions,
           );
-        }
+        },
+      );
+    }
 
-        return TopicListItem(
-          topic: item,
-          onTap: () => onToggle(index),
-          onLongPress: openOptions,
-          onOptionsTap: openOptions,
-        );
-      },
-    );
+    if (topicRevCtrl != null) {
+      return ListenableBuilder(
+        listenable: topicRevCtrl,
+        builder: (context, _) => buildList(context),
+      );
+    }
+
+    return buildList(context);
   }
 }
 

@@ -10,6 +10,7 @@ import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/topic_revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/notification_controller.dart';
 import '../controllers/cloud_sync_controller.dart';
@@ -71,6 +72,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (getIt.isRegistered<RevisionController>()) {
       getIt<RevisionController>().reconcile();
+    }
+
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      getIt<TopicRevisionController>().loadRevisions();
     }
 
     if (getIt.isRegistered<ProgressController>()) {
@@ -433,11 +438,15 @@ class _HomeTopModule extends StatelessWidget {
           listenable: Listenable.merge([
             ongoingController,
             if (getIt.isRegistered<RevisionController>()) getIt<RevisionController>(),
+            if (getIt.isRegistered<TopicRevisionController>()) getIt<TopicRevisionController>(),
             if (getIt.isRegistered<ProgressController>()) getIt<ProgressController>(),
           ]),
           builder: (context, _) {
             final revisionCtrl = getIt.isRegistered<RevisionController>()
                 ? getIt<RevisionController>()
+                : null;
+            final topicRevisionCtrl = getIt.isRegistered<TopicRevisionController>()
+                ? getIt<TopicRevisionController>()
                 : null;
             final progressCtrl = getIt.isRegistered<ProgressController>()
                 ? getIt<ProgressController>()
@@ -445,7 +454,8 @@ class _HomeTopModule extends StatelessWidget {
             final streak = (progressCtrl != null && progressCtrl.currentStreak > 0)
                 ? progressCtrl.currentStreak
                 : ongoingController.dayStreakCount;
-            final revisionsDue = revisionCtrl?.dueCount ?? 0;
+            final revisionsDue =
+                (topicRevisionCtrl?.dueCount ?? 0) + (revisionCtrl?.dueCount ?? 0);
 
             int completedToday = ongoingController.completedTodayCount;
             if (progressCtrl != null) {

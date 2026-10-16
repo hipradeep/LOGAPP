@@ -39,6 +39,10 @@ class TopicRevision {
 
   bool get isFinished => status == RevisionStatus.finished;
 
+  /// Timestamp of the last cleared revision or completion.
+  DateTime? get lastRevisionAt =>
+      completedAt ?? (currentLevel > 1 ? updatedAt : null);
+
   String get levelLabel => 'R$currentLevel';
 
   int get levelsRemaining =>

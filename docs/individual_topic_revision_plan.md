@@ -243,14 +243,16 @@ StudyLog(
 - [x] Register in `ServiceLocator` (`getIt`).
 
 ### Phase 3: Module Detail Screen Integration
-- [ ] Add "Add to Revision" option in topic options sheet.
-- [ ] Add revision status pill next to topics in topic lists when enrolled.
+- [x] Add "Add to Revision" option in topic options sheet.
+- [x] Add revision status pill next to topics in topic lists when enrolled.
+- [x] Add "Remove from Revision" and "Reset Revision Ladder" actions in topic options sheet.
+- [x] Clean up topic revisions when a topic is deleted.
 
 ### Phase 4: Revision Screen UI Enhancement
-- [ ] Put **Topics** as the first tab and **Modules** as the second tab: `[ Topics ]` `[ Modules ]`.
-- [ ] Build dedicated `TopicRevisionCard` widget.
-- [ ] Wire level filters and sorting modes (due date, name, level) for both tabs.
+- [x] Put **Topics** as the first tab and **Modules** as the second tab: `[ Topics (N) ]` `[ Modules (N) ]`.
+- [x] Build dedicated `TopicRevisionCard` widget with quick revision & quick complete actions.
+- [x] Wire level filters (`All`, `R1`–`R5`, `Finished`) and sorting modes (due date, name, level) for both tabs.
 
 ### Phase 5: Study Session & Validation
-- [ ] Support single-topic revision timer sessions.
-- [ ] Verify streak calculation and today's summary card accuracy.
+- [x] Support single-topic revision timer sessions.
+- [x] Verify streak calculation and today's summary card accuracy.

@@ -11,6 +11,7 @@ import '../services/local_revision_topic_storage.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/topic_revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../widgets/sheet_action_widgets.dart';
 
@@ -181,18 +182,20 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   bool get _canReset => widget.allowReset && !widget.isRestrictMode;
 
   int get _totalTopicsCount {
-    return widget.isRevision ? _revisionTopics.length : _topics.length;
+    return (widget.isRevision && _revisionTopics.isNotEmpty)
+        ? _revisionTopics.length
+        : _topics.length;
   }
 
   int get _completedTopicsCount {
-    if (widget.isRevision) {
+    if (widget.isRevision && _revisionTopics.isNotEmpty) {
       return _revisionTopics.where((t) => t.isCompleted).length;
     }
     return _topics.where((t) => t.isCompleted).length;
   }
 
   String get _currentTopicTitle {
-    if (widget.isRevision) {
+    if (widget.isRevision && _revisionTopics.isNotEmpty) {
       if (_currentTopicIndex < _revisionTopics.length) {
         if (_currentTopicIndex < _topics.length && _topics[_currentTopicIndex].title.isNotEmpty) {
           return _topics[_currentTopicIndex].title;
@@ -211,7 +214,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   }
 
   bool get _isCurrentTopicCompleted {
-    if (widget.isRevision) {
+    if (widget.isRevision && _revisionTopics.isNotEmpty) {
       if (_currentTopicIndex < _revisionTopics.length) {
         return _revisionTopics[_currentTopicIndex].isCompleted;
       }
@@ -226,7 +229,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   Future<void> _handleDoneAndNext() async {
     final now = DateTime.now();
 
-    if (widget.isRevision) {
+    if (widget.isRevision && _revisionTopics.isNotEmpty) {
       if (_currentTopicIndex >= _revisionTopics.length) return;
       final current = _revisionTopics[_currentTopicIndex];
       final updated = current.copyWith(
@@ -271,6 +274,65 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           moduleTitle: widget.moduleTitle,
           topicId: updated.topicId.isNotEmpty ? updated.topicId : updated.id,
           topicTitle: _currentTopicTitle,
+          revisionLevel: 1,
+          durationMinutes: elapsedMinutes,
+          timestamp: now,
+          createdAt: now,
+        );
+        await LocalStudyLogStorage.addLog(sessionLog);
+      }
+    } else if (widget.isRevision) {
+      // Individual topic revision session
+      if (_currentTopicIndex >= _topics.length) return;
+      final current = _topics[_currentTopicIndex];
+      final updated = current.copyWith(
+        status: TopicStatus.completed,
+        completedAt: now,
+      );
+
+      setState(() {
+        _topics[_currentTopicIndex] = updated;
+      });
+
+      final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
+
+      // Advance individual topic revision in TopicRevisionController
+      if (getIt.isRegistered<TopicRevisionController>()) {
+        final trc = getIt<TopicRevisionController>();
+        final rev = widget.revisionId != null
+            ? trc.topicRevisions.where((r) => r.id == widget.revisionId).firstOrNull
+            : trc.topicRevisionFor(current.id);
+        if (rev != null) {
+          await trc.completeCurrentLevel(rev.id, at: now, durationMinutes: elapsedMinutes);
+        } else {
+          final studyLog = StudyLog(
+            id: 'rev_topic_${current.id}_${now.millisecondsSinceEpoch}',
+            type: StudyLogType.revisionCompleted,
+            courseId: widget.courseId,
+            courseTitle: widget.courseTitle,
+            moduleId: widget.moduleId,
+            moduleTitle: widget.moduleTitle,
+            topicId: current.id,
+            topicTitle: current.title,
+            revisionLevel: 1,
+            durationMinutes: elapsedMinutes,
+            timestamp: now,
+            createdAt: now,
+          );
+          await LocalStudyLogStorage.addLog(studyLog);
+        }
+      }
+
+      if (widget.trackSession) {
+        final sessionLog = StudyLog(
+          id: 'session_${now.millisecondsSinceEpoch}',
+          type: StudyLogType.studySession,
+          courseId: widget.courseId,
+          courseTitle: widget.courseTitle,
+          moduleId: widget.moduleId,
+          moduleTitle: widget.moduleTitle,
+          topicId: current.id,
+          topicTitle: current.title,
           revisionLevel: 1,
           durationMinutes: elapsedMinutes,
           timestamp: now,
@@ -330,6 +392,9 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       }
     }
 
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      unawaited(getIt<TopicRevisionController>().refresh());
+    }
     if (getIt.isRegistered<OngoingModulesController>()) {
       unawaited(getIt<OngoingModulesController>().refresh());
     }
@@ -350,7 +415,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     if (!mounted) return;
 
     // Check if ALL topics in this module/session are completed
-    final allCompleted = widget.isRevision
+    final allCompleted = (widget.isRevision && _revisionTopics.isNotEmpty)
         ? _revisionTopics.every((t) => t.isCompleted)
         : _topics.every((t) => t.isCompleted);
 
@@ -376,7 +441,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
 
     // Look for the next incomplete topic after current index
     for (int i = _currentTopicIndex + 1; i < total; i++) {
-      final isComp = widget.isRevision
+      final isComp = (widget.isRevision && _revisionTopics.isNotEmpty)
           ? _revisionTopics[i].isCompleted
           : _topics[i].isCompleted;
       if (!isComp) {
@@ -388,7 +453,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     // Wrap around if needed
     if (nextIndex == -1) {
       for (int i = 0; i < _currentTopicIndex; i++) {
-        final isComp = widget.isRevision
+        final isComp = (widget.isRevision && _revisionTopics.isNotEmpty)
             ? _revisionTopics[i].isCompleted
             : _topics[i].isCompleted;
         if (!isComp) {

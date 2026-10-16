@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/revision.dart';
+import '../models/topic_revision.dart';
 import '../models/topic.dart';
 import '../models/study_log.dart';
 import '../models/user_profile.dart';
 import '../services/local_revision_storage.dart';
+import '../services/local_topic_revision_storage.dart';
 import '../services/local_topic_storage.dart';
 import '../services/local_study_log_storage.dart';
 import '../services/local_user_profile_storage.dart';
@@ -260,6 +262,21 @@ class ProgressController extends ChangeNotifier {
           if (timesRevised > 0) {
             allTimeRevisionsCount += timesRevised;
             final d = normalizeDate(r.lastRevisionAt ?? r.updatedAt);
+            if (!d.isAfter(today)) {
+              allActiveDates.add(d);
+              if (!d.isBefore(cutoffDate)) {
+                _dailyRevisions[d] = (_dailyRevisions[d] ?? 0) + timesRevised;
+              }
+            }
+          }
+        }
+
+        final List<TopicRevision> topicRevs = await LocalTopicRevisionStorage.loadAll();
+        for (final tr in topicRevs) {
+          final int timesRevised = tr.isFinished ? RevisionSchedule.maxLevel : (tr.currentLevel - 1);
+          if (timesRevised > 0) {
+            allTimeRevisionsCount += timesRevised;
+            final d = normalizeDate(tr.lastRevisionAt ?? tr.updatedAt);
             if (!d.isAfter(today)) {
               allActiveDates.add(d);
               if (!d.isBefore(cutoffDate)) {

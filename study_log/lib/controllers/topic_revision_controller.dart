@@ -162,7 +162,7 @@ class TopicRevisionController extends ChangeNotifier {
   /// Advances the current level for the target topic revision.
   ///
   /// Writes a [StudyLogType.revisionCompleted] study log so activity feeds and streaks update.
-  Future<bool> completeCurrentLevel(String id, {DateTime? at}) async {
+  Future<bool> completeCurrentLevel(String id, {DateTime? at, int? durationMinutes}) async {
     final now = at ?? DateTime.now();
     final index = _topicRevisions.indexWhere((tr) => tr.id == id);
     if (index == -1) return false;
@@ -193,6 +193,7 @@ class TopicRevisionController extends ChangeNotifier {
       topicId: current.topicId,
       topicTitle: current.title,
       revisionLevel: current.currentLevel,
+      durationMinutes: durationMinutes,
       timestamp: now,
       createdAt: now,
     );
@@ -276,6 +277,9 @@ class TopicRevisionController extends ChangeNotifier {
   }
 
   Future<void> refresh() => _load();
+
+  /// Loads topic revisions from SQLite cache and subscribes to streams.
+  Future<void> loadRevisions() => _load();
 
   Future<void> _load() async {
     final cached = await LocalTopicRevisionStorage.loadAll();

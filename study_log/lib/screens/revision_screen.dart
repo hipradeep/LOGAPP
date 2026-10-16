@@ -8,11 +8,27 @@ import '../widgets/course_icon_chip.dart';
 import '../widgets/compact_list_item.dart';
 import '../widgets/revision_options_sheet.dart';
 import '../widgets/revision_interval_sheet.dart';
+import '../widgets/topic_revision_card.dart';
+import '../widgets/topic_options_sheet.dart';
 import '../models/revision.dart';
+import '../models/topic.dart';
+import '../models/topic_revision.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/topic_revision_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
+import 'session_setup_screen.dart';
+
+/// Type filter in the unified revision stream.
+enum RevisionTypeFilter {
+  all('All'),
+  topics('Topics'),
+  modules('Modules');
+
+  const RevisionTypeFilter(this.label);
+  final String label;
+}
 
 /// How the continuous revision list is ordered.
 enum RevisionSortMode {
@@ -35,20 +51,26 @@ enum RevisionScope {
   final String label;
 }
 
-/// Revision screen — a tracking list for the R1 -> R5 spaced repetition ladder.
+/// Revision screen — tracking spaced repetition for individual Topics and whole Modules in a unified stream.
 ///
-/// Clean visual design with:
-/// - Horizontal level tabs showing intervals and count badges, plus a Finished chip
-/// - Section header showing active category with count and sort dropdown
-/// - Modern white item cards with tech icon glyphs, level pill tags, and due status
+/// Features:
+/// - Unified single stream: All due topic & module revisions appear together in chronological order
+/// - Combined horizontal level ladder (All, R1..R5, Finished) with aggregated count badges
+/// - Lightweight segmented type filter: [ All (N) ] [ Topics (N) ] [ Modules (N) ]
+/// - Urgent scope filter pills: [ All ] [ Due Today (N) ] [ Upcoming (N) ]
+/// - Section header showing active category with count and sort dropdown (Due Date, Level, Name)
+/// - Stream group headers distinguishing Today's Revisions from Upcoming items
+/// - Dedicated [TopicRevisionCard] and [_RevisionItemCard] with type badges and quick actions
 class RevisionScreen extends StatefulWidget {
   final RevisionController revisionController;
+  final TopicRevisionController? topicRevisionController;
   final VoidCallback? onBack;
   final void Function(Revision revision) onOpenRevision;
 
   const RevisionScreen({
     super.key,
     required this.revisionController,
+    this.topicRevisionController,
     this.onBack,
     required this.onOpenRevision,
   });
@@ -58,14 +80,22 @@ class RevisionScreen extends StatefulWidget {
 }
 
 class _RevisionScreenState extends State<RevisionScreen> {
+  RevisionTypeFilter _typeFilter = RevisionTypeFilter.all;
   int? _levelFilter;
   RevisionScope _scope = RevisionScope.all;
   RevisionSortMode _sortMode = RevisionSortMode.dueDate;
+
+  TopicRevisionController? get _topicRevisionController =>
+      widget.topicRevisionController ??
+      (getIt.isRegistered<TopicRevisionController>()
+          ? getIt<TopicRevisionController>()
+          : null);
 
   @override
   void initState() {
     super.initState();
     widget.revisionController.reconcile();
+    _topicRevisionController?.refresh();
   }
 
   void _handleRevisionLongPress(Revision revision) {
@@ -77,37 +107,240 @@ class _RevisionScreenState extends State<RevisionScreen> {
     );
   }
 
-  /// Filters, scopes and orders the records for the single list.
-  List<Revision> _visibleRevisions(DateTime now) {
-    final items = widget.revisionController.revisions;
+  Future<void> _handleQuickCompleteModule(Revision moduleRev) async {
+    final success =
+        await widget.revisionController.completeCurrentLevel(moduleRev.id);
+    if (success && mounted) {
+      final next = moduleRev.currentLevel + 1;
+      final msg = next > 5
+          ? 'Module revision completed!'
+          : 'Module moved to revision level R$next!';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _handleOpenTopicSession(TopicRevision topicRev) {
+    final courseTitle = TopicRevisionCard.courseTitleFor(topicRev);
+    final moduleTitle = TopicRevisionCard.moduleTitleFor(topicRev);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SessionSetupScreen(
+          courseTitle: courseTitle,
+          courseId: topicRev.courseId,
+          moduleTitle: moduleTitle,
+          moduleId: topicRev.moduleId,
+          topics: [
+            Topic(
+              id: topicRev.topicId,
+              courseId: topicRev.courseId,
+              moduleId: topicRev.moduleId,
+              title: topicRev.title,
+              status: TopicStatus.completed,
+            ),
+          ],
+          isRevision: true,
+          revisionId: topicRev.id,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleQuickCompleteTopic(TopicRevision topicRev) async {
+    final topicCtrl = _topicRevisionController;
+    if (topicCtrl == null) return;
+    final success = await topicCtrl.completeCurrentLevel(topicRev.id);
+    if (success && mounted) {
+      final next = topicRev.currentLevel + 1;
+      final msg = next > 5
+          ? '"${topicRev.title}" marked mastered!'
+          : '"${topicRev.title}" moved to revision level R$next!';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _handleTopicLongPress(TopicRevision topicRev) {
+    final courseTitle = TopicRevisionCard.courseTitleFor(topicRev);
+    final moduleTitle = TopicRevisionCard.moduleTitleFor(topicRev);
+
+    TopicOptionsSheet.show(
+      context,
+      topic: Topic(
+        id: topicRev.topicId,
+        courseId: topicRev.courseId,
+        moduleId: topicRev.moduleId,
+        title: topicRev.title,
+        status: TopicStatus.completed,
+      ),
+      moduleTitle: moduleTitle,
+      courseTitle: courseTitle,
+      courseId: topicRev.courseId,
+      moduleId: topicRev.moduleId,
+    );
+  }
+
+  void _handleTypeFilterChanged(RevisionTypeFilter filter) {
+    if (_typeFilter != filter) {
+      setState(() => _typeFilter = filter);
+    }
+  }
+
+  void _handleLevelSelected(int? level) {
+    setState(() {
+      if (_levelFilter == level) {
+        _levelFilter = null;
+      } else {
+        _levelFilter = level;
+      }
+    });
+  }
+
+  void _handleScopeChanged(RevisionScope scope) {
+    if (_scope != scope) {
+      setState(() => _scope = scope);
+    }
+  }
+
+  void _handleSortChanged(RevisionSortMode mode) {
+    setState(() => _sortMode = mode);
+  }
+
+  /// Single-pass ingestion, filtering, and metric calculation for the revision stream.
+  _RevisionStreamState _computeStreamState(DateTime now) {
+    final topicCtrl = _topicRevisionController;
     final ongoing = getIt.isRegistered<OngoingModulesController>()
         ? getIt<OngoingModulesController>()
         : null;
 
-    final filtered = items.where((r) {
-      if (_levelFilter == null) {
-        // Finished items will not show in "all" section
-        if (r.isFinished) return false;
-      } else if (_levelFilter == 6) {
-        // Finished tab selected
-        if (!r.isFinished) return false;
+    final List<UnifiedRevisionItem> allItems = [];
+
+    // 1. Ingest Topic Revisions
+    int activeTopicsCount = 0;
+    int finishedTopicsCount = 0;
+    final topicLevelCounts = <int, int>{};
+    if (topicCtrl != null) {
+      for (final tr in topicCtrl.scheduledTopics) {
+        if (tr.isFinished) {
+          finishedTopicsCount++;
+        } else {
+          activeTopicsCount++;
+          topicLevelCounts[tr.currentLevel] =
+              (topicLevelCounts[tr.currentLevel] ?? 0) + 1;
+        }
+        if (_typeFilter != RevisionTypeFilter.modules) {
+          allItems.add(UnifiedTopicRevisionItem(tr));
+        }
+      }
+    }
+
+    // 2. Ingest Module Revisions
+    int activeModulesCount = 0;
+    int finishedModulesCount = 0;
+    final moduleLevelCounts = <int, int>{};
+    for (final r in widget.revisionController.revisions) {
+      if (r.isFinished) {
+        finishedModulesCount++;
       } else {
-        // R1..R5 tab selected
-        if (r.isFinished || r.currentLevel != _levelFilter) return false;
+        activeModulesCount++;
+        moduleLevelCounts[r.currentLevel] =
+            (moduleLevelCounts[r.currentLevel] ?? 0) + 1;
+      }
+      if (_typeFilter != RevisionTypeFilter.topics) {
+        final title = ongoing?.moduleTitleFor(r.moduleId) ?? '';
+        final topicCount = ongoing?.topicCountForModule(r.moduleId) ?? 0;
+        allItems.add(UnifiedModuleRevisionItem(
+          r,
+          resolvedTitle: title,
+          topicCount: topicCount,
+        ));
+      }
+    }
+
+    // 3. Combined Level Counts based on active type filter
+    final int activeTotal;
+    final int finishedTotal;
+    final Map<int, int> aggregatedLevelCounts = {};
+
+    if (_typeFilter == RevisionTypeFilter.topics) {
+      activeTotal = activeTopicsCount;
+      finishedTotal = finishedTopicsCount;
+      aggregatedLevelCounts.addAll(topicLevelCounts);
+    } else if (_typeFilter == RevisionTypeFilter.modules) {
+      activeTotal = activeModulesCount;
+      finishedTotal = finishedModulesCount;
+      aggregatedLevelCounts.addAll(moduleLevelCounts);
+    } else {
+      activeTotal = activeTopicsCount + activeModulesCount;
+      finishedTotal = finishedTopicsCount + finishedModulesCount;
+      for (int lvl = 1; lvl <= 5; lvl++) {
+        aggregatedLevelCounts[lvl] =
+            (topicLevelCounts[lvl] ?? 0) + (moduleLevelCounts[lvl] ?? 0);
+      }
+    }
+
+    // 4. Compute scope counts based on current type and level filters
+    int dueTodayCount = 0;
+    int upcomingCount = 0;
+    for (final item in allItems) {
+      if (_levelFilter != null) {
+        if (_levelFilter == 6 && !item.isFinished) continue;
+        if (_levelFilter != 6 &&
+            (item.isFinished || item.currentLevel != _levelFilter)) {
+          continue;
+        }
+      } else {
+        if (item.isFinished) continue;
+      }
+
+      if (item.isDueAt(now)) {
+        dueTodayCount++;
+      } else {
+        upcomingCount++;
+      }
+    }
+
+    // 5. Filter by level and scope
+    final filtered = allItems.where((item) {
+      if (_levelFilter == 6 || _scope == RevisionScope.finished) {
+        if (!item.isFinished) return false;
+      } else if (_levelFilter != null) {
+        if (item.isFinished || item.currentLevel != _levelFilter) return false;
+      } else {
+        if (item.isFinished && _scope != RevisionScope.finished) return false;
       }
 
       switch (_scope) {
         case RevisionScope.all:
           return true;
         case RevisionScope.dueToday:
-          return r.isDueAt(now);
+          return item.isDueAt(now);
         case RevisionScope.upcoming:
-          return !r.isFinished && !r.isDueAt(now);
+          return !item.isFinished && !item.isDueAt(now);
         case RevisionScope.finished:
-          return r.isFinished;
+          return item.isFinished;
       }
     }).toList();
 
+    // 6. Sort
     switch (_sortMode) {
       case RevisionSortMode.dueDate:
         filtered.sort((a, b) {
@@ -126,124 +359,185 @@ class _RevisionScreenState extends State<RevisionScreen> {
       case RevisionSortMode.name:
         filtered.sort((a, b) {
           if (a.isFinished != b.isFinished) return a.isFinished ? 1 : -1;
-          final titleA = ongoing?.moduleTitleFor(a.moduleId) ?? '';
-          final titleB = ongoing?.moduleTitleFor(b.moduleId) ?? '';
-          return titleA.toLowerCase().compareTo(titleB.toLowerCase());
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
         });
         break;
     }
-    return filtered;
+
+    return _RevisionStreamState(
+      visibleItems: filtered,
+      activeTopicsCount: activeTopicsCount,
+      finishedTopicsCount: finishedTopicsCount,
+      activeModulesCount: activeModulesCount,
+      finishedModulesCount: finishedModulesCount,
+      dueTodayCount: dueTodayCount,
+      upcomingCount: upcomingCount,
+      aggregatedLevelCounts: aggregatedLevelCounts,
+      activeTotal: activeTotal,
+      finishedTotal: finishedTotal,
+    );
   }
 
-  void _handleLevelSelected(int? level) {
-    setState(() {
-      if (_levelFilter == level) {
-        _levelFilter = null;
-      } else {
-        _levelFilter = level;
+  /// Converts a filtered list of items into row entries with optional group headers.
+  List<_StreamRowEntry> _buildRowEntries(
+    List<UnifiedRevisionItem> items,
+    DateTime now,
+  ) {
+    if (items.isEmpty) return const [];
+
+    if (_scope == RevisionScope.all &&
+        _sortMode == RevisionSortMode.dueDate &&
+        _levelFilter != 6) {
+      final dueItems = <UnifiedRevisionItem>[];
+      final upcomingItems = <UnifiedRevisionItem>[];
+
+      for (final item in items) {
+        if (item.isDueAt(now)) {
+          dueItems.add(item);
+        } else {
+          upcomingItems.add(item);
+        }
       }
-    });
-  }
 
-  void _handleSortChanged(RevisionSortMode mode) {
-    setState(() => _sortMode = mode);
+      if (dueItems.isNotEmpty && upcomingItems.isNotEmpty) {
+        final entries = <_StreamRowEntry>[];
+        entries.add(_HeaderRowEntry(
+          title: "Today's Revisions",
+          count: dueItems.length,
+          icon: Icons.today_rounded,
+          color: AppTheme.errorColor,
+        ));
+        for (final item in dueItems) {
+          entries.add(_ItemRowEntry(item));
+        }
+        entries.add(_HeaderRowEntry(
+          title: 'Upcoming',
+          count: upcomingItems.length,
+          icon: Icons.schedule_rounded,
+        ));
+        for (final item in upcomingItems) {
+          entries.add(_ItemRowEntry(item));
+        }
+        return entries;
+      }
+    }
+
+    return items.map((item) => _ItemRowEntry(item)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+    final topicCtrl = _topicRevisionController;
+    final Listenable mergedListenable = topicCtrl != null
+        ? Listenable.merge([widget.revisionController, topicCtrl])
+        : widget.revisionController;
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
         child: Column(
           children: [
-            TabHeader(
-              title: 'Revision',
-              subtitle: 'Review due & upcoming topics',
-              actions: [
-                IconButton(
-                  icon: Icon(
-                    Icons.info_outline_rounded,
-                    color: AppTheme.textSecondaryColor(context),
-                    size: 22,
-                  ),
-                  onPressed: () => RevisionIntervalSheet.show(context),
-                  tooltip: 'Revision Intervals',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-              ],
-            ),
-            ListenableBuilder(
-              listenable: widget.revisionController,
-              builder: (context, _) {
-                return _RevisionLevelFilterRow(
-                  selectedLevel: _levelFilter,
-                  revisions: widget.revisionController.revisions,
-                  onSelected: _handleLevelSelected,
-                );
-              },
-            ),
-            ListenableBuilder(
-              listenable: widget.revisionController,
-              builder: (context, _) {
-                final now = DateTime.now();
-                final revisions = _visibleRevisions(now);
-
-                final String sectionTitle;
-                final int sectionCount;
-
-                if (_levelFilter == 6) {
-                  sectionTitle = 'Finished Revisions';
-                  sectionCount = revisions.length;
-                } else if (_levelFilter != null) {
-                  sectionTitle = 'R$_levelFilter Revisions';
-                  sectionCount = revisions.length;
-                } else if (_scope == RevisionScope.dueToday) {
-                  sectionTitle = 'Due Today';
-                  sectionCount = revisions.length;
-                } else if (_scope == RevisionScope.upcoming) {
-                  sectionTitle = 'Upcoming';
-                  sectionCount = revisions.length;
-                } else if (_scope == RevisionScope.finished) {
-                  sectionTitle = 'Finished';
-                  sectionCount = revisions.length;
-                } else {
-                  sectionTitle = 'All Revisions';
-                  sectionCount = revisions.length;
-                }
-
-                return _RevisionSectionHeader(
-                  title: sectionTitle,
-                  count: sectionCount,
-                  sortMode: _sortMode,
-                  scope: _scope,
-                  onSortChanged: _handleSortChanged,
-                  onFilterPressed: _openFilterSheet,
-                );
-              },
-            ),
+            const _RevisionTabHeader(),
             Expanded(
               child: ListenableBuilder(
-                listenable: widget.revisionController,
-                builder: (context, _) {
-                  final revisions = _visibleRevisions(DateTime.now());
+                listenable: mergedListenable,
+                builder: (context, _) => _buildStreamBody(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                  if (widget.revisionController.isLoading &&
-                      widget.revisionController.revisions.isEmpty) {
-                    return const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      ),
-                    );
-                  }
+  Widget _buildStreamBody(BuildContext context) {
+    final now = DateTime.now();
+    final state = _computeStreamState(now);
+    final topicCtrl = _topicRevisionController;
 
-                  if (revisions.isEmpty) {
-                    return RefreshIndicator(
-                      onRefresh: () => widget.revisionController.reconcile(),
+    final String typeLabel = switch (_typeFilter) {
+      RevisionTypeFilter.all => 'Revisions',
+      RevisionTypeFilter.topics => 'Topics',
+      RevisionTypeFilter.modules => 'Modules',
+    };
+
+    final String sectionTitle;
+    if (_levelFilter == 6) {
+      sectionTitle = _typeFilter == RevisionTypeFilter.all
+          ? 'Finished'
+          : 'Finished $typeLabel';
+    } else if (_levelFilter != null) {
+      sectionTitle = 'R$_levelFilter $typeLabel';
+    } else if (_scope == RevisionScope.dueToday) {
+      sectionTitle = _typeFilter == RevisionTypeFilter.all
+          ? 'Due Today'
+          : 'Due Today ($typeLabel)';
+    } else if (_scope == RevisionScope.upcoming) {
+      sectionTitle = _typeFilter == RevisionTypeFilter.all
+          ? 'Upcoming Revisions'
+          : 'Upcoming $typeLabel';
+    } else if (_scope == RevisionScope.finished) {
+      sectionTitle = _typeFilter == RevisionTypeFilter.all
+          ? 'Finished Revisions'
+          : 'Finished $typeLabel';
+    } else {
+      sectionTitle = _typeFilter == RevisionTypeFilter.all
+          ? 'All Revisions'
+          : typeLabel;
+    }
+
+    final bool isInitialLoading =
+        (topicCtrl != null &&
+            topicCtrl.isLoading &&
+            topicCtrl.scheduledTopics.isEmpty) ||
+        (widget.revisionController.isLoading &&
+            widget.revisionController.revisions.isEmpty);
+
+    final entries = _buildRowEntries(state.visibleItems, now);
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+
+    return Column(
+      children: [
+        _RevisionLevelFilterRow(
+          selectedLevel: _levelFilter,
+          activeTotalCount: state.activeTotal,
+          finishedTotalCount: state.finishedTotal,
+          levelCounts: state.aggregatedLevelCounts,
+          onSelected: _handleLevelSelected,
+        ),
+        const VGapXs(),
+        if (_levelFilter != 6) ...[
+          _RevisionScopeFilterBar(
+            selectedScope: _scope,
+            allCount: state.activeTotal,
+            dueTodayCount: state.dueTodayCount,
+            upcomingCount: state.upcomingCount,
+            onSelected: _handleScopeChanged,
+          ),
+        ],
+        _RevisionSectionHeader(
+          typeFilter: _typeFilter,
+          title: sectionTitle,
+          count: state.visibleItems.length,
+          allCount: state.activeTopicsCount + state.activeModulesCount,
+          topicsCount: state.activeTopicsCount,
+          modulesCount: state.activeModulesCount,
+          sortMode: _sortMode,
+          onTypeChanged: _handleTypeFilterChanged,
+          onSortChanged: _handleSortChanged,
+        ),
+        Expanded(
+          child: isInitialLoading
+              ? const Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                )
+              : state.visibleItems.isEmpty
+                  ? RefreshIndicator(
+                      onRefresh: _handleRefresh,
                       color: AppTheme.primaryColor,
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(
@@ -256,192 +550,150 @@ class _RevisionScreenState extends State<RevisionScreen> {
                           showCard: false,
                         ),
                       ),
-                    );
-                  }
-
-                  return RefreshIndicator(
-                    onRefresh: () => widget.revisionController.reconcile(),
-                    color: AppTheme.primaryColor,
-                    child: ListView.separated(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _handleRefresh,
+                      color: AppTheme.primaryColor,
+                      child: ListView.separated(
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          2,
+                          16,
+                          bottomSafe + 100,
+                        ),
+                        itemCount: entries.length,
+                        separatorBuilder: (_, index) {
+                          final next = entries[index + 1];
+                          if (next is _HeaderRowEntry) {
+                            return const VGapMd();
+                          }
+                          return const VGapSm();
+                        },
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          switch (entry) {
+                            case _HeaderRowEntry():
+                              return _RevisionGroupHeader(
+                                title: entry.title,
+                                count: entry.count,
+                                icon: entry.icon,
+                                color: entry.color,
+                              );
+                            case _ItemRowEntry(:final item):
+                              if (item is UnifiedTopicRevisionItem) {
+                                final topicRev = item.topicRevision;
+                                return TopicRevisionCard(
+                                  key: ValueKey('topic_${topicRev.id}'),
+                                  revision: topicRev,
+                                  onTap: () => _handleOpenTopicSession(topicRev),
+                                  onRevise: () =>
+                                      _handleOpenTopicSession(topicRev),
+                                  onQuickComplete: () =>
+                                      _handleQuickCompleteTopic(topicRev),
+                                  onLongPress: () =>
+                                      _handleTopicLongPress(topicRev),
+                                  onOptionsTap: () =>
+                                      _handleTopicLongPress(topicRev),
+                                );
+                              } else if (item is UnifiedModuleRevisionItem) {
+                                final moduleRev = item.moduleRevision;
+                                return _RevisionItemCard(
+                                  key: ValueKey('module_${moduleRev.id}'),
+                                  revision: moduleRev,
+                                  topicCount: item.topicCount,
+                                  onTap: () => widget.onOpenRevision(moduleRev),
+                                  onQuickComplete: () =>
+                                      _handleQuickCompleteModule(moduleRev),
+                                  onLongPress: () =>
+                                      _handleRevisionLongPress(moduleRev),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                          }
+                        },
                       ),
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        4,
-                        16,
-                        bottomSafe + 24,
-                      ),
-                      itemCount: revisions.length,
-                      separatorBuilder: (_, _) => const VGapSm(),
-                      itemBuilder: (context, index) {
-                        final revision = revisions[index];
-                        return _RevisionItemCard(
-                          key: ValueKey(revision.id),
-                          revision: revision,
-                          onTap: () => widget.onOpenRevision(revision),
-                          onLongPress: () => _handleRevisionLongPress(revision),
-                        );
-                      },
                     ),
-                  );
-                },
-              ),
-            ),
-          ],
         ),
-      ),
+      ],
     );
   }
 
+  Future<void> _handleRefresh() async {
+    final futures = <Future>[];
+    final topicCtrl = _topicRevisionController;
+    if (topicCtrl != null) futures.add(topicCtrl.refresh());
+    futures.add(widget.revisionController.reconcile());
+    await Future.wait(futures);
+  }
+
   String _emptyTitleFor() {
-    if (_levelFilter == 6) return 'No finished revisions';
-    if (_levelFilter != null) return 'No R$_levelFilter revisions';
+    final type = _typeFilter == RevisionTypeFilter.topics
+        ? 'topic revisions'
+        : (_typeFilter == RevisionTypeFilter.modules
+            ? 'module revisions'
+            : 'revisions');
+    if (_levelFilter == 6) return 'No finished $type';
+    if (_levelFilter != null) return 'No R$_levelFilter $type';
     switch (_scope) {
       case RevisionScope.all:
-        return 'No revisions scheduled';
+        return 'No $type scheduled';
       case RevisionScope.dueToday:
         return 'Nothing due today';
       case RevisionScope.upcoming:
         return 'Nothing upcoming';
       case RevisionScope.finished:
-        return 'No finished revisions';
+        return 'No finished $type';
     }
   }
 
   String _emptyDescriptionFor() {
+    final type = _typeFilter == RevisionTypeFilter.topics
+        ? 'topics'
+        : (_typeFilter == RevisionTypeFilter.modules
+            ? 'modules'
+            : 'topics or modules');
     if (_levelFilter == 6) {
-      return 'Complete the R5 level of a ladder to see it here.';
+      return 'Complete the R5 level of any $type to see them here.';
     }
     if (_levelFilter != null) {
       return 'Revisions appear here when they reach level R$_levelFilter.';
     }
     switch (_scope) {
       case RevisionScope.all:
-        return 'Finish all tasks in a module and tap "Add to Revision" '
-            'to schedule spaced repetition here.';
+        return 'Add individual topics or completed modules to Revision to start spaced repetition.';
       case RevisionScope.dueToday:
-        return 'You are all caught up. Revisions appear here once their '
-            'date arrives.';
+        return 'You are all caught up! Revisions appear here once their scheduled date arrives.';
       case RevisionScope.upcoming:
-        return 'No revision is counting down right now.';
+        return 'No revisions are currently counting down.';
       case RevisionScope.finished:
-        return 'Complete the R5 level of a ladder to see it here.';
-    }
-  }
-
-  Future<void> _openFilterSheet() async {
-    final result = await showModalBottomSheet<RevisionScope>(
-      context: context,
-      backgroundColor: AppTheme.surface(context),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const VGapSm(),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.borderColor(context),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const VGapMd(),
-            Text(
-              'Filter revisions',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
-              ),
-            ),
-            const VGapSm(),
-            for (final scope in RevisionScope.values)
-              ListTile(
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                onTap: () => Navigator.pop(ctx, scope),
-                leading: Icon(
-                  _scopeIconFor(scope),
-                  color: scope == _scope
-                      ? AppTheme.primaryColor
-                      : AppTheme.textSecondaryColor(context),
-                  size: 20,
-                ),
-                title: Text(
-                  scope.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight:
-                        scope == _scope ? FontWeight.bold : FontWeight.w500,
-                    color: scope == _scope
-                        ? AppTheme.primaryColor
-                        : AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                trailing: scope == _scope
-                    ? const Icon(
-                        Icons.check_rounded,
-                        color: AppTheme.primaryColor,
-                        size: 18,
-                      )
-                    : null,
-              ),
-            const VGapSm(),
-          ],
-        ),
-      ),
-    );
-    if (result == null || !mounted) return;
-    setState(() => _scope = result);
-  }
-
-  static IconData _scopeIconFor(RevisionScope scope) {
-    switch (scope) {
-      case RevisionScope.all:
-        return Icons.list_alt_rounded;
-      case RevisionScope.dueToday:
-        return Icons.today_rounded;
-      case RevisionScope.upcoming:
-        return Icons.schedule_rounded;
-      case RevisionScope.finished:
-        return Icons.check_circle_outline_rounded;
+        return 'Complete the R5 level of any $type to see them here.';
     }
   }
 }
 
 
+
 /// Horizontal category filter row: All (12), R1 (Purple), R2 (Blue), R3 (Teal), R4 (Orange), R5 (Coral), Finished (Green)
 class _RevisionLevelFilterRow extends StatelessWidget {
   final int? selectedLevel;
-  final List<Revision> revisions;
+  final int activeTotalCount;
+  final int finishedTotalCount;
+  final Map<int, int> levelCounts;
   final ValueChanged<int?> onSelected;
 
   const _RevisionLevelFilterRow({
     required this.selectedLevel,
-    required this.revisions,
+    required this.activeTotalCount,
+    required this.finishedTotalCount,
+    required this.levelCounts,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    int activeTotalCount = 0;
-    int finishedTotalCount = 0;
-    final levelCounts = <int, int>{};
-
-    for (final r in revisions) {
-      if (r.isFinished) {
-        finishedTotalCount++;
-      } else {
-        activeTotalCount++;
-        levelCounts[r.currentLevel] = (levelCounts[r.currentLevel] ?? 0) + 1;
-      }
-    }
-
     return SizedBox(
       height: 40,
       child: ListView(
@@ -669,42 +921,98 @@ class _FinishedTabCard extends StatelessWidget {
   }
 }
 
-/// Section header row: Left title + count badge, Right sort dropdown + filter icon
+/// Section header row: Left type dropdown (All / Topics / Modules) + count badge, Right sort dropdown
 class _RevisionSectionHeader extends StatelessWidget {
+  final RevisionTypeFilter typeFilter;
   final String title;
   final int count;
+  final int allCount;
+  final int topicsCount;
+  final int modulesCount;
   final RevisionSortMode sortMode;
-  final RevisionScope scope;
+  final ValueChanged<RevisionTypeFilter> onTypeChanged;
   final ValueChanged<RevisionSortMode> onSortChanged;
-  final VoidCallback onFilterPressed;
 
   const _RevisionSectionHeader({
+    required this.typeFilter,
     required this.title,
     required this.count,
+    required this.allCount,
+    required this.topicsCount,
+    required this.modulesCount,
     required this.sortMode,
-    required this.scope,
+    required this.onTypeChanged,
     required this.onSortChanged,
-    required this.onFilterPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-              letterSpacing: -0.3,
+          PopupMenuButton<RevisionTypeFilter>(
+            initialValue: typeFilter,
+            onSelected: onTypeChanged,
+            position: PopupMenuPosition.under,
+            color: AppTheme.surface(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            elevation: 6,
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: RevisionTypeFilter.all,
+                child: _TypeMenuItem(
+                  icon: Icons.layers_outlined,
+                  title: 'All Revisions',
+                  count: allCount,
+                  isSelected: typeFilter == RevisionTypeFilter.all,
+                ),
+              ),
+              PopupMenuItem(
+                value: RevisionTypeFilter.topics,
+                child: _TypeMenuItem(
+                  icon: Icons.topic_outlined,
+                  title: 'Topics',
+                  count: topicsCount,
+                  isSelected: typeFilter == RevisionTypeFilter.topics,
+                ),
+              ),
+              PopupMenuItem(
+                value: RevisionTypeFilter.modules,
+                child: _TypeMenuItem(
+                  icon: Icons.folder_outlined,
+                  title: 'Modules',
+                  count: modulesCount,
+                  isSelected: typeFilter == RevisionTypeFilter.modules,
+                ),
+              ),
+            ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor(context),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const HGapXs(),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.textPrimaryColor(context),
+                  size: 20,
+                ),
+              ],
             ),
           ),
           const HGapSm(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: AppTheme.pastelIndigo(context),
               borderRadius: BorderRadius.circular(12),
@@ -712,7 +1020,7 @@ class _RevisionSectionHeader extends StatelessWidget {
             child: Text(
               '$count',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.pastelIndigoText(context),
               ),
@@ -745,53 +1053,34 @@ class _RevisionSectionHeader extends StatelessWidget {
                   ),
                 ),
             ],
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  sortMode.label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceVariant(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.borderColor(context),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    sortMode.label,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ),
+                  const HGapXs(),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
                     color: AppTheme.textSecondaryColor(context),
+                    size: 18,
                   ),
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.textSecondaryColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          const HGapSm(),
-          Material(
-            color: scope != RevisionScope.all
-                ? AppTheme.pastelIndigo(context)
-                : AppTheme.surfaceVariant(context),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: onFilterPressed,
-              customBorder: const CircleBorder(),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: scope != RevisionScope.all
-                        ? AppTheme.pastelIndigoBorder(context)
-                        : AppTheme.borderColor(context),
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.tune_rounded,
-                  color: scope != RevisionScope.all
-                      ? AppTheme.pastelIndigoText(context)
-                      : AppTheme.textSecondaryColor(context),
-                  size: 18,
-                ),
+                ],
               ),
             ),
           ),
@@ -801,22 +1090,426 @@ class _RevisionSectionHeader extends StatelessWidget {
   }
 }
 
-/// Item card for a revision:
-/// - Rounded rectangular card
-/// - Tech icon / glyph container
-/// - Title with R-level pill tag
-/// - Subtitle (course & description)
+class _TypeMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final int count;
+  final bool isSelected;
+
+  const _TypeMenuItem({
+    required this.icon,
+    required this.title,
+    required this.count,
+    required this.isSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: isSelected
+              ? AppTheme.primaryColor
+              : AppTheme.textSecondaryColor(context),
+        ),
+        const HGapSm(),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected
+                  ? AppTheme.primaryColor
+                  : AppTheme.textPrimaryColor(context),
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppTheme.pastelIndigo(context)
+                : AppTheme.surfaceVariant(context),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isSelected
+                  ? AppTheme.pastelIndigoText(context)
+                  : AppTheme.textSecondaryColor(context),
+            ),
+          ),
+        ),
+        if (isSelected) ...[
+          const HGapSm(),
+          const Icon(
+            Icons.check_rounded,
+            size: 16,
+            color: AppTheme.primaryColor,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Scope filter bar for the revision stream: [ All ] [ Due Today (X) ] [ Upcoming (Y) ]
+class _RevisionScopeFilterBar extends StatelessWidget {
+  final RevisionScope selectedScope;
+  final int allCount;
+  final int dueTodayCount;
+  final int upcomingCount;
+  final ValueChanged<RevisionScope> onSelected;
+
+  const _RevisionScopeFilterBar({
+    required this.selectedScope,
+    required this.allCount,
+    required this.dueTodayCount,
+    required this.upcomingCount,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceVariant(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.borderColor(context),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _ScopeFilterSegment(
+                title: 'All',
+                count: allCount,
+                isSelected: selectedScope == RevisionScope.all,
+                onTap: () => onSelected(RevisionScope.all),
+              ),
+            ),
+            const HGapXs(),
+            Expanded(
+              child: _ScopeFilterSegment(
+                title: 'Due Today',
+                count: dueTodayCount,
+                isUrgent: dueTodayCount > 0,
+                isSelected: selectedScope == RevisionScope.dueToday,
+                onTap: () => onSelected(RevisionScope.dueToday),
+              ),
+            ),
+            const HGapXs(),
+            Expanded(
+              child: _ScopeFilterSegment(
+                title: 'Upcoming',
+                count: upcomingCount,
+                isSelected: selectedScope == RevisionScope.upcoming,
+                onTap: () => onSelected(RevisionScope.upcoming),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScopeFilterSegment extends StatelessWidget {
+  final String title;
+  final int count;
+  final bool isSelected;
+  final bool isUrgent;
+  final VoidCallback onTap;
+
+  const _ScopeFilterSegment({
+    required this.title,
+    required this.count,
+    required this.isSelected,
+    this.isUrgent = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveIsUrgent = isUrgent && isSelected;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.surface(context) : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppTheme.shadowColor(context),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1.5),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected
+                    ? (effectiveIsUrgent
+                        ? AppTheme.errorColor
+                        : AppTheme.textPrimaryColor(context))
+                    : AppTheme.textSecondaryColor(context),
+              ),
+            ),
+            const HGapXs(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 1),
+              decoration: BoxDecoration(
+                color: effectiveIsUrgent
+                    ? AppTheme.errorColor.withValues(alpha: 0.15)
+                    : (isSelected
+                        ? AppTheme.pastelIndigo(context)
+                        : AppTheme.surface(context)),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: effectiveIsUrgent
+                      ? AppTheme.errorColor.withValues(alpha: 0.35)
+                      : (isSelected
+                          ? AppTheme.pastelIndigoBorder(context)
+                          : AppTheme.borderColor(context)),
+                  width: 0.8,
+                ),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: effectiveIsUrgent
+                      ? AppTheme.errorColor
+                      : (isSelected
+                          ? AppTheme.pastelIndigoText(context)
+                          : AppTheme.textSecondaryColor(context)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Static tab header for the Revision Screen.
+class _RevisionTabHeader extends StatelessWidget {
+  const _RevisionTabHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return TabHeader(
+      title: 'Revision',
+      subtitle: 'Review due & upcoming topics',
+      actions: [
+        IconButton(
+          icon: Icon(
+            Icons.info_outline_rounded,
+            color: AppTheme.textSecondaryColor(context),
+            size: 22,
+          ),
+          onPressed: () => RevisionIntervalSheet.show(context),
+          tooltip: 'Revision Intervals',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+      ],
+    );
+  }
+}
+
+/// Visual group header separating due today revisions and upcoming revisions.
+class _RevisionGroupHeader extends StatelessWidget {
+  final String title;
+  final int count;
+  final IconData icon;
+  final Color? color;
+
+  const _RevisionGroupHeader({
+    required this.title,
+    required this.count,
+    required this.icon,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = color ?? AppTheme.textSecondaryColor(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: effectiveColor),
+          const HGapXs(),
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: effectiveColor,
+            ),
+          ),
+          const HGapXs(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: effectiveColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: effectiveColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Holds metrics and visible items for the revision stream.
+class _RevisionStreamState {
+  final List<UnifiedRevisionItem> visibleItems;
+  final int activeTopicsCount;
+  final int finishedTopicsCount;
+  final int activeModulesCount;
+  final int finishedModulesCount;
+  final int dueTodayCount;
+  final int upcomingCount;
+  final Map<int, int> aggregatedLevelCounts;
+  final int activeTotal;
+  final int finishedTotal;
+
+  const _RevisionStreamState({
+    required this.visibleItems,
+    required this.activeTopicsCount,
+    required this.finishedTopicsCount,
+    required this.activeModulesCount,
+    required this.finishedModulesCount,
+    required this.dueTodayCount,
+    required this.upcomingCount,
+    required this.aggregatedLevelCounts,
+    required this.activeTotal,
+    required this.finishedTotal,
+  });
+}
+
+sealed class _StreamRowEntry {
+  const _StreamRowEntry();
+}
+
+class _HeaderRowEntry extends _StreamRowEntry {
+  final String title;
+  final int count;
+  final IconData icon;
+  final Color? color;
+
+  const _HeaderRowEntry({
+    required this.title,
+    required this.count,
+    required this.icon,
+    this.color,
+  });
+}
+
+class _ItemRowEntry extends _StreamRowEntry {
+  final UnifiedRevisionItem item;
+
+  const _ItemRowEntry(this.item);
+}
+
+/// Pastel tag identifying the item as a whole module revision.
+class _ModuleTypeBadge extends StatelessWidget {
+  const _ModuleTypeBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.pastelBlue(context),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: AppTheme.pastelBlueBorder(context),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.folder_outlined,
+            size: 11,
+            color: AppTheme.pastelBlueText(context),
+          ),
+          const HGapXs(),
+          Text(
+            'Module',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.pastelBlueText(context),
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Item card for a module revision:
+/// - Leading course icon chip
+/// - Title with [Module] type pill and [R-level] pill
+/// - Course name and topic count breadcrumb
 /// - Red clock with due status
+/// - Primary "Open" action button and quick "Complete" checkmark when due
 class _RevisionItemCard extends StatelessWidget {
   final Revision revision;
+  final int topicCount;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onQuickComplete;
 
   const _RevisionItemCard({
     super.key,
     required this.revision,
+    this.topicCount = 0,
     required this.onTap,
     this.onLongPress,
+    this.onQuickComplete,
   });
 
   @override
@@ -834,11 +1527,19 @@ class _RevisionItemCard extends StatelessWidget {
         radius: 10,
       ),
       title: _moduleTitleFor(revision),
-      titleBadge: _RevisionLevelPill(
-        level: revision.currentLevel,
-        isFinished: revision.isFinished,
+      titleBadge: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _ModuleTypeBadge(),
+          const HGapXs(),
+          _RevisionLevelPill(
+            level: revision.currentLevel,
+            isFinished: revision.isFinished,
+          ),
+        ],
       ),
       courseName: _courseFor(revision),
+      moduleName: _topicCountLabel(topicCount, revision),
       bottom: Row(
         children: [
           Icon(
@@ -849,7 +1550,7 @@ class _RevisionItemCard extends StatelessWidget {
             color: isDue ? AppTheme.errorColor : dueColor,
           ),
           const HGapXs(),
-          Flexible(
+          Expanded(
             child: Text(
               _dueLabel(days, isDue, revision),
               style: TextStyle(
@@ -861,6 +1562,89 @@ class _RevisionItemCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (!revision.isFinished) ...[
+            if (onQuickComplete != null && isDue) ...[
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onQuickComplete,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.successColor.withValues(alpha: 0.3),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 13,
+                          color: AppTheme.successColor,
+                        ),
+                        const HGapXs(),
+                        Text(
+                          'Complete',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.successColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const HGapXs(),
+            ],
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isDue
+                        ? AppTheme.primaryColor
+                        : AppTheme.pastelBlue(context),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Open',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDue
+                              ? Colors.white
+                              : AppTheme.pastelBlueText(context),
+                        ),
+                      ),
+                      const HGapXs(),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 13,
+                        color: isDue
+                            ? Colors.white
+                            : AppTheme.pastelBlueText(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
       onTap: onTap,
@@ -881,6 +1665,19 @@ class _RevisionItemCard extends StatelessWidget {
       if (course != null && course.title.isNotEmpty) return course.title;
     }
     return '';
+  }
+
+  static String _topicCountLabel(int topicCount, Revision revision) {
+    final count = topicCount > 0
+        ? topicCount
+        : (getIt.isRegistered<OngoingModulesController>()
+            ? getIt<OngoingModulesController>()
+                .topicCountForModule(revision.moduleId)
+            : 0);
+    if (count > 0) {
+      return count == 1 ? '1 topic' : '$count topics';
+    }
+    return 'Module';
   }
 
   static String _dueLabel(int days, bool isDue, Revision revision) {
