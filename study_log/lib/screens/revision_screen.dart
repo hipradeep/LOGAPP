@@ -18,7 +18,9 @@ import '../controllers/topic_revision_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
+import '../services/local_topic_storage.dart';
 import 'session_setup_screen.dart';
+import 'topic_detail_screen.dart';
 
 /// Type filter in the unified revision stream.
 enum RevisionTypeFilter {
@@ -126,6 +128,42 @@ class _RevisionScreenState extends State<RevisionScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _handleOpenTopicDetail(TopicRevision topicRev) async {
+    final courseTitle = TopicRevisionCard.courseTitleFor(topicRev);
+    final moduleTitle = TopicRevisionCard.moduleTitleFor(topicRev);
+
+    Topic? topic;
+    try {
+      final topics = await LocalTopicStorage.loadTopicsForModule(
+        moduleId: topicRev.moduleId,
+        fallbackTitle: moduleTitle,
+      );
+      topic = topics.where((t) => t.id == topicRev.topicId).firstOrNull;
+    } catch (_) {}
+
+    topic ??= Topic(
+      id: topicRev.topicId,
+      courseId: topicRev.courseId,
+      moduleId: topicRev.moduleId,
+      title: topicRev.title,
+      status: TopicStatus.inProgress,
+    );
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TopicDetailScreen(
+          topic: topic!,
+          moduleTitle: moduleTitle,
+          courseTitle: courseTitle,
+          courseId: topicRev.courseId,
+          moduleId: topicRev.moduleId,
+        ),
+      ),
+    );
   }
 
   void _handleOpenTopicSession(TopicRevision topicRev) {
@@ -588,7 +626,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
                                 return TopicRevisionCard(
                                   key: ValueKey('topic_${topicRev.id}'),
                                   revision: topicRev,
-                                  onTap: () => _handleOpenTopicSession(topicRev),
+                                  onTap: () => _handleOpenTopicDetail(topicRev),
                                   onRevise: () =>
                                       _handleOpenTopicSession(topicRev),
                                   onQuickComplete: () =>

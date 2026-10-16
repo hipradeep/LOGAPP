@@ -242,16 +242,6 @@ class TopicOptionsSheet extends StatelessWidget {
           title: 'Edit Topic',
           onTap: () => Navigator.pop(context, TopicOptionAction.edit),
         ),
-        SheetActionRow(
-          icon: Icons.copy_rounded,
-          title: 'Duplicate Topic',
-          onTap: () => Navigator.pop(context, TopicOptionAction.duplicate),
-        ),
-        SheetActionRow(
-          icon: Icons.swap_vert_rounded,
-          title: 'Move Topic',
-          onTap: () => Navigator.pop(context, TopicOptionAction.move),
-        ),
         if (topicRev == null) ...[
           SheetActionRow(
             icon: Icons.replay_rounded,

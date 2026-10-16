@@ -25,6 +25,7 @@ import '../controllers/topic_revision_controller.dart';
 import '../widgets/topic_options_sheet.dart';
 import 'add_topic_screen.dart';
 import 'session_setup_screen.dart';
+import 'topic_detail_screen.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
   final String moduleTitle;
@@ -620,6 +621,27 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
   }
 
+  Future<void> _handleOpenTopicDetail(int index) async {
+    final topic = _topics[index];
+    await Navigator.push<Topic?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TopicDetailScreen(
+          topic: topic,
+          moduleTitle: widget.moduleTitle,
+          courseTitle: widget.courseTitle,
+          courseId: widget.courseId,
+          moduleId: widget.moduleId,
+        ),
+      ),
+    );
+
+    // Refresh topics from storage in case status, notes, or full topic was modified/deleted
+    await _loadTopics();
+    await _syncModuleCompletion();
+    unawaited(_loadModuleStats());
+  }
+
   Future<void> _handleDuplicateTopic(int index) async {
     final original = _topics[index];
     final newId = 'topic_${DateTime.now().millisecondsSinceEpoch}';
@@ -927,6 +949,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 courseId: widget.courseId,
                 moduleId: widget.moduleId,
                 onToggle: _toggleTopicStatus,
+                onOpenDetail: _handleOpenTopicDetail,
                 onEdit: _handleEditTopic,
                 onDuplicate: _handleDuplicateTopic,
                 onDelete: _handleDeleteTopic,
@@ -1086,6 +1109,7 @@ class _TopicsListView extends StatelessWidget {
   final String courseId;
   final String moduleId;
   final ValueChanged<int> onToggle;
+  final ValueChanged<int> onOpenDetail;
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onDuplicate;
   final ValueChanged<int> onDelete;
@@ -1098,6 +1122,7 @@ class _TopicsListView extends StatelessWidget {
     required this.courseId,
     required this.moduleId,
     required this.onToggle,
+    required this.onOpenDetail,
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
@@ -1192,7 +1217,8 @@ class _TopicsListView extends StatelessWidget {
           return TopicListItem(
             topic: item,
             topicRevision: topicRev,
-            onTap: () => onToggle(index),
+            onCheckboxTap: () => onToggle(index),
+            onTap: () => onOpenDetail(index),
             onLongPress: openOptions,
             onOptionsTap: openOptions,
           );
