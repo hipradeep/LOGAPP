@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
+import '../widgets/entity_detail_header.dart';
 import '../widgets/module_context_pill.dart';
 import '../widgets/study_confirmation_dialog.dart';
 import '../widgets/topic_list_item.dart';
@@ -962,8 +963,6 @@ class _CompactModuleHeader extends StatelessWidget {
   final DateTime lastUpdatedAt;
   final int totalMinutesExpended;
 
-  static final DateFormat _dateFormat = DateFormat('d MMM, yyyy');
-
   const _CompactModuleHeader({
     required this.moduleTitle,
     required this.courseId,
@@ -975,118 +974,39 @@ class _CompactModuleHeader extends StatelessWidget {
     required this.totalMinutesExpended,
   });
 
-  static String _formatDuration(int minutes) {
-    if (minutes <= 0) return '0h';
-    final hours = minutes / 60.0;
-    if (minutes % 60 == 0) {
-      return '${hours.toInt()}h';
-    } else if (hours < 1.0) {
-      return '${minutes}m';
-    } else {
-      return '${hours.toStringAsFixed(1).replaceAll('.0', '')}h';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final percent = (progress * 100).round();
     final isComplete = totalCount > 0 && completedCount >= totalCount;
-    final dateStr = _dateFormat.format(lastUpdatedAt);
-    final hoursStr = _formatDuration(totalMinutesExpended);
+    final dateStr = EntityDetailHeader.formatDate(lastUpdatedAt);
+    final hoursStr = EntityDetailHeader.formatDuration(totalMinutesExpended);
+    final countStr = totalCount > 0 ? '$completedCount/$totalCount topics' : null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ModuleContextPill(
-            moduleTitle: moduleTitle,
-            courseId: courseId,
-            courseTitle: courseTitle,
-          ),
-          const VGapXs(),
-          Wrap(
-            spacing: 8.0,
-            runSpacing: 4.0,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                '$completedCount/$totalCount topics',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondaryColor(context),
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 12,
-                    color: AppTheme.textMutedColor(context),
-                  ),
-                  const HGapXs(),
-                  Text(
-                    dateStr,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.schedule_rounded,
-                    size: 13,
-                    color: AppTheme.textMutedColor(context),
-                  ),
-                  const HGapXs(),
-                  Text(
-                    hoursStr,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: isComplete
-                      ? AppTheme.successColor.withValues(alpha: 0.12)
-                      : AppTheme.pastelPurple(context),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: isComplete
-                        ? AppTheme.successColor.withValues(alpha: 0.25)
-                        : AppTheme.pastelPurpleBorder(context),
-                  ),
-                ),
-                child: Text(
-                  isComplete ? 'Completed' : 'In Progress',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: isComplete
-                        ? AppTheme.successColor
-                        : AppTheme.pastelPurpleText(context),
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          ],
-        ),
-      );
+    final statusBg = isComplete
+        ? AppTheme.successColor.withValues(alpha: 0.12)
+        : AppTheme.pastelPurple(context);
+    final statusBorder = isComplete
+        ? AppTheme.successColor.withValues(alpha: 0.25)
+        : AppTheme.pastelPurpleBorder(context);
+    final statusColor = isComplete
+        ? AppTheme.successColor
+        : AppTheme.pastelPurpleText(context);
+    final statusLabel = isComplete ? 'Completed' : 'In Progress';
+
+    return EntityDetailHeader(
+      title: moduleTitle,
+      courseId: courseId,
+      courseTitle: courseTitle,
+      horizontalPadding: 16.0,
+      countText: countStr,
+      dateText: dateStr,
+      durationText: hoursStr,
+      statusWidget: DetailStatusBadge(
+        label: statusLabel,
+        backgroundColor: statusBg,
+        borderColor: statusBorder,
+        textColor: statusColor,
+      ),
+    );
   }
 }
 

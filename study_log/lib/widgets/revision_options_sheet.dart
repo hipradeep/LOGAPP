@@ -16,27 +16,35 @@ enum RevisionOptionAction {
   remove,
 }
 
-/// Bottom action sheet presented when long-pressing a Revision Module item in the list.
+/// Bottom action sheet presented when long-pressing a Revision Module item in the list
+/// or tapping the options menu on the Revision Detail screen.
 /// Provides quick access to viewing details, resetting to R1, or removing from revision schedule.
 class RevisionOptionsSheet extends StatelessWidget {
   final Revision revision;
+  final bool showOpenDetails;
 
   const RevisionOptionsSheet({
     super.key,
     required this.revision,
+    this.showOpenDetails = true,
   });
 
   static Future<void> show(
     BuildContext context, {
     required Revision revision,
     required RevisionController revisionController,
-    required void Function(Revision revision) onOpenRevision,
+    void Function(Revision revision)? onOpenRevision,
+    VoidCallback? onDeleted,
+    bool showOpenDetails = true,
   }) async {
     final action = await showModalBottomSheet<RevisionOptionAction>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => RevisionOptionsSheet(revision: revision),
+      builder: (_) => RevisionOptionsSheet(
+        revision: revision,
+        showOpenDetails: showOpenDetails,
+      ),
     );
 
     if (!context.mounted || action == null) return;
@@ -45,7 +53,7 @@ class RevisionOptionsSheet extends StatelessWidget {
 
     switch (action) {
       case RevisionOptionAction.openDetails:
-        onOpenRevision(revision);
+        onOpenRevision?.call(revision);
         break;
 
       case RevisionOptionAction.resetToR1:
@@ -82,6 +90,7 @@ class RevisionOptionsSheet extends StatelessWidget {
                 ),
               ),
             );
+            onDeleted?.call();
           }
         }
         break;
@@ -106,6 +115,7 @@ class RevisionOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final title = _moduleTitleFor(revision);
     final course = _courseFor(revision);
     final level = revision.isFinished ? 'Completed' : 'Level R${revision.currentLevel}';
@@ -125,11 +135,12 @@ class RevisionOptionsSheet extends StatelessWidget {
           subtitle: subtitle,
         ),
         const VGapSm(),
-        SheetActionRow(
-          icon: Icons.visibility_outlined,
-          title: 'Open Revision Details',
-          onTap: () => Navigator.pop(context, RevisionOptionAction.openDetails),
-        ),
+        if (showOpenDetails)
+          SheetActionRow(
+            icon: Icons.visibility_outlined,
+            title: 'Open Revision Details',
+            onTap: () => Navigator.pop(context, RevisionOptionAction.openDetails),
+          ),
         SheetActionRow(
           icon: Icons.restart_alt_rounded,
           title: 'Reset to R1',

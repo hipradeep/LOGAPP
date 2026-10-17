@@ -60,16 +60,20 @@ class RevisionTopic {
   }
 
   /// Converts this [RevisionTopic] into a lightweight [Topic] so widgets like [TopicListItem]
-  /// can consume it. The [topic] parameter supplies the title and icon looked up via [topicId].
+  /// can consume it. The [topic] parameter supplies the title, notes, and icon looked up via [topicId].
   Topic toTopic({Topic? topic}) {
     final resolvedTitle = (topic != null && topic.title.isNotEmpty)
         ? topic.title
         : (title.isNotEmpty ? title : (topicId.isNotEmpty ? topicId : 'Topic'));
+    final realId = (topic != null && topic.id.isNotEmpty)
+        ? topic.id
+        : (topicId.isNotEmpty ? topicId : id);
     return Topic(
-      id: id,
+      id: realId,
       courseId: courseId,
       moduleId: topic?.moduleId ?? '',
       title: resolvedTitle,
+      description: topic?.description ?? '',
       status: status,
       orderIndex: orderIndex,
       iconCodePoint: topic?.iconCodePoint,

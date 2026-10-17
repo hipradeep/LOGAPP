@@ -6,11 +6,13 @@ import '../theme/revision_level_palette.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
+import '../widgets/entity_detail_header.dart';
 import '../widgets/module_context_pill.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/topic_list_item.dart';
 import '../widgets/revision_completion_dialog.dart';
 import '../widgets/study_confirmation_dialog.dart';
+import '../widgets/revision_options_sheet.dart';
 import '../models/revision.dart';
 import '../models/topic.dart';
 import '../models/revision_topic.dart';
@@ -23,6 +25,7 @@ import '../controllers/revision_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/progress_controller.dart';
 import 'session_setup_screen.dart';
+import 'topic_detail_screen.dart';
 
 /// Read-only by design: the ladder advances on its own, so there is no action
 /// button here — tapping a topic simply opens the module it belongs to.
@@ -45,6 +48,8 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   String _resolvedModuleId = '';
   String _cachedCourseTitle = '';
   String _cachedModuleTitle = '';
+  int get _completedTopicsCount => _revisionTopics.where((t) => t.isCompleted).length;
+  int _totalMinutesExpended = 0;
 
   RevisionController get _controller => getIt<RevisionController>();
 
@@ -83,6 +88,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   void initState() {
     super.initState();
     _loadTopics();
+    _loadModuleStats();
   }
 
   @override
@@ -132,6 +138,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
           _isLoadingTopics = false;
         }
       });
+      unawaited(_loadModuleStats());
     }
 
     // Immediately resolve and fetch any missing topic names
@@ -151,6 +158,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
               _isLoadingTopics = false;
             });
             unawaited(_fetchTopicNames(updatedList));
+            unawaited(_loadModuleStats());
           }
         },
         onError: (_) {},
@@ -162,6 +170,33 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       await _autoSeedTopicsFromModule();
     }
   }
+
+  Future<void> _loadModuleStats() async {
+    try {
+      final moduleId = widget.revision.moduleId;
+      final moduleTitle = _moduleTitle;
+
+      int totalMinutes = 0;
+      final logs = await DatabaseService.instance.getStudyLogs();
+      for (final log in logs) {
+        final matches = (moduleId.isNotEmpty && log.moduleId == moduleId) ||
+            (moduleTitle.isNotEmpty &&
+                log.moduleTitle.toLowerCase() == moduleTitle.toLowerCase());
+        if (matches) {
+          if (log.durationMinutes != null && log.durationMinutes! > 0) {
+            totalMinutes += log.durationMinutes!;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _totalMinutesExpended = totalMinutes;
+        });
+      }
+    } catch (_) {}
+  }
+
 
   /// Fetches and resolves topic names using a cache-first hierarchy:
   /// Level 0: Denormalized title in RevisionTopic (0 reads, 0ms)
@@ -539,69 +574,13 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
   }
 
   void _openOptionsMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (modalCtx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const VGapMd(),
-                ListTile(
-                  leading: Icon(
-                    Icons.restart_alt_rounded,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                  title: const Text('Reset to R1'),
-                  onTap: () async {
-                    Navigator.pop(modalCtx);
-                    await _controller.resetRevision(_revision.id);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: AppTheme.errorColor,
-                  ),
-                  title: const Text(
-                    'Remove from revision',
-                    style: TextStyle(
-                      color: AppTheme.errorColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(modalCtx);
-                    final confirmed = await StudyConfirmationDialog.showRemoveRevisionModule(
-                      context,
-                      moduleTitle: _moduleTitle,
-                    );
-                    if (confirmed && mounted) {
-                      await _controller.deleteRevision(_revision.id);
-                      if (context.mounted) Navigator.of(context).pop();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
+    RevisionOptionsSheet.show(
+      context,
+      revision: _revision,
+      revisionController: _controller,
+      showOpenDetails: false,
+      onDeleted: () {
+        if (mounted) Navigator.of(context).pop();
       },
     );
   }
@@ -647,6 +626,42 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     _startCurrentLevel(_revision);
   }
 
+  Future<void> _handleOpenTopicDetail(int index) async {
+    if (index >= _revisionTopics.length) return;
+    final revTopic = _revisionTopics[index];
+    final targetTopicId =
+        revTopic.topicId.isNotEmpty ? revTopic.topicId : revTopic.id;
+
+    Topic? topic;
+    if (targetTopicId.isNotEmpty) {
+      try {
+        topic = await DatabaseService.instance.getTopicById(targetTopicId);
+      } catch (_) {}
+    }
+
+    topic ??= _baseTopicsById[targetTopicId] ??
+        revTopic.toTopic(topic: _baseTopicsById[targetTopicId]);
+
+    if (!mounted) return;
+    await Navigator.push<Topic?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TopicDetailScreen(
+          topic: topic!,
+          moduleTitle: _moduleTitle,
+          courseTitle: _courseTitle,
+          courseId: _revision.courseId,
+          moduleId: _revision.moduleId,
+          isFromModuleRevision: true,
+        ),
+      ),
+    );
+
+    if (mounted) {
+      await _loadTopics();
+    }
+  }
+
   void _handleTabSelected(int index) {
     if (_activeTab.value != index) {
       _activeTab.value = index;
@@ -675,6 +690,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                   courseTitle: _courseTitle,
                   moduleTitle: _moduleTitle,
                   revision: revision,
+                  completedTopicsCount: _completedTopicsCount,
+                  totalTopicsCount: _revisionTopics.length,
+                  totalMinutesExpended: _totalMinutesExpended,
                   onBack: _handleBack,
                   onOptions: _openOptionsMenu,
                   onStartLevel: _handleStartLevel,
@@ -684,7 +702,9 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                   builder: (context, activeIdx, _) {
                     return _RevisionTabsRow(
                       activeIndex: activeIdx,
-                      topicsCount: _revisionTopics.length,
+                      completedTopicsCount: _completedTopicsCount,
+                      totalTopicsCount: _revisionTopics.length,
+                      levelLabel: revision.isFinished ? 'Done' : revision.levelLabel,
                       onTabSelected: _handleTabSelected,
                     );
                   },
@@ -707,6 +727,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
                         isLoading: _isLoadingTopics,
                         bottomPadding: bottomSafe + 84,
                         onToggle: _toggleTopicStatus,
+                        onTopicTap: _handleOpenTopicDetail,
                       );
                     },
                   ),
@@ -757,6 +778,9 @@ class _RevisionHeaderSection extends StatelessWidget {
   final String courseTitle;
   final String moduleTitle;
   final Revision revision;
+  final int completedTopicsCount;
+  final int totalTopicsCount;
+  final int totalMinutesExpended;
   final VoidCallback onBack;
   final VoidCallback onOptions;
   final VoidCallback onStartLevel;
@@ -765,6 +789,9 @@ class _RevisionHeaderSection extends StatelessWidget {
     required this.courseTitle,
     required this.moduleTitle,
     required this.revision,
+    required this.completedTopicsCount,
+    required this.totalTopicsCount,
+    required this.totalMinutesExpended,
     required this.onBack,
     required this.onOptions,
     required this.onStartLevel,
@@ -774,18 +801,38 @@ class _RevisionHeaderSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDue = revision.isDueAt(DateTime.now()) && !revision.isFinished;
 
+    final Color statusBg;
+    final Color statusBorder;
+    final Color statusColor;
+    final String statusLabel;
+
+    if (revision.isFinished) {
+      statusBg = AppTheme.successColor.withValues(alpha: 0.12);
+      statusBorder = AppTheme.successColor.withValues(alpha: 0.25);
+      statusColor = AppTheme.successColor;
+      statusLabel = 'Completed';
+    } else {
+      final palette = RevisionLevelPalette.of(context, revision.currentLevel);
+      statusBg = palette.background;
+      statusBorder = palette.border;
+      statusColor = palette.foreground;
+      statusLabel = isDue
+          ? 'R${revision.currentLevel} • Due'
+          : 'R${revision.currentLevel} • Pending';
+    }
+
+    final countStr = totalTopicsCount > 0 ? '$completedTopicsCount/$totalTopicsCount' : null;
+    final dateStr = EntityDetailHeader.formatDate(revision.updatedAt);
+    final hoursStr = EntityDetailHeader.formatDuration(totalMinutesExpended);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CustomAppBar(
           title: courseTitle.isNotEmpty ? courseTitle : 'REVISION',
           onBack: onBack,
           actions: [
-            _RevisionLevelChip(
-              currentLevel: revision.currentLevel,
-              isFinished: revision.isFinished,
-            ),
-            const HGapXs(),
             IconButton(
               icon: Icon(
                 Icons.more_vert_rounded,
@@ -799,204 +846,54 @@ class _RevisionHeaderSection extends StatelessWidget {
             ),
           ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: ModuleContextPill(
-                    moduleTitle: moduleTitle,
-                    courseId: revision.courseId,
-                  ),
-                ),
-              ),
-              if (isDue) ...[
-                const HGapSm(),
-                AddPillButton(
+        EntityDetailHeader(
+          title: moduleTitle,
+          courseId: revision.courseId,
+          horizontalPadding: 20.0,
+          trailingAction: isDue
+              ? AddPillButton(
                   label: 'Start ${revision.levelLabel}',
                   icon: Icons.play_arrow_rounded,
                   onPressed: onStartLevel,
-                ),
-              ],
-            ],
+                )
+              : null,
+          countText: countStr,
+          dateText: dateStr,
+          durationText: hoursStr,
+          statusWidget: DetailStatusBadge(
+            label: statusLabel,
+            backgroundColor: statusBg,
+            borderColor: statusBorder,
+            textColor: statusColor,
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-          child: _RevisionMetaStrip(revision: revision),
+          showDivider: true,
         ),
       ],
-    );
-  }
-}
-
-class _RevisionLevelChip extends StatelessWidget {
-  final int currentLevel;
-  final bool isFinished;
-
-  const _RevisionLevelChip({
-    required this.currentLevel,
-    required this.isFinished,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = isFinished
-        ? RevisionLevelPalette.completed(context)
-        : RevisionLevelPalette.of(context, currentLevel);
-    final label = isFinished ? 'Completed' : 'R$currentLevel';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: colors.foreground,
-        ),
-      ),
-    );
-  }
-}
-
-/// Two-up strip under the hero: when the module was completed and when it was
-/// last revised.
-class _RevisionMetaStrip extends StatelessWidget {
-  final Revision revision;
-
-  const _RevisionMetaStrip({required this.revision});
-
-  static const List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  static String _formatDate(DateTime value) =>
-      '${value.day} ${_months[value.month - 1]} ${value.year}';
-
-  @override
-  Widget build(BuildContext context) {
-    final lastRevision = revision.lastRevisionAt;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _MetaItem(
-            icon: Icons.task_alt_rounded,
-            label: 'Completed',
-            value: _formatDate(revision.createdAt),
-          ),
-        ),
-        const _MetaDivider(),
-        Expanded(
-          child: _MetaItem(
-            icon: Icons.history_rounded,
-            label: 'Last revision',
-            value: lastRevision != null ? _formatDate(lastRevision) : '-',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MetaItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color? valueColor;
-  final Widget? leading;
-
-  const _MetaItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.valueColor,
-    this.leading,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            if (leading != null) ...[
-              leading!,
-              const HGapXs(),
-            ] else ...[
-              Icon(icon, color: AppTheme.textSecondaryColor(context), size: 12),
-              const HGapXs(),
-            ],
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textSecondaryColor(context),
-                  letterSpacing: 0.4,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const VGapXs(),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: valueColor ?? AppTheme.textPrimaryColor(context),
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-}
-
-class _MetaDivider extends StatelessWidget {
-  const _MetaDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 30,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: AppTheme.borderColor(context),
     );
   }
 }
 
 class _RevisionTabsRow extends StatelessWidget {
   final int activeIndex;
-  final int topicsCount;
+  final int completedTopicsCount;
+  final int totalTopicsCount;
+  final String levelLabel;
   final ValueChanged<int> onTabSelected;
 
   const _RevisionTabsRow({
     required this.activeIndex,
-    required this.topicsCount,
+    required this.completedTopicsCount,
+    required this.totalTopicsCount,
+    required this.levelLabel,
     required this.onTabSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final topicsLabel = totalTopicsCount > 0
+        ? 'Topics ($completedTopicsCount/$totalTopicsCount)'
+        : 'Topics ($totalTopicsCount)';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
@@ -1008,13 +905,13 @@ class _RevisionTabsRow extends StatelessWidget {
         child: Row(
           children: [
             _TabItem(
-              label: 'Topics ($topicsCount)',
+              label: topicsLabel,
               isActive: activeIndex == 0,
               onTap: () => onTabSelected(0),
             ),
             const HGapLg(),
             _TabItem(
-              label: 'Progress',
+              label: 'Progress ($levelLabel)',
               isActive: activeIndex == 1,
               onTap: () => onTabSelected(1),
             ),
@@ -1075,6 +972,7 @@ class _RevisionTopicsView extends StatelessWidget {
   final bool isLoading;
   final double bottomPadding;
   final ValueChanged<int> onToggle;
+  final ValueChanged<int>? onTopicTap;
 
   const _RevisionTopicsView({
     required this.topics,
@@ -1083,6 +981,7 @@ class _RevisionTopicsView extends StatelessWidget {
     required this.isLoading,
     required this.bottomPadding,
     required this.onToggle,
+    this.onTopicTap,
   });
 
   @override
@@ -1127,9 +1026,9 @@ class _RevisionTopicsView extends StatelessWidget {
                 key: ValueKey(topic.id),
                 topic: topic.toTopic(topic: base),
                 showCheckbox: true,
-                showTrailing: false,
+                showTrailing: true,
                 onCheckboxTap: () => onToggle(index),
-                onTap: () => onToggle(index),
+                onTap: onTopicTap != null ? () => onTopicTap!(index) : () => onToggle(index),
               );
             },
           ),
@@ -1283,6 +1182,7 @@ class _RevisionLadderView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final maxLevel = RevisionSchedule.maxLevel;
 
     return ListView(
@@ -1292,7 +1192,7 @@ class _RevisionLadderView extends StatelessWidget {
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
-        top: 8,
+        top: 12,
         bottom: bottomPadding,
       ),
       children: [
@@ -1345,14 +1245,15 @@ class _TimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final state = _state;
     final isCleared = state == _StepState.cleared;
     final isCurrent = state == _StepState.current;
 
     final lineColor = isCleared
-        ? AppTheme.successColor.withValues(alpha: 0.30)
+        ? AppTheme.successColor.withValues(alpha: 0.35)
         : isCurrent
-            ? AppTheme.primaryColor.withValues(alpha: 0.25)
+            ? AppTheme.primaryColor.withValues(alpha: 0.30)
             : AppTheme.borderColor(context);
 
     return IntrinsicHeight(
@@ -1378,7 +1279,7 @@ class _TimelineRow extends StatelessWidget {
           const HGapSm(),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(top: 3, bottom: isLast ? 0 : 14),
+              padding: EdgeInsets.only(top: 3, bottom: isLast ? 0 : 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1409,16 +1310,16 @@ class _TimelineRow extends StatelessWidget {
                           color: AppTheme.textSecondaryColor(context),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const HGapXs(),
                       Container(
                         width: 3,
                         height: 3,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFCBD0DB),
+                        decoration: BoxDecoration(
+                          color: AppTheme.textMutedColor(context).withValues(alpha: 0.6),
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const HGapXs(),
                       Text(
                         RevisionSchedule.intervalLabel(level),
                         style: TextStyle(
@@ -1448,6 +1349,7 @@ class _StatusIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     switch (state) {
       case _StepState.current:
         return Container(
@@ -1462,7 +1364,7 @@ class _StatusIndicator extends StatelessWidget {
             width: 7,
             height: 7,
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.textOnDark,
               shape: BoxShape.circle,
             ),
           ),
@@ -1480,7 +1382,11 @@ class _StatusIndicator extends StatelessWidget {
             ),
           ),
           alignment: Alignment.center,
-          child: const Icon(Icons.check_rounded, color: Colors.white, size: 11),
+          child: const Icon(
+            Icons.check_rounded,
+            color: AppTheme.textOnDark,
+            size: 11,
+          ),
         );
       case _StepState.upcoming:
         return Container(
@@ -1489,7 +1395,10 @@ class _StatusIndicator extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppTheme.surface(context),
             shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.borderColor(context), width: 2),
+            border: Border.all(
+              color: AppTheme.borderColor(context),
+              width: 2,
+            ),
           ),
         );
     }
@@ -1503,25 +1412,30 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     late final String label;
     late final Color bg;
     late final Color fg;
+    late final Color border;
 
     switch (state) {
       case _StepState.cleared:
         label = 'Cleared';
         bg = AppTheme.pastelGreen(context);
         fg = AppTheme.pastelGreenText(context);
+        border = AppTheme.pastelGreenBorder(context);
         break;
       case _StepState.current:
         label = 'Pending';
         bg = AppTheme.pastelPurple(context);
         fg = AppTheme.pastelPurpleText(context);
+        border = AppTheme.pastelPurpleBorder(context);
         break;
       case _StepState.upcoming:
         label = 'Upcoming';
-        bg = const Color(0xFFF3F4F6);
+        bg = AppTheme.surfaceVariant(context);
         fg = AppTheme.textSecondaryColor(context);
+        border = AppTheme.borderColor(context);
         break;
     }
 
@@ -1530,6 +1444,7 @@ class _StatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: border),
       ),
       child: Text(
         label,

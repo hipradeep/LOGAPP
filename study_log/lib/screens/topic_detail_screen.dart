@@ -14,6 +14,7 @@ import '../theme/app_theme.dart';
 import '../theme/revision_level_palette.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
+import '../widgets/entity_detail_header.dart';
 import '../widgets/module_context_pill.dart';
 import '../widgets/study_confirmation_dialog.dart';
 import '../widgets/study_text_fields.dart';
@@ -30,6 +31,7 @@ class TopicDetailScreen extends StatefulWidget {
   final String courseTitle;
   final String courseId;
   final String moduleId;
+  final bool isFromModuleRevision;
 
   const TopicDetailScreen({
     super.key,
@@ -38,6 +40,7 @@ class TopicDetailScreen extends StatefulWidget {
     this.courseTitle = '',
     this.courseId = '',
     this.moduleId = '',
+    this.isFromModuleRevision = false,
   });
 
   @override
@@ -47,12 +50,25 @@ class TopicDetailScreen extends StatefulWidget {
 class _TopicDetailScreenState extends State<TopicDetailScreen> {
   late Topic _topic;
   List<StudyLog> _topicLogs = [];
+  final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
     _topic = widget.topic;
     _loadTopicData();
+  }
+
+  @override
+  void dispose() {
+    _activeTab.dispose();
+    super.dispose();
+  }
+
+  void _handleTabSelected(int index) {
+    if (_activeTab.value != index) {
+      _activeTab.value = index;
+    }
   }
 
   Future<void> _loadTopicData() async {
@@ -245,6 +261,80 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
     return minutes;
   }
 
+  Widget? _buildFab() {
+    if (widget.isFromModuleRevision) return null;
+
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      return ListenableBuilder(
+        listenable: getIt<TopicRevisionController>(),
+        builder: (context, _) {
+          final revCtrl = getIt<TopicRevisionController>();
+          final revision = revCtrl.topicRevisionFor(_topic.id);
+          final now = DateTime.now();
+          final isDue = revision != null && revision.isDueAt(now);
+
+          final Color fabColor;
+          final String tooltip;
+          final bool isRevision;
+
+          if (revision != null) {
+            isRevision = true;
+            if (revision.isFinished) {
+              fabColor = AppTheme.successColor;
+              tooltip = 'Mastered (Start Revision)';
+            } else {
+              final colors = RevisionLevelPalette.of(context, revision.currentLevel);
+              fabColor = colors.foreground;
+              tooltip = isDue
+                  ? 'Start R${revision.currentLevel} (Due Today)'
+                  : 'Start R${revision.currentLevel} Revision';
+            }
+          } else {
+            switch (_topic.status) {
+              case TopicStatus.completed:
+                fabColor = AppTheme.successColor;
+                tooltip = 'Topic Completed (Start Revision)';
+                isRevision = true;
+                break;
+              case TopicStatus.inProgress:
+                fabColor = const Color(0xFF6366F1);
+                tooltip = 'Continue Study Session';
+                isRevision = false;
+                break;
+              case TopicStatus.notStarted:
+                fabColor = AppTheme.primaryColor;
+                tooltip = 'Start Study Session';
+                isRevision = false;
+                break;
+            }
+          }
+
+          return FloatingActionButton(
+            onPressed: () => _handleStartStudy(isRevision: isRevision),
+            backgroundColor: fabColor,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            shape: const CircleBorder(),
+            tooltip: tooltip,
+            child: const Icon(Icons.play_arrow_rounded, size: 28),
+          );
+        },
+      );
+    }
+
+    return FloatingActionButton(
+      onPressed: () => _handleStartStudy(isRevision: _topic.isCompleted),
+      backgroundColor:
+          _topic.isCompleted ? AppTheme.successColor : AppTheme.primaryColor,
+      foregroundColor: Colors.white,
+      elevation: 4,
+      shape: const CircleBorder(),
+      tooltip:
+          _topic.isCompleted ? 'Start Revision Session' : 'Start Study Session',
+      child: const Icon(Icons.play_arrow_rounded, size: 28),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
@@ -257,71 +347,7 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
       },
       child: Scaffold(
         backgroundColor: AppTheme.background(context),
-        floatingActionButton: getIt.isRegistered<TopicRevisionController>()
-            ? ListenableBuilder(
-                listenable: getIt<TopicRevisionController>(),
-                builder: (context, _) {
-                  final revCtrl = getIt<TopicRevisionController>();
-                  final revision = revCtrl.topicRevisionFor(_topic.id);
-                  final now = DateTime.now();
-                  final isDue = revision != null && revision.isDueAt(now);
-
-                  final Color fabColor;
-                  final String tooltip;
-                  final bool isRevision;
-
-                  if (revision != null) {
-                    isRevision = true;
-                    if (revision.isFinished) {
-                      fabColor = AppTheme.successColor;
-                      tooltip = 'Mastered (Start Revision)';
-                    } else {
-                      final colors = RevisionLevelPalette.of(context, revision.currentLevel);
-                      fabColor = colors.foreground;
-                      tooltip = isDue
-                          ? 'Start R${revision.currentLevel} (Due Today)'
-                          : 'Start R${revision.currentLevel} Revision';
-                    }
-                  } else {
-                    switch (_topic.status) {
-                      case TopicStatus.completed:
-                        fabColor = AppTheme.successColor;
-                        tooltip = 'Topic Completed (Start Revision)';
-                        isRevision = true;
-                        break;
-                      case TopicStatus.inProgress:
-                        fabColor = const Color(0xFF6366F1);
-                        tooltip = 'Continue Study Session';
-                        isRevision = false;
-                        break;
-                      case TopicStatus.notStarted:
-                        fabColor = AppTheme.primaryColor;
-                        tooltip = 'Start Study Session';
-                        isRevision = false;
-                        break;
-                    }
-                  }
-
-                  return FloatingActionButton(
-                    onPressed: () => _handleStartStudy(isRevision: isRevision),
-                    backgroundColor: fabColor,
-                    foregroundColor: Colors.white,
-                    elevation: 4,
-                    shape: const CircleBorder(),
-                    tooltip: tooltip,
-                    child: const Icon(Icons.play_arrow_rounded, size: 28),
-                  );
-                },
-              )
-            : FloatingActionButton(
-                onPressed: () => _handleStartStudy(isRevision: _topic.isCompleted),
-                backgroundColor: _topic.isCompleted ? AppTheme.successColor : AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                elevation: 4,
-                shape: const CircleBorder(),
-                tooltip: _topic.isCompleted ? 'Start Revision Session' : 'Start Study Session',
-                child: const Icon(Icons.play_arrow_rounded, size: 28),
-              ),
+        floatingActionButton: _buildFab(),
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -348,42 +374,95 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
                 totalMinutesExpended: _resolveTotalMinutes(),
                 onStatusChanged: _handleStatusChanged,
               ),
-              const VGapXs(),
-              Divider(
-                height: 12,
-                thickness: 1.0,
-                color: AppTheme.borderColor(context),
-              ),
-              const VGapXs(),
+              _buildTabsRow(context),
+              const VGapSm(),
               Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(16.0, 4.0, 16.0, bottomSafe + 84),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _TopicNotesCard(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _activeTab,
+                  builder: (context, activeIdx, _) {
+                    if (activeIdx == 1) {
+                      return SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          16.0,
+                          4.0,
+                          16.0,
+                          widget.isFromModuleRevision ? (bottomSafe + 24) : (bottomSafe + 84),
+                        ),
+                        child: _TopicRevisionLadderCard(
+                          topic: _topic,
+                          courseId: widget.courseId,
+                          moduleId: widget.moduleId,
+                          courseTitle: widget.courseTitle,
+                          moduleTitle: widget.moduleTitle,
+                          onRevisionUpdated: _loadTopicData,
+                          onStatusChanged: _handleStatusChanged,
+                        ),
+                      );
+                    }
+                    return SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        16.0,
+                        4.0,
+                        16.0,
+                        widget.isFromModuleRevision ? (bottomSafe + 24) : (bottomSafe + 84),
+                      ),
+                      child: _TopicNotesCard(
                         description: _topic.description,
                         onDoubleTap: _handleEditFullTopic,
                       ),
-                      const VGapMd(),
-                      _TopicRevisionLadderCard(
-                        topic: _topic,
-                        courseId: widget.courseId,
-                        moduleId: widget.moduleId,
-                        courseTitle: widget.courseTitle,
-                        moduleTitle: widget.moduleTitle,
-                        onRevisionUpdated: _loadTopicData,
-                        onStatusChanged: _handleStatusChanged,
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTabsRow(BuildContext context) {
+    final topicRevCtrl = getIt.isRegistered<TopicRevisionController>()
+        ? getIt<TopicRevisionController>()
+        : null;
+
+    if (topicRevCtrl != null) {
+      return ListenableBuilder(
+        listenable: topicRevCtrl,
+        builder: (context, _) {
+          final revision = topicRevCtrl.topicRevisionFor(_topic.id);
+          final String progressLabel;
+          if (revision != null) {
+            final levelLabel = revision.isFinished ? 'Done' : 'R${revision.currentLevel}';
+            progressLabel = 'Progress ($levelLabel)';
+          } else {
+            progressLabel = 'Progress';
+          }
+          return ValueListenableBuilder<int>(
+            valueListenable: _activeTab,
+            builder: (context, activeIdx, _) {
+              return _TopicTabsRow(
+                activeIndex: activeIdx,
+                progressLabel: progressLabel,
+                onTabSelected: _handleTabSelected,
+              );
+            },
+          );
+        },
+      );
+    }
+
+    return ValueListenableBuilder<int>(
+      valueListenable: _activeTab,
+      builder: (context, activeIdx, _) {
+        return _TopicTabsRow(
+          activeIndex: activeIdx,
+          progressLabel: 'Progress',
+          onTabSelected: _handleTabSelected,
+        );
+      },
     );
   }
 }
@@ -401,8 +480,6 @@ class _CompactTopicHeader extends StatelessWidget {
   final int totalMinutesExpended;
   final ValueChanged<TopicStatus> onStatusChanged;
 
-  static final DateFormat _dateFormat = DateFormat('d MMM, yyyy');
-
   const _CompactTopicHeader({
     required this.topicTitle,
     required this.courseId,
@@ -413,22 +490,10 @@ class _CompactTopicHeader extends StatelessWidget {
     required this.onStatusChanged,
   });
 
-  static String _formatDuration(int minutes) {
-    if (minutes <= 0) return '0h';
-    final hours = minutes / 60.0;
-    if (minutes % 60 == 0) {
-      return '${hours.toInt()}h';
-    } else if (hours < 1.0) {
-      return '${minutes}m';
-    } else {
-      return '${hours.toStringAsFixed(1).replaceAll('.0', '')}h';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final dateStr = _dateFormat.format(lastUpdatedAt);
-    final hoursStr = _formatDuration(totalMinutesExpended);
+    final dateStr = EntityDetailHeader.formatDate(lastUpdatedAt);
+    final hoursStr = EntityDetailHeader.formatDuration(totalMinutesExpended);
 
     final isComplete = status == TopicStatus.completed;
     final inProgress = status == TopicStatus.inProgress;
@@ -457,99 +522,30 @@ class _CompactTopicHeader extends StatelessWidget {
 
     final displayTitle = topicTitle.isNotEmpty ? topicTitle : 'Topic';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ModuleContextPill(
-            moduleTitle: displayTitle,
-            courseId: courseId,
-            courseTitle: courseTitle,
-          ),
-          const VGapXs(),
-          Wrap(
-            spacing: 8.0,
-            runSpacing: 4.0,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 12,
-                    color: AppTheme.textMutedColor(context),
-                  ),
-                  const HGapXs(),
-                  Text(
-                    dateStr,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.schedule_rounded,
-                    size: 13,
-                    color: AppTheme.textMutedColor(context),
-                  ),
-                  const HGapXs(),
-                  Text(
-                    hoursStr,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-              PopupMenuButton<TopicStatus>(
-                onSelected: onStatusChanged,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                color: AppTheme.surface(context),
-                elevation: 4,
-                itemBuilder: (_) => [
-                  _buildPopupItem(context, TopicStatus.notStarted, 'Not Started', Icons.radio_button_unchecked_rounded),
-                  _buildPopupItem(context, TopicStatus.inProgress, 'In Progress', Icons.timelapse_rounded),
-                  _buildPopupItem(context, TopicStatus.completed, 'Completed', Icons.check_circle_rounded),
-                ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: statusBg,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: statusBorder),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        statusLabel,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: statusColor,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Icon(Icons.arrow_drop_down_rounded, size: 12, color: statusColor),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return EntityDetailHeader(
+      title: displayTitle,
+      courseId: courseId,
+      courseTitle: courseTitle,
+      horizontalPadding: 16.0,
+      dateText: dateStr,
+      durationText: hoursStr,
+      statusWidget: PopupMenuButton<TopicStatus>(
+        onSelected: onStatusChanged,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        color: AppTheme.surface(context),
+        elevation: 4,
+        itemBuilder: (_) => [
+          _buildPopupItem(context, TopicStatus.notStarted, 'Not Started', Icons.radio_button_unchecked_rounded),
+          _buildPopupItem(context, TopicStatus.inProgress, 'In Progress', Icons.timelapse_rounded),
+          _buildPopupItem(context, TopicStatus.completed, 'Completed', Icons.check_circle_rounded),
         ],
+        child: DetailStatusBadge(
+          label: statusLabel,
+          backgroundColor: statusBg,
+          borderColor: statusBorder,
+          textColor: statusColor,
+          trailing: Icon(Icons.arrow_drop_down_rounded, size: 12, color: statusColor),
+        ),
       ),
     );
   }
@@ -580,6 +576,87 @@ class _CompactTopicHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TopicTabsRow extends StatelessWidget {
+  final int activeIndex;
+  final String progressLabel;
+  final ValueChanged<int> onTabSelected;
+
+  const _TopicTabsRow({
+    required this.activeIndex,
+    required this.progressLabel,
+    required this.onTabSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            _TabItem(
+              label: 'Notes',
+              isActive: activeIndex == 0,
+              onTap: () => onTabSelected(0),
+            ),
+            const HGapLg(),
+            _TabItem(
+              label: progressLabel,
+              isActive: activeIndex == 1,
+              onTap: () => onTabSelected(1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TabItem extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _TabItem({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        decoration: BoxDecoration(
+          border: isActive
+              ? const Border(
+                  bottom: BorderSide(
+                    color: AppTheme.primaryColor,
+                    width: 2.5,
+                  ),
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+            color: isActive ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context),
+          ),
+        ),
       ),
     );
   }
@@ -681,11 +758,10 @@ class _TopicRevisionLadderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Direct Horizontal Ladder: (Study Status) -> R1 -> R2 -> R3 -> R4 -> R5
-                  _HorizontalPipeline(
+                  // Vertical Repetition Pipeline: Study Phase -> R1 -> R2 -> R3 -> R4 -> R5
+                  _VerticalPipeline(
                     topicStatus: topic.status,
                     revision: revision,
-                    onStatusChanged: onStatusChanged,
                   ),
 
               // Bottom Actions Row
@@ -915,15 +991,13 @@ class _TopicRevisionLadderCard extends StatelessWidget {
   }
 }
 
-class _HorizontalPipeline extends StatelessWidget {
+class _VerticalPipeline extends StatelessWidget {
   final TopicStatus topicStatus;
   final TopicRevision? revision;
-  final ValueChanged<TopicStatus>? onStatusChanged;
 
-  const _HorizontalPipeline({
+  const _VerticalPipeline({
     required this.topicStatus,
     required this.revision,
-    this.onStatusChanged,
   });
 
   static const List<int> _intervals = [1, 3, 7, 14, 30];
@@ -932,204 +1006,341 @@ class _HorizontalPipeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final isStudyDone = topicStatus == TopicStatus.completed;
 
-    // Connecting lines states
-    final line0Active = isStudyDone;
-    final line1Active = revision != null && (revision!.isFinished || revision!.currentLevel >= 2);
-    final line2Active = revision != null && (revision!.isFinished || revision!.currentLevel >= 3);
-    final line3Active = revision != null && (revision!.isFinished || revision!.currentLevel >= 4);
-    final line4Active = revision != null && (revision!.isFinished || revision!.currentLevel >= 5);
-
-    final line0Color = revision != null ? AppTheme.primaryColor : AppTheme.successColor;
-
-    return Row(
+    return Column(
       children: [
-        _buildStudyStatusNode(context, topicStatus),
-        _buildConnectingLine(context, line0Active, customColor: line0Color),
-        _buildRevisionNode(context, 1, _intervals[0], revision),
-        _buildConnectingLine(context, line1Active),
-        _buildRevisionNode(context, 2, _intervals[1], revision),
-        _buildConnectingLine(context, line2Active),
-        _buildRevisionNode(context, 3, _intervals[2], revision),
-        _buildConnectingLine(context, line3Active),
-        _buildRevisionNode(context, 4, _intervals[3], revision),
-        _buildConnectingLine(context, line4Active),
-        _buildRevisionNode(context, 5, _intervals[4], revision),
+        // 0. Initial Study Status Node
+        _buildStudyStatusRow(context, isStudyDone),
+        // 1 to 5: R1 through R5
+        for (var level = 1; level <= 5; level++)
+          _buildRevisionRow(
+            context,
+            level: level,
+            intervalDays: _intervals[level - 1],
+            revision: revision,
+            isLast: level == 5,
+          ),
       ],
     );
   }
 
-  Widget _buildStudyStatusNode(BuildContext context, TopicStatus status) {
-    final isDone = status == TopicStatus.completed;
-    final inProg = status == TopicStatus.inProgress;
+  Widget _buildStudyStatusRow(BuildContext context, bool isStudyDone) {
+    final inProg = topicStatus == TopicStatus.inProgress;
 
-    final Color bg;
-    final Color border;
+    final Color indicatorBg;
+    final Color indicatorBorder;
     final Color iconColor;
-    final IconData icon;
+    final IconData iconData;
     final String label;
+    final Color badgeBg;
+    final Color badgeBorder;
+    final Color badgeText;
+    final String subtitle;
 
-    if (isDone) {
-      bg = AppTheme.successColor;
-      border = AppTheme.successColor;
-      iconColor = Colors.white;
-      icon = Icons.check_rounded;
+    if (isStudyDone) {
+      indicatorBg = AppTheme.successColor;
+      indicatorBorder = AppTheme.successColor.withValues(alpha: 0.35);
+      iconColor = AppTheme.textOnDark;
+      iconData = Icons.check_rounded;
       label = 'Learned';
+      badgeBg = AppTheme.pastelGreen(context);
+      badgeBorder = AppTheme.pastelGreenBorder(context);
+      badgeText = AppTheme.pastelGreenText(context);
+      subtitle = 'Topic completed • Ready for repetition';
     } else if (inProg) {
-      bg = AppTheme.pastelPurple(context);
-      border = AppTheme.pastelPurpleBorder(context);
+      indicatorBg = AppTheme.pastelPurple(context);
+      indicatorBorder = AppTheme.pastelPurpleBorder(context);
       iconColor = AppTheme.pastelPurpleText(context);
-      icon = Icons.timelapse_rounded;
-      label = 'In Prog';
+      iconData = Icons.timelapse_rounded;
+      label = 'In Progress';
+      badgeBg = AppTheme.pastelPurple(context);
+      badgeBorder = AppTheme.pastelPurpleBorder(context);
+      badgeText = AppTheme.pastelPurpleText(context);
+      subtitle = 'Topic currently being studied';
     } else {
-      bg = AppTheme.surfaceVariant(context);
-      border = AppTheme.borderColor(context);
+      indicatorBg = AppTheme.surface(context);
+      indicatorBorder = AppTheme.borderColor(context);
       iconColor = AppTheme.textMutedColor(context);
-      icon = Icons.radio_button_unchecked_rounded;
-      label = 'Study';
+      iconData = Icons.radio_button_unchecked_rounded;
+      label = 'Not Started';
+      badgeBg = AppTheme.surfaceVariant(context);
+      badgeBorder = AppTheme.borderColor(context);
+      badgeText = AppTheme.textSecondaryColor(context);
+      subtitle = 'Study session not started yet';
     }
 
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onStatusChanged == null
-            ? null
-            : () {
-                final TopicStatus next;
-                switch (status) {
-                  case TopicStatus.notStarted:
-                    next = TopicStatus.inProgress;
-                    break;
-                  case TopicStatus.inProgress:
-                    next = TopicStatus.completed;
-                    break;
-                  case TopicStatus.completed:
-                    next = TopicStatus.notStarted;
-                    break;
-                }
-                onStatusChanged!(next);
-              },
-        borderRadius: BorderRadius.circular(10),
-        child: Tooltip(
-          message: 'Tap to change status ($label)',
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+    final lineColor = isStudyDone
+        ? AppTheme.successColor.withValues(alpha: 0.35)
+        : AppTheme.borderColor(context);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 26,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 30,
-                  height: 30,
+                  width: 22,
+                  height: 22,
                   decoration: BoxDecoration(
+                    color: indicatorBg,
                     shape: BoxShape.circle,
-                    color: bg,
-                    border: Border.all(color: border, width: inProg ? 2.0 : 1.5),
+                    border: Border.all(
+                      color: indicatorBorder,
+                      width: isStudyDone ? 4 : 2,
+                    ),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, size: 16, color: iconColor),
+                  child: Icon(iconData, size: 11, color: iconColor),
                 ),
-                const VGapXs(),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: isDone || inProg ? FontWeight.bold : FontWeight.w500,
-                    color: isDone
-                        ? AppTheme.successColor
-                        : (inProg ? AppTheme.pastelPurpleText(context) : AppTheme.textMutedColor(context)),
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 3),
+                    color: lineColor,
                   ),
                 ),
               ],
             ),
           ),
-        ),
+          const HGapSm(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Study Phase',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimaryColor(context),
+                        ),
+                      ),
+                      const HGapXs(),
+                      DetailStatusBadge(
+                        label: label,
+                        backgroundColor: badgeBg,
+                        borderColor: badgeBorder,
+                        textColor: badgeText,
+                      ),
+                    ],
+                  ),
+                  const VGapXs(),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildRevisionNode(
-    BuildContext context,
-    int level,
-    int intervalDays,
-    TopicRevision? revision,
-  ) {
-    final isCompleted = revision != null && (revision.isFinished || level < revision.currentLevel);
+  Widget _buildRevisionRow(
+    BuildContext context, {
+    required int level,
+    required int intervalDays,
+    required TopicRevision? revision,
+    required bool isLast,
+  }) {
+    final isCleared = revision != null && (revision.isFinished || level < revision.currentLevel);
     final isCurrent = revision != null && !revision.isFinished && level == revision.currentLevel;
+    final now = DateTime.now();
+    final isDue = isCurrent && revision.isDueAt(now);
 
-    final Color bg;
-    final Color border;
-    final Color textColor;
-    final double borderWidth;
+    final lineColor = isCleared
+        ? AppTheme.successColor.withValues(alpha: 0.35)
+        : isCurrent
+            ? AppTheme.primaryColor.withValues(alpha: 0.30)
+            : AppTheme.borderColor(context);
 
-    if (isCompleted) {
-      bg = AppTheme.successColor;
-      border = AppTheme.successColor;
-      textColor = Colors.white;
-      borderWidth = 1.5;
+    final Widget indicator;
+    final String statusLabel;
+    final Color badgeBg;
+    final Color badgeBorder;
+    final Color badgeText;
+
+    if (isCleared) {
+      statusLabel = 'Cleared';
+      badgeBg = AppTheme.pastelGreen(context);
+      badgeBorder = AppTheme.pastelGreenBorder(context);
+      badgeText = AppTheme.pastelGreenText(context);
+      indicator = Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: AppTheme.successColor,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppTheme.successColor.withValues(alpha: 0.35),
+            width: 4,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.check_rounded,
+          color: AppTheme.textOnDark,
+          size: 11,
+        ),
+      );
     } else if (isCurrent) {
-      bg = AppTheme.primaryColor;
-      border = AppTheme.primaryColor;
-      textColor = Colors.white;
-      borderWidth = 2.5;
+      statusLabel = isDue ? 'Due Today' : 'Pending';
+      badgeBg = isDue
+          ? AppTheme.errorColor.withValues(alpha: 0.12)
+          : AppTheme.pastelPurple(context);
+      badgeBorder = isDue
+          ? AppTheme.errorColor.withValues(alpha: 0.35)
+          : AppTheme.pastelPurpleBorder(context);
+      badgeText = isDue ? AppTheme.errorColor : AppTheme.pastelPurpleText(context);
+      indicator = Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: isDue ? AppTheme.errorColor : AppTheme.primaryColor,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: (isDue ? AppTheme.errorColor : AppTheme.primaryColor)
+                .withValues(alpha: 0.30),
+            width: 4,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Container(
+          width: 7,
+          height: 7,
+          decoration: const BoxDecoration(
+            color: AppTheme.textOnDark,
+            shape: BoxShape.circle,
+          ),
+        ),
+      );
     } else {
-      bg = AppTheme.surfaceVariant(context);
-      border = AppTheme.borderColor(context);
-      textColor = AppTheme.textSecondaryColor(context);
-      borderWidth = 1.5;
+      statusLabel = 'Upcoming';
+      badgeBg = AppTheme.surfaceVariant(context);
+      badgeBorder = AppTheme.borderColor(context);
+      badgeText = AppTheme.textSecondaryColor(context);
+      indicator = Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: AppTheme.surface(context),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppTheme.borderColor(context),
+            width: 2,
+          ),
+        ),
+      );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: bg,
-            border: Border.all(color: border, width: borderWidth),
-          ),
-          alignment: Alignment.center,
-          child: isCompleted
-              ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
-              : Text(
-                  'R$level',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-        ),
-        const VGapXs(),
-        Text(
-          '+${intervalDays}d',
-          style: TextStyle(
-            fontSize: 9.5,
-            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-            color: isCurrent
-                ? AppTheme.primaryColor
-                : (isCompleted ? AppTheme.successColor : AppTheme.textMutedColor(context)),
-          ),
-        ),
-      ],
-    );
-  }
+    String? dateDetail;
+    if (isCurrent && revision != null) {
+      dateDetail = DateFormat('d MMM, yyyy').format(revision.nextRevisionAt);
+    } else if (isCleared && level == 1 && revision != null) {
+      dateDetail = DateFormat('d MMM, yyyy').format(revision.createdAt);
+    } else if (isCleared && level == 5 && revision?.completedAt != null) {
+      dateDetail = DateFormat('d MMM, yyyy').format(revision!.completedAt!);
+    }
 
-  Widget _buildConnectingLine(BuildContext context, bool isActive, {Color? customColor}) {
-    final lineColor = isActive
-        ? (customColor ?? AppTheme.primaryColor)
-        : AppTheme.borderColor(context);
-
-    return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 2.5,
-            color: lineColor,
+          SizedBox(
+            width: 26,
+            child: Column(
+              children: [
+                indicator,
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      color: lineColor,
+                    ),
+                  ),
+              ],
+            ),
           ),
-          const VGapXs(),
-          const SizedBox(height: 12),
+          const HGapSm(),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: 2, bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'R$level',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: isCurrent
+                              ? (isDue ? AppTheme.errorColor : AppTheme.primaryColor)
+                              : AppTheme.textPrimaryColor(context),
+                        ),
+                      ),
+                      const HGapXs(),
+                      DetailStatusBadge(
+                        label: statusLabel,
+                        backgroundColor: badgeBg,
+                        borderColor: badgeBorder,
+                        textColor: badgeText,
+                      ),
+                    ],
+                  ),
+                  const VGapXs(),
+                  Row(
+                    children: [
+                      Text(
+                        '+${intervalDays}d interval',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isCurrent
+                              ? (isDue ? AppTheme.errorColor : AppTheme.primaryColor)
+                              : AppTheme.textSecondaryColor(context),
+                        ),
+                      ),
+                      if (dateDetail != null) ...[
+                        const HGapXs(),
+                        Container(
+                          width: 3,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: AppTheme.textMutedColor(context).withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const HGapXs(),
+                        Text(
+                          dateDetail,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textSecondaryColor(context),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
