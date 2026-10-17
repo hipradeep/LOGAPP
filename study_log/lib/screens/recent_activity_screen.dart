@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/study_log.dart';
+import '../models/topic.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
