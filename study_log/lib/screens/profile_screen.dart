@@ -260,18 +260,22 @@ class _UserProfileCard extends StatelessWidget {
         final streak = progressCtrl?.currentStreak ?? 0;
 
         final syncDisplayName = syncCtrl?.displayName?.trim();
+        final pName = progressCtrl?.userName;
+        final pEmail = progressCtrl?.userEmail;
+        final pHeadline = progressCtrl?.userHeadline;
+
         final displayName = (syncDisplayName != null && syncDisplayName.isNotEmpty)
             ? syncDisplayName
-            : (progressCtrl?.userName.isNotEmpty == true && progressCtrl!.userName != 'Learner'
-                ? progressCtrl!.userName
+            : ((pName != null && pName.isNotEmpty && pName != 'Learner')
+                ? pName
                 : (syncCtrl?.userEmail?.split('@').first ?? 'Learner'));
 
         final syncEmail = syncCtrl?.userEmail;
         final displayEmail = (syncEmail != null && syncEmail.isNotEmpty)
             ? syncEmail
-            : (progressCtrl?.userEmail?.isNotEmpty == true
-                ? progressCtrl!.userEmail!
-                : (progressCtrl?.userHeadline ?? 'Student'));
+            : ((pEmail != null && pEmail.isNotEmpty)
+                ? pEmail
+                : (pHeadline ?? 'Student'));
 
         final avatarUrl = syncCtrl?.photoUrl ?? progressCtrl?.userAvatarUrl;
         final initialName = displayName.isNotEmpty ? displayName : 'L';
