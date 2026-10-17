@@ -12,9 +12,6 @@ import '../models/topic.dart';
 import '../models/course.dart';
 import '../models/module.dart';
 import '../models/study_log.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_module_storage.dart';
-import '../services/local_study_log_storage.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
@@ -122,11 +119,14 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   }
 
   Future<void> _loadTopics() async {
-    // 1. Immediately render local cached topics for zero-latency load
-    final cached = await LocalTopicStorage.loadTopicsForModule(
-      moduleId: widget.moduleId,
-      fallbackTitle: widget.moduleTitle,
-    );
+    // 1. Immediately render topics directly from SQLite DatabaseService
+    final cached = widget.moduleId.isNotEmpty
+        ? await DatabaseService.instance.getTopics(moduleId: widget.moduleId)
+        : (widget.moduleTitle.isNotEmpty
+            ? (await DatabaseService.instance.getAllTopics())
+                .where((t) => t.moduleId == widget.moduleTitle)
+                .toList()
+            : <Topic>[]);
     if (!mounted) return;
     if (cached.isNotEmpty) {
       final clean = _deduplicateTopics(cached);
@@ -167,7 +167,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       final topicIds = _topics.map((t) => t.id).toSet();
       final topicTitles = _topics.map((t) => t.title.toLowerCase().trim()).toSet();
 
-      final logs = await LocalStudyLogStorage.loadAll();
+      final logs = await DatabaseService.instance.getStudyLogs();
       for (final log in logs) {
         final matches = (widget.moduleId.isNotEmpty && log.moduleId == widget.moduleId) ||
             (widget.moduleTitle.isNotEmpty &&
@@ -200,7 +200,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       }
 
       if (latestDate == null) {
-        final allModules = await LocalModuleStorage.loadAllModules();
+        final allModules = await DatabaseService.instance.getAllModules();
         final match = allModules.firstWhere(
           (m) =>
               (widget.moduleId.isNotEmpty && m.id == widget.moduleId) ||
@@ -279,7 +279,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
 
     // Avoid duplicate module completion logs on the same calendar day
-    final existingLogs = await LocalStudyLogStorage.loadAll();
+    final existingLogs = await DatabaseService.instance.getStudyLogs();
     final alreadyLoggedToday = existingLogs.any((l) {
       if (!l.isModuleCompleted) return false;
       final sameModule = (resolvedModuleId.isNotEmpty && l.moduleId == resolvedModuleId) ||
@@ -302,7 +302,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         timestamp: now,
         createdAt: now,
       );
-      await LocalStudyLogStorage.addLog(modLog);
+      await DatabaseService.instance.addStudyLog(modLog);
     }
   }
 
@@ -314,19 +314,19 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           .moduleId;
     }
     if (resolvedModuleId.isNotEmpty) {
-      await LocalStudyLogStorage.deleteLogForModule(
+      await DatabaseService.instance.deleteStudyLogForModule(
         moduleId: resolvedModuleId,
         type: StudyLogType.moduleCompleted.value,
       );
     }
     if (widget.moduleId.isNotEmpty && widget.moduleId != resolvedModuleId) {
-      await LocalStudyLogStorage.deleteLogForModule(
+      await DatabaseService.instance.deleteStudyLogForModule(
         moduleId: widget.moduleId,
         type: StudyLogType.moduleCompleted.value,
       );
     }
     if (widget.moduleTitle.isNotEmpty) {
-      await LocalStudyLogStorage.deleteLogForModule(
+      await DatabaseService.instance.deleteStudyLogForModule(
         moduleId: widget.moduleTitle,
         type: StudyLogType.moduleCompleted.value,
       );
@@ -350,7 +350,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
 
     if (courseId.isEmpty || moduleId.isEmpty) {
-      final all = await LocalModuleStorage.loadAllModules();
+      final all = await DatabaseService.instance.getAllModules();
       final match = all.firstWhere(
         (m) => (moduleId.isNotEmpty && m.id == moduleId) ||
                (widget.moduleTitle.isNotEmpty && m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
@@ -374,7 +374,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
     if (courseId.isEmpty) return;
     try {
-      final modules = await LocalModuleStorage.loadModules(courseId);
+      final modules = await DatabaseService.instance.getModules(courseId: courseId);
       final idx = modules.indexWhere(
         (m) => (moduleId.isNotEmpty && m.id == moduleId) ||
                (widget.moduleTitle.isNotEmpty && m.title.toLowerCase() == widget.moduleTitle.toLowerCase()),
@@ -389,7 +389,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             updatedAt: now,
           );
           modules[idx] = targetModule;
-          await LocalModuleStorage.saveModulesForCourse(courseId, modules);
+          await DatabaseService.instance.saveModules(courseId, modules);
         }
       } else {
         // Module not cached yet for this course — create and store it
@@ -404,7 +404,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           updatedAt: now,
         );
         modules.add(targetModule);
-        await LocalModuleStorage.saveModulesForCourse(courseId, modules);
+        await DatabaseService.instance.saveModules(courseId, modules);
       }
 
       // If all modules in this course are now completed, also update course to completed
@@ -448,8 +448,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       setState(() {
         _topics = merged;
       });
-      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      await LocalTopicStorage.saveTopics(key, merged);
       await _syncModuleCompletion();
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
@@ -504,8 +502,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         _topics[index] = updated;
       });
 
-      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      await LocalTopicStorage.saveTopics(key, _topics);
+      await DatabaseService.instance.updateTopic(updated);
       await _syncModuleCompletion();
 
       if (updated.isCompleted) {
@@ -521,7 +518,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           timestamp: updated.completedAt ?? DateTime.now(),
           createdAt: DateTime.now(),
         );
-        await LocalStudyLogStorage.addLog(studyLog);
+        await DatabaseService.instance.addStudyLog(studyLog);
         if (getIt.isRegistered<ProgressController>()) {
           unawaited(getIt<ProgressController>().refresh());
         }
@@ -557,17 +554,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       setState(() {
         _topics.removeAt(index);
       });
-      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      await LocalTopicStorage.saveTopics(key, _topics);
+      if (sub.id.isNotEmpty) {
+        await DatabaseService.instance.deleteTopic(sub.id);
+      }
       await _syncModuleCompletion();
       unawaited(_loadModuleStats());
-
-      if (getIt.isRegistered<DatabaseService>()) {
-        final db = getIt<DatabaseService>();
-        if (sub.id.isNotEmpty) {
-          unawaited(db.deleteTopic(sub.id));
-        }
-      }
 
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
@@ -612,8 +603,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       setState(() {
         _topics[index] = result;
       });
-      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      await LocalTopicStorage.saveTopics(key, _topics);
       await _syncModuleCompletion();
       if (getIt.isRegistered<OngoingModulesController>()) {
         await getIt<OngoingModulesController>().refresh();
@@ -655,8 +644,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       _topics.insert(index + 1, duplicated);
     });
 
-    final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-    await LocalTopicStorage.saveTopics(key, _topics);
+    await DatabaseService.instance.addTopic(duplicated);
     await _syncModuleCompletion();
 
     if (getIt.isRegistered<OngoingModulesController>()) {

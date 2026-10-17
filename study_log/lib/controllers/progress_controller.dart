@@ -5,11 +5,7 @@ import '../models/topic_revision.dart';
 import '../models/topic.dart';
 import '../models/study_log.dart';
 import '../models/user_profile.dart';
-import '../services/local_revision_storage.dart';
-import '../services/local_topic_revision_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_study_log_storage.dart';
-import '../services/local_user_profile_storage.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 
 /// Activity level for strike heatmap visualization.
@@ -163,7 +159,7 @@ class ProgressController extends ChangeNotifier {
 
     try {
       // 0. Fast local hydration: reset in-memory variables and apply cached profile
-      final cachedProfile = await LocalUserProfileStorage.loadProfile();
+      final cachedProfile = await DatabaseService.instance.getUserProfile();
       _userProfile = cachedProfile;
       _totalStudyMinutes = cachedProfile?.totalStudyMinutes ?? 0;
       _currentStreak = cachedProfile?.currentStreak ?? 0;
@@ -183,9 +179,9 @@ class ProgressController extends ChangeNotifier {
 
       // Load all historical completion events for accurate all-time total active days and max streak
       final results = await Future.wait([
-        LocalTopicStorage.loadCompletedTopicDatesSince(DateTime(2000)),
-        LocalRevisionStorage.loadRevisionEventsSince(DateTime(2000)),
-        LocalStudyLogStorage.loadAll(),
+        DatabaseService.instance.loadCompletedTopicDatesSince(DateTime(2000)),
+        DatabaseService.instance.loadRevisionEventsSince(DateTime(2000)),
+        DatabaseService.instance.getStudyLogs(),
       ]);
 
       final completedTopicDates = results[0] as List<DateTime>;
@@ -256,7 +252,7 @@ class ProgressController extends ChangeNotifier {
 
       // Fallback: If no dedicated revision event logs exist, inspect cached revisions lazily
       if (allTimeRevisionsCount == 0) {
-        final List<RevisionModule> revisions = await LocalRevisionStorage.loadAll();
+        final List<RevisionModule> revisions = await DatabaseService.instance.getRevisions();
         for (final r in revisions) {
           final int timesRevised = r.isFinished ? RevisionSchedule.maxLevel : (r.currentLevel - 1);
           if (timesRevised > 0) {
@@ -271,7 +267,7 @@ class ProgressController extends ChangeNotifier {
           }
         }
 
-        final List<TopicRevision> topicRevs = await LocalTopicRevisionStorage.loadAll();
+        final List<TopicRevision> topicRevs = await DatabaseService.instance.getTopicRevisions();
         for (final tr in topicRevs) {
           final int timesRevised = tr.isFinished ? RevisionSchedule.maxLevel : (tr.currentLevel - 1);
           if (timesRevised > 0) {
@@ -293,7 +289,7 @@ class ProgressController extends ChangeNotifier {
       // Compute streaks and highlights across all active dates
       _computeStreaksAndHighlights(today, allActiveDates);
 
-      final profile = await LocalUserProfileStorage.loadProfile();
+      final profile = await DatabaseService.instance.getUserProfile();
 
       if (allActiveDates.isEmpty && _totalStudyMinutes == 0 && profile != null) {
         // Fresh install / data cleared: restore stats from cloud profile
@@ -304,7 +300,7 @@ class ProgressController extends ChangeNotifier {
         _totalTopicsFinished = profile.totalTopicsFinished;
         _totalTopicRevisions = profile.totalTopicRevisions;
         _userProfile = profile;
-        unawaited(LocalUserProfileStorage.saveProfile(profile));
+        unawaited(DatabaseService.instance.saveUserProfile(profile));
       } else {
         DateTime? lastActive;
         if (allActiveDates.isNotEmpty) {
@@ -325,7 +321,7 @@ class ProgressController extends ChangeNotifier {
         );
         _userProfile = updatedProfile;
 
-        unawaited(LocalUserProfileStorage.saveProfile(updatedProfile));
+        unawaited(DatabaseService.instance.saveUserProfile(updatedProfile));
       }
 
       // Generate 3-month daily activities (90 days exactly)
@@ -381,7 +377,7 @@ class ProgressController extends ChangeNotifier {
     );
     _userProfile = updated;
     notifyListeners();
-    await LocalUserProfileStorage.saveProfile(updated);
+    await DatabaseService.instance.saveUserProfile(updated);
   }
 
   void _computeStreaksAndHighlights(DateTime today, Set<DateTime> allDates) {

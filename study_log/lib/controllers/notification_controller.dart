@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/notification_settings.dart';
-import '../services/local_notification_storage.dart';
+import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import '../services/service_locator.dart';
 import 'revision_controller.dart';
@@ -105,7 +105,8 @@ class NotificationController extends ChangeNotifier {
   }
 
   Future<void> _load() async {
-    _settings = await LocalNotificationStorage.loadSettings();
+    final settings = await DatabaseService.instance.getNotificationSettings();
+    _settings = settings ?? const NotificationSettings();
     _isLoading = false;
     notifyListeners();
     _scheduleDebouncedSync();
@@ -114,7 +115,7 @@ class NotificationController extends ChangeNotifier {
   Future<void> _update(NotificationSettings newSettings) async {
     _settings = newSettings;
     notifyListeners();
-    unawaited(LocalNotificationStorage.saveSettings(_settings));
+    unawaited(DatabaseService.instance.saveNotificationSettings(_settings));
     _scheduleDebouncedSync();
   }
 

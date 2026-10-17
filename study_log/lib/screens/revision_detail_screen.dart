@@ -16,11 +16,6 @@ import '../models/topic.dart';
 import '../models/revision_topic.dart';
 import '../models/module.dart';
 import '../models/study_log.dart';
-import '../services/local_revision_topic_storage.dart';
-import '../services/local_revision_storage.dart';
-import '../services/local_study_log_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_module_storage.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
@@ -110,15 +105,15 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       }
     }
     if (_cachedModuleTitle.isEmpty && revision.moduleId.isNotEmpty) {
-      final mod = await LocalModuleStorage.getModuleById(revision.moduleId);
+      final mod = await DatabaseService.instance.getModuleById(revision.moduleId);
       if (mod != null && mod.title.isNotEmpty) {
         _cachedModuleTitle = mod.title;
       }
     }
 
     // 1. Concurrently load cached revision topics and local base topics
-    final cachedRevFuture = LocalRevisionTopicStorage.loadTopicsForRevision(revision.id);
-    final localTopicsFuture = LocalTopicStorage.loadTopicsForModule(
+    final cachedRevFuture = DatabaseService.instance.getRevisionTopics(revisionId: revision.id);
+    final localTopicsFuture = _loadBaseTopicsForModule(
       moduleId: revision.moduleId,
       fallbackTitle: _moduleTitle.isNotEmpty ? _moduleTitle : null,
     );
@@ -170,7 +165,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
   /// Fetches and resolves topic names using a cache-first hierarchy:
   /// Level 0: Denormalized title in RevisionTopic (0 reads, 0ms)
-  /// Level 1: Local SQLite database (LocalTopicStorage - instant local read)
+  /// Level 1: Local SQLite database (DatabaseService - instant local read)
   Future<void> _fetchTopicNames(List<RevisionTopic> revTopics) async {
     if (revTopics.isEmpty) return;
 
@@ -186,7 +181,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
     // Level 1: Try loading module topics if base map is still empty
     if (map.isEmpty) {
-      final baseTopics = await LocalTopicStorage.loadTopicsForModule(
+      final baseTopics = await _loadBaseTopicsForModule(
         moduleId: moduleId,
         fallbackTitle: moduleTitle.isNotEmpty ? moduleTitle : null,
       );
@@ -201,15 +196,13 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         .where((id) => id.isNotEmpty && !map.containsKey(id))
         .toSet();
 
-    // Check all local buckets on disk before making any remote calls
+    // Check all topics in SQLite database before making any remote calls
     if (missingTopicIds.isNotEmpty) {
-      final allBuckets = await LocalTopicStorage.loadAllBuckets();
-      for (final list in allBuckets.values) {
-        for (final t in list) {
-          if (missingTopicIds.contains(t.id)) {
-            map[t.id] = t;
-            missingTopicIds.remove(t.id);
-          }
+      final allTopics = await DatabaseService.instance.getAllTopics();
+      for (final t in allTopics) {
+        if (missingTopicIds.contains(t.id)) {
+          map[t.id] = t;
+          missingTopicIds.remove(t.id);
         }
       }
     }
@@ -240,7 +233,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
 
     // Permanently save backfilled titles to SQLite database
     if (backfillNeeded) {
-      await LocalRevisionTopicStorage.saveTopics(widget.revision.id, updatedRevTopics);
+      await DatabaseService.instance.saveRevisionTopics(widget.revision.id, updatedRevTopics);
     }
   }
 
@@ -249,7 +242,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     final targetModuleId = revision.moduleId;
     _resolvedModuleId = targetModuleId;
 
-    var baseTopics = await LocalTopicStorage.loadTopicsForModule(
+    var baseTopics = await _loadBaseTopicsForModule(
       moduleId: targetModuleId,
       fallbackTitle: _moduleTitle.isNotEmpty ? _moduleTitle : null,
     );
@@ -274,7 +267,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
           _isLoadingTopics = false;
         });
       }
-      await LocalRevisionTopicStorage.saveTopics(revision.id, seeded);
+      await DatabaseService.instance.saveRevisionTopics(revision.id, seeded);
     } else if (mounted) {
       setState(() {
         _isLoadingTopics = false;
@@ -315,7 +308,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       _revisionTopics = updatedTopics;
     });
 
-    await LocalRevisionTopicStorage.saveTopics(widget.revision.id, updatedTopics);
+    await DatabaseService.instance.saveRevisionTopics(widget.revision.id, updatedTopics);
 
 
 
@@ -341,8 +334,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         createdAt: now,
       );
 
-      await LocalStudyLogStorage.addLog(studyLog);
-      await LocalRevisionStorage.recordRevisionEvent(now);
+      await DatabaseService.instance.addStudyLog(studyLog);
 
       if (getIt.isRegistered<OngoingModulesController>()) {
         unawaited(getIt<OngoingModulesController>().refresh());
@@ -352,7 +344,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
       }
     } else if (next == TopicStatus.notStarted) {
       // If user unchecks the topic, remove the revision log entry
-      await LocalStudyLogStorage.deleteLogForTopic(
+      await DatabaseService.instance.deleteStudyLogForTopic(
         topicId: targetTopicId,
         type: 'revisionCompleted',
       );
@@ -399,7 +391,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
           setState(() {
             _revisionTopics = resetTopics;
           });
-          await LocalRevisionTopicStorage.saveTopics(revision.id, resetTopics);
+          await DatabaseService.instance.saveRevisionTopics(revision.id, resetTopics);
 
           await _startCurrentLevel(revision, popOnComplete: true);
         },
@@ -429,8 +421,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
             timestamp: now,
             createdAt: now,
           );
-          await LocalStudyLogStorage.addLog(log);
-          await LocalRevisionStorage.recordRevisionEvent(now);
+          await DatabaseService.instance.addStudyLog(log);
 
           if (getIt.isRegistered<OngoingModulesController>()) {
             unawaited(getIt<OngoingModulesController>().refresh());
@@ -448,7 +439,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
           setState(() {
             _revisionTopics = resetTopics;
           });
-          await LocalRevisionTopicStorage.saveTopics(revision.id, resetTopics);
+          await DatabaseService.instance.saveRevisionTopics(revision.id, resetTopics);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -477,7 +468,7 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
     setState(() {
       _revisionTopics = resetTopics;
     });
-    await LocalRevisionTopicStorage.saveTopics(widget.revision.id, resetTopics);
+    await DatabaseService.instance.saveRevisionTopics(widget.revision.id, resetTopics);
 
     if (showFeedback && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -489,6 +480,22 @@ class _RevisionDetailScreenState extends State<RevisionDetailScreen> {
         ),
       );
     }
+  }
+
+  Future<List<Topic>> _loadBaseTopicsForModule({
+    required String moduleId,
+    String? fallbackTitle,
+  }) async {
+    if (moduleId.isNotEmpty) {
+      final topics = await DatabaseService.instance.getTopics(moduleId: moduleId);
+      if (topics.isNotEmpty) return topics;
+    }
+    if (fallbackTitle != null && fallbackTitle.isNotEmpty) {
+      final all = await DatabaseService.instance.getAllTopics();
+      final matched = all.where((t) => t.moduleId == fallbackTitle).toList();
+      if (matched.isNotEmpty) return matched;
+    }
+    return [];
   }
 
   static const List<String> _months = [

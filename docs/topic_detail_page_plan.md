@@ -17,16 +17,29 @@ The **Topic Details Page** serves as the central hub for learning, revising, and
 2. **Compact Topic Header**:
    - Displays topic title in a `ModuleContextPill` with course glyph and book icon.
    - Metadata row featuring last modify/revision date, total study hours, and an interactive status selector dropdown (`Not Started`, `In Progress`, `Completed`).
-3. **Full-Width Read-Only Notes Card**:
-   - Rendered in a clean themed container with `AppTheme.surface(context)` and rounded corners.
-   - Direct, distraction-free reading without edit buttons or clutter.
+3. **Seamless Borderless Notes/Description**:
+   - Clean, unboxed text directly beneath the section label with all card padding and borders removed.
+   - **Clickable URLs**: Web URLs (`http://`, `https://`, `www.`) are identified, styled in blue with an underline, and open directly in the browser on tap via native platform intent.
+   - **Double-Click to Edit**: Double-clicking on the description section opens the Topic Edit screen.
 4. **Direct Horizontal Spaced Repetition Pipeline**:
    - Real-time progression pipeline starting from initial study status to all 5 spaced repetition levels:
      $$\text{[Study Status]} \longrightarrow \text{[R1]} \longrightarrow \text{[R2]} \longrightarrow \text{[R3]} \longrightarrow \text{[R4]} \longrightarrow \text{[R5]}$$
    - **Interactive First Node**: Tapping the first node directly cycles topic status (`Study / Not Started` $\to$ `In Prog` $\to$ `Learned / Completed` $\to$ `Study`).
    - When the topic is marked **Completed**, an **"Add to Revision (R1)"** button is presented below the horizontal row.
    - When enrolled, active revision actions (**Complete R{n}**) allow immediate level advancement when due.
-5. **Streamlined Focus**:
+5. **Dynamic Session Start FAB**:
+   - Circular FAB (`Icons.play_arrow_rounded`) dynamically themed according to study progress and spaced repetition level:
+     - **Not Started**: Purple (`AppTheme.primaryColor`)
+     - **In Progress**: Vibrant Indigo (`#6366F1`)
+     - **Completed / Ready for Revision**: Emerald Green (`AppTheme.successColor`)
+     - **R1 Active**: R1 Purple (`RevisionLevelPalette.of(context, 1)`)
+     - **R2 Active**: R2 Blue (`RevisionLevelPalette.of(context, 2)`)
+     - **R3 Active**: R3 Sky / Teal (`RevisionLevelPalette.of(context, 3)`)
+     - **R4 Active**: R4 Orange (`RevisionLevelPalette.of(context, 4)`)
+     - **R5 Active**: R5 Coral Red (`RevisionLevelPalette.of(context, 5)`)
+     - **Mastered**: Emerald Green (`AppTheme.successColor`)
+   - Rebuilds reactively via `ListenableBuilder` listening to `TopicRevisionController`.
+6. **Streamlined Focus**:
    - Redundant study analytics cards and verbose session history timeline removed for a clean, distraction-free view focused on topic comprehension and spaced repetition.
 
 ---
@@ -42,20 +55,20 @@ The **Topic Details Page** serves as the central hub for learning, revising, and
 +-------------------------------------------------------------------+
 | ───────────────────────────────────────────────────────────────── |
 |                                                                   |
-| [ NOTES CARD (FULL WIDTH)                                       ] |
-| +---------------------------------------------------------------+ |
-| | Inorder traversal yields sorted sequence. Lookup is O(log n). | |
-| +---------------------------------------------------------------+ |
+| Notes/Description                                                 |
+| Inorder traversal yields sorted sequence. Lookup is O(log n).     |
+| [ 🔗 https://example.com ↗ ]                                      |
 |                                                                   |
-| [ REPETITION CARD                                               ] |
+| Repetition                                          [ R1 Active ] |
 | +---------------------------------------------------------------+ |
-| | [🔁 Repetition]                                  [ R1 Active ] | |
-| |                                                               | |
 | |  (✓) ─────── [R1] ─────── (R2) ─────── (R3) ─────── (R4) ───  | |
 | | Learned     +1d          +3d          +7d          +14d       | |
 | |                                                               | |
 | | [ ✓ Complete R1 ]                                             | |
 | +---------------------------------------------------------------+ |
+|                                                                   |
+|                                                           [ (▶) ] |
++-------------------------------------------------------------------+
 ```
 
 ---
@@ -120,7 +133,7 @@ stateDiagram-v2
   - Records a `StudyLogType.revisionCompleted` entry into [`LocalStudyLogStorage`](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/services/local_study_log_storage.dart).
   - Triggers `onRevisionUpdated: _loadTopicData` which reloads topic revision data and updates the progression pipeline.
 
-### 4.4 Status Change Synchronization (`_handleStatusChanged`)
+### 4.3 Status Change Synchronization (`_handleStatusChanged`)
 - **Trigger**: User selects a new status from the header status dropdown.
 - **Action**:
   - Updates topic entity in [`LocalTopicStorage`](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/services/local_topic_storage.dart) and SQLite database.

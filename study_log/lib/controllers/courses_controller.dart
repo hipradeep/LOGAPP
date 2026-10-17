@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/course.dart';
 import '../services/database_service.dart';
-import '../services/local_course_storage.dart';
 import '../services/service_locator.dart';
 import 'revision_controller.dart';
 

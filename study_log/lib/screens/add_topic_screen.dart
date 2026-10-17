@@ -5,7 +5,7 @@ import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/module_context_pill.dart';
 import '../widgets/study_text_fields.dart';
-import '../services/local_topic_storage.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../models/topic.dart';
 import '../controllers/ongoing_modules_controller.dart';
@@ -46,7 +46,6 @@ class AddTopicScreen extends StatefulWidget {
 class _AddTopicScreenState extends State<AddTopicScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _orderController;
 
   late String _selectedModuleTitle;
   bool _isSaving = false;
@@ -55,8 +54,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
-    _descriptionController = TextEditingController();
-    _orderController = TextEditingController();
+    _descriptionController = UrlHighlightEditingController();
     _selectedModuleTitle = widget.moduleTitle;
     _descriptionController.addListener(_onDescriptionChanged);
 
@@ -64,7 +62,6 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     if (editing != null) {
       _nameController.text = editing.title;
       _descriptionController.text = editing.description;
-      _orderController.text = '${editing.orderIndex}';
     }
   }
 
@@ -73,7 +70,6 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     _nameController.dispose();
     _descriptionController.removeListener(_onDescriptionChanged);
     _descriptionController.dispose();
-    _orderController.dispose();
     super.dispose();
   }
 
@@ -118,7 +114,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     }
 
     final description = _descriptionController.text.trim();
-    final order = int.tryParse(_orderController.text.trim()) ?? 0;
+    final order = widget.topicToEdit?.orderIndex ?? 0;
     final courseId = widget.courseId.trim();
     if (courseId.isEmpty) {
       setState(() => _isSaving = false);
@@ -148,15 +144,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
           orderIndex: order,
         );
 
-        final existing = await LocalTopicStorage.loadTopicsForModule(
-          moduleId: moduleId,
-          fallbackTitle: _selectedModuleTitle,
-        );
-        final updated = existing.map((t) => t.id == savedTopic.id ? savedTopic : t).toList();
-        final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
-        await LocalTopicStorage.saveTopics(key, updated);
-
-
+        await DatabaseService.instance.updateTopic(savedTopic);
       } else {
         final now = DateTime.now();
         final newId = 'topic_${now.millisecondsSinceEpoch}';
@@ -171,20 +159,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
           orderIndex: order,
         );
 
-        final existing = await LocalTopicStorage.loadTopicsForModule(
-          moduleId: moduleId,
-          fallbackTitle: _selectedModuleTitle,
-        );
-        final updated = existing
-            .where((t) =>
-                t.id != savedTopic.id &&
-                t.title.trim().toLowerCase() != savedTopic.title.trim().toLowerCase())
-            .toList()
-          ..add(savedTopic);
-        final key = moduleId.isNotEmpty ? moduleId : _selectedModuleTitle;
-        await LocalTopicStorage.saveTopics(key, updated);
-
-
+        await DatabaseService.instance.addTopic(savedTopic);
       }
 
       if (getIt.isRegistered<OngoingModulesController>()) {
@@ -276,19 +251,8 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                     const VGapLg(),
                     BorderlessDescriptionField(
                       controller: _descriptionController,
-                    ),
-                    const VGapLg(),
-                    UnderlineInputField(
-                      label: 'Order (Optional)',
-                      controller: _orderController,
-                      hintText: 'Enter order (e.g., 1, 2, 3)',
-                      keyboardType: TextInputType.number,
-                      fontSize: 16,
-                      suffixIcon: Icon(
-                        Icons.unfold_more_rounded,
-                        color: AppTheme.textMutedColor(context),
-                        size: 22,
-                      ),
+                      padding: EdgeInsets.zero,
+                      backgroundColor: Colors.transparent,
                     ),
                   ],
                 ),

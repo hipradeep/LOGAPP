@@ -9,14 +9,14 @@ import '../models/study_log.dart';
 import '../models/topic.dart';
 import '../models/topic_revision.dart';
 import '../services/database_service.dart';
-import '../services/local_study_log_storage.dart';
-import '../services/local_topic_storage.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
+import '../theme/revision_level_palette.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/module_context_pill.dart';
 import '../widgets/study_confirmation_dialog.dart';
+import '../widgets/study_text_fields.dart';
 import '../widgets/topic_options_sheet.dart';
 import '../widgets/topic_revision_badge.dart';
 import 'add_topic_screen.dart';
@@ -56,21 +56,21 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
   }
 
   Future<void> _loadTopicData() async {
-    // 1. Refresh topic entity from database/cache
-    try {
-      final topics = await LocalTopicStorage.loadTopicsForModule(
-        moduleId: widget.moduleId,
-        fallbackTitle: widget.moduleTitle,
-      );
-      final match = topics.where((t) => t.id == _topic.id).firstOrNull;
-      if (match != null && mounted) {
-        _topic = match;
-      }
-    } catch (_) {}
+    // 1. Refresh topic entity directly from DatabaseService
+    if (_topic.id.isNotEmpty) {
+      try {
+        final match = await DatabaseService.instance.getTopicById(_topic.id);
+        if (match != null && mounted) {
+          setState(() {
+            _topic = match;
+          });
+        }
+      } catch (_) {}
+    }
 
     // 2. Load study logs for this specific topic
     try {
-      final allLogs = await LocalStudyLogStorage.loadAll();
+      final allLogs = await DatabaseService.instance.getStudyLogs();
       final filtered = allLogs
           .where((l) => l.topicId == _topic.id)
           .toList()
@@ -86,7 +86,14 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
   Future<void> _handleStatusChanged(TopicStatus newStatus) async {
     if (newStatus == _topic.status) return;
 
+    final resolvedCourseId =
+        _topic.courseId.isNotEmpty ? _topic.courseId : widget.courseId;
+    final resolvedModuleId =
+        _topic.moduleId.isNotEmpty ? _topic.moduleId : widget.moduleId;
+
     final updated = _topic.copyWith(
+      courseId: resolvedCourseId,
+      moduleId: resolvedModuleId,
       status: newStatus,
       completedAt: newStatus == TopicStatus.completed ? DateTime.now() : null,
       clearCompletedAt: newStatus != TopicStatus.completed,
@@ -96,38 +103,28 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
       _topic = updated;
     });
 
-    final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
     try {
-      final currentTopics = await LocalTopicStorage.loadTopicsForModule(
-        moduleId: widget.moduleId,
-        fallbackTitle: widget.moduleTitle,
-      );
-      final index = currentTopics.indexWhere((t) => t.id == updated.id);
-      if (index != -1) {
-        currentTopics[index] = updated;
-        await LocalTopicStorage.saveTopics(key, currentTopics);
-      }
+      // 1. Direct SQLite database upsert & real-time stream notification
+      await DatabaseService.instance.updateTopic(updated);
 
-      if (getIt.isRegistered<DatabaseService>()) {
-        await getIt<DatabaseService>().updateTopic(updated);
-      }
-
+      // 2. Log completion if newly completed
       if (updated.isCompleted) {
         final studyLog = StudyLog(
           id: '${updated.id}_${DateTime.now().millisecondsSinceEpoch}',
           type: StudyLogType.topicCompleted,
-          courseId: widget.courseId,
+          courseId: resolvedCourseId,
           courseTitle: widget.courseTitle,
-          moduleId: widget.moduleId,
+          moduleId: resolvedModuleId,
           moduleTitle: widget.moduleTitle,
           topicId: updated.id,
           topicTitle: updated.title,
           timestamp: updated.completedAt ?? DateTime.now(),
           createdAt: DateTime.now(),
         );
-        await LocalStudyLogStorage.addLog(studyLog);
+        await DatabaseService.instance.addStudyLog(studyLog);
       }
 
+      // 4. Refresh global reactive controllers
       if (getIt.isRegistered<OngoingModulesController>()) {
         unawaited(getIt<OngoingModulesController>().refresh());
       }
@@ -205,16 +202,8 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
     );
 
     if (confirmed && mounted) {
-      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      final currentTopics = await LocalTopicStorage.loadTopicsForModule(
-        moduleId: widget.moduleId,
-        fallbackTitle: widget.moduleTitle,
-      );
-      currentTopics.removeWhere((t) => t.id == _topic.id);
-      await LocalTopicStorage.saveTopics(key, currentTopics);
-
-      if (getIt.isRegistered<DatabaseService>() && _topic.id.isNotEmpty) {
-        unawaited(getIt<DatabaseService>().deleteTopic(_topic.id));
+      if (_topic.id.isNotEmpty) {
+        await DatabaseService.instance.deleteTopic(_topic.id);
       }
       if (getIt.isRegistered<TopicRevisionController>() && _topic.id.isNotEmpty) {
         unawaited(getIt<TopicRevisionController>().deleteByTopicId(_topic.id));
@@ -261,10 +250,78 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, _) {},
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        Navigator.pop(context, _topic);
+      },
       child: Scaffold(
         backgroundColor: AppTheme.background(context),
+        floatingActionButton: getIt.isRegistered<TopicRevisionController>()
+            ? ListenableBuilder(
+                listenable: getIt<TopicRevisionController>(),
+                builder: (context, _) {
+                  final revCtrl = getIt<TopicRevisionController>();
+                  final revision = revCtrl.topicRevisionFor(_topic.id);
+                  final now = DateTime.now();
+                  final isDue = revision != null && revision.isDueAt(now);
+
+                  final Color fabColor;
+                  final String tooltip;
+                  final bool isRevision;
+
+                  if (revision != null) {
+                    isRevision = true;
+                    if (revision.isFinished) {
+                      fabColor = AppTheme.successColor;
+                      tooltip = 'Mastered (Start Revision)';
+                    } else {
+                      final colors = RevisionLevelPalette.of(context, revision.currentLevel);
+                      fabColor = colors.foreground;
+                      tooltip = isDue
+                          ? 'Start R${revision.currentLevel} (Due Today)'
+                          : 'Start R${revision.currentLevel} Revision';
+                    }
+                  } else {
+                    switch (_topic.status) {
+                      case TopicStatus.completed:
+                        fabColor = AppTheme.successColor;
+                        tooltip = 'Topic Completed (Start Revision)';
+                        isRevision = true;
+                        break;
+                      case TopicStatus.inProgress:
+                        fabColor = const Color(0xFF6366F1);
+                        tooltip = 'Continue Study Session';
+                        isRevision = false;
+                        break;
+                      case TopicStatus.notStarted:
+                        fabColor = AppTheme.primaryColor;
+                        tooltip = 'Start Study Session';
+                        isRevision = false;
+                        break;
+                    }
+                  }
+
+                  return FloatingActionButton(
+                    onPressed: () => _handleStartStudy(isRevision: isRevision),
+                    backgroundColor: fabColor,
+                    foregroundColor: Colors.white,
+                    elevation: 4,
+                    shape: const CircleBorder(),
+                    tooltip: tooltip,
+                    child: const Icon(Icons.play_arrow_rounded, size: 28),
+                  );
+                },
+              )
+            : FloatingActionButton(
+                onPressed: () => _handleStartStudy(isRevision: _topic.isCompleted),
+                backgroundColor: _topic.isCompleted ? AppTheme.successColor : AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shape: const CircleBorder(),
+                tooltip: _topic.isCompleted ? 'Start Revision Session' : 'Start Study Session',
+                child: const Icon(Icons.play_arrow_rounded, size: 28),
+              ),
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -301,12 +358,13 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(16.0, 4.0, 16.0, bottomSafe + 32),
+                  padding: EdgeInsets.fromLTRB(16.0, 4.0, 16.0, bottomSafe + 84),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _TopicNotesCard(
                         description: _topic.description,
+                        onDoubleTap: _handleEditFullTopic,
                       ),
                       const VGapMd(),
                       _TopicRevisionLadderCard(
@@ -565,98 +623,70 @@ class _TopicRevisionLadderCard extends StatelessWidget {
         final now = DateTime.now();
         final isDue = revision != null && revision.isDueAt(now);
 
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDue
-                  ? AppTheme.errorColor.withValues(alpha: 0.35)
-                  : AppTheme.borderColor(context),
-              width: isDue ? 1.5 : 1.0,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                children: [
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Outer Section Header Row (Label without icon + Status Badge)
+            Row(
+              children: [
+                Text(
+                  'Repetition',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+                if (revision != null) ...[
+                  const Spacer(),
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppTheme.pastelIndigo(context),
+                      color: revision.isFinished
+                          ? AppTheme.successColor.withValues(alpha: 0.12)
+                          : (isDue
+                              ? AppTheme.errorColor.withValues(alpha: 0.12)
+                              : AppTheme.pastelIndigo(context)),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(
-                      Icons.repeat_rounded,
-                      size: 16,
-                      color: AppTheme.pastelIndigoText(context),
-                    ),
-                  ),
-                  const HGapSm(),
-                  Text(
-                    'Repetition',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimaryColor(context),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (revision != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
+                    child: Text(
+                      revision.isFinished
+                          ? 'Mastered'
+                          : (isDue ? 'R${revision.currentLevel} Due' : 'R${revision.currentLevel} Active'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                         color: revision.isFinished
-                            ? AppTheme.successColor.withValues(alpha: 0.12)
-                            : (isDue
-                                ? AppTheme.errorColor.withValues(alpha: 0.12)
-                                : AppTheme.pastelIndigo(context)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        revision.isFinished
-                            ? 'Mastered'
-                            : (isDue ? 'R${revision.currentLevel} Due' : 'R${revision.currentLevel} Active'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: revision.isFinished
-                              ? AppTheme.successColor
-                              : (isDue ? AppTheme.errorColor : AppTheme.pastelIndigoText(context)),
-                        ),
+                            ? AppTheme.successColor
+                            : (isDue ? AppTheme.errorColor : AppTheme.pastelIndigoText(context)),
                       ),
                     ),
-                  ] else ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceVariant(context),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.borderColor(context)),
-                      ),
-                      child: Text(
-                        topic.status == TopicStatus.completed ? 'Ready for R1' : 'Study Phase',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textSecondaryColor(context),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
+              ],
+            ),
+            const VGapSm(),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.surface(context),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDue
+                      ? AppTheme.errorColor.withValues(alpha: 0.35)
+                      : AppTheme.borderColor(context),
+                  width: isDue ? 1.5 : 1.0,
+                ),
               ),
-              const VGapMd(),
-
-              // Direct Horizontal Ladder: (Study Status) -> R1 -> R2 -> R3 -> R4 -> R5
-              _HorizontalPipeline(
-                topicStatus: topic.status,
-                revision: revision,
-                onStatusChanged: onStatusChanged,
-              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Direct Horizontal Ladder: (Study Status) -> R1 -> R2 -> R3 -> R4 -> R5
+                  _HorizontalPipeline(
+                    topicStatus: topic.status,
+                    revision: revision,
+                    onStatusChanged: onStatusChanged,
+                  ),
 
               // Bottom Actions Row
               if (revision == null) ...[
@@ -753,12 +783,15 @@ class _TopicRevisionLadderCard extends StatelessWidget {
                             color: AppTheme.textSecondaryColor(context),
                           ),
                           const HGapXs(),
-                          Text(
-                            'Mark topic as completed to continue revision',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.textSecondaryColor(context),
+                          Flexible(
+                            child: Text(
+                              'Mark topic as completed to continue revision',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textSecondaryColor(context),
+                              ),
                             ),
                           ),
                         ],
@@ -782,14 +815,17 @@ class _TopicRevisionLadderCard extends StatelessWidget {
                             color: AppTheme.textSecondaryColor(context),
                           ),
                           const HGapXs(),
-                          Text(
-                            revision.daysUntilDue(now) == 1
-                                ? 'R${revision.currentLevel} unlocks tomorrow (${DateFormat('d MMM').format(revision.nextRevisionAt)})'
-                                : 'R${revision.currentLevel} unlocks in ${revision.daysUntilDue(now)} days (${DateFormat('d MMM').format(revision.nextRevisionAt)})',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.textSecondaryColor(context),
+                          Flexible(
+                            child: Text(
+                              revision.daysUntilDue(now) == 1
+                                  ? 'R${revision.currentLevel} unlocks tomorrow (${DateFormat('d MMM').format(revision.nextRevisionAt)})'
+                                  : 'R${revision.currentLevel} unlocks in ${revision.daysUntilDue(now)} days (${DateFormat('d MMM').format(revision.nextRevisionAt)})',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textSecondaryColor(context),
+                              ),
                             ),
                           ),
                         ],
@@ -824,9 +860,11 @@ class _TopicRevisionLadderCard extends StatelessWidget {
               ],
             ],
           ),
-        );
-      },
+        ),
+      ],
     );
+  },
+);
   }
 
   void _enrollTopic(BuildContext context, TopicRevisionController controller) async {
@@ -1104,66 +1142,129 @@ class _HorizontalPipeline extends StatelessWidget {
 
 class _TopicNotesCard extends StatelessWidget {
   final String description;
+  final VoidCallback? onDoubleTap;
 
   const _TopicNotesCard({
     required this.description,
+    this.onDoubleTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final trimmed = description.trim();
     final hasNotes = trimmed.isNotEmpty;
+    final urls = UrlHighlightEditingController.extractUrls(trimmed);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onDoubleTap: onDoubleTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+        Text(
+          'Notes/Description',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimaryColor(context),
+          ),
+        ),
+        const VGapSm(),
+        hasNotes
+            ? Text.rich(
+                TextSpan(
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                  children: UrlHighlightEditingController.buildUrlSpans(
+                    text: trimmed,
+                    defaultStyle: TextStyle(
+                      fontSize: 15,
+                      height: 1.5,
+                      color: AppTheme.textPrimaryColor(context),
+                    ),
+                    urlStyle: const TextStyle(
+                      fontSize: 15,
+                      height: 1.5,
+                      color: Color(0xFF2196F3),
+                      decoration: TextDecoration.underline,
+                      decorationColor: Color(0xFF2196F3),
+                    ),
+                    onUrlTap: (u) => UrlLauncherHelper.openUrl(u, context: context),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  size: 16,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-              const HGapSm(),
-              Text(
-                'Notes/Description',
+              )
+            : Text(
+                'No notes added yet.',
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
+                  fontSize: 15,
+                  height: 1.5,
+                  fontStyle: FontStyle.italic,
+                  color: AppTheme.textMutedColor(context),
                 ),
               ),
+        if (urls.isNotEmpty) ...[
+          const VGapSm(),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final u in urls)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => UrlLauncherHelper.openUrl(u, context: context),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2196F3).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF2196F3).withValues(alpha: 0.3),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.link_rounded,
+                            size: 15,
+                            color: Color(0xFF2196F3),
+                          ),
+                          const HGapXs(),
+                          Flexible(
+                            child: Text(
+                              u,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2196F3),
+                                decoration: TextDecoration.underline,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const HGapXs(),
+                          const Icon(
+                            Icons.open_in_new_rounded,
+                            size: 13,
+                            color: Color(0xFF2196F3),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          const VGapSm(),
-          Text(
-            hasNotes ? trimmed : 'No notes added yet.',
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.45,
-              fontStyle: hasNotes ? FontStyle.normal : FontStyle.italic,
-              color: hasNotes
-                  ? AppTheme.textSecondaryColor(context)
-                  : AppTheme.textMutedColor(context),
-            ),
-          ),
         ],
-      ),
+      ],
+    ),
     );
   }
 }

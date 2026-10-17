@@ -18,7 +18,7 @@ import '../controllers/topic_revision_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
-import '../services/local_topic_storage.dart';
+import '../services/database_service.dart';
 import 'session_setup_screen.dart';
 import 'topic_detail_screen.dart';
 
@@ -59,8 +59,8 @@ enum RevisionScope {
 /// - Unified single stream: All due topic & module revisions appear together in chronological order
 /// - Combined horizontal level ladder (All, R1..R5, Finished) with aggregated count badges
 /// - Lightweight segmented type filter: [ All (N) ] [ Topics (N) ] [ Modules (N) ]
-/// - Urgent scope filter pills: [ All ] [ Due Today (N) ] [ Upcoming (N) ]
-/// - Section header showing active category with count and sort dropdown (Due Date, Level, Name)
+/// - Section header showing active category with count, sort dropdown (Due Date, Level, Name), and filter action
+/// - Scope filter modal bottom sheet: [ All, Due today, Upcoming, Finished ] accessed via the tune filter button
 /// - Stream group headers distinguishing Today's Revisions from Upcoming items
 /// - Dedicated [TopicRevisionCard] and [_RevisionItemCard] with type badges and quick actions
 class RevisionScreen extends StatefulWidget {
@@ -136,10 +136,10 @@ class _RevisionScreenState extends State<RevisionScreen> {
 
     Topic? topic;
     try {
-      final topics = await LocalTopicStorage.loadTopicsForModule(
-        moduleId: topicRev.moduleId,
-        fallbackTitle: moduleTitle,
-      );
+      final db = getIt.isRegistered<DatabaseService>()
+          ? getIt<DatabaseService>()
+          : DatabaseService.instance;
+      final topics = await db.getTopics(moduleId: topicRev.moduleId);
       topic = topics.where((t) => t.id == topicRev.topicId).firstOrNull;
     } catch (_) {}
 
@@ -256,6 +256,22 @@ class _RevisionScreenState extends State<RevisionScreen> {
     if (_scope != scope) {
       setState(() => _scope = scope);
     }
+  }
+
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<RevisionScope>(
+      context: context,
+      backgroundColor: AppTheme.surface(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _RevisionFilterSheet(
+        currentScope: _scope,
+        onSelectScope: (scope) => Navigator.pop(ctx, scope),
+      ),
+    );
+    if (result == null || !mounted) return;
+    _handleScopeChanged(result);
   }
 
   void _handleSortChanged(RevisionSortMode mode) {
@@ -544,15 +560,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
           onSelected: _handleLevelSelected,
         ),
         const VGapXs(),
-        if (_levelFilter != 6) ...[
-          _RevisionScopeFilterBar(
-            selectedScope: _scope,
-            allCount: state.activeTotal,
-            dueTodayCount: state.dueTodayCount,
-            upcomingCount: state.upcomingCount,
-            onSelected: _handleScopeChanged,
-          ),
-        ],
         _RevisionSectionHeader(
           typeFilter: _typeFilter,
           title: sectionTitle,
@@ -561,8 +568,10 @@ class _RevisionScreenState extends State<RevisionScreen> {
           topicsCount: state.activeTopicsCount,
           modulesCount: state.activeModulesCount,
           sortMode: _sortMode,
+          scope: _scope,
           onTypeChanged: _handleTypeFilterChanged,
           onSortChanged: _handleSortChanged,
+          onFilterPressed: _openFilterSheet,
         ),
         Expanded(
           child: isInitialLoading
@@ -959,7 +968,7 @@ class _FinishedTabCard extends StatelessWidget {
   }
 }
 
-/// Section header row: Left type dropdown (All / Topics / Modules) + count badge, Right sort dropdown
+/// Section header row: Left type dropdown (All / Topics / Modules) + count badge, Right sort dropdown + filter icon
 class _RevisionSectionHeader extends StatelessWidget {
   final RevisionTypeFilter typeFilter;
   final String title;
@@ -968,8 +977,10 @@ class _RevisionSectionHeader extends StatelessWidget {
   final int topicsCount;
   final int modulesCount;
   final RevisionSortMode sortMode;
+  final RevisionScope scope;
   final ValueChanged<RevisionTypeFilter> onTypeChanged;
   final ValueChanged<RevisionSortMode> onSortChanged;
+  final VoidCallback onFilterPressed;
 
   const _RevisionSectionHeader({
     required this.typeFilter,
@@ -979,8 +990,10 @@ class _RevisionSectionHeader extends StatelessWidget {
     required this.topicsCount,
     required this.modulesCount,
     required this.sortMode,
+    required this.scope,
     required this.onTypeChanged,
     required this.onSortChanged,
+    required this.onFilterPressed,
   });
 
   @override
@@ -1071,9 +1084,10 @@ class _RevisionSectionHeader extends StatelessWidget {
             position: PopupMenuPosition.under,
             color: AppTheme.surface(context),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
             ),
-            elevation: 6,
+            elevation: 8,
+            shadowColor: AppTheme.shadowColor(context),
             itemBuilder: (ctx) => [
               for (final mode in RevisionSortMode.values)
                 PopupMenuItem<RevisionSortMode>(
@@ -1091,34 +1105,55 @@ class _RevisionSectionHeader extends StatelessWidget {
                   ),
                 ),
             ],
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceVariant(context),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppTheme.borderColor(context),
-                  width: 0.8,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    sortMode.label,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                  const HGapXs(),
-                  Icon(
-                    Icons.keyboard_arrow_down_rounded,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  sortMode.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.textSecondaryColor(context),
-                    size: 18,
                   ),
-                ],
+                ),
+                const HGapXs(),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.textSecondaryColor(context),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+          const HGapSm(),
+          Material(
+            color: scope != RevisionScope.all
+                ? AppTheme.pastelIndigo(context)
+                : AppTheme.surfaceVariant(context),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onFilterPressed,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: scope != RevisionScope.all
+                        ? AppTheme.pastelIndigoBorder(context)
+                        : AppTheme.borderColor(context),
+                    width: 0.8,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: scope != RevisionScope.all
+                      ? AppTheme.pastelIndigoText(context)
+                      : AppTheme.textSecondaryColor(context),
+                  size: 18,
+                ),
               ),
             ),
           ),
@@ -1197,161 +1232,87 @@ class _TypeMenuItem extends StatelessWidget {
   }
 }
 
-/// Scope filter bar for the revision stream: [ All ] [ Due Today (X) ] [ Upcoming (Y) ]
-class _RevisionScopeFilterBar extends StatelessWidget {
-  final RevisionScope selectedScope;
-  final int allCount;
-  final int dueTodayCount;
-  final int upcomingCount;
-  final ValueChanged<RevisionScope> onSelected;
+/// Modal bottom sheet for filtering revisions by scope (All, Due today, Upcoming, Finished).
+class _RevisionFilterSheet extends StatelessWidget {
+  final RevisionScope currentScope;
+  final ValueChanged<RevisionScope> onSelectScope;
 
-  const _RevisionScopeFilterBar({
-    required this.selectedScope,
-    required this.allCount,
-    required this.dueTodayCount,
-    required this.upcomingCount,
-    required this.onSelected,
+  const _RevisionFilterSheet({
+    required this.currentScope,
+    required this.onSelectScope,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-      child: Container(
-        height: 36,
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceVariant(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppTheme.borderColor(context),
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ScopeFilterSegment(
-                title: 'All',
-                count: allCount,
-                isSelected: selectedScope == RevisionScope.all,
-                onTap: () => onSelected(RevisionScope.all),
-              ),
-            ),
-            const HGapXs(),
-            Expanded(
-              child: _ScopeFilterSegment(
-                title: 'Due Today',
-                count: dueTodayCount,
-                isUrgent: dueTodayCount > 0,
-                isSelected: selectedScope == RevisionScope.dueToday,
-                onTap: () => onSelected(RevisionScope.dueToday),
-              ),
-            ),
-            const HGapXs(),
-            Expanded(
-              child: _ScopeFilterSegment(
-                title: 'Upcoming',
-                count: upcomingCount,
-                isSelected: selectedScope == RevisionScope.upcoming,
-                onTap: () => onSelected(RevisionScope.upcoming),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  static IconData scopeIconFor(RevisionScope scope) {
+    switch (scope) {
+      case RevisionScope.all:
+        return Icons.table_chart_outlined;
+      case RevisionScope.dueToday:
+        return Icons.today_rounded;
+      case RevisionScope.upcoming:
+        return Icons.schedule_rounded;
+      case RevisionScope.finished:
+        return Icons.check_circle_outline_rounded;
+    }
   }
-}
-
-class _ScopeFilterSegment extends StatelessWidget {
-  final String title;
-  final int count;
-  final bool isSelected;
-  final bool isUrgent;
-  final VoidCallback onTap;
-
-  const _ScopeFilterSegment({
-    required this.title,
-    required this.count,
-    required this.isSelected,
-    this.isUrgent = false,
-    required this.onTap,
-  });
 
   @override
   Widget build(BuildContext context) {
-    final effectiveIsUrgent = isUrgent && isSelected;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.surface(context) : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppTheme.shadowColor(context),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1.5),
-                  ),
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected
-                    ? (effectiveIsUrgent
-                        ? AppTheme.errorColor
-                        : AppTheme.textPrimaryColor(context))
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const VGapSm(),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppTheme.borderColor(context),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const VGapMd(),
+          Text(
+            'Filter revisions',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimaryColor(context),
+            ),
+          ),
+          const VGapSm(),
+          for (final scope in RevisionScope.values)
+            ListTile(
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              onTap: () => onSelectScope(scope),
+              leading: Icon(
+                scopeIconFor(scope),
+                color: scope == currentScope
+                    ? AppTheme.primaryColor
                     : AppTheme.textSecondaryColor(context),
+                size: 20,
               ),
-            ),
-            const HGapXs(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 1),
-              decoration: BoxDecoration(
-                color: effectiveIsUrgent
-                    ? AppTheme.errorColor.withValues(alpha: 0.15)
-                    : (isSelected
-                        ? AppTheme.pastelIndigo(context)
-                        : AppTheme.surface(context)),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: effectiveIsUrgent
-                      ? AppTheme.errorColor.withValues(alpha: 0.35)
-                      : (isSelected
-                          ? AppTheme.pastelIndigoBorder(context)
-                          : AppTheme.borderColor(context)),
-                  width: 0.8,
-                ),
-              ),
-              child: Text(
-                '$count',
+              title: Text(
+                scope.label,
                 style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: effectiveIsUrgent
-                      ? AppTheme.errorColor
-                      : (isSelected
-                          ? AppTheme.pastelIndigoText(context)
-                          : AppTheme.textSecondaryColor(context)),
+                  fontSize: 14,
+                  fontWeight:
+                      scope == currentScope ? FontWeight.bold : FontWeight.w500,
+                  color: scope == currentScope
+                      ? AppTheme.primaryColor
+                      : AppTheme.textPrimaryColor(context),
                 ),
               ),
+              trailing: scope == currentScope
+                  ? const Icon(
+                      Icons.check_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 18,
+                    )
+                  : null,
             ),
-          ],
-        ),
+          const VGapSm(),
+        ],
       ),
     );
   }
@@ -1565,17 +1526,6 @@ class _RevisionItemCard extends StatelessWidget {
         radius: 10,
       ),
       title: _moduleTitleFor(revision),
-      titleBadge: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const _ModuleTypeBadge(),
-          const HGapXs(),
-          _RevisionLevelPill(
-            level: revision.currentLevel,
-            isFinished: revision.isFinished,
-          ),
-        ],
-      ),
       courseName: _courseFor(revision),
       moduleName: _topicCountLabel(topicCount, revision),
       bottom: Row(
@@ -1600,89 +1550,53 @@ class _RevisionItemCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (!revision.isFinished) ...[
-            if (onQuickComplete != null && isDue) ...[
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onQuickComplete,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.successColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.successColor.withValues(alpha: 0.3),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.check_rounded,
-                          size: 13,
-                          color: AppTheme.successColor,
-                        ),
-                        const HGapXs(),
-                        Text(
-                          'Complete',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.successColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const HGapXs(),
-            ],
+          if (!revision.isFinished && onQuickComplete != null && isDue) ...[
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: onTap,
+                onTap: onQuickComplete,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: isDue
-                        ? AppTheme.primaryColor
-                        : AppTheme.pastelBlue(context),
+                    color: AppTheme.successColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.successColor.withValues(alpha: 0.3),
+                      width: 0.8,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Open',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: isDue
-                              ? Colors.white
-                              : AppTheme.pastelBlueText(context),
-                        ),
+                      const Icon(
+                        Icons.check_rounded,
+                        size: 13,
+                        color: AppTheme.successColor,
                       ),
                       const HGapXs(),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 13,
-                        color: isDue
-                            ? Colors.white
-                            : AppTheme.pastelBlueText(context),
+                      Text(
+                        'Complete',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.successColor,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
+            const HGapXs(),
           ],
+          const _ModuleTypeBadge(),
+          const HGapXs(),
+          _RevisionLevelPill(
+            level: revision.currentLevel,
+            isFinished: revision.isFinished,
+          ),
         ],
       ),
       onTap: onTap,

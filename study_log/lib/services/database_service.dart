@@ -557,6 +557,18 @@ class DatabaseService {
     return maps.map((m) => Topic.fromMap(m)).toList();
   }
 
+  Future<Topic?> getTopicById(String id) async {
+    final db = await database;
+    final maps = await db.query(
+      'topics',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Topic.fromMap(maps.first);
+  }
+
   Future<void> addTopic(Topic topic) async {
     final db = await database;
     await db.insert(
@@ -570,12 +582,19 @@ class DatabaseService {
 
   Future<void> updateTopic(Topic topic) async {
     final db = await database;
-    await db.update(
+    final count = await db.update(
       'topics',
       topic.toMap(),
       where: 'id = ?',
       whereArgs: [topic.id],
     );
+    if (count == 0) {
+      await db.insert(
+        'topics',
+        topic.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
     _getTopicController(topic.moduleId)
         .add(await getTopics(moduleId: topic.moduleId));
   }

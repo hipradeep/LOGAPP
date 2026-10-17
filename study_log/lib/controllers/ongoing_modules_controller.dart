@@ -4,11 +4,6 @@ import '../models/course.dart';
 import '../models/module.dart';
 import '../models/topic.dart';
 import '../models/study_log.dart';
-import '../services/local_course_storage.dart';
-import '../services/local_module_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_revision_storage.dart';
-import '../services/local_study_log_storage.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
@@ -166,9 +161,9 @@ class OngoingModulesController extends ChangeNotifier {
 
     try {
       List<Course> courses = _coursesController.courses;
-      // Fallback: If CoursesController hasn't hydrated yet, read directly from local disk cache
+      // Fallback: If CoursesController hasn't hydrated yet, read directly from SQLite
       if (courses.isEmpty) {
-        courses = await LocalCourseStorage.loadCourses();
+        courses = await _dbService.getCourses();
       }
       // Filter out archived courses; completed courses are still tracked for
       // overall course completion, progress rollups, and statistics.
@@ -177,11 +172,27 @@ class OngoingModulesController extends ChangeNotifier {
         return st != 'archived';
       }).toList();
 
-      // Read the topic cache once per refresh instead of once per module.
-      final topicBuckets = await LocalTopicStorage.loadAllBuckets();
+      // Read all topics once per refresh instead of once per module.
+      final allTopics = await _dbService.getAllTopics();
+      final Map<String, List<Topic>> topicBuckets = {};
+      for (final t in allTopics) {
+        if (t.moduleId.isNotEmpty) {
+          topicBuckets.putIfAbsent(t.moduleId, () => []).add(t);
+        }
+      }
 
-      // Read all cached modules in 1 pass from local disk
-      final allCachedModules = await LocalModuleStorage.loadAllModules();
+      List<Topic> resolveTopics(String modId, String? fallbackTitle) {
+        if (modId.isNotEmpty && topicBuckets.containsKey(modId)) {
+          return topicBuckets[modId]!;
+        }
+        if (fallbackTitle != null && fallbackTitle.isNotEmpty && topicBuckets.containsKey(fallbackTitle)) {
+          return topicBuckets[fallbackTitle]!;
+        }
+        return const [];
+      }
+
+      // Read all cached modules in 1 pass from SQLite
+      final allCachedModules = await _dbService.getAllModules();
       final Map<String, List<Module>> modulesByCourse = {};
       _modulesById.clear();
       for (final m in allCachedModules) {
@@ -203,14 +214,14 @@ class OngoingModulesController extends ChangeNotifier {
                 for (final m in fetched) {
                   if (m.id.isNotEmpty) _modulesById[m.id] = m;
                 }
-                await LocalModuleStorage.saveModulesForCourse(c.id, fetched);
+                await _dbService.saveModules(c.id, fetched);
               }
             } catch (_) {}
           }),
         );
       }
 
-      // Check which modules have no cached topics in local disk, and fetch from database
+      // Check which modules have no cached topics, and fetch from database
       final allModulesList = <Module>[];
       for (final course in nonArchivedCourses) {
         final mods = modulesByCourse[course.id] ?? [];
@@ -221,11 +232,7 @@ class OngoingModulesController extends ChangeNotifier {
       }
 
       final modulesMissingTopics = allModulesList.where((m) {
-        final local = LocalTopicStorage.resolveForModule(
-          topicBuckets,
-          moduleId: m.id,
-          fallbackTitle: m.title,
-        );
+        final local = resolveTopics(m.id, m.title);
         return local.isEmpty && m.id.isNotEmpty;
       }).toList();
 
@@ -239,7 +246,6 @@ class OngoingModulesController extends ChangeNotifier {
                 if (m.title.isNotEmpty) {
                   topicBuckets[m.title] = remoteTopics;
                 }
-                await LocalTopicStorage.saveTopics(m.id, remoteTopics);
               }
             } catch (_) {}
           }),
@@ -247,7 +253,7 @@ class OngoingModulesController extends ChangeNotifier {
       }
 
       final Set<String> revisionModuleIds = {};
-      final cachedRevs = await LocalRevisionStorage.loadAll();
+      final cachedRevs = await _dbService.getRevisions();
       for (final r in cachedRevs) {
         if (r.moduleId.isNotEmpty) revisionModuleIds.add(r.moduleId);
       }
@@ -276,11 +282,7 @@ class OngoingModulesController extends ChangeNotifier {
 
         // 3. For each real module, compute its progress and status from actual topics
         for (final module in modules) {
-          final topics = LocalTopicStorage.resolveForModule(
-            topicBuckets,
-            moduleId: module.id,
-            fallbackTitle: module.title,
-          );
+          final topics = resolveTopics(module.id, module.title);
           topicCounts[module.id] = topics.length;
           int moduleCompleted = 0;
           totalTopics += topics.length;
@@ -385,7 +387,7 @@ class OngoingModulesController extends ChangeNotifier {
       }
 
       // Include study logs in streak tracking and today's activity
-      final studyLogs = await LocalStudyLogStorage.loadAll();
+      final studyLogs = await _dbService.getStudyLogs();
       for (final log in studyLogs) {
         completionDays.add(_dayOnly(log.timestamp));
         if (_isSameDay(log.timestamp, DateTime.now())) {
@@ -479,10 +481,10 @@ class OngoingModulesController extends ChangeNotifier {
   /// Deletes a module permanently from SQLite local database.
   Future<void> deleteModule(OngoingModuleItem item) async {
     try {
-      // 1. Remove from local modules for this course
-      final cached = await LocalModuleStorage.loadModules(item.course.id);
+      // 1. Remove from modules for this course
+      final cached = await _dbService.getModules(courseId: item.course.id);
       final updated = cached.where((s) => s.id != item.module.id && s.title != item.module.title).toList();
-      await LocalModuleStorage.saveModulesForCourse(item.course.id, updated);
+      await _dbService.saveModules(item.course.id, updated);
 
       // 2. Remove from database if available
       if (item.module.id.isNotEmpty) {

@@ -62,6 +62,23 @@ class MainActivity : FlutterActivity() {
                         result.error("SHARE_ERROR", e.localizedMessage ?: "Failed to open share", null)
                     }
                 }
+                "openUrl" -> {
+                    val rawUrl = call.argument<String>("url") ?: ""
+                    try {
+                        val formattedUrl = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+                            rawUrl
+                        } else {
+                            "https://$rawUrl"
+                        }
+                        val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(formattedUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(browserIntent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("URL_ERROR", e.localizedMessage ?: "Failed to open URL", null)
+                    }
+                }
                 else -> {
                     result.notImplemented()
                 }

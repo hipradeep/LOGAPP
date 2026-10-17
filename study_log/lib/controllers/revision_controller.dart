@@ -5,12 +5,6 @@ import '../models/revision.dart';
 import '../models/module.dart';
 import '../models/study_log.dart';
 import '../services/database_service.dart';
-import '../services/local_revision_storage.dart';
-import '../services/local_study_log_storage.dart';
-import '../services/local_module_storage.dart';
-import '../services/local_course_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_revision_topic_storage.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 import 'ongoing_modules_controller.dart';
@@ -145,8 +139,7 @@ class RevisionController extends ChangeNotifier {
 
     final advanced = current.advance(now);
     _revisions = _sorted(List<Revision>.of(_revisions)..[index] = advanced);
-    await LocalRevisionStorage.saveAll(_revisions);
-    await LocalRevisionStorage.recordRevisionEvent(now);
+    await _dbService.saveRevisions(_revisions);
 
     final courseTitle = _coursesController.getCourseById(current.courseId)?.title ?? '';
     final moduleTitle = _ongoingController.moduleTitleFor(current.moduleId);
@@ -162,7 +155,7 @@ class RevisionController extends ChangeNotifier {
       timestamp: now,
       createdAt: now,
     );
-    await LocalStudyLogStorage.addLog(log);
+    await DatabaseService.instance.addStudyLog(log);
     if (getIt.isRegistered<ProgressController>()) {
       unawaited(getIt<ProgressController>().refresh());
     }
@@ -185,7 +178,7 @@ class RevisionController extends ChangeNotifier {
       updatedAt: now,
     );
     _revisions = _sorted(List<Revision>.of(_revisions)..[index] = reset);
-    await LocalRevisionStorage.saveAll(_revisions);
+    await _dbService.saveRevisions(_revisions);
     notifyListeners();
     await _pushToDatabase(reset, isNew: false);
   }
@@ -212,7 +205,7 @@ class RevisionController extends ChangeNotifier {
   }
 
   Future<void> _load() async {
-    final cached = await LocalRevisionStorage.loadAll();
+    final cached = await _dbService.getRevisions();
     if (_revisions.isEmpty && cached.isNotEmpty) {
       _revisions = _sorted(cached);
       _isLoading = false;
@@ -299,21 +292,7 @@ class RevisionController extends ChangeNotifier {
       return _revisions[existingIndex];
     }
 
-    // 2. Check cached storage
-    final cached = await LocalRevisionStorage.loadAll();
-    final cachedIndex = cached.indexWhere(
-      (r) => moduleId.isNotEmpty && r.moduleId == moduleId,
-    );
-    if (cachedIndex != -1) {
-      final existingRev = cached[cachedIndex];
-      if (!_revisions.any((r) => r.id == existingRev.id)) {
-        _revisions = _sorted(List<Revision>.of(_revisions)..add(existingRev));
-        notifyListeners();
-      }
-      return existingRev;
-    }
-
-    // 3. Check database
+    // 2. Check database
     try {
       final dbRevisions = await _dbService.getRevisions();
       final existingInDb = dbRevisions.where((r) => r.moduleId == moduleId).toList();
@@ -386,7 +365,7 @@ class RevisionController extends ChangeNotifier {
 
     // 2. Clean up revision topics belonging strictly to this revision
     try {
-      await LocalRevisionTopicStorage.deleteTopicsForRevision(revisionId);
+      await _dbService.saveRevisionTopics(revisionId, []);
     } catch (e) {
       debugPrint('Error cleaning up revision topics: $e');
     }

@@ -52,16 +52,6 @@ class TopicRevisionCard extends StatelessWidget {
         radius: 10,
       ),
       title: revision.title,
-      titleBadge: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showTypeBadge) ...[
-            const _TopicTypeBadge(),
-            const HGapXs(),
-          ],
-          TopicRevisionBadge(revision: revision),
-        ],
-      ),
       courseName: courseTitleFor(revision),
       moduleName: moduleTitleFor(revision),
       bottom: Row(
@@ -86,89 +76,51 @@ class TopicRevisionCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (!revision.isFinished) ...[
-            if (onQuickComplete != null && isDue) ...[
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onQuickComplete,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.successColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.successColor.withValues(alpha: 0.3),
-                        width: 0.8,
-                      ),
+          if (!revision.isFinished && onQuickComplete != null && isDue) ...[
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onQuickComplete,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.successColor.withValues(alpha: 0.3),
+                      width: 0.8,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.check_rounded,
-                          size: 13,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_rounded,
+                        size: 13,
+                        color: AppTheme.successColor,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        'Complete',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
                           color: AppTheme.successColor,
                         ),
-                        const SizedBox(width: 3),
-                        Text(
-                          'Complete',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.successColor,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const HGapXs(),
-            ],
-            if (onRevise != null) ...[
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onRevise,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: isDue
-                          ? AppTheme.primaryColor
-                          : AppTheme.pastelIndigo(context),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.play_arrow_rounded,
-                          size: 13,
-                          color: isDue
-                              ? Colors.white
-                              : AppTheme.pastelIndigoText(context),
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          'Revise',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isDue
-                                ? Colors.white
-                                : AppTheme.pastelIndigoText(context),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
+            const HGapXs(),
           ],
+          if (showTypeBadge) ...[
+            const _TopicTypeBadge(),
+            const HGapXs(),
+          ],
+          TopicRevisionBadge(revision: revision),
         ],
       ),
       onTap: onTap,

@@ -246,7 +246,6 @@ class TopicOptionsSheet extends StatelessWidget {
           SheetActionRow(
             icon: Icons.replay_rounded,
             title: 'Add to Revision',
-            subtitle: 'Start spaced repetition (R1 → R5) for this topic',
             onTap: () => Navigator.pop(context, TopicOptionAction.addToRevision),
           ),
         ] else ...[
@@ -259,13 +258,11 @@ class TopicOptionsSheet extends StatelessWidget {
           SheetActionRow(
             icon: Icons.restart_alt_rounded,
             title: 'Reset Revision Ladder',
-            subtitle: 'Restart spaced repetition back at R1',
             onTap: () => Navigator.pop(context, TopicOptionAction.resetRevision),
           ),
           SheetActionRow(
             icon: Icons.bookmark_remove_outlined,
             title: 'Remove from Revision',
-            subtitle: 'Stop revision reminders for this topic',
             onTap: () => Navigator.pop(context, TopicOptionAction.removeFromRevision),
           ),
         ],

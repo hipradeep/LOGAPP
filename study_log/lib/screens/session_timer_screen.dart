@@ -5,9 +5,7 @@ import '../widgets/app_spacers.dart';
 import '../models/topic.dart';
 import '../models/revision_topic.dart';
 import '../models/study_log.dart';
-import '../services/local_study_log_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_revision_topic_storage.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -106,18 +104,8 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         _currentTopicIndex = 0;
 
         if (widget.revisionId != null && widget.revisionId!.isNotEmpty) {
-          unawaited(LocalRevisionTopicStorage.saveTopics(widget.revisionId!, _revisionTopics));
+          unawaited(DatabaseService.instance.saveRevisionTopics(widget.revisionId!, _revisionTopics));
         }
-      } else if (_topics.isNotEmpty && _revisionTopics.isEmpty && _topics.every((t) => t.isCompleted)) {
-        // If regular topics passed for revision and all completed, restart from first and reset status
-        _topics = _topics.map((t) => t.copyWith(
-          status: TopicStatus.notStarted,
-          clearCompletedAt: true,
-        )).toList();
-        _currentTopicIndex = 0;
-
-        final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-        unawaited(LocalTopicStorage.saveTopics(key, _topics));
       } else {
         _currentTopicIndex = widget.initialTopicIndex.clamp(
           0,
@@ -243,7 +231,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       });
 
       if (widget.revisionId != null && widget.revisionId!.isNotEmpty) {
-        await LocalRevisionTopicStorage.saveTopics(widget.revisionId!, _revisionTopics);
+        await DatabaseService.instance.saveRevisionTopics(widget.revisionId!, _revisionTopics);
       }
 
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
@@ -262,7 +250,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         timestamp: now,
         createdAt: now,
       );
-      await LocalStudyLogStorage.addLog(studyLog);
+      await DatabaseService.instance.addStudyLog(studyLog);
       // 2) Save study session for this topic
       if (widget.trackSession) {
         final sessionLog = StudyLog(
@@ -279,7 +267,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           timestamp: now,
           createdAt: now,
         );
-        await LocalStudyLogStorage.addLog(sessionLog);
+        await DatabaseService.instance.addStudyLog(sessionLog);
       }
     } else if (widget.isRevision) {
       // Individual topic revision session
@@ -287,12 +275,14 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       final current = _topics[_currentTopicIndex];
       final updated = current.copyWith(
         status: TopicStatus.completed,
-        completedAt: now,
+        completedAt: current.completedAt ?? now,
       );
 
       setState(() {
         _topics[_currentTopicIndex] = updated;
       });
+
+      await DatabaseService.instance.updateTopic(updated);
 
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
 
@@ -319,7 +309,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
             timestamp: now,
             createdAt: now,
           );
-          await LocalStudyLogStorage.addLog(studyLog);
+          await DatabaseService.instance.addStudyLog(studyLog);
         }
       }
 
@@ -338,7 +328,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           timestamp: now,
           createdAt: now,
         );
-        await LocalStudyLogStorage.addLog(sessionLog);
+        await DatabaseService.instance.addStudyLog(sessionLog);
       }
     } else {
       if (_currentTopicIndex >= _topics.length) return;
@@ -352,8 +342,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         _topics[_currentTopicIndex] = updated;
       });
 
-      final key = widget.moduleId.isNotEmpty ? widget.moduleId : widget.moduleTitle;
-      await LocalTopicStorage.saveTopics(key, _topics);
+      await DatabaseService.instance.updateTopic(updated);
 
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
 
@@ -371,7 +360,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         timestamp: now,
         createdAt: now,
       );
-      await LocalStudyLogStorage.addLog(studyLog);
+      await DatabaseService.instance.addStudyLog(studyLog);
 
       // 2) Save study session for this topic
       if (widget.trackSession) {
@@ -388,7 +377,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           timestamp: now,
           createdAt: now,
         );
-        await LocalStudyLogStorage.addLog(sessionLog);
+        await DatabaseService.instance.addStudyLog(sessionLog);
       }
     }
 
@@ -508,7 +497,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         createdAt: now,
       );
 
-      await LocalStudyLogStorage.addLog(studyLog);
+      await DatabaseService.instance.addStudyLog(studyLog);
 
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());

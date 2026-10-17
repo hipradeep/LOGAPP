@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/module.dart';
 import '../services/database_service.dart';
-import '../services/local_module_storage.dart';
 import '../services/service_locator.dart';
 import 'ongoing_modules_controller.dart';
 

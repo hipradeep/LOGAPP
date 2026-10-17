@@ -7,8 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../models/course.dart';
 import '../models/module.dart';
-import '../services/local_course_storage.dart';
-import '../services/local_module_storage.dart';
 import '../models/topic.dart';
 import '../models/study_log.dart';
 import '../services/service_locator.dart';
@@ -184,7 +182,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
     }
 
     // Load existing local courses so we can merge / upsert
-    final existingCourses = await LocalCourseStorage.loadCourses();
+    final existingCourses = await DatabaseService.instance.getCourses();
     final existingIds = existingCourses.map((c) => c.id).toSet();
 
     final coursesToSave = <Course>[];
@@ -371,7 +369,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
         courseCount++;
       }
 
-      final existingModules = await LocalModuleStorage.loadModules(courseId);
+      final existingModules = await DatabaseService.instance.getModules(courseId: courseId);
       int sIdx = existingModules.length;
 
       for (final rawModule in standaloneModules) {

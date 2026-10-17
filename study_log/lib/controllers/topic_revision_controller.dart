@@ -5,8 +5,6 @@ import '../models/revision_module.dart';
 import '../models/topic_revision.dart';
 import '../models/study_log.dart';
 import '../services/database_service.dart';
-import '../services/local_topic_revision_storage.dart';
-import '../services/local_study_log_storage.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 import 'progress_controller.dart';
@@ -199,7 +197,7 @@ class TopicRevisionController extends ChangeNotifier {
     );
 
     try {
-      await LocalStudyLogStorage.addLog(log);
+      await DatabaseService.instance.addStudyLog(log);
       if (getIt.isRegistered<ProgressController>()) {
         unawaited(getIt<ProgressController>().refresh());
       }
@@ -282,7 +280,7 @@ class TopicRevisionController extends ChangeNotifier {
   Future<void> loadRevisions() => _load();
 
   Future<void> _load() async {
-    final cached = await LocalTopicRevisionStorage.loadAll();
+    final cached = await _dbService.getTopicRevisions();
     if (_topicRevisions.isEmpty && cached.isNotEmpty) {
       _topicRevisions = _sorted(cached);
       _isLoading = false;

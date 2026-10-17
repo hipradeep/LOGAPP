@@ -143,10 +143,10 @@ Displays counts aggregated across both Topics and Modules:
 * `R1` $\dots$ `R5` $\rightarrow$ Combined items at each level
 * `Finished` $\rightarrow$ Combined completed items
 
-### Filter Chips (Single Horizontal Row)
-* **Scope**: `All` | `Due Today` | `Upcoming` | `Finished`
-* **Type Filter**: `All` | `Topics` | `Modules`
-* **Sort Dropdown**: `Due Date` | `Level` | `Name`
+### Section Controls & Actions
+* **Type Dropdown (Left)**: `All Revisions` | `Topics` | `Modules` with active item count badge
+* **Sort Dropdown (Right)**: `Due Date` | `Level` | `Name`
+* **Filter Action (Right)**: Circular filter button (`Icons.tune_rounded`) triggering the **Filter revisions** modal bottom sheet (`All`, `Due today`, `Upcoming`, `Finished`)
 
 ---
 
@@ -170,6 +170,21 @@ Displays counts aggregated across both Topics and Modules:
 ### Phase 4: Empty States & Polish
 - [x] Contextual empty state when filter yields zero results (e.g. "No topics or modules due today! 🎉").
 - [x] Adhere to all rules in `optimize_view.md` (`const` gravity, zero `.withOpacity()`, pure `ListenableBuilder`).
+
+### Phase 5: Complete Deprecation & Removal of Obsolete LocalStorage Wrappers
+- [x] Migrated all revision screens ([RevisionScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/revision_screen.dart), [RevisionDetailScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/revision_detail_screen.dart)) to use [DatabaseService](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/services/database_service.dart) directly.
+- [x] Migrated all other screens ([SessionTimerScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/session_timer_screen.dart), [TopicDetailScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/topic_detail_screen.dart), [RecentActivityScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/recent_activity_screen.dart), [ModuleDetailScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/module_detail_screen.dart), [ArchivedCourseDetailScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/archived_course_detail_screen.dart), [UploadJsonScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/upload_json_screen.dart)).
+- [x] Migrated all controllers ([RevisionController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/revision_controller.dart), [TopicRevisionController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/topic_revision_controller.dart), [ProgressController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/progress_controller.dart), [OngoingModulesController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/ongoing_modules_controller.dart), [NotificationController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/notification_controller.dart), [CoursesController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/courses_controller.dart), [ModulesController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/modules_controller.dart)).
+- [x] Permanently deleted all 9 obsolete `local_*_storage.dart` wrapper files:
+  - `local_revision_storage.dart`
+  - `local_topic_revision_storage.dart`
+  - `local_revision_topic_storage.dart`
+  - `local_study_log_storage.dart`
+  - `local_topic_storage.dart`
+  - `local_module_storage.dart`
+  - `local_course_storage.dart`
+  - `local_notification_storage.dart`
+  - `local_user_profile_storage.dart`
 
 ---
 

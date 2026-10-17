@@ -3,8 +3,6 @@ import '../controllers/courses_controller.dart';
 import '../models/course.dart';
 import '../models/module.dart';
 import '../models/topic.dart';
-import '../services/local_module_storage.dart';
-import '../services/local_topic_storage.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
@@ -52,32 +50,21 @@ class _ArchivedCourseDetailScreenState
   Future<void> _loadCourseDetails() async {
     try {
       // 1. Load modules for this course
-      final loadedModules = await LocalModuleStorage.loadModules(_courseId);
+      final loadedModules = await DatabaseService.instance.getModules(courseId: _courseId);
 
-      // 2. Load all topic buckets to resolve topics per module
-      final topicBuckets = await LocalTopicStorage.loadAllBuckets();
+      // 2. Load all topics to resolve topics per module
+      final allTopics = await DatabaseService.instance.getAllTopics();
       final Map<String, List<Topic>> moduleTopicsMap = {};
       int totalTopics = 0;
       int completedTopics = 0;
       int completedModules = 0;
 
       for (final module in loadedModules) {
-        var topics = LocalTopicStorage.resolveForModule(
-          topicBuckets,
-          moduleId: module.id,
-          fallbackTitle: module.title,
-        );
-
-        if (topics.isEmpty && module.id.isNotEmpty) {
-          try {
-            final dbTopics = await DatabaseService.instance.getTopics(
-              moduleId: module.id,
-            );
-            if (dbTopics.isNotEmpty) {
-              topics = dbTopics;
-            }
-          } catch (_) {}
-        }
+        var topics = allTopics
+            .where((t) =>
+                t.moduleId == module.id ||
+                (module.title.isNotEmpty && t.moduleId == module.title))
+            .toList();
 
         moduleTopicsMap[module.id] = topics;
         totalTopics += topics.length;

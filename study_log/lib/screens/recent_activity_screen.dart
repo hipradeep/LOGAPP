@@ -4,9 +4,7 @@ import '../models/study_log.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
-import '../services/local_study_log_storage.dart';
-import '../services/local_topic_storage.dart';
-import '../services/local_revision_storage.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/courses_controller.dart';
@@ -85,12 +83,17 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
   }
 
   Future<List<StudyLog>> _fetchAllLogs() async {
-    final directLogs = await LocalStudyLogStorage.loadAll();
+    final directLogs = await DatabaseService.instance.getStudyLogs();
     final Map<String, StudyLog> logsById = {
       for (final l in directLogs) l.id: l,
     };
 
-    final topicBuckets = await LocalTopicStorage.loadAllBuckets();
+    final allTopics = await DatabaseService.instance.getAllTopics();
+    final Map<String, List<Topic>> topicBuckets = {};
+    for (final t in allTopics) {
+      final key = t.moduleId.isNotEmpty ? t.moduleId : 'default';
+      topicBuckets.putIfAbsent(key, () => []).add(t);
+    }
     final ongoing = getIt.isRegistered<OngoingModulesController>()
         ? getIt<OngoingModulesController>()
         : null;
@@ -188,7 +191,7 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
       }
     }
 
-    final revisions = await LocalRevisionStorage.loadAll();
+    final revisions = await DatabaseService.instance.getRevisions();
     final existingRevisionKeys = directLogs
         .where((l) => l.isRevisionModuleCompleted)
         .map((l) =>
