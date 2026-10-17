@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_profile.dart';
 import '../services/database_backup_service.dart';
@@ -19,7 +20,8 @@ import 'revision_controller.dart';
 /// • Automatically restores incoming account's Google Drive backup.
 /// • If incoming account has no backup, clears previous user's data to start fresh.
 /// • Updates SQLite UserProfile and all UI controllers seamlessly.
-class CloudSyncController extends ChangeNotifier {
+/// • Listens to SQLite change events and debounces automated background Drive sync.
+class CloudSyncController extends ChangeNotifier with WidgetsBindingObserver {
   final GoogleAuthService _authService;
   final GoogleDriveService _driveService;
   final DatabaseBackupService _backupService;
@@ -28,6 +30,7 @@ class CloudSyncController extends ChangeNotifier {
   bool _isSigningIn = false;
   bool _isSyncing = false;
   bool _isRestoring = false;
+  bool _isAutoSyncing = false;
   bool _isExportingFile = false;
   bool _isImportingFile = false;
   bool _isCheckingAuth = true;
@@ -36,6 +39,10 @@ class CloudSyncController extends ChangeNotifier {
   String? _cachedPhotoUrl;
   String? _errorMessage;
   DateTime? _lastBackupDate;
+
+  Timer? _debounceTimer;
+  StreamSubscription<String>? _dbChangeSubscription;
+  static const Duration _debounceDuration = Duration(seconds: 4);
 
   CloudSyncController({
     GoogleAuthService? authService,
@@ -46,6 +53,8 @@ class CloudSyncController extends ChangeNotifier {
         _driveService = driveService ?? getIt<GoogleDriveService>(),
         _backupService = backupService ?? getIt<DatabaseBackupService>(),
         _dbService = dbService ?? getIt<DatabaseService>() {
+    WidgetsBinding.instance.addObserver(this);
+
     _authService.onCurrentUserChanged.listen((account) {
       if (account != null) {
         _cachedActiveEmail = account.email.trim().toLowerCase();
@@ -57,12 +66,18 @@ class CloudSyncController extends ChangeNotifier {
       }
       notifyListeners();
     });
+
+    _dbChangeSubscription = _dbService.onDatabaseChanged.listen((table) {
+      _onDatabaseChanged(table);
+    });
+
     unawaited(init());
   }
 
   bool get isSigningIn => _isSigningIn;
   bool get isSyncing => _isSyncing;
   bool get isRestoring => _isRestoring;
+  bool get isAutoSyncing => _isAutoSyncing;
   bool get isExportingFile => _isExportingFile;
   bool get isImportingFile => _isImportingFile;
   bool get isCheckingAuth => _isCheckingAuth;
@@ -444,5 +459,70 @@ class CloudSyncController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Automated Background Drive Sync
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void _onDatabaseChanged(String table) {
+    // Only schedule push if user is authenticated with Google
+    if (!isSignedIn) return;
+
+    debugPrint(
+      '[CloudSyncController] SQLite event in "$table". Scheduling auto-sync in ${_debounceDuration.inSeconds}s...',
+    );
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(_debounceDuration, () {
+      unawaited(_executeBackgroundDrivePush());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      if (_debounceTimer?.isActive == true) {
+        debugPrint(
+          '[CloudSyncController] App pausing with pending Drive sync. Flushing immediately...',
+        );
+        _debounceTimer?.cancel();
+        unawaited(_executeBackgroundDrivePush());
+      }
+    }
+  }
+
+  /// Silently backs up local database changes to Google Drive in the background.
+  Future<void> _executeBackgroundDrivePush() async {
+    if (!isSignedIn || _isSyncing || _isRestoring || _isAutoSyncing) {
+      return;
+    }
+
+    _isAutoSyncing = true;
+    notifyListeners();
+
+    try {
+      debugPrint('[CloudSyncController] Background Drive push started...');
+      final payload = await _backupService.exportAllToJson();
+      await _driveService.backupDatabase(payload);
+      _lastBackupDate = DateTime.now();
+      debugPrint(
+        '[CloudSyncController] Background Drive push succeeded at $_lastBackupDate',
+      );
+    } catch (e) {
+      debugPrint('[CloudSyncController] Background Drive push non-fatal: $e');
+    } finally {
+      _isAutoSyncing = false;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _debounceTimer?.cancel();
+    _dbChangeSubscription?.cancel();
+    super.dispose();
   }
 }

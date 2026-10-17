@@ -259,6 +259,24 @@ class _UserProfileCard extends StatelessWidget {
             : (revisionCtrl?.revisions.length ?? 0);
         final streak = progressCtrl?.currentStreak ?? 0;
 
+        final syncDisplayName = syncCtrl?.displayName?.trim();
+        final displayName = (syncDisplayName != null && syncDisplayName.isNotEmpty)
+            ? syncDisplayName
+            : (progressCtrl?.userName.isNotEmpty == true && progressCtrl!.userName != 'Learner'
+                ? progressCtrl!.userName
+                : (syncCtrl?.userEmail?.split('@').first ?? 'Learner'));
+
+        final syncEmail = syncCtrl?.userEmail;
+        final displayEmail = (syncEmail != null && syncEmail.isNotEmpty)
+            ? syncEmail
+            : (progressCtrl?.userEmail?.isNotEmpty == true
+                ? progressCtrl!.userEmail!
+                : (progressCtrl?.userHeadline ?? 'Student'));
+
+        final avatarUrl = syncCtrl?.photoUrl ?? progressCtrl?.userAvatarUrl;
+        final initialName = displayName.isNotEmpty ? displayName : 'L';
+        final userInitial = initialName.trim()[0].toUpperCase();
+
         if (!isSignedIn && syncCtrl?.isCheckingAuth == true) {
           return const SizedBox.shrink();
         }
@@ -304,15 +322,14 @@ class _UserProfileCard extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: ClipOval(
-                        child: (progressCtrl?.userAvatarUrl != null &&
-                                progressCtrl!.userAvatarUrl!.isNotEmpty)
+                        child: (avatarUrl != null && avatarUrl.isNotEmpty)
                             ? Image.network(
-                                progressCtrl.userAvatarUrl!,
+                                avatarUrl,
                                 width: 40,
                                 height: 40,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Text(
-                                  progressCtrl.userInitial,
+                                  userInitial,
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -321,7 +338,7 @@ class _UserProfileCard extends StatelessWidget {
                                 ),
                               )
                             : Text(
-                                progressCtrl?.userInitial ?? 'P',
+                                userInitial,
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -340,7 +357,7 @@ class _UserProfileCard extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  progressCtrl?.userName ?? 'Pradeep Maurya',
+                                  displayName,
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -360,9 +377,7 @@ class _UserProfileCard extends StatelessWidget {
                           ),
                           const VGapXs(),
                           Text(
-                            (progressCtrl?.userEmail?.isNotEmpty == true)
-                                ? progressCtrl!.userEmail!
-                                : (progressCtrl?.userHeadline ?? 'Learner'),
+                            displayEmail,
                             style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.textSecondaryColor(context),

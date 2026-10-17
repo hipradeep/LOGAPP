@@ -47,6 +47,33 @@ class DatabaseService {
       StreamController<List<TopicRevision>>.broadcast();
   final _studyLogsStreamController =
       StreamController<List<StudyLog>>.broadcast();
+  final _databaseChangeController =
+      StreamController<String>.broadcast();
+
+  /// Reactive broadcast stream that emits the affected table name whenever
+  /// any entity is inserted, updated, or deleted.
+  Stream<String> get onDatabaseChanged => _databaseChangeController.stream;
+
+  bool _suppressChangeEvents = false;
+
+  void _notifyChange(String table) {
+    if (!_suppressChangeEvents && !_databaseChangeController.isClosed) {
+      _databaseChangeController.add(table);
+    }
+  }
+
+  void notifyDatabaseChanged([String table = 'general']) {
+    _notifyChange(table);
+  }
+
+  Future<T> runWithoutChangeEventsAsync<T>(Future<T> Function() action) async {
+    _suppressChangeEvents = true;
+    try {
+      return await action();
+    } finally {
+      _suppressChangeEvents = false;
+    }
+  }
 
   StreamController<List<Module>> _getModuleController(String courseId) {
     return _modulesStreamControllers.putIfAbsent(
@@ -313,6 +340,7 @@ class DatabaseService {
     for (final c in _revisionTopicsStreamControllers.values) {
       c.add([]);
     }
+    _notifyChange('all');
   }
 
   /// Completely deletes and recreates the SQLite database file from scratch.
@@ -325,6 +353,7 @@ class DatabaseService {
     }
     await deleteDatabase(path);
     await database;
+    _notifyChange('all');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -366,6 +395,7 @@ class DatabaseService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     _coursesStreamController.add(await getCourses());
+    _notifyChange('courses');
   }
 
   Future<void> updateCourse(Course course) async {
@@ -377,6 +407,7 @@ class DatabaseService {
       whereArgs: [course.id],
     );
     _coursesStreamController.add(await getCourses());
+    _notifyChange('courses');
   }
 
   Future<void> deleteCourse(String id) async {
@@ -387,6 +418,7 @@ class DatabaseService {
       whereArgs: [id],
     );
     _coursesStreamController.add(await getCourses());
+    _notifyChange('courses');
   }
 
   Future<void> saveCourses(List<Course> courses) async {
@@ -401,12 +433,14 @@ class DatabaseService {
       }
     });
     _coursesStreamController.add(await getCourses());
+    _notifyChange('courses');
   }
 
   Future<void> clearCourses() async {
     final db = await database;
     await db.delete('courses');
     _coursesStreamController.add([]);
+    _notifyChange('courses');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -438,6 +472,7 @@ class DatabaseService {
     );
     _getModuleController(module.courseId)
         .add(await getModules(courseId: module.courseId));
+    _notifyChange('modules');
   }
 
   Future<void> updateModule(Module module) async {
@@ -450,6 +485,7 @@ class DatabaseService {
     );
     _getModuleController(module.courseId)
         .add(await getModules(courseId: module.courseId));
+    _notifyChange('modules');
   }
 
   Future<void> deleteModule(String id) async {
@@ -472,6 +508,7 @@ class DatabaseService {
     if (courseId != null) {
       _getModuleController(courseId).add(await getModules(courseId: courseId));
     }
+    _notifyChange('modules');
   }
 
   Future<void> saveModules(String courseId, List<Module> modules) async {
@@ -510,6 +547,7 @@ class DatabaseService {
       }
     });
     _getModuleController(courseId).add(await getModules(courseId: courseId));
+    _notifyChange('modules');
   }
 
   Future<void> clearModules() async {
@@ -518,6 +556,7 @@ class DatabaseService {
     for (final controller in _modulesStreamControllers.values) {
       controller.add([]);
     }
+    _notifyChange('modules');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -578,6 +617,7 @@ class DatabaseService {
     );
     _getTopicController(topic.moduleId)
         .add(await getTopics(moduleId: topic.moduleId));
+    _notifyChange('topics');
   }
 
   Future<void> updateTopic(Topic topic) async {
@@ -597,6 +637,7 @@ class DatabaseService {
     }
     _getTopicController(topic.moduleId)
         .add(await getTopics(moduleId: topic.moduleId));
+    _notifyChange('topics');
   }
 
   Future<void> deleteTopic(String id) async {
@@ -620,6 +661,7 @@ class DatabaseService {
     if (moduleId != null) {
       _getTopicController(moduleId).add(await getTopics(moduleId: moduleId));
     }
+    _notifyChange('topics');
   }
 
   Future<void> saveTopics(String moduleId, List<Topic> topics) async {
@@ -655,6 +697,7 @@ class DatabaseService {
       }
     });
     _getTopicController(moduleId).add(await getTopics(moduleId: moduleId));
+    _notifyChange('topics');
   }
 
   Future<void> clearTopics() async {
@@ -663,6 +706,7 @@ class DatabaseService {
     for (final controller in _topicsStreamControllers.values) {
       controller.add([]);
     }
+    _notifyChange('topics');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -691,6 +735,7 @@ class DatabaseService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     _revisionsStreamController.add(await getRevisions());
+    _notifyChange('revisions');
   }
 
   Future<void> updateRevision(RevisionModule revision) async {
@@ -702,6 +747,7 @@ class DatabaseService {
       whereArgs: [revision.id],
     );
     _revisionsStreamController.add(await getRevisions());
+    _notifyChange('revisions');
   }
 
   Future<void> deleteRevision(String id) async {
@@ -712,6 +758,7 @@ class DatabaseService {
       whereArgs: [id],
     );
     _revisionsStreamController.add(await getRevisions());
+    _notifyChange('revisions');
   }
 
   Future<void> saveRevisions(List<RevisionModule> revisions) async {
@@ -745,12 +792,14 @@ class DatabaseService {
       }
     });
     _revisionsStreamController.add(await getRevisions());
+    _notifyChange('revisions');
   }
 
   Future<void> clearRevisions() async {
     final db = await database;
     await db.delete('revisions');
     _revisionsStreamController.add([]);
+    _notifyChange('revisions');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -784,6 +833,7 @@ class DatabaseService {
     );
     _getRevisionTopicController(topic.revisionId)
         .add(await getRevisionTopics(revisionId: topic.revisionId));
+    _notifyChange('revision_topics');
   }
 
   Future<void> updateRevisionTopic(RevisionTopic topic) async {
@@ -796,6 +846,7 @@ class DatabaseService {
     );
     _getRevisionTopicController(topic.revisionId)
         .add(await getRevisionTopics(revisionId: topic.revisionId));
+    _notifyChange('revision_topics');
   }
 
   Future<void> deleteRevisionTopic(String id) async {
@@ -821,6 +872,7 @@ class DatabaseService {
       _getRevisionTopicController(revisionId)
           .add(await getRevisionTopics(revisionId: revisionId));
     }
+    _notifyChange('revision_topics');
   }
 
   Future<void> saveRevisionTopics(
@@ -858,6 +910,7 @@ class DatabaseService {
     });
     _getRevisionTopicController(revisionId)
         .add(await getRevisionTopics(revisionId: revisionId));
+    _notifyChange('revision_topics');
   }
 
   Future<void> clearRevisionTopics() async {
@@ -866,6 +919,7 @@ class DatabaseService {
     for (final controller in _revisionTopicsStreamControllers.values) {
       controller.add([]);
     }
+    _notifyChange('revision_topics');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -925,6 +979,7 @@ class DatabaseService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     _topicRevisionsStreamController.add(await getTopicRevisions());
+    _notifyChange('topic_revisions');
   }
 
   Future<void> updateTopicRevision(TopicRevision topicRevision) async {
@@ -936,6 +991,7 @@ class DatabaseService {
       whereArgs: [topicRevision.id],
     );
     _topicRevisionsStreamController.add(await getTopicRevisions());
+    _notifyChange('topic_revisions');
   }
 
   Future<void> deleteTopicRevision(String id) async {
@@ -946,6 +1002,7 @@ class DatabaseService {
       whereArgs: [id],
     );
     _topicRevisionsStreamController.add(await getTopicRevisions());
+    _notifyChange('topic_revisions');
   }
 
   Future<void> deleteTopicRevisionByTopicId(String topicId) async {
@@ -956,6 +1013,7 @@ class DatabaseService {
       whereArgs: [topicId],
     );
     _topicRevisionsStreamController.add(await getTopicRevisions());
+    _notifyChange('topic_revisions');
   }
 
   Future<void> saveTopicRevisions(List<TopicRevision> topicRevisions) async {
@@ -986,12 +1044,14 @@ class DatabaseService {
       }
     });
     _topicRevisionsStreamController.add(await getTopicRevisions());
+    _notifyChange('topic_revisions');
   }
 
   Future<void> clearTopicRevisions() async {
     final db = await database;
     await db.delete('topic_revisions');
     _topicRevisionsStreamController.add([]);
+    _notifyChange('topic_revisions');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1020,6 +1080,7 @@ class DatabaseService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     _studyLogsStreamController.add(await getStudyLogs());
+    _notifyChange('study_logs');
   }
 
   Future<void> saveStudyLogs(List<StudyLog> logs) async {
@@ -1034,12 +1095,14 @@ class DatabaseService {
       }
     });
     _studyLogsStreamController.add(await getStudyLogs());
+    _notifyChange('study_logs');
   }
 
   Future<void> clearStudyLogs() async {
     final db = await database;
     await db.delete('study_logs');
     _studyLogsStreamController.add([]);
+    _notifyChange('study_logs');
   }
 
   Future<void> deleteStudyLogForTopic({
@@ -1053,6 +1116,7 @@ class DatabaseService {
       whereArgs: [topicId, type],
     );
     _studyLogsStreamController.add(await getStudyLogs());
+    _notifyChange('study_logs');
   }
 
   Future<void> deleteStudyLogForModule({
@@ -1066,6 +1130,7 @@ class DatabaseService {
       whereArgs: [moduleId, type],
     );
     _studyLogsStreamController.add(await getStudyLogs());
+    _notifyChange('study_logs');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1090,11 +1155,13 @@ class DatabaseService {
       profile.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    _notifyChange('user_profile');
   }
 
   Future<void> clearUserProfile() async {
     final db = await database;
     await db.delete('user_profile');
+    _notifyChange('user_profile');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1126,11 +1193,13 @@ class DatabaseService {
       {'id': 'settings', 'data': jsonStr},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    _notifyChange('notification_settings');
   }
 
   Future<void> clearNotificationSettings() async {
     final db = await database;
     await db.delete('notification_settings');
+    _notifyChange('notification_settings');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1156,6 +1225,7 @@ class DatabaseService {
       {'id': 'setting_$key', 'data': value},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    _notifyChange('notification_settings');
   }
 
   Future<void> deleteSetting(String key) async {
@@ -1165,6 +1235,7 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: ['setting_$key'],
     );
+    _notifyChange('notification_settings');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1255,6 +1326,7 @@ class DatabaseService {
     if (studyLogs != null && studyLogs.isNotEmpty) {
       _studyLogsStreamController.add(await getStudyLogs());
     }
+    _notifyChange('batch');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1348,6 +1420,7 @@ class DatabaseService {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    _notifyChange('notification_settings');
   }
 
   /// Reloads and pushes latest data across all active broadcast streams.

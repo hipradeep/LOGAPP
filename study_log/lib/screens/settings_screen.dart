@@ -789,10 +789,12 @@ class _CloudSyncCard extends StatelessWidget {
               iconBgColor: const Color(0xFFE0F2FE),
               iconColor: const Color(0xFF0284C7),
               title: 'Back Up to Drive',
-              subtitle: lastBackup != null
-                  ? 'Last backup: ${_dateFormat.format(lastBackup)}'
-                  : 'No backups in Drive yet',
-              trailing: syncCtrl.isSyncing
+              subtitle: syncCtrl.isAutoSyncing
+                  ? 'Auto-syncing changes to Drive...'
+                  : (lastBackup != null
+                      ? 'Auto-synced: ${_dateFormat.format(lastBackup)}'
+                      : 'No backups in Drive yet'),
+              trailing: (syncCtrl.isSyncing || syncCtrl.isAutoSyncing)
                   ? const SizedBox(
                       width: 16,
                       height: 16,

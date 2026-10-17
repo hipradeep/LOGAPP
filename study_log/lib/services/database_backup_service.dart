@@ -111,10 +111,11 @@ class DatabaseBackupService {
   /// Restores the complete SQLite database state from a backup map,
   /// replacing current data transactionally and refreshing all reactive streams.
   Future<void> importAllFromJson(Map<String, dynamic> data) async {
-    final db = await _dbService.database;
-    final nowIso = DateTime.now().toIso8601String();
+    await _dbService.runWithoutChangeEventsAsync(() async {
+      final db = await _dbService.database;
+      final nowIso = DateTime.now().toIso8601String();
 
-    await db.transaction((txn) async {
+      await db.transaction((txn) async {
       await txn.delete('courses');
       await txn.delete('modules');
       await txn.delete('topics');
@@ -308,8 +309,9 @@ class DatabaseBackupService {
       }
     });
 
-    // Notify all active broadcast streams with freshly restored data
-    await _dbService.reloadAllStreams();
+      // Notify all active broadcast streams with freshly restored data
+      await _dbService.reloadAllStreams();
+    });
 
     // Immediately refresh all registered UI controllers
     if (getIt.isRegistered<CoursesController>()) {
