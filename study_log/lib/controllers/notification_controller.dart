@@ -5,8 +5,11 @@ import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import '../services/service_locator.dart';
 import 'revision_controller.dart';
+import 'topic_revision_controller.dart';
 import 'ongoing_modules_controller.dart';
 import 'courses_controller.dart';
+import 'package:timezone/timezone.dart' as tz;
+import '../services/notification_coordinator.dart';
 
 /// Controller managing user notification preferences and schedules.
 /// Adheres strictly to the ChangeNotifier pattern without external state dependencies.
@@ -14,6 +17,7 @@ import 'courses_controller.dart';
 class NotificationController extends ChangeNotifier {
   final NotificationService _notificationService;
   final RevisionController? _revisionController;
+  final TopicRevisionController? _topicRevisionController;
   final OngoingModulesController? _ongoingController;
   final CoursesController? _coursesController;
 
@@ -23,12 +27,17 @@ class NotificationController extends ChangeNotifier {
   NotificationController({
     NotificationService? notificationService,
     RevisionController? revisionController,
+    TopicRevisionController? topicRevisionController,
     OngoingModulesController? ongoingController,
     CoursesController? coursesController,
   })  : _notificationService = notificationService ?? getIt<NotificationService>(),
         _revisionController = revisionController ??
             (getIt.isRegistered<RevisionController>()
                 ? getIt<RevisionController>()
+                : null),
+        _topicRevisionController = topicRevisionController ??
+            (getIt.isRegistered<TopicRevisionController>()
+                ? getIt<TopicRevisionController>()
                 : null),
         _ongoingController = ongoingController ??
             (getIt.isRegistered<OngoingModulesController>()
@@ -39,6 +48,7 @@ class NotificationController extends ChangeNotifier {
                 ? getIt<CoursesController>()
                 : null) {
     _revisionController?.addListener(_onRevisionChanged);
+    _topicRevisionController?.addListener(_onTopicRevisionChanged);
     _ongoingController?.addListener(_onOngoingChanged);
     _coursesController?.addListener(_onCoursesChanged);
     _load();
@@ -51,20 +61,52 @@ class NotificationController extends ChangeNotifier {
   void dispose() {
     _debounceTimer?.cancel();
     _revisionController?.removeListener(_onRevisionChanged);
+    _topicRevisionController?.removeListener(_onTopicRevisionChanged);
     _ongoingController?.removeListener(_onOngoingChanged);
     _coursesController?.removeListener(_onCoursesChanged);
     super.dispose();
   }
 
   void _onRevisionChanged() {
-    if (_settings.enabled && _settings.revisionDueEnabled) {
-      _scheduleDebouncedSync();
+    if (_settings.enabled) {
+      final now = DateTime.now();
+      final revisedToday = _revisionController?.revisions.any((r) =>
+              DateUtils.isSameDay(r.lastRevisionAt ?? r.updatedAt, now)) ??
+          false;
+      if (revisedToday) {
+        _notificationService.cancelStreakAndLastCall();
+      }
+      if (_settings.revisionDueEnabled) {
+        _scheduleDebouncedSync();
+      }
+    }
+  }
+
+  void _onTopicRevisionChanged() {
+    if (_settings.enabled) {
+      final now = DateTime.now();
+      final revisedToday = _topicRevisionController?.topicRevisions.any((tr) =>
+              (tr.isLevelCompleted || tr.isFinished) &&
+              DateUtils.isSameDay(tr.updatedAt, now)) ??
+          false;
+      if (revisedToday) {
+        _notificationService.cancelStreakAndLastCall();
+      }
+      if (_settings.revisionDueEnabled) {
+        _scheduleDebouncedSync();
+      }
     }
   }
 
   void _onOngoingChanged() {
-    if (_settings.enabled && _settings.streakSaverEnabled) {
-      _scheduleDebouncedSync();
+    if (_settings.enabled) {
+      final completed = (_ongoingController?.completedTodayCount ?? 0) > 0;
+      if (completed) {
+        _notificationService.cancelStreakAndLastCall();
+      }
+      if (_settings.streakSaverEnabled) {
+        _scheduleDebouncedSync();
+      }
     }
   }
 
@@ -129,42 +171,82 @@ class NotificationController extends ChangeNotifier {
         return;
       }
 
-    // 1. Course Study reminder (daily repeating)
-    if (_settings.courseDueEnabled) {
-      await _notificationService.scheduleDailyCourseReminder(
-        time: _clampTo4Am(_settings.courseDueTime),
+      final ongoingCtrl = _ongoingController ??
+          (getIt.isRegistered<OngoingModulesController>()
+              ? getIt<OngoingModulesController>()
+              : null);
+      final topicRevCtrl = _topicRevisionController ??
+          (getIt.isRegistered<TopicRevisionController>()
+              ? getIt<TopicRevisionController>()
+              : null);
+      final revCtrl = _revisionController ??
+          (getIt.isRegistered<RevisionController>()
+              ? getIt<RevisionController>()
+              : null);
+      final coursesCtrl = _coursesController ??
+          (getIt.isRegistered<CoursesController>()
+              ? getIt<CoursesController>()
+              : null);
+
+      final completedTopicsToday = (ongoingCtrl?.completedTodayCount ?? 0) > 0;
+      final now = DateTime.now();
+      final hasRevisedTopicToday = topicRevCtrl?.topicRevisions.any((tr) =>
+              (tr.isLevelCompleted || tr.isFinished) &&
+              DateUtils.isSameDay(tr.updatedAt, now)) ??
+          false;
+      final hasRevisedModuleToday = revCtrl?.revisions.any((r) =>
+              DateUtils.isSameDay(r.lastRevisionAt ?? r.updatedAt, now)) ??
+          false;
+
+      final hasStudiedToday =
+          completedTopicsToday || hasRevisedTopicToday || hasRevisedModuleToday;
+
+      final dueTopics = topicRevCtrl?.topicsDueToday ?? const [];
+      final dueModules = revCtrl?.revisionsDueToday ?? const [];
+
+      final deadlineCourses = (coursesCtrl?.courses ?? const []).where((c) {
+        if (c.isArchived || c.isCompleted || c.deadline == null) return false;
+        final d = c.deadline!;
+        return d.year == now.year && d.month == now.month && d.day == now.day;
+      }).toList();
+
+      final currentStreak = ongoingCtrl?.dayStreakCount ?? 0;
+
+      // 1. User-Configured Daily Study Reminder Slots
+      if (_settings.courseDueEnabled) {
+        await _notificationService.scheduleStudyReminderSlots(
+          slots: _settings.studyReminderSlots,
+        );
+      } else {
+        await _notificationService.cancelStudyReminderSlots();
+      }
+
+      // 2. Coordinated Ambient Notifications (Morning Briefing, Midday Boost, Streak Saver, Last Call, Deadlines)
+      final tzNow = tz.TZDateTime.now(tz.local);
+      final dailyPlan = NotificationCoordinator.buildDailyPlan(
+        now: tzNow,
+        dueTopics: dueTopics,
+        dueModules: dueModules,
+        deadlineCourses: deadlineCourses,
+        hasStudiedToday: hasStudiedToday,
+        currentStreak: currentStreak,
+        settings: _settings,
       );
-    } else {
-      await _notificationService.cancelCourseReminder();
-    }
 
-    // 2. Streak Saver reminder (every repeatIntervalHours from 4 AM if study not logged today, including evening alert)
-    if (_settings.streakSaverEnabled) {
-      await syncStreakSaverReminders();
-    } else {
-      await _notificationService.cancelAllStreakReminders();
-    }
-
-    // 3. Revision reminders for current day (every repeatIntervalHours from 4 AM)
-    if (_settings.revisionDueEnabled) {
-      await syncRevisionReminders();
-    } else {
-      await _notificationService.cancelAllRevisionReminders();
-    }
-
-    // 4. On Current Date Deadline alerts (every repeatIntervalHours from 4 AM)
-    if (_settings.deadlineEnabled) {
-      await syncDeadlineReminders();
-    } else {
-      await _notificationService.cancelAllDeadlineReminders();
-    }
+      await _notificationService.scheduleCoordinatedPlan(dailyPlan);
     } finally {
       _isSyncing = false;
     }
   }
 
-  /// Evaluates today's study progress. If no topic or revision has been logged today,
-  /// schedules streak reminder notifications spaced random 90–120 minutes starting from 4:00 AM.
+  /// Real-time cancellation hook invoked as soon as user marks a topic or revision complete.
+  Future<void> onStudyActivityLogged() async {
+    await _notificationService.cancelStreakAndLastCall();
+    _scheduleDebouncedSync();
+  }
+
+  /// Evaluates today's study progress across topics and revisions.
+  /// If no topic or revision has been logged today, schedules streak reminder notifications.
   /// If study was already logged today, cancels all streak reminders.
   Future<void> syncStreakSaverReminders() async {
     if (!_settings.enabled || !_settings.streakSaverEnabled) {
@@ -176,19 +258,39 @@ class NotificationController extends ChangeNotifier {
         (getIt.isRegistered<OngoingModulesController>()
             ? getIt<OngoingModulesController>()
             : null);
+    final topicRevCtrl = _topicRevisionController ??
+        (getIt.isRegistered<TopicRevisionController>()
+            ? getIt<TopicRevisionController>()
+            : null);
+    final revCtrl = _revisionController ??
+        (getIt.isRegistered<RevisionController>()
+            ? getIt<RevisionController>()
+            : null);
 
-    final hasStudiedToday = (ongoingCtrl?.completedTodayCount ?? 0) > 0;
+    final completedTopicsToday = (ongoingCtrl?.completedTodayCount ?? 0) > 0;
+    final now = DateTime.now();
+    final hasRevisedTopicToday = topicRevCtrl?.topicRevisions.any((tr) =>
+            (tr.isLevelCompleted || tr.isFinished) &&
+            DateUtils.isSameDay(tr.updatedAt, now)) ??
+        false;
+    final hasRevisedModuleToday = revCtrl?.revisions.any((r) =>
+            DateUtils.isSameDay(r.lastRevisionAt ?? r.updatedAt, now)) ??
+        false;
+
+    final hasStudiedToday =
+        completedTopicsToday || hasRevisedTopicToday || hasRevisedModuleToday;
+
     if (hasStudiedToday) {
       // User has already studied today -> streak is safe, cancel alerts for today
       await _notificationService.cancelAllStreakReminders();
       return;
     }
 
-    // User forgot / has not completed any study today -> schedule 90-120 min gap reminders from 4 AM
+    // User forgot / has not completed any study today -> schedule streak reminders
     await _notificationService.scheduleStreakRemindersForToday();
   }
 
-  /// Evaluates modules due for revision today and schedules interval reminders for the current day.
+  /// Evaluates both topics and modules due for revision today and schedules interval reminders.
   Future<void> syncRevisionReminders() async {
     if (!_settings.enabled || !_settings.revisionDueEnabled) {
       await _notificationService.cancelAllRevisionReminders();
@@ -199,16 +301,24 @@ class NotificationController extends ChangeNotifier {
         (getIt.isRegistered<RevisionController>()
             ? getIt<RevisionController>()
             : null);
+    final topicRevCtrl = _topicRevisionController ??
+        (getIt.isRegistered<TopicRevisionController>()
+            ? getIt<TopicRevisionController>()
+            : null);
 
-    if (revCtrl == null) return;
+    final dueModules = revCtrl?.revisionsDueToday ?? const [];
+    final moduleTitles = revCtrl?.moduleTitlesDueToday ?? const [];
 
-    final dueToday = revCtrl.revisionsDueToday;
-    final titles = revCtrl.moduleTitlesDueToday;
+    final dueTopics = topicRevCtrl?.topicsDueToday ?? const [];
+    final topicTitles = dueTopics.map((tr) => tr.title).toList();
+
+    final totalDueCount = dueModules.length + dueTopics.length;
 
     // By default, revision reminders start from 4:00 AM onwards for the current day
     await _notificationService.scheduleRevisionRemindersForToday(
-      dueCount: dueToday.length,
-      moduleTitles: titles,
+      dueCount: totalDueCount,
+      moduleTitles: moduleTitles,
+      topicTitles: topicTitles,
     );
   }
 
@@ -287,6 +397,55 @@ class NotificationController extends ChangeNotifier {
     final clamped = _clampTo4Am(time);
     if (_settings.streakSaverTime == clamped) return;
     await _update(_settings.copyWith(streakSaverTime: clamped));
+  }
+
+  bool get morningBriefingEnabled => _settings.morningBriefingEnabled;
+  TimeOfDay get morningBriefingTime => _settings.morningBriefingTime;
+  List<StudyReminderSlot> get studyReminderSlots => _settings.studyReminderSlots;
+
+  Future<void> setMorningBriefing(bool value) async {
+    if (_settings.morningBriefingEnabled == value) return;
+    await _update(_settings.copyWith(morningBriefingEnabled: value));
+  }
+
+  Future<void> setMorningBriefingTime(TimeOfDay time) async {
+    final clamped = _clampTo4Am(time);
+    if (_settings.morningBriefingTime == clamped) return;
+    await _update(_settings.copyWith(morningBriefingTime: clamped));
+  }
+
+  Future<void> addStudyReminderSlot({
+    required String title,
+    required TimeOfDay time,
+  }) async {
+    final newSlot = StudyReminderSlot(
+      id: 'slot_${DateTime.now().millisecondsSinceEpoch}',
+      title: title.trim().isEmpty ? 'Study Session' : title.trim(),
+      time: time,
+      isEnabled: true,
+    );
+    final updated = [..._settings.studyReminderSlots, newSlot];
+    await _update(_settings.copyWith(studyReminderSlots: updated));
+  }
+
+  Future<void> updateStudyReminderSlot(StudyReminderSlot slot) async {
+    final updated = _settings.studyReminderSlots.map((s) {
+      return s.id == slot.id ? slot : s;
+    }).toList();
+    await _update(_settings.copyWith(studyReminderSlots: updated));
+  }
+
+  Future<void> toggleStudyReminderSlot(String id, bool isEnabled) async {
+    final updated = _settings.studyReminderSlots.map((s) {
+      return s.id == id ? s.copyWith(isEnabled: isEnabled) : s;
+    }).toList();
+    await _update(_settings.copyWith(studyReminderSlots: updated));
+  }
+
+  Future<void> deleteStudyReminderSlot(String id) async {
+    final updated =
+        _settings.studyReminderSlots.where((s) => s.id != id).toList();
+    await _update(_settings.copyWith(studyReminderSlots: updated));
   }
 
   Future<void> setDeadlineEnabled(bool value) async {

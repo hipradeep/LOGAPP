@@ -276,12 +276,15 @@ class BorderlessDescriptionField extends StatefulWidget {
   final Color urlColor;
   final ValueChanged<String>? onChanged;
 
+  final bool showUrlChips;
+  final bool readOnly;
+
   const BorderlessDescriptionField({
     super.key,
     this.label = 'Notes/Description',
     this.controller,
     this.hintText = 'Enter description',
-    this.maxLength = 500,
+    this.maxLength = 1000,
     this.minLines = 1,
     this.maxLines,
     this.scrollPhysics = const NeverScrollableScrollPhysics(),
@@ -289,6 +292,84 @@ class BorderlessDescriptionField extends StatefulWidget {
     this.padding = EdgeInsets.zero,
     this.backgroundColor = Colors.transparent,
     this.urlColor = const Color(0xFF2196F3),
+    this.showUrlChips = true,
+    this.readOnly = false,
+    this.onChanged,
+  });
+
+  /// Specialized constructor for Course descriptions.
+  const BorderlessDescriptionField.course({
+    super.key,
+    this.label = 'Course Description',
+    this.controller,
+    this.hintText = 'Enter course description, syllabus, or notes...',
+    this.maxLength = 1000,
+    this.minLines = 2,
+    this.maxLines,
+    this.scrollPhysics = const NeverScrollableScrollPhysics(),
+    this.fontSize = 15.0,
+    this.padding = EdgeInsets.zero,
+    this.backgroundColor = Colors.transparent,
+    this.urlColor = const Color(0xFF2196F3),
+    this.showUrlChips = true,
+    this.readOnly = false,
+    this.onChanged,
+  });
+
+  /// Specialized constructor for Module descriptions.
+  const BorderlessDescriptionField.module({
+    super.key,
+    this.label = 'Module Description',
+    this.controller,
+    this.hintText = 'Enter module description, outline, or resources...',
+    this.maxLength = 1000,
+    this.minLines = 2,
+    this.maxLines,
+    this.scrollPhysics = const NeverScrollableScrollPhysics(),
+    this.fontSize = 15.0,
+    this.padding = EdgeInsets.zero,
+    this.backgroundColor = Colors.transparent,
+    this.urlColor = const Color(0xFF2196F3),
+    this.showUrlChips = true,
+    this.readOnly = false,
+    this.onChanged,
+  });
+
+  /// Specialized constructor for Topic descriptions.
+  const BorderlessDescriptionField.topic({
+    super.key,
+    this.label = 'Notes/Description',
+    this.controller,
+    this.hintText = 'Enter topic notes, references, or key takeaways...',
+    this.maxLength = 1000,
+    this.minLines = 2,
+    this.maxLines,
+    this.scrollPhysics = const NeverScrollableScrollPhysics(),
+    this.fontSize = 15.0,
+    this.padding = EdgeInsets.zero,
+    this.backgroundColor = Colors.transparent,
+    this.urlColor = const Color(0xFF2196F3),
+    this.showUrlChips = true,
+    this.readOnly = false,
+    this.onChanged,
+  });
+
+  /// Specialized constructor for Todo / Task notes.
+  const BorderlessDescriptionField.todo({
+    super.key,
+    this.label = 'Notes',
+    this.controller,
+    this.hintText = 'Add description, notes, or links (optional)...',
+    this.maxLength = 1000,
+    this.minLines = 2,
+    this.maxLines = 6,
+    this.scrollPhysics = const NeverScrollableScrollPhysics(),
+    this.fontSize = 15.0,
+    this.padding = EdgeInsets.zero,
+    this.backgroundColor = Colors.transparent,
+    this.urlColor = const Color(0xFF2196F3),
+    this.showUrlChips = true,
+    this.readOnly = false,
     this.onChanged,
   });
 
@@ -384,6 +465,7 @@ class _BorderlessDescriptionFieldState extends State<BorderlessDescriptionField>
             children: [
               TextField(
                 controller: effectiveController,
+                readOnly: widget.readOnly,
                 keyboardType: TextInputType.multiline,
                 minLines: widget.minLines,
                 maxLines: widget.maxLines,
@@ -416,13 +498,84 @@ class _BorderlessDescriptionFieldState extends State<BorderlessDescriptionField>
               ListenableBuilder(
                 listenable: effectiveController,
                 builder: (context, _) {
-                  return Text(
-                    '${effectiveController.text.length}/${widget.maxLength}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textMutedColor(context),
-                      fontWeight: FontWeight.w500,
-                    ),
+                  final urls = widget.showUrlChips
+                      ? UrlHighlightEditingController.extractUrls(effectiveController.text)
+                      : const <String>[];
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (urls.isNotEmpty)
+                            Text(
+                              '${urls.length} link${urls.length == 1 ? "" : "s"} detected',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF2196F3),
+                              ),
+                            )
+                          else
+                            const SizedBox.shrink(),
+                          Text(
+                            '${effectiveController.text.length}/${widget.maxLength}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMutedColor(context),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (urls.isNotEmpty) ...[
+                        const VGapXs(),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: urls.map((u) {
+                            return InkWell(
+                              onTap: () => UrlLauncherHelper.openUrl(u, context: context),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2196F3).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFF2196F3).withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.link_rounded, size: 13, color: Color(0xFF2196F3)),
+                                    const HGapXs(),
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(maxWidth: 220),
+                                      child: Text(
+                                        u,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF2196F3),
+                                          fontWeight: FontWeight.w500,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ),
+                                    const HGapXs(),
+                                    const Icon(Icons.open_in_new_rounded, size: 11, color: Color(0xFF2196F3)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -433,3 +586,6 @@ class _BorderlessDescriptionFieldState extends State<BorderlessDescriptionField>
     );
   }
 }
+
+/// Common alias for borderless notes and description field.
+typedef NotesDescriptionField = BorderlessDescriptionField;

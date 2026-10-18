@@ -210,7 +210,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                       keyboardType: TextInputType.multiline,
                     ),
                     const VGapLg(),
-                    BorderlessDescriptionField(
+                    BorderlessDescriptionField.module(
                       controller: _descriptionController,
                     ),
                   ],

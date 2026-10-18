@@ -17,7 +17,7 @@ import 'topic_revision_badge.dart';
 /// - Topic title with [TopicRevisionBadge] (R1..R5 / Mastered)
 /// - Course & module breadcrumbs (`Course › Module`)
 /// - Due countdown indicator (Due today, In 3d, Overdue 2d)
-/// - Quick action buttons: "Revise" (timer session) and "Complete" (quick advance)
+/// - Revision level badge [TopicRevisionBadge] (R1..R5 / Mastered)
 class TopicRevisionCard extends StatelessWidget {
   final TopicRevision revision;
   final VoidCallback onTap;
@@ -77,46 +77,6 @@ class TopicRevisionCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (!revision.isFinished && onQuickComplete != null && isDue) ...[
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onQuickComplete,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.successColor.withValues(alpha: 0.3),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.check_rounded,
-                        size: 13,
-                        color: AppTheme.successColor,
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        'Complete',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.successColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const HGapXs(),
-          ],
           TopicRevisionBadge(revision: revision),
         ],
       ),

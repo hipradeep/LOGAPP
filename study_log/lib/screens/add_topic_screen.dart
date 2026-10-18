@@ -249,10 +249,8 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                       keyboardType: TextInputType.multiline,
                     ),
                     const VGapLg(),
-                    BorderlessDescriptionField(
+                    BorderlessDescriptionField.topic(
                       controller: _descriptionController,
-                      padding: EdgeInsets.zero,
-                      backgroundColor: Colors.transparent,
                     ),
                   ],
                 ),

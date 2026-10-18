@@ -5,8 +5,7 @@ import '../theme/revision_level_palette.dart';
 /// Compact badge indicating the spaced repetition level and status for a topic.
 ///
 /// Examples:
-/// - Active & Due: [● R2 Due] (Level pastel)
-/// - Active & Upcoming: [R2] (Level pastel)
+/// - Active: [R2] (Level pastel)
 /// - Mastered / Finished: [R5 ✓] (Pastel Green)
 class TopicRevisionBadge extends StatelessWidget {
   final TopicRevision revision;
@@ -29,8 +28,6 @@ class TopicRevisionBadge extends StatelessWidget {
     final String label;
     if (revision.isFinished) {
       label = 'R${revision.currentLevel} ✓';
-    } else if (isDue) {
-      label = 'R${revision.currentLevel} Due';
     } else {
       label = 'R${revision.currentLevel}';
     }
@@ -45,32 +42,15 @@ class TopicRevisionBadge extends StatelessWidget {
           width: isDue ? 1.0 : 0.8,
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (isDue && !revision.isFinished) ...[
-            Container(
-              width: 5,
-              height: 5,
-              margin: const EdgeInsets.only(right: 4),
-              decoration: BoxDecoration(
-                color: colors.foreground,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: colors.foreground,
-              height: 1.1,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: colors.foreground,
+          height: 1.1,
+          letterSpacing: 0.2,
+        ),
       ),
     );
   }

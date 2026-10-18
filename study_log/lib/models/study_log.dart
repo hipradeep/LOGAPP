@@ -3,7 +3,9 @@ enum StudyLogType {
   revisionCompleted,
   studySession,
   moduleCompleted,
-  revisionModuleCompleted;
+  revisionModuleCompleted,
+  todoCompleted,
+  todoSession;
 
   String get value => name;
 
@@ -26,6 +28,13 @@ enum StudyLogType {
       case 'revision_module_completed':
       case 'revision_module':
         return StudyLogType.revisionModuleCompleted;
+      case 'todocompleted':
+      case 'todo_completed':
+      case 'todo':
+        return StudyLogType.todoCompleted;
+      case 'todosession':
+      case 'todo_session':
+        return StudyLogType.todoSession;
       case 'studysession':
       case 'study_session':
       case 'session':
@@ -84,7 +93,14 @@ class StudyLog {
       (type == StudyLogType.revisionCompleted && (topicId == null || topicId!.isEmpty));
 
   /// True if this log represents a timer study session.
-  bool get isStudySession => type == StudyLogType.studySession;
+  bool get isStudySession =>
+      type == StudyLogType.studySession || type == StudyLogType.todoSession;
+
+  /// True if this log represents an individual todo task completion.
+  bool get isTodoCompleted => type == StudyLogType.todoCompleted;
+
+  /// True if this log represents a pomodoro session specifically on a todo.
+  bool get isTodoSession => type == StudyLogType.todoSession;
 
   Map<String, dynamic> toMap({bool forLocalJson = false}) {
     return {

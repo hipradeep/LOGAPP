@@ -11,6 +11,7 @@ import '../widgets/study_confirmation_dialog.dart';
 import '../services/database_backup_service.dart';
 import 'upload_json_screen.dart';
 import 'notification_settings_screen.dart';
+import 'design_system_screen.dart';
 
 /// Dedicated Settings screen holding configuration options:
 /// - Preferences: Appearance, Notifications
@@ -80,6 +81,14 @@ class _PreferencesSection extends StatelessWidget {
     );
   }
 
+  void _onDesignSystem(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const DesignSystemScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeCtrl = getIt.isRegistered<ThemeController>()
@@ -127,6 +136,15 @@ class _PreferencesSection extends StatelessWidget {
               iconColor: const Color(0xFF4F46E5),
               title: 'Notifications',
               onTap: () => _onNotifications(context),
+            ),
+            const _TileDivider(),
+            _SettingsTile(
+              icon: Icons.widgets_outlined,
+              iconBgColor: const Color(0xFFEDE9FE),
+              iconColor: const Color(0xFF7C3AED),
+              title: 'Design System',
+              subtitle: 'Tokens, components & styles',
+              onTap: () => _onDesignSystem(context),
             ),
           ],
         ),

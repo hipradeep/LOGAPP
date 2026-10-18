@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -13,6 +12,7 @@ import '../models/study_log.dart';
 import '../models/user_profile.dart';
 import '../models/notification_settings.dart';
 import '../models/topic_revision.dart';
+import '../models/todo_item.dart';
 
 /// Central SQLite Database Service for the Study app.
 ///
@@ -45,6 +45,8 @@ class DatabaseService {
       <String, StreamController<List<RevisionTopic>>>{};
   final _topicRevisionsStreamController =
       StreamController<List<TopicRevision>>.broadcast();
+  final _todosStreamController =
+      StreamController<List<TodoItem>>.broadcast();
   final _studyLogsStreamController =
       StreamController<List<StudyLog>>.broadcast();
   final _databaseChangeController =
@@ -156,6 +158,47 @@ class DatabaseService {
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_topicId ON topic_revisions(topicId);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_due ON topic_revisions(nextRevisionAt, status);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_courseId ON topic_revisions(courseId);');
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS todos (
+            id                 TEXT PRIMARY KEY,
+            title              TEXT NOT NULL,
+            description        TEXT NOT NULL DEFAULT '',
+            status             TEXT NOT NULL DEFAULT 'TODO',
+            priority           TEXT NOT NULL DEFAULT 'MED',
+            deadline           TEXT,
+            reminderTime       TEXT,
+            isRecurring        INTEGER NOT NULL DEFAULT 0,
+            recurrenceRule     TEXT,
+            courseId           TEXT,
+            moduleId           TEXT,
+            topicId            TEXT,
+            estimatedPomodoros INTEGER NOT NULL DEFAULT 1,
+            completedPomodoros INTEGER NOT NULL DEFAULT 0,
+            totalMinutesSpent  INTEGER NOT NULL DEFAULT 0,
+            orderIndex         INTEGER NOT NULL DEFAULT 0,
+            createdAt          TEXT NOT NULL,
+            updatedAt          TEXT NOT NULL,
+            completedAt        TEXT
+          );
+        ''');
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS todo_subtasks (
+            id          TEXT PRIMARY KEY,
+            todoId      TEXT NOT NULL,
+            title       TEXT NOT NULL,
+            isCompleted INTEGER NOT NULL DEFAULT 0,
+            orderIndex  INTEGER NOT NULL DEFAULT 0,
+            createdAt   TEXT NOT NULL,
+            completedAt TEXT,
+            FOREIGN KEY (todoId) REFERENCES todos(id) ON DELETE CASCADE
+          );
+        ''');
+
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_todos_status_deadline ON todos(status, deadline);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_todos_deadline ON todos(deadline);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_todo_subtasks_todoId_order ON todo_subtasks(todoId, orderIndex);');
       },
     );
   }
@@ -307,6 +350,45 @@ class DatabaseService {
       );
     ''');
 
+    // 9. Todos Table
+    batch.execute('''
+      CREATE TABLE todos (
+        id                 TEXT PRIMARY KEY,
+        title              TEXT NOT NULL,
+        description        TEXT NOT NULL DEFAULT '',
+        status             TEXT NOT NULL DEFAULT 'TODO',
+        priority           TEXT NOT NULL DEFAULT 'MED',
+        deadline           TEXT,
+        reminderTime       TEXT,
+        isRecurring        INTEGER NOT NULL DEFAULT 0,
+        recurrenceRule     TEXT,
+        courseId           TEXT,
+        moduleId           TEXT,
+        topicId            TEXT,
+        estimatedPomodoros INTEGER NOT NULL DEFAULT 1,
+        completedPomodoros INTEGER NOT NULL DEFAULT 0,
+        totalMinutesSpent  INTEGER NOT NULL DEFAULT 0,
+        orderIndex         INTEGER NOT NULL DEFAULT 0,
+        createdAt          TEXT NOT NULL,
+        updatedAt          TEXT NOT NULL,
+        completedAt        TEXT
+      );
+    ''');
+
+    // 10. Todo Subtasks Table
+    batch.execute('''
+      CREATE TABLE todo_subtasks (
+        id          TEXT PRIMARY KEY,
+        todoId      TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        isCompleted INTEGER NOT NULL DEFAULT 0,
+        orderIndex  INTEGER NOT NULL DEFAULT 0,
+        createdAt   TEXT NOT NULL,
+        completedAt TEXT,
+        FOREIGN KEY (todoId) REFERENCES todos(id) ON DELETE CASCADE
+      );
+    ''');
+
     // Indexes for fast querying
     batch.execute('CREATE INDEX idx_modules_courseId ON modules(courseId);');
     batch.execute('CREATE INDEX idx_topics_moduleId ON topics(moduleId);');
@@ -318,6 +400,9 @@ class DatabaseService {
     batch.execute('CREATE INDEX idx_topic_revisions_topicId ON topic_revisions(topicId);');
     batch.execute('CREATE INDEX idx_topic_revisions_due ON topic_revisions(nextRevisionAt, status);');
     batch.execute('CREATE INDEX idx_topic_revisions_courseId ON topic_revisions(courseId);');
+    batch.execute('CREATE INDEX idx_todos_status_deadline ON todos(status, deadline);');
+    batch.execute('CREATE INDEX idx_todos_deadline ON todos(deadline);');
+    batch.execute('CREATE INDEX idx_todo_subtasks_todoId_order ON todo_subtasks(todoId, orderIndex);');
 
     await batch.commit(noResult: true);
   }
@@ -337,10 +422,13 @@ class DatabaseService {
       await txn.delete('revision_topics');
       await txn.delete('topic_revisions');
       await txn.delete('study_logs');
+      await txn.delete('todos');
+      await txn.delete('todo_subtasks');
       await txn.delete('user_profile');
       await txn.delete('notification_settings');
     });
 
+    _todosStreamController.add([]);
     _coursesStreamController.add([]);
     _revisionsStreamController.add([]);
     _topicRevisionsStreamController.add([]);
@@ -1499,11 +1587,211 @@ class DatabaseService {
     _notifyChange('notification_settings');
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Todos & Subtasks Operations
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Stream<List<TodoItem>> watchTodos() => _todosStreamController.stream;
+
+  Future<List<TodoItem>> getTodos({bool includeArchived = true}) async {
+    final db = await database;
+    final String? where = includeArchived ? null : "status != 'ARCHIVED'";
+    final maps = await db.query(
+      'todos',
+      where: where,
+      orderBy: 'orderIndex ASC, createdAt DESC',
+    );
+
+    final subtasksMaps = await db.query(
+      'todo_subtasks',
+      orderBy: 'orderIndex ASC, createdAt ASC',
+    );
+
+    final Map<String, List<TodoSubtask>> subtasksByTodoId = {};
+    for (final sm in subtasksMaps) {
+      final subtask = TodoSubtask.fromMap(sm);
+      subtasksByTodoId.putIfAbsent(subtask.todoId, () => []).add(subtask);
+    }
+
+    return maps.map((m) {
+      final id = m['id']?.toString() ?? '';
+      final subtasks = subtasksByTodoId[id] ?? const [];
+      return TodoItem.fromMap(m, subtasks: subtasks);
+    }).toList();
+  }
+
+  Future<TodoItem?> getTodoById(String id) async {
+    if (id.isEmpty) return null;
+    final db = await database;
+    final maps = await db.query(
+      'todos',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+
+    final subtasks = await getSubtasksForTodo(id);
+    return TodoItem.fromMap(maps.first, subtasks: subtasks);
+  }
+
+  Future<void> insertTodo(TodoItem item, {List<TodoSubtask>? initialSubtasks}) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.insert(
+        'todos',
+        item.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      final subtasks = initialSubtasks ?? item.subtasks;
+      for (int i = 0; i < subtasks.length; i++) {
+        final s = subtasks[i].copyWith(orderIndex: i, todoId: item.id);
+        await txn.insert(
+          'todo_subtasks',
+          s.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+
+    _notifyChange('todos');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> updateTodo(TodoItem item) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update(
+        'todos',
+        item.toMap(),
+        where: 'id = ?',
+        whereArgs: [item.id],
+      );
+
+      // Re-sync subtasks
+      await txn.delete(
+        'todo_subtasks',
+        where: 'todoId = ?',
+        whereArgs: [item.id],
+      );
+      for (int i = 0; i < item.subtasks.length; i++) {
+        final s = item.subtasks[i].copyWith(orderIndex: i, todoId: item.id);
+        await txn.insert(
+          'todo_subtasks',
+          s.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+
+    _notifyChange('todos');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> updateTodoStatus(String id, TodoStatus status, {DateTime? completedAt}) async {
+    final db = await database;
+    await db.update(
+      'todos',
+      {
+        'status': status.value,
+        'updatedAt': DateTime.now().toIso8601String(),
+        'completedAt': status == TodoStatus.done ? (completedAt ?? DateTime.now()).toIso8601String() : null,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _notifyChange('todos');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> deleteTodo(String id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('todo_subtasks', where: 'todoId = ?', whereArgs: [id]);
+      await txn.delete('todos', where: 'id = ?', whereArgs: [id]);
+    });
+    _notifyChange('todos');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<List<TodoSubtask>> getSubtasksForTodo(String todoId) async {
+    final db = await database;
+    final maps = await db.query(
+      'todo_subtasks',
+      where: 'todoId = ?',
+      whereArgs: [todoId],
+      orderBy: 'orderIndex ASC, createdAt ASC',
+    );
+    return maps.map((m) => TodoSubtask.fromMap(m)).toList();
+  }
+
+  Future<void> insertSubtask(TodoSubtask subtask) async {
+    final db = await database;
+    await db.insert(
+      'todo_subtasks',
+      subtask.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _notifyChange('todo_subtasks');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> updateSubtask(TodoSubtask subtask) async {
+    final db = await database;
+    await db.update(
+      'todo_subtasks',
+      subtask.toMap(),
+      where: 'id = ?',
+      whereArgs: [subtask.id],
+    );
+    _notifyChange('todo_subtasks');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> toggleSubtaskCompletion(String subtaskId, bool isCompleted) async {
+    final db = await database;
+    await db.update(
+      'todo_subtasks',
+      {
+        'isCompleted': isCompleted ? 1 : 0,
+        'completedAt': isCompleted ? DateTime.now().toIso8601String() : null,
+      },
+      where: 'id = ?',
+      whereArgs: [subtaskId],
+    );
+    _notifyChange('todo_subtasks');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> deleteSubtask(String id) async {
+    final db = await database;
+    await db.delete('todo_subtasks', where: 'id = ?', whereArgs: [id]);
+    _notifyChange('todo_subtasks');
+    _todosStreamController.add(await getTodos());
+  }
+
+  Future<void> updateSubtaskOrder(String todoId, List<String> orderedSubtaskIds) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (int i = 0; i < orderedSubtaskIds.length; i++) {
+        await txn.update(
+          'todo_subtasks',
+          {'orderIndex': i},
+          where: 'id = ? AND todoId = ?',
+          whereArgs: [orderedSubtaskIds[i], todoId],
+        );
+      }
+    });
+    _notifyChange('todo_subtasks');
+    _todosStreamController.add(await getTodos());
+  }
+
   /// Reloads and pushes latest data across all active broadcast streams.
   Future<void> reloadAllStreams() async {
     _coursesStreamController.add(await getCourses());
     _revisionsStreamController.add(await getRevisions());
     _studyLogsStreamController.add(await getStudyLogs());
+    _todosStreamController.add(await getTodos());
 
     for (final courseId in _modulesStreamControllers.keys) {
       _modulesStreamControllers[courseId]

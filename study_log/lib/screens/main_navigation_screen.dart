@@ -8,12 +8,20 @@ import '../controllers/courses_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../models/revision.dart';
 import 'home_screen.dart';
+import 'todo_screen.dart';
 import 'revision_screen.dart';
 import 'revision_detail_screen.dart';
 import 'profile_screen.dart';
+import '../controllers/todo_controller.dart';
 
-/// Root navigation screen housing the 3 core tabs:
+import 'dart:async';
+import 'course_detail_screen.dart';
+import '../models/notification_payload.dart';
+import '../services/notification_service.dart';
+
+/// Root navigation screen housing the 4 core tabs:
 /// - Home
+/// - TODO (Daily todos, checklists, deadlines)
 /// - Revision (R1 -> R5 spaced repetition ladder)
 /// - Profile
 class MainNavigationScreen extends StatefulWidget {
@@ -26,6 +34,7 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final ValueNotifier<int> _currentIndex = ValueNotifier<int>(0);
   DateTime? _lastBackPressTime;
+  StreamSubscription<NotificationPayload>? _payloadSubscription;
 
   late final List<Widget> _pages;
 
@@ -34,12 +43,72 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     super.initState();
     _pages = [
       const HomeScreen(),
+      const TodoScreen(),
       RevisionScreen(
         revisionController: getIt<RevisionController>(),
         onOpenRevision: _openRevisionDetail,
       ),
       const ProfileScreen(),
     ];
+
+    if (getIt.isRegistered<NotificationService>()) {
+      _payloadSubscription =
+          getIt<NotificationService>().onPayloadTapped.listen(_handleNotificationPayload);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkInitialLaunchPayload();
+    });
+  }
+
+  Future<void> _checkInitialLaunchPayload() async {
+    if (!getIt.isRegistered<NotificationService>()) return;
+    final payload = await getIt<NotificationService>().getLaunchPayload();
+    if (payload != null && mounted) {
+      _handleNotificationPayload(payload);
+    }
+  }
+
+  void _handleNotificationPayload(NotificationPayload payload) {
+    if (!mounted) return;
+    switch (payload.action) {
+      case 'open_tab':
+        final tab = payload.tabIndex ?? 1;
+        _onTabSelected(tab);
+        break;
+      case 'open_home':
+        _onTabSelected(0);
+        break;
+      case 'open_todo':
+        _onTabSelected(1);
+        break;
+      case 'open_revision':
+        _onTabSelected(2);
+        break;
+      case 'open_course':
+        if (payload.courseId != null && getIt.isRegistered<CoursesController>()) {
+          final course =
+              getIt<CoursesController>().getCourseById(payload.courseId!);
+          if (course != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CourseDetailScreen(course: course),
+              ),
+            );
+          } else {
+            _onTabSelected(0);
+          }
+        } else {
+          _onTabSelected(0);
+        }
+        break;
+      case 'open_timer':
+        // Jump directly to Revision tab
+        _onTabSelected(2);
+        break;
+      default:
+        _onTabSelected(0);
+    }
   }
 
   void _openRevisionDetail(Revision revision) {
@@ -53,6 +122,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   void dispose() {
+    _payloadSubscription?.cancel();
     _currentIndex.dispose();
     super.dispose();
   }
@@ -60,26 +130,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _onTabSelected(int index) {
     if (_currentIndex.value == index) {
       if (index == 1) {
+        if (getIt.isRegistered<TodoController>()) {
+          getIt<TodoController>().refresh();
+        }
+      } else if (index == 2) {
         if (getIt.isRegistered<RevisionController>()) {
           getIt<RevisionController>().reconcile();
         }
         if (getIt.isRegistered<TopicRevisionController>()) {
           getIt<TopicRevisionController>().refresh();
         }
-      } else if (index == 2 && getIt.isRegistered<ProgressController>()) {
+      } else if (index == 3 && getIt.isRegistered<ProgressController>()) {
         getIt<ProgressController>().refresh();
       }
       return;
     }
     _currentIndex.value = index;
     if (index == 1) {
+      if (getIt.isRegistered<TodoController>()) {
+        getIt<TodoController>().refresh();
+      }
+    } else if (index == 2) {
       if (getIt.isRegistered<RevisionController>()) {
         getIt<RevisionController>().reconcile();
       }
       if (getIt.isRegistered<TopicRevisionController>()) {
         getIt<TopicRevisionController>().refresh();
       }
-    } else if (index == 2) {
+    } else if (index == 3) {
       if (getIt.isRegistered<CoursesController>()) {
         getIt<CoursesController>().refresh();
       }
@@ -197,13 +275,21 @@ class _StudyBottomNav extends StatelessWidget {
           _NavItem(
             index: 1,
             currentIndex: currentIndex,
+            label: '#TODO',
+            selectedIcon: Icons.task_alt_rounded,
+            unselectedIcon: Icons.task_alt_outlined,
+            onTap: onTap,
+          ),
+          _NavItem(
+            index: 2,
+            currentIndex: currentIndex,
             label: 'Revision',
             selectedIcon: Icons.sync_rounded,
             unselectedIcon: Icons.sync_outlined,
             onTap: onTap,
           ),
           _NavItem(
-            index: 2,
+            index: 3,
             currentIndex: currentIndex,
             label: 'Profile',
             selectedIcon: Icons.person_rounded,

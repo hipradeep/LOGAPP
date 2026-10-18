@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/notification_payload.dart';
+import '../models/notification_settings.dart';
+import 'notification_coordinator.dart';
 
 /// Thin wrapper over `flutter_local_notifications` that owns plugin
 /// initialization, Android permission negotiation, timezone resolution,
@@ -45,20 +49,53 @@ class NotificationService {
   static const String _deadlineChannelDescription =
       'Alerts for course deadlines due today.';
 
+  static const int morningBriefingNotificationId = 1000;
   static const int courseNotificationId = 1001;
   static const int streakNotificationId = 1002;
+  static const int middayBoostNotificationId = 1003;
+  static const int lastCallNotificationId = 1004;
   static const int revisionBaseNotificationId = 2000;
   static const int maxRevisionSlots = 20;
   static const int streakBaseNotificationId = 3000;
   static const int maxStreakSlots = 10;
   static const int deadlineBaseNotificationId = 4000;
   static const int maxDeadlineSlots = 10;
+  static const int studySlotBaseId = 5000;
+  static const int maxStudySlots = 10;
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final StreamController<NotificationPayload> _payloadStreamController =
+      StreamController<NotificationPayload>.broadcast();
+
+  /// Stream of notification tap payloads for deep-linking.
+  Stream<NotificationPayload> get onPayloadTapped =>
+      _payloadStreamController.stream;
 
   AndroidFlutterLocalNotificationsPlugin? _android;
   Future<void>? _initFuture;
   bool _isRequestingPermission = false;
+
+  void _onNotificationResponse(NotificationResponse response) {
+    final payload = NotificationPayload.fromJson(response.payload);
+    if (payload != null) {
+      _payloadStreamController.add(payload);
+    }
+  }
+
+  /// Inspects launch details when the app was launched directly by tapping a notification.
+  Future<NotificationPayload?> getLaunchPayload() async {
+    try {
+      await init();
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      if (details != null && details.didNotificationLaunchApp) {
+        final raw = details.notificationResponse?.payload;
+        return NotificationPayload.fromJson(raw);
+      }
+    } catch (e) {
+      debugPrint('NotificationService getLaunchPayload error: $e');
+    }
+    return null;
+  }
 
   static const NotificationDetails _courseDetails = NotificationDetails(
     android: AndroidNotificationDetails(
@@ -131,7 +168,10 @@ class NotificationService {
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
 
-    await _plugin.initialize(settings: settings);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: _onNotificationResponse,
+    );
 
     final android = _android ??= _resolveAndroid();
     if (android != null) {
@@ -424,12 +464,13 @@ class NotificationService {
   /// Cancels the daily streak saver reminder.
   Future<void> cancelStreakReminder() async => cancelAllStreakReminders();
 
-  /// Schedules reminder notifications throughout the CURRENT DAY ONLY for modules due for revision today.
+  /// Schedules reminder notifications throughout the CURRENT DAY ONLY for modules and topics due for revision today.
   ///
   /// Reminders start from 4:00 AM and repeat at random 90–120 minute intervals up to 10:00 PM (22:00) today.
   Future<void> scheduleRevisionRemindersForToday({
     required int dueCount,
     List<String> moduleTitles = const [],
+    List<String> topicTitles = const [],
   }) async {
     try {
       await init();
@@ -453,15 +494,22 @@ class NotificationService {
         if (slotIndex >= maxRevisionSlots) break;
         if (slotTime.isAfter(now)) {
           final id = revisionBaseNotificationId + slotIndex;
-          final moduleDesc = moduleTitles.isNotEmpty
-              ? (moduleTitles.length == 1
-                  ? '"${moduleTitles.first}"'
-                  : '"${moduleTitles.first}" and ${moduleTitles.length - 1} other(s)')
-              : '';
-
-          final body = moduleDesc.isNotEmpty
-              ? 'Revision due today for $moduleDesc. Don\'t forget spaced repetition!'
-              : '$dueCount module(s) due for spaced repetition today.';
+          final String body;
+          if (topicTitles.isNotEmpty && moduleTitles.isNotEmpty) {
+            body = 'Revision due today: ${topicTitles.length} topic(s) and ${moduleTitles.length} module(s). Don\'t forget spaced repetition!';
+          } else if (topicTitles.isNotEmpty) {
+            final desc = topicTitles.length == 1
+                ? '"${topicTitles.first}"'
+                : '"${topicTitles.first}" and ${topicTitles.length - 1} other(s)';
+            body = 'Topic revision due today for $desc. Lock in your spaced repetition memory!';
+          } else if (moduleTitles.isNotEmpty) {
+            final desc = moduleTitles.length == 1
+                ? '"${moduleTitles.first}"'
+                : '"${moduleTitles.first}" and ${moduleTitles.length - 1} other(s)';
+            body = 'Revision due today for $desc. Don\'t forget spaced repetition!';
+          } else {
+            body = '$dueCount revision item(s) due for spaced repetition today.';
+          }
 
           await _plugin.zonedSchedule(
             id: id,
@@ -557,14 +605,198 @@ class NotificationService {
     }
   }
 
-  /// Cancels all production reminders (Course, Streak, Revisions, and Deadlines).
+  /// Schedules the single-pass coordinated plan computed by [NotificationCoordinator].
+  Future<void> scheduleCoordinatedPlan(List<CoordinatedNotification> plan) async {
+    try {
+      await init();
+      // Cancel previous coordinated notification IDs
+      await Future.wait([
+        _plugin.cancel(id: morningBriefingNotificationId),
+        _plugin.cancel(id: streakNotificationId),
+        _plugin.cancel(id: middayBoostNotificationId),
+        _plugin.cancel(id: lastCallNotificationId),
+        _plugin.cancel(id: deadlineBaseNotificationId),
+        for (int i = 0; i < maxStreakSlots; i++)
+          _plugin.cancel(id: streakBaseNotificationId + i),
+        for (int i = 0; i < maxRevisionSlots; i++)
+          _plugin.cancel(id: revisionBaseNotificationId + i),
+      ]);
+
+      if (plan.isEmpty) return;
+      if (!await requestPermission()) return;
+
+      final android = _android ??= _resolveAndroid();
+      final canExact = await _canScheduleExact(android);
+      final scheduleMode = canExact
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+
+      for (final alert in plan) {
+        final NotificationDetails details;
+        switch (alert.channelId) {
+          case NotificationCoordinator.revisionChannelId:
+            details = _revisionDetails;
+            break;
+          case NotificationCoordinator.streakChannelId:
+            details = _streakDetails;
+            break;
+          case NotificationCoordinator.deadlineChannelId:
+            details = _deadlineDetails;
+            break;
+          default:
+            details = _courseDetails;
+        }
+
+        await _plugin.zonedSchedule(
+          id: alert.id,
+          title: alert.title,
+          body: alert.body,
+          scheduledDate: alert.scheduledTime,
+          notificationDetails: details,
+          androidScheduleMode: scheduleMode,
+          payload: alert.payload.toJson(),
+        );
+        debugPrint(
+            'NotificationService: Scheduled coordinated alert "${alert.title}" [ID: ${alert.id}] at ${alert.scheduledTime}');
+      }
+    } catch (e, stack) {
+      debugPrint('NotificationService scheduleCoordinatedPlan error: $e\n$stack');
+    }
+  }
+
+  /// Schedules daily study reminders for each active slot configured by the user.
+  Future<void> scheduleStudyReminderSlots({
+    required List<StudyReminderSlot> slots,
+  }) async {
+    try {
+      await init();
+      await cancelStudyReminderSlots();
+
+      final activeSlots = slots.where((s) => s.isEnabled).toList();
+      if (activeSlots.isEmpty) return;
+      if (!await requestPermission()) return;
+
+      final android = _android ??= _resolveAndroid();
+      final canExact = await _canScheduleExact(android);
+      final scheduleMode = canExact
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+
+      for (int i = 0; i < activeSlots.length && i < maxStudySlots; i++) {
+        final slot = activeSlots[i];
+        final scheduled = _nextInstanceOfDailyTime(slot.time);
+        final payload = NotificationPayload.morningBriefing().toJson();
+
+        await _plugin.zonedSchedule(
+          id: studySlotBaseId + i,
+          title: '${slot.title} 📚',
+          body: 'Take some time to continue your course modules today!',
+          scheduledDate: scheduled,
+          notificationDetails: _courseDetails,
+          androidScheduleMode: scheduleMode,
+          matchDateTimeComponents: DateTimeComponents.time,
+          payload: payload,
+        );
+        debugPrint(
+            'NotificationService: Scheduled study slot "${slot.title}" at ${slot.time.hour}:${slot.time.minute.toString().padLeft(2, '0')}');
+      }
+    } catch (e, stack) {
+      debugPrint('NotificationService scheduleStudyReminderSlots error: $e\n$stack');
+    }
+  }
+
+  /// Cancels all scheduled user study reminder slots.
+  Future<void> cancelStudyReminderSlots() async {
+    try {
+      await init();
+      await Future.wait([
+        for (int i = 0; i < maxStudySlots; i++)
+          _plugin.cancel(id: studySlotBaseId + i),
+      ]);
+    } catch (e) {
+      debugPrint('NotificationService cancelStudyReminderSlots error: $e');
+    }
+  }
+
+  /// Real-time cancellation hook: immediately cancels streak saver and last call alerts
+  /// as soon as study activity or a revision is logged today.
+  Future<void> cancelStreakAndLastCall() async {
+    try {
+      await init();
+      await Future.wait([
+        _plugin.cancel(id: streakNotificationId),
+        _plugin.cancel(id: lastCallNotificationId),
+        for (int i = 0; i < maxStreakSlots; i++)
+          _plugin.cancel(id: streakBaseNotificationId + i),
+      ]);
+      debugPrint('NotificationService: Cancelled streak saver and last call alerts.');
+    } catch (e) {
+      debugPrint('NotificationService cancelStreakAndLastCall error: $e');
+    }
+  }
+
+  static const int todoBaseNotificationId = 5000;
+
+  /// Schedules an explicit reminder alert for a task.
+  Future<void> scheduleTodoReminder({
+    required String todoId,
+    required String title,
+    required DateTime reminderTime,
+  }) async {
+    try {
+      if (reminderTime.isBefore(DateTime.now())) return;
+      await init();
+      if (!await requestPermission()) return;
+
+      final android = _android ??= _resolveAndroid();
+      final canExact = await _canScheduleExact(android);
+      final scheduleMode = canExact
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+
+      final alertId = todoBaseNotificationId + (todoId.hashCode.abs() % 4000);
+      final tzScheduled = tz.TZDateTime.from(reminderTime, tz.local);
+      final payload = const NotificationPayload(action: 'open_todo', tabIndex: 1).toJson();
+
+      await _plugin.zonedSchedule(
+        id: alertId,
+        title: 'Task Reminder ⏰',
+        body: title,
+        scheduledDate: tzScheduled,
+        notificationDetails: _deadlineDetails,
+        androidScheduleMode: scheduleMode,
+        payload: payload,
+      );
+      debugPrint('NotificationService: Scheduled todo reminder for "$title" at $reminderTime');
+    } catch (e, stack) {
+      debugPrint('NotificationService scheduleTodoReminder error: $e\n$stack');
+    }
+  }
+
+  /// Cancels an explicit reminder alert for a task.
+  Future<void> cancelTodoReminder(String todoId) async {
+    try {
+      await init();
+      final alertId = todoBaseNotificationId + (todoId.hashCode.abs() % 4000);
+      await _plugin.cancel(id: alertId);
+      debugPrint('NotificationService: Cancelled todo reminder for task $todoId');
+    } catch (e) {
+      debugPrint('NotificationService cancelTodoReminder error: $e');
+    }
+  }
+
+  /// Cancels all production reminders (Course, Streak, Revisions, Deadlines, and Tiers).
   Future<void> cancelAllReminders() async {
     try {
       await init();
       await cancelCourseReminder();
+      await cancelStudyReminderSlots();
       await cancelStreakReminder();
+      await cancelStreakAndLastCall();
       await cancelAllRevisionReminders();
       await cancelAllDeadlineReminders();
+      await _plugin.cancel(id: morningBriefingNotificationId);
+      await _plugin.cancel(id: middayBoostNotificationId);
       debugPrint('NotificationService: Cancelled all production reminders.');
     } catch (e) {
       debugPrint('NotificationService cancelAllReminders error: $e');

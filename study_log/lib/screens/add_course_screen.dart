@@ -335,7 +335,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
                       keyboardType: TextInputType.multiline,
                     ),
                     const VGapLg(),
-                    BorderlessDescriptionField(
+                    BorderlessDescriptionField.course(
                       controller: _descriptionController,
                     ),
                     const VGapLg(),
