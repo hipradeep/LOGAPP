@@ -134,12 +134,25 @@ class DatabaseService {
             title          TEXT NOT NULL,
             currentLevel   INTEGER NOT NULL DEFAULT 1,
             status         TEXT NOT NULL DEFAULT 'active',
+            levelStatus    TEXT NOT NULL DEFAULT 'notStarted',
             nextRevisionAt TEXT NOT NULL,
             completedAt    TEXT,
             createdAt      TEXT NOT NULL,
             updatedAt      TEXT NOT NULL
           );
         ''');
+        try {
+          await db.execute(
+            "ALTER TABLE topic_revisions ADD COLUMN levelStatus TEXT NOT NULL DEFAULT 'notStarted';",
+          );
+        } catch (_) {
+          // Column already exists
+        }
+        try {
+          await db.execute(
+            "UPDATE topic_revisions SET levelStatus = 'notStarted' WHERE levelStatus = 'inProgress';",
+          );
+        } catch (_) {}
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_topicId ON topic_revisions(topicId);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_due ON topic_revisions(nextRevisionAt, status);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_courseId ON topic_revisions(courseId);');
@@ -240,6 +253,7 @@ class DatabaseService {
         title          TEXT NOT NULL,
         currentLevel   INTEGER NOT NULL DEFAULT 1,
         status         TEXT NOT NULL DEFAULT 'active',
+        levelStatus    TEXT NOT NULL DEFAULT 'notStarted',
         nextRevisionAt TEXT NOT NULL,
         completedAt    TEXT,
         createdAt      TEXT NOT NULL,
@@ -417,8 +431,15 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [id],
     );
+    await db.delete(
+      'topic_revisions',
+      where: 'courseId = ?',
+      whereArgs: [id],
+    );
     _coursesStreamController.add(await getCourses());
+    _topicRevisionsStreamController.add(await getTopicRevisions());
     _notifyChange('courses');
+    _notifyChange('topic_revisions');
   }
 
   Future<void> saveCourses(List<Course> courses) async {
@@ -488,6 +509,26 @@ class DatabaseService {
     _notifyChange('modules');
   }
 
+  Future<void> updateModuleOrders(List<Module> reorderedModules) async {
+    final db = await database;
+    final batch = db.batch();
+    for (int i = 0; i < reorderedModules.length; i++) {
+      batch.update(
+        'modules',
+        {'orderIndex': i},
+        where: 'id = ?',
+        whereArgs: [reorderedModules[i].id],
+      );
+    }
+    await batch.commit(noResult: true);
+    if (reorderedModules.isNotEmpty) {
+      final courseId = reorderedModules.first.courseId;
+      _getModuleController(courseId)
+          .add(await getModules(courseId: courseId));
+    }
+    _notifyChange('modules');
+  }
+
   Future<void> deleteModule(String id) async {
     final db = await database;
     final existing = await db.query(
@@ -504,11 +545,18 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [id],
     );
+    await db.delete(
+      'topic_revisions',
+      where: 'moduleId = ?',
+      whereArgs: [id],
+    );
 
     if (courseId != null) {
       _getModuleController(courseId).add(await getModules(courseId: courseId));
     }
+    _topicRevisionsStreamController.add(await getTopicRevisions());
     _notifyChange('modules');
+    _notifyChange('topic_revisions');
   }
 
   Future<void> saveModules(String courseId, List<Module> modules) async {
@@ -657,9 +705,37 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [id],
     );
+    await db.delete(
+      'topic_revisions',
+      where: 'topicId = ?',
+      whereArgs: [id],
+    );
 
     if (moduleId != null) {
       _getTopicController(moduleId).add(await getTopics(moduleId: moduleId));
+    }
+    _topicRevisionsStreamController.add(await getTopicRevisions());
+    _notifyChange('topics');
+    _notifyChange('topic_revisions');
+  }
+
+  Future<void> updateTopicOrders(List<Topic> reorderedTopics) async {
+    final db = await database;
+    final batch = db.batch();
+    for (int i = 0; i < reorderedTopics.length; i++) {
+      batch.update(
+        'topics',
+        {'orderIndex': i},
+        where: 'id = ?',
+        whereArgs: [reorderedTopics[i].id],
+      );
+    }
+    await batch.commit(noResult: true);
+    if (reorderedTopics.isNotEmpty) {
+      final moduleId = reorderedTopics.first.moduleId;
+      if (moduleId.isNotEmpty) {
+        _getTopicController(moduleId).add(await getTopics(moduleId: moduleId));
+      }
     }
     _notifyChange('topics');
   }

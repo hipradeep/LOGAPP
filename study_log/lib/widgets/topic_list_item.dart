@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/topic.dart';
 import '../models/topic_revision.dart';
+import '../theme/app_theme.dart';
 import 'compact_list_item.dart';
 import 'topic_revision_badge.dart';
 import 'topic_status_indicator.dart';
@@ -25,6 +26,8 @@ class TopicListItem extends StatelessWidget {
   final bool showCheckbox;
   final bool showTrailing;
   final int? titleMaxLines;
+  final Widget? trailing;
+  final String? subtitle;
 
   const TopicListItem({
     super.key,
@@ -39,13 +42,25 @@ class TopicListItem extends StatelessWidget {
     this.showCheckbox = true,
     this.showTrailing = true,
     this.titleMaxLines,
+    this.trailing,
+    this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final isEarlyCompleted = topicRevision != null &&
+        !topicRevision!.isFinished &&
+        topicRevision!.levelStatus == TopicStatus.completed &&
+        !topicRevision!.isDueAt(now);
+
     Widget? leadingWidget;
     if (showCheckbox) {
-      final indicator = TopicStatusIndicator(status: topic.status);
+      final effectiveStatus = topicRevision?.levelStatus ?? topic.status;
+      final indicator = TopicStatusIndicator(
+        status: effectiveStatus,
+        completedColor: isEarlyCompleted ? AppTheme.pastelBlueText(context) : null,
+      );
       leadingWidget = onCheckboxTap != null
           ? GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -60,12 +75,20 @@ class TopicListItem extends StatelessWidget {
             ? TopicRevisionBadge(revision: topicRevision!)
             : null);
 
+    // Before due date, early completed revision is NOT cleared (should not be struck-through/dimmed).
+    final effectiveIsCompleted = topicRevision != null
+        ? (topicRevision!.isFinished ||
+            (topicRevision!.levelStatus == TopicStatus.completed && topicRevision!.isDueAt(now)))
+        : topic.isCompleted;
+
     return CompactListItem(
       isCard: isCard,
-      isCompleted: topic.isCompleted,
+      isCompleted: effectiveIsCompleted,
       leading: leadingWidget,
       title: topic.title,
+      subtitle: subtitle,
       titleBadge: badge,
+      trailing: trailing,
       showTrailingChevron: showTrailing,
       onTap: onTap,
       onLongPress: onLongPress,

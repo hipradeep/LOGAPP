@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
@@ -24,6 +25,7 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final ValueNotifier<int> _currentIndex = ValueNotifier<int>(0);
+  DateTime? _lastBackPressTime;
 
   late final List<Widget> _pages;
 
@@ -90,23 +92,60 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: _currentIndex,
-      builder: (context, activeIndex, _) {
-        return Scaffold(
-          backgroundColor: AppTheme.background(context),
-          body: IndexedStack(
-            index: activeIndex,
-            children: _pages,
-          ),
-          bottomNavigationBar: _StudyBottomNav(
-            currentIndex: activeIndex,
-            onTap: _onTabSelected,
+  void _handlePopInvoked(bool didPop, Object? result) {
+    if (didPop) return;
+
+    if (_currentIndex.value != 0) {
+      _onTabSelected(0);
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastBackPressTime == null ||
+        now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+      _lastBackPressTime = now;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Press back again to exit'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                AppTheme.defaultBorderRadius,
+              ),
+            ),
           ),
         );
-      },
+      return;
+    }
+
+    SystemNavigator.pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handlePopInvoked,
+      child: ValueListenableBuilder<int>(
+        valueListenable: _currentIndex,
+        builder: (context, activeIndex, _) {
+          return Scaffold(
+            backgroundColor: AppTheme.background(context),
+            body: IndexedStack(
+              index: activeIndex,
+              children: _pages,
+            ),
+            bottomNavigationBar: _StudyBottomNav(
+              currentIndex: activeIndex,
+              onTap: _onTabSelected,
+            ),
+          );
+        },
+      ),
     );
   }
 }

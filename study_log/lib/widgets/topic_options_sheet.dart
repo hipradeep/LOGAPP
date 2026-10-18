@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import '../controllers/topic_revision_controller.dart';
 import '../models/topic.dart';
 import '../models/topic_revision.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../utils/topic_icon_util.dart';
 import 'app_spacers.dart';
 import 'sheet_action_widgets.dart';
+import 'study_confirmation_dialog.dart';
 
 enum TopicOptionAction {
   edit,
+  order,
   duplicate,
   move,
   addToRevision,
@@ -27,6 +30,7 @@ class TopicOptionsSheet extends StatelessWidget {
   final String courseId;
   final String moduleId;
   final VoidCallback? onEdit;
+  final VoidCallback? onOrderTopic;
   final VoidCallback? onDuplicate;
   final VoidCallback? onMove;
   final VoidCallback? onDelete;
@@ -39,6 +43,7 @@ class TopicOptionsSheet extends StatelessWidget {
     this.courseId = '',
     this.moduleId = '',
     this.onEdit,
+    this.onOrderTopic,
     this.onDuplicate,
     this.onMove,
     this.onDelete,
@@ -52,6 +57,7 @@ class TopicOptionsSheet extends StatelessWidget {
     String courseId = '',
     String moduleId = '',
     VoidCallback? onEdit,
+    VoidCallback? onOrderTopic,
     VoidCallback? onDuplicate,
     VoidCallback? onMove,
     VoidCallback? onDelete,
@@ -67,6 +73,7 @@ class TopicOptionsSheet extends StatelessWidget {
         courseId: courseId,
         moduleId: moduleId,
         onEdit: onEdit,
+        onOrderTopic: onOrderTopic,
         onDuplicate: onDuplicate,
         onMove: onMove,
         onDelete: onDelete,
@@ -78,6 +85,9 @@ class TopicOptionsSheet extends StatelessWidget {
     switch (action) {
       case TopicOptionAction.edit:
         onEdit?.call();
+        break;
+      case TopicOptionAction.order:
+        onOrderTopic?.call();
         break;
       case TopicOptionAction.duplicate:
         onDuplicate?.call();
@@ -100,7 +110,29 @@ class TopicOptionsSheet extends StatelessWidget {
         await _handleResetRevision(context, topic: topic);
         break;
       case TopicOptionAction.delete:
-        onDelete?.call();
+        if (onDelete != null) {
+          onDelete.call();
+        } else {
+          final confirmed = await StudyConfirmationDialog.showDeleteTopic(
+            context,
+            topicTitle: topic.title,
+          );
+          if (confirmed && context.mounted) {
+            await DatabaseService.instance.deleteTopic(topic.id);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Topic "${topic.title}" deleted'),
+                  backgroundColor: AppTheme.primaryColor,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                  ),
+                ),
+              );
+            }
+          }
+        }
         break;
     }
   }
@@ -148,6 +180,12 @@ class TopicOptionsSheet extends StatelessWidget {
     BuildContext context, {
     required Topic topic,
   }) async {
+    final confirmed = await StudyConfirmationDialog.showRemoveRevisionTopic(
+      context,
+      topicTitle: topic.title,
+    );
+    if (!confirmed || !context.mounted) return;
+
     if (!getIt.isRegistered<TopicRevisionController>()) return;
     try {
       await getIt<TopicRevisionController>().deleteByTopicId(topic.id);
@@ -184,6 +222,13 @@ class TopicOptionsSheet extends StatelessWidget {
     try {
       final rev = getIt<TopicRevisionController>().topicRevisionFor(topic.id);
       if (rev != null) {
+        final confirmed = await StudyConfirmationDialog.showResetRevision(
+          context,
+          title: topic.title,
+          currentLevelLabel: rev.levelLabel,
+        );
+        if (!confirmed || !context.mounted) return;
+
         await getIt<TopicRevisionController>().resetTopicRevision(rev.id);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -241,6 +286,11 @@ class TopicOptionsSheet extends StatelessWidget {
           icon: Icons.edit_outlined,
           title: 'Edit Topic',
           onTap: () => Navigator.pop(context, TopicOptionAction.edit),
+        ),
+        SheetActionRow(
+          icon: Icons.reorder_rounded,
+          title: 'Order Topic',
+          onTap: () => Navigator.pop(context, TopicOptionAction.order),
         ),
         if (topicRev == null) ...[
           SheetActionRow(

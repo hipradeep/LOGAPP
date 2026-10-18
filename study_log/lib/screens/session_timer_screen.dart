@@ -182,36 +182,48 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     return _topics.where((t) => t.isCompleted).length;
   }
 
-  String get _currentTopicTitle {
+  String _getTopicTitleAt(int index) {
     if (widget.isRevision && _revisionTopics.isNotEmpty) {
-      if (_currentTopicIndex < _revisionTopics.length) {
-        if (_currentTopicIndex < _topics.length && _topics[_currentTopicIndex].title.isNotEmpty) {
-          return _topics[_currentTopicIndex].title;
+      if (index < _revisionTopics.length) {
+        if (index < _topics.length && _topics[index].title.isNotEmpty) {
+          return _topics[index].title;
         }
-        final rt = _revisionTopics[_currentTopicIndex];
+        final rt = _revisionTopics[index];
         final match = _topics.where((t) => t.id == rt.topicId).firstOrNull;
         if (match != null && match.title.isNotEmpty) return match.title;
-        return rt.topicId.isNotEmpty ? rt.topicId : 'Topic';
+        return rt.topicId.isNotEmpty ? rt.topicId : 'Topic ${index + 1}';
       }
     } else {
-      if (_currentTopicIndex < _topics.length) {
-        return _topics[_currentTopicIndex].title;
+      if (index < _topics.length) {
+        return _topics[index].title;
       }
     }
-    return 'Topic';
+    return 'Topic ${index + 1}';
   }
 
-  bool get _isCurrentTopicCompleted {
+  bool _isTopicCompletedAt(int index) {
     if (widget.isRevision && _revisionTopics.isNotEmpty) {
-      if (_currentTopicIndex < _revisionTopics.length) {
-        return _revisionTopics[_currentTopicIndex].isCompleted;
+      if (index < _revisionTopics.length) {
+        return _revisionTopics[index].isCompleted;
       }
     } else {
-      if (_currentTopicIndex < _topics.length) {
-        return _topics[_currentTopicIndex].isCompleted;
+      if (index < _topics.length) {
+        return _topics[index].isCompleted;
       }
     }
     return false;
+  }
+
+  String get _currentTopicTitle => _getTopicTitleAt(_currentTopicIndex);
+
+  bool get _isCurrentTopicCompleted => _isTopicCompletedAt(_currentTopicIndex);
+
+  void _switchToTopic(int index) {
+    if (index >= 0 && index < _totalTopicsCount && index != _currentTopicIndex) {
+      setState(() {
+        _currentTopicIndex = index;
+      });
+    }
   }
 
   Future<void> _handleDoneAndNext() async {
@@ -235,6 +247,19 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       }
 
       final elapsedMinutes = (_elapsedSeconds / 60).ceil().clamp(1, widget.durationMinutes);
+      final targetTopicId = updated.topicId.isNotEmpty ? updated.topicId : updated.id;
+
+      // Advance individual topic revision in TopicRevisionController (Single Source of Truth)
+      if (getIt.isRegistered<TopicRevisionController>()) {
+        final trc = getIt<TopicRevisionController>();
+        final rev = trc.topicRevisionFor(targetTopicId) ??
+            (widget.revisionId != null
+                ? trc.topicRevisions.where((r) => r.id == widget.revisionId).firstOrNull
+                : null);
+        if (rev != null) {
+          await trc.completeCurrentLevel(rev.id, at: now, durationMinutes: elapsedMinutes);
+        }
+      }
 
       // Log to StudyLog
       final studyLog = StudyLog(
@@ -244,7 +269,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         courseTitle: widget.courseTitle,
         moduleId: widget.moduleId,
         moduleTitle: widget.moduleTitle,
-        topicId: updated.topicId.isNotEmpty ? updated.topicId : updated.id,
+        topicId: targetTopicId,
         topicTitle: _currentTopicTitle,
         durationMinutes: elapsedMinutes,
         timestamp: now,
@@ -650,11 +675,20 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
+  String get _breadcrumbs {
+    if (widget.courseTitle.isNotEmpty && widget.moduleTitle.isNotEmpty) {
+      return '${widget.courseTitle} > ${widget.moduleTitle}';
+    } else if (widget.courseTitle.isNotEmpty) {
+      return widget.courseTitle;
+    } else {
+      return widget.moduleTitle;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final total = _totalTopicsCount;
     final completed = _completedTopicsCount;
-    final ratio = total > 0 ? (completed / total).clamp(0.0, 1.0) : 0.0;
 
     return PopScope(
       canPop: false,
@@ -666,33 +700,63 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       child: Scaffold(
         backgroundColor: AppTheme.background(context),
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              children: [
-                // Top App Bar: Title | Settings
-                _buildTopBar(context),
-
-                const Spacer(flex: 1),
-
-                // RepaintBoundary isolates 1-second countdown repaints from rest of UI
-                RepaintBoundary(
-                  child: _buildCircularTimer(context),
+          child: Stack(
+            children: [
+              // Layer 1: Timer Layer (Z-index: Center, lifted slightly for optical balance)
+              Positioned.fill(
+                child: Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, -45),
+                    child: RepaintBoundary(
+                      child: _buildCircularTimer(context, completed, total),
+                    ),
+                  ),
                 ),
+              ),
 
-                const Spacer(flex: 1),
+              // Layer 2: Top Header Layer (App Bar, Breadcrumbs, Current Topic)
+              Positioned(
+                top: 8,
+                left: 16,
+                right: 16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTopBar(context),
+                    if (_breadcrumbs.isNotEmpty) ...[
+                      const VGapXs(),
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            _breadcrumbs,
+                            textAlign: TextAlign.center,
+                            softWrap: true,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              height: 1.3,
+                              color: AppTheme.textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const VGapSm(),
+                    _buildCurrentTopicCard(context),
+                  ],
+                ),
+              ),
 
-                // Current Topic Card
-                _buildCurrentTopicCard(context, completed, total, ratio),
-
-                const Spacer(flex: 1),
-
-                // Bottom Action Controls: Pause & End Session
-                _buildBottomControls(context),
-
-                const VGapSm(),
-              ],
-            ),
+              // Layer 3: Bottom Controls Layer (End, Next & Save / Save)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: _buildBottomControls(context),
+              ),
+            ],
           ),
         ),
       ),
@@ -835,6 +899,140 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     );
   }
 
+  void _openTopicsReadModeSheet() {
+    final total = _totalTopicsCount;
+    final completed = _completedTopicsCount;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return SheetContainer(
+          children: [
+            const SheetHandleBar(),
+            const VGapMd(),
+            SheetHeader(
+              badge: SheetHeaderBadge(
+                backgroundColor: AppTheme.pastelIndigo(sheetCtx),
+                child: Icon(
+                  Icons.menu_book_rounded,
+                  color: AppTheme.primaryColor,
+                  size: 22,
+                ),
+              ),
+              title: 'Session Topics',
+              subtitle: '${widget.moduleTitle.isNotEmpty ? widget.moduleTitle : widget.title} • $completed of $total completed',
+            ),
+            const VGapMd(),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetCtx).height * 0.52,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: total,
+                separatorBuilder: (_, __) => const VGapXs(),
+                itemBuilder: (ctx, index) {
+                  final isCurrent = index == _currentTopicIndex;
+                  final isDone = _isTopicCompletedAt(index);
+                  final title = _getTopicTitleAt(index);
+
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        Navigator.pop(sheetCtx);
+                        if (index != _currentTopicIndex) {
+                          _switchToTopic(index);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6.5),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? AppTheme.pastelIndigo(sheetCtx)
+                              : (isDone
+                                  ? AppTheme.pastelGreen(sheetCtx).withValues(alpha: 0.35)
+                                  : AppTheme.surfaceVariant(sheetCtx).withValues(alpha: 0.45)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isCurrent
+                                ? AppTheme.primaryColor.withValues(alpha: 0.4)
+                                : (isDone
+                                    ? AppTheme.pastelGreenBorder(sheetCtx)
+                                    : AppTheme.borderColor(sheetCtx)),
+                            width: isCurrent ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isCurrent
+                                    ? AppTheme.primaryColor
+                                    : (isDone
+                                        ? AppTheme.pastelGreenText(sheetCtx)
+                                        : AppTheme.surfaceVariant(sheetCtx)),
+                              ),
+                              alignment: Alignment.center,
+                              child: isDone
+                                  ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
+                                  : Text(
+                                      '${index + 1}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isCurrent
+                                            ? Colors.white
+                                            : AppTheme.textSecondaryColor(sheetCtx),
+                                      ),
+                                    ),
+                            ),
+                            const HGapSm(),
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                  color: isDone
+                                      ? AppTheme.textSecondaryColor(sheetCtx)
+                                      : AppTheme.textPrimaryColor(sheetCtx),
+                                  decoration: isDone ? TextDecoration.lineThrough : null,
+                                  decorationColor: AppTheme.textMutedColor(sheetCtx),
+                                ),
+                              ),
+                            ),
+                            if (isCurrent)
+                              Icon(
+                                Icons.play_arrow_rounded,
+                                size: 18,
+                                color: AppTheme.primaryColor,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const VGapMd(),
+            SheetCancelButton(
+              onTap: () => Navigator.pop(sheetCtx),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildTopBar(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -927,7 +1125,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     }
   }
 
-  Widget _buildCircularTimer(BuildContext context) {
+  Widget _buildCircularTimer(BuildContext context, int completed, int total) {
     return GestureDetector(
       onTap: _handleTimerTap,
       behavior: HitTestBehavior.opaque,
@@ -960,6 +1158,17 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Total countdown duration placed above running timer
+              Text(
+                _formatTime(_totalSeconds),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: AppTheme.textSecondaryColor(context),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const VGapXs(),
+              // Running countdown timer
               ValueListenableBuilder<int>(
                 valueListenable: _secondsRemainingNotifier,
                 builder: (context, secondsRemaining, _) {
@@ -975,13 +1184,33 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                 },
               ),
               const VGapXs(),
+              // 0/1 topics counter placed where total countdown duration was
               Text(
-                '/ ${_formatTime(_totalSeconds)}',
+                '$completed / $total topics',
                 style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 12,
                   color: AppTheme.textSecondaryColor(context),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
+              ),
+              const VGapXs(),
+              // Pause / Play icon below 0/1
+              ValueListenableBuilder<bool>(
+                valueListenable: _isRunningNotifier,
+                builder: (context, isRunning, _) {
+                  final canPause = _canPause;
+                  return Icon(
+                    !canPause
+                        ? Icons.lock_outline_rounded
+                        : (isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                    size: 20,
+                    color: !canPause
+                        ? (widget.isRestrictMode
+                            ? AppTheme.pastelOrangeText(context)
+                            : AppTheme.textMutedColor(context))
+                        : AppTheme.textSecondaryColor(context),
+                  );
+                },
               ),
             ],
           ),
@@ -990,20 +1219,65 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     );
   }
 
-  Widget _buildCurrentTopicCard(
-    BuildContext context,
-    int completed,
-    int total,
-    double ratio,
-  ) {
-    final breadcrumbs = widget.courseTitle.isNotEmpty
-        ? '${widget.moduleTitle} • ${widget.courseTitle}'
-        : widget.moduleTitle;
+  Widget _buildCurrentTopicCard(BuildContext context) {
+    return GestureDetector(
+      onTap: _openTopicsReadModeSheet,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current Topic',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppTheme.textSecondaryColor(context),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const VGapXs(),
+              // Topic title with ^ icon at end
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_currentTopicIndex + 1}. $_currentTopicTitle',
+                      softWrap: true,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        height: 1.25,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimaryColor(context),
+                      ),
+                    ),
+                  ),
+                  const HGapXs(),
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    size: 19,
+                    color: AppTheme.textSecondaryColor(context),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
+  Widget _buildBottomControls(BuildContext context) {
+    final total = _totalTopicsCount;
+    final completed = _completedTopicsCount;
     final allDone = _isCurrentTopicCompleted && completed >= total;
     final isAlreadyDone = _isCurrentTopicCompleted && !allDone;
+    final remainingTopics = total - completed;
 
-    final VoidCallback? onTap = allDone
+    final VoidCallback? onNextAndSave = allDone
         ? () {
             _sessionTimer?.cancel();
             _isRunningNotifier.value = false;
@@ -1016,209 +1290,10 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           }
         : (isAlreadyDone ? _advanceToNextTopic : _handleDoneAndNext);
 
-    final buttonBg = allDone
-        ? AppTheme.pastelGreen(context)
-        : AppTheme.pastelIndigo(context);
-
-    final buttonBorder = allDone
-        ? AppTheme.pastelGreenBorder(context)
-        : AppTheme.pastelIndigoBorder(context);
-
-    final buttonColor = allDone
-        ? AppTheme.pastelGreenText(context)
-        : AppTheme.primaryColor;
-
-    final buttonIcon = allDone
-        ? Icons.check_circle_rounded
-        : (isAlreadyDone ? Icons.arrow_forward_rounded : Icons.check_rounded);
-
-    final buttonText = allDone
-        ? 'All Done'
-        : (isAlreadyDone ? 'Next Topic' : 'Done & Next');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // Title & Breadcrumb (topic icon removed)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Current Topic',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.textSecondaryColor(context),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const VGapXs(),
-                    Text(
-                      '${_currentTopicIndex + 1}. $_currentTopicTitle',
-                      softWrap: true,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        height: 1.25,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimaryColor(context),
-                      ),
-                    ),
-                    const VGapXs(),
-                    Text(
-                      breadcrumbs,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AppTheme.textSecondaryColor(context),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const HGapSm(),
-              // Done & Next Pill Button matching AddPillButton style
-              Material(
-                color: buttonBg,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: buttonBorder),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          buttonIcon,
-                          size: 13,
-                          color: buttonColor,
-                        ),
-                        const HGapXs(),
-                        Text(
-                          buttonText,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.bold,
-                            color: buttonColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const VGapSm(),
-
-          // Progress text & bar
-          Text(
-            '$completed / $total topics',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textSecondaryColor(context),
-            ),
-          ),
-          const VGapXs(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 4,
-              backgroundColor: AppTheme.borderColor(context),
-              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomControls(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // Pause / Resume Control
-        ValueListenableBuilder<bool>(
-          valueListenable: _isRunningNotifier,
-          builder: (context, isRunning, _) {
-            final canPause = _canPause;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: _handleTimerTap,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: canPause
-                          ? AppTheme.surface(context)
-                          : AppTheme.surfaceVariant(context).withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: widget.isRestrictMode
-                            ? AppTheme.pastelOrangeBorder(context)
-                            : AppTheme.borderColor(context),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      !canPause
-                          ? Icons.lock_outline_rounded
-                          : (isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                      size: 21,
-                      color: !canPause
-                          ? (widget.isRestrictMode
-                              ? AppTheme.pastelOrangeText(context)
-                              : AppTheme.textSecondaryColor(context))
-                          : AppTheme.textPrimaryColor(context),
-                    ),
-                  ),
-                ),
-                const VGapXs(),
-                Text(
-                  !canPause
-                      ? (widget.isRestrictMode ? 'Strict' : 'Locked')
-                      : (isRunning ? 'Pause' : 'Resume'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: widget.isRestrictMode && !canPause
-                        ? AppTheme.pastelOrangeText(context)
-                        : AppTheme.textSecondaryColor(context),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-
-        // End Session Control
+        // Left: End Session Control (replacing Pause)
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1257,6 +1332,62 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textSecondaryColor(context),
+              ),
+            ),
+          ],
+        ),
+
+        // Right: Next and Save Control (replacing End)
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: onNextAndSave,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: allDone
+                      ? AppTheme.pastelGreen(context)
+                      : AppTheme.surface(context),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: allDone
+                        ? AppTheme.pastelGreenBorder(context)
+                        : AppTheme.primaryColor.withValues(alpha: 0.35),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  allDone
+                      ? Icons.check_circle_rounded
+                      : (isAlreadyDone ? Icons.arrow_forward_rounded : Icons.check_rounded),
+                  size: 21,
+                  color: allDone ? AppTheme.pastelGreenText(context) : AppTheme.primaryColor,
+                ),
+              ),
+            ),
+            const VGapXs(),
+            Text(
+              allDone
+                  ? 'All Done'
+                  : (isAlreadyDone
+                      ? 'Next Topic'
+                      : (remainingTopics <= 1 ? 'Save' : 'Next & Save')),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: allDone
+                    ? AppTheme.pastelGreenText(context)
+                    : AppTheme.textSecondaryColor(context),
               ),
             ),
           ],

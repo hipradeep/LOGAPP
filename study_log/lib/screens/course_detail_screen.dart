@@ -36,6 +36,7 @@ class CourseDetailScreen extends StatefulWidget {
 class _CourseDetailScreenState extends State<CourseDetailScreen> {
   late final ModulesController _modulesController;
   final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
+  final ValueNotifier<bool> _isReordering = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -47,14 +48,27 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   void dispose() {
     _modulesController.dispose();
     _activeTab.dispose();
+    _isReordering.dispose();
     super.dispose();
   }
 
   void _handleBack() {
+    if (_isReordering.value) {
+      _isReordering.value = false;
+      return;
+    }
     Navigator.of(context).pop();
   }
 
+  void _toggleReordering() {
+    if (_activeTab.value != 0) {
+      _activeTab.value = 0;
+    }
+    _isReordering.value = !_isReordering.value;
+  }
+
   void _openModuleDetail(Module module, int orderIndex) {
+    if (_isReordering.value) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -84,6 +98,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   void _handleTabSelected(int index) {
     if (_activeTab.value == index) return;
+    if (_isReordering.value) {
+      _isReordering.value = false;
+    }
     _activeTab.value = index;
   }
 
@@ -91,106 +108,128 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background(context),
-      body: SafeArea(
-        child: Column(
-          children: [
-            CustomAppBar(
-              title: 'COURSE',
-              onBack: _handleBack,
-              actions: [
-                AddPillButton(
-                  label: 'Add Module',
-                  onPressed: _openAddModuleScreen,
-                ),
-              ],
-            ),
-            ListenableBuilder(
-              listenable: Listenable.merge([
-                _modulesController,
-                if (getIt.isRegistered<OngoingModulesController>())
-                  getIt<OngoingModulesController>(),
-              ]),
-              builder: (context, _) {
-                final modules = _modulesController.modules;
-                final ongoing = getIt.isRegistered<OngoingModulesController>()
-                    ? getIt<OngoingModulesController>()
-                    : null;
-                // Derive module completion from real topic state rather than the
-                // Module's stored `status` string alone.
-                var completedCount = 0;
-                for (final s in modules) {
-                  final complete = (ongoing != null && ongoing.isModuleComplete(s.id)) ||
-                      s.status.toLowerCase() == 'completed';
-                  if (complete) completedCount++;
-                }
-                final totalCount = modules.length;
-                final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
-
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: CourseContextPill(
-                          courseTitle: widget.course.title,
-                          courseId: widget.course.id,
+    return ValueListenableBuilder<bool>(
+      valueListenable: _isReordering,
+      builder: (context, isReordering, _) {
+        return PopScope(
+          canPop: !isReordering,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            if (_isReordering.value) {
+              _isReordering.value = false;
+            }
+          },
+          child: Scaffold(
+            backgroundColor: AppTheme.background(context),
+            body: SafeArea(
+              child: Column(
+                children: [
+                  CustomAppBar(
+                    title: isReordering ? 'REORDER MODULES' : 'COURSE',
+                    onBack: _handleBack,
+                    actions: [
+                      if (isReordering)
+                        AddPillButton(
+                          label: 'Done',
+                          icon: Icons.check_rounded,
+                          onPressed: _toggleReordering,
+                        )
+                      else
+                        AddPillButton(
+                          label: 'Add Module',
+                          onPressed: _openAddModuleScreen,
                         ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
-                      child: _CourseProgressHeader(
-                        completedModules: completedCount,
-                        totalModules: totalCount,
-                        progress: progress,
-                      ),
-                    ),
-                    const VGapXs(),
-                    ValueListenableBuilder<int>(
+                    ],
+                  ),
+                  ListenableBuilder(
+                    listenable: Listenable.merge([
+                      _modulesController,
+                      if (getIt.isRegistered<OngoingModulesController>())
+                        getIt<OngoingModulesController>(),
+                    ]),
+                    builder: (context, _) {
+                      final modules = _modulesController.modules;
+                      final ongoing = getIt.isRegistered<OngoingModulesController>()
+                          ? getIt<OngoingModulesController>()
+                          : null;
+                      // Derive module completion from real topic state rather than the
+                      // Module's stored `status` string alone.
+                      var completedCount = 0;
+                      for (final s in modules) {
+                        final complete = (ongoing != null && ongoing.isModuleComplete(s.id)) ||
+                            s.status.toLowerCase() == 'completed';
+                        if (complete) completedCount++;
+                      }
+                      final totalCount = modules.length;
+                      final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: CourseContextPill(
+                                courseTitle: widget.course.title,
+                                courseId: widget.course.id,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+                            child: _CourseProgressHeader(
+                              completedModules: completedCount,
+                              totalModules: totalCount,
+                              progress: progress,
+                            ),
+                          ),
+                          const VGapXs(),
+                          ValueListenableBuilder<int>(
+                            valueListenable: _activeTab,
+                            builder: (context, activeIdx, _) {
+                              return _CourseTabsRow(
+                                activeIndex: activeIdx,
+                                modulesCount: totalCount,
+                                onTabSelected: _handleTabSelected,
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const VGapSm(),
+                  Expanded(
+                    child: ValueListenableBuilder<int>(
                       valueListenable: _activeTab,
                       builder: (context, activeIdx, _) {
-                        return _CourseTabsRow(
-                          activeIndex: activeIdx,
-                          modulesCount: totalCount,
-                          onTabSelected: _handleTabSelected,
+                        if (activeIdx == 1) {
+                          return _CourseOverviewView(
+                            course: widget.course,
+                            bottomPadding: bottomSafe + 24,
+                          );
+                        }
+                        return _CourseModulesListView(
+                          course: widget.course,
+                          modulesController: _modulesController,
+                          onModuleTap: _openModuleDetail,
+                          bottomPadding: bottomSafe + 24,
+                          isReordering: isReordering,
+                          onOrderModule: _toggleReordering,
                         );
                       },
                     ),
-                  ],
-                );
-              },
-            ),
-            const VGapSm(),
-            Expanded(
-              child: ValueListenableBuilder<int>(
-                valueListenable: _activeTab,
-                builder: (context, activeIdx, _) {
-                  if (activeIdx == 1) {
-                    return _CourseOverviewView(
-                      course: widget.course,
-                      bottomPadding: bottomSafe + 24,
-                    );
-                  }
-                  return _CourseModulesListView(
-                    course: widget.course,
-                    modulesController: _modulesController,
-                    onModuleTap: _openModuleDetail,
-                    bottomPadding: bottomSafe + 24,
-                  );
-                },
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
-
 
 class _CourseTabsRow extends StatelessWidget {
   final int activeIndex;
@@ -208,7 +247,7 @@ class _CourseTabsRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
-        decoration:  BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: AppTheme.borderColor(context), width: 1.5),
           ),
@@ -392,12 +431,16 @@ class _CourseModulesListView extends StatelessWidget {
   final ModulesController modulesController;
   final void Function(Module, int) onModuleTap;
   final double bottomPadding;
+  final bool isReordering;
+  final VoidCallback? onOrderModule;
 
   const _CourseModulesListView({
     required this.course,
     required this.modulesController,
     required this.onModuleTap,
     required this.bottomPadding,
+    this.isReordering = false,
+    this.onOrderModule,
   });
 
   static const List<Color> _badgeColorCycle = [
@@ -466,8 +509,54 @@ class _CourseModulesListView extends StatelessWidget {
           );
         }
 
+        if (isReordering) {
+          return ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
+            itemCount: dynamicModules.length,
+            onReorder: modulesController.reorderModules,
+            itemBuilder: (context, index) {
+              final Module module = dynamicModules[index];
+              final color = _badgeColorCycle[index % _badgeColorCycle.length];
+              final topicCount = ongoing?.topicCountForModule(module.id) ?? 0;
+              final completedTopics =
+                  ongoing?.completedTopicCountForModule(module.id) ?? 0;
+              final isComplete = (ongoing != null && ongoing.isModuleComplete(module.id)) ||
+                  (topicCount > 0 && completedTopics >= topicCount) ||
+                  module.status.toLowerCase() == 'completed';
+              final topicInfo = topicCount > 0
+                  ? '$completedTopics / $topicCount topics'
+                  : 'No topics yet';
+
+              return Column(
+                key: ValueKey(module.id),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ModuleListItem(
+                    number: index + 1,
+                    title: module.title,
+                    subtitle: topicInfo,
+                    isComplete: isComplete,
+                    badgeColor: isComplete ? AppTheme.successColor : color,
+                    isReordering: true,
+                    reorderIndex: index,
+                  ),
+                  Divider(
+                    height: 1,
+                    thickness: 0.6,
+                    indent: 52,
+                    endIndent: 16,
+                    color: AppTheme.borderColor(context),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+
         return ListView.separated(
-          physics: const BouncingScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(top: 4, bottom: bottomPadding),
           itemCount: dynamicModules.length,
           separatorBuilder: (context, index) => Divider(
@@ -504,6 +593,7 @@ class _CourseModulesListView extends StatelessWidget {
                 courseId: course.id,
                 modulesController: modulesController,
                 isCompleted: isComplete,
+                onOrderModule: onOrderModule,
               ),
               onOptionsTap: () => ModuleOptionsSheet.show(
                 context,
@@ -512,6 +602,7 @@ class _CourseModulesListView extends StatelessWidget {
                 courseId: course.id,
                 modulesController: modulesController,
                 isCompleted: isComplete,
+                onOrderModule: onOrderModule,
               ),
             );
           },
@@ -530,6 +621,8 @@ class _ModuleListItem extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onOptionsTap;
+  final bool isReordering;
+  final int reorderIndex;
 
   const _ModuleListItem({
     required this.number,
@@ -540,11 +633,13 @@ class _ModuleListItem extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onOptionsTap,
+    this.isReordering = false,
+    this.reorderIndex = 0,
   });
 
   @override
   Widget build(BuildContext context) {
-    return CompactListItem(
+    Widget item = CompactListItem(
       isCard: false,
       isCompleted: isComplete,
       leading: Container(
@@ -571,10 +666,33 @@ class _ModuleListItem extends StatelessWidget {
               ),
       ),
       title: title,
-      subtitle: subtitle,
-      onTap: onTap,
-      onLongPress: onLongPress,
-      onOptionsTap: onOptionsTap,
+      subtitle: isReordering ? 'Drag to reorder' : subtitle,
+      trailing: isReordering
+          ? ReorderableDragStartListener(
+              index: reorderIndex,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                child: Icon(
+                  Icons.reorder_rounded,
+                  color: AppTheme.primaryColor,
+                  size: 22,
+                ),
+              ),
+            )
+          : null,
+      showTrailingChevron: !isReordering,
+      onTap: isReordering ? null : onTap,
+      onLongPress: isReordering ? null : onLongPress,
+      onOptionsTap: isReordering ? null : onOptionsTap,
     );
+
+    if (isReordering) {
+      return ReorderableDelayedDragStartListener(
+        index: reorderIndex,
+        child: item,
+      );
+    }
+    return item;
   }
 }
+

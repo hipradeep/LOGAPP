@@ -1,4 +1,5 @@
 import 'revision_module.dart';
+import 'topic.dart';
 
 /// A spaced repetition record for a single, individually tracked [Topic].
 ///
@@ -14,6 +15,9 @@ class TopicRevision {
   /// 1-based level, R1 through R5.
   final int currentLevel;
   final RevisionStatus status;
+
+  /// Study status for the current revision level (starts fresh at inProgress for each level).
+  final TopicStatus levelStatus;
 
   /// When [currentLevel] unlocks.
   final DateTime nextRevisionAt;
@@ -31,6 +35,7 @@ class TopicRevision {
     required this.title,
     required this.currentLevel,
     required this.status,
+    this.levelStatus = TopicStatus.notStarted,
     required this.nextRevisionAt,
     this.completedAt,
     required this.createdAt,
@@ -38,6 +43,8 @@ class TopicRevision {
   });
 
   bool get isFinished => status == RevisionStatus.finished;
+
+  bool get isLevelCompleted => levelStatus == TopicStatus.completed;
 
   /// Timestamp of the last cleared revision or completion.
   DateTime? get lastRevisionAt =>
@@ -87,20 +94,23 @@ class TopicRevision {
 
   /// Advances the record to the next level, scheduling [nextRevisionAt] from [now].
   ///
+  /// Resets [levelStatus] to [TopicStatus.inProgress] for the newly unlocked level.
   /// If the current level is [RevisionSchedule.maxLevel], marks it [RevisionStatus.finished].
   TopicRevision advance(DateTime now) {
     if (currentLevel >= RevisionSchedule.maxLevel) {
       return copyWith(
         status: RevisionStatus.finished,
+        levelStatus: TopicStatus.completed,
         completedAt: now,
         updatedAt: now,
       );
     }
 
     final nextLevel = currentLevel + 1;
-    final delay = RevisionSchedule.intervalFor(currentLevel);
+    final delay = RevisionSchedule.intervalFor(nextLevel);
     return copyWith(
       currentLevel: nextLevel,
+      levelStatus: TopicStatus.notStarted,
       nextRevisionAt: now.add(delay),
       updatedAt: now,
     );
@@ -114,6 +124,7 @@ class TopicRevision {
     String? title,
     int? currentLevel,
     RevisionStatus? status,
+    TopicStatus? levelStatus,
     DateTime? nextRevisionAt,
     DateTime? completedAt,
     bool clearCompletedAt = false,
@@ -128,6 +139,7 @@ class TopicRevision {
       title: title ?? this.title,
       currentLevel: currentLevel ?? this.currentLevel,
       status: status ?? this.status,
+      levelStatus: levelStatus ?? this.levelStatus,
       nextRevisionAt: nextRevisionAt ?? this.nextRevisionAt,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
       createdAt: createdAt ?? this.createdAt,
@@ -144,11 +156,18 @@ class TopicRevision {
       'title': title,
       'currentLevel': currentLevel,
       'status': status.name,
+      'levelStatus': levelStatus.name,
       'nextRevisionAt': nextRevisionAt.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
+  }
+
+  static TopicStatus _parseLevelStatus(dynamic val) {
+    if (val == 'completed') return TopicStatus.completed;
+    if (val == 'inProgress') return TopicStatus.inProgress;
+    return TopicStatus.notStarted;
   }
 
   factory TopicRevision.fromMap(Map<String, dynamic> map) {
@@ -162,6 +181,7 @@ class TopicRevision {
       status: map['status'] == 'finished'
           ? RevisionStatus.finished
           : RevisionStatus.active,
+      levelStatus: _parseLevelStatus(map['levelStatus']),
       nextRevisionAt: DateTime.parse(map['nextRevisionAt'] as String),
       completedAt: map['completedAt'] != null
           ? DateTime.parse(map['completedAt'] as String)

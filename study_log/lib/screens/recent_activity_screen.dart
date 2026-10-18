@@ -53,10 +53,14 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
     super.initState();
     final now = DateTime.now();
     _selectedDate = DateTime(now.year, now.month, now.day);
-    _dateStripController = ScrollController();
+    final days = _getCalendarDays();
+    final index = days.indexWhere((d) => _isSameDay(d, _selectedDate));
+    final initialOffset = index == days.length - 1 ? 999999.0 : (index * 60.0);
+    _dateStripController = ScrollController(initialScrollOffset: initialOffset);
     _progressController = getIt<ProgressController>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _scrollToSelectedDate(false);
         _loadData();
       }
     });
@@ -327,6 +331,8 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
               primary: AppTheme.primaryColor,
+
+
               onPrimary: Colors.white,
               surface: AppTheme.surface(context),
               onSurface: AppTheme.textPrimaryColor(context),
@@ -352,20 +358,33 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
       final index = days.indexWhere((d) => _isSameDay(d, _selectedDate));
       if (index == -1) return;
 
-      final targetOffset = (index * 60.0) - (MediaQuery.sizeOf(context).width / 2) + 30.0;
-      final clampedOffset = targetOffset.clamp(
-        0.0,
-        _dateStripController.position.maxScrollExtent,
-      );
+      final isLastItem = index == days.length - 1;
+      final maxScroll = _dateStripController.position.hasContentDimensions
+          ? _dateStripController.position.maxScrollExtent
+          : 0.0;
 
-      if (animate) {
-        _dateStripController.animateTo(
-          clampedOffset,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-        );
+      final double targetOffset;
+      if (isLastItem) {
+        targetOffset = maxScroll;
       } else {
-        _dateStripController.jumpTo(clampedOffset);
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        targetOffset = (16.0 + index * 60.0 + 26.0) - (screenWidth / 2);
+      }
+
+      final clampedOffset = maxScroll > 0
+          ? targetOffset.clamp(0.0, maxScroll)
+          : (targetOffset > 0 ? targetOffset : 0.0);
+
+      if (_dateStripController.hasClients) {
+        if (animate) {
+          _dateStripController.animateTo(
+            clampedOffset,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+          );
+        } else {
+          _dateStripController.jumpTo(clampedOffset);
+        }
       }
     });
   }

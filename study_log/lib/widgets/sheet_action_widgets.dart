@@ -52,12 +52,14 @@ class SheetHeader extends StatelessWidget {
   final Widget badge;
   final String title;
   final String subtitle;
+  final int? subtitleMaxLines;
 
   const SheetHeader({
     super.key,
     required this.badge,
     required this.title,
     required this.subtitle,
+    this.subtitleMaxLines,
   });
 
   @override
@@ -86,12 +88,14 @@ class SheetHeader extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 subtitle,
+                softWrap: true,
                 style: TextStyle(
                   fontSize: 12,
+                  height: 1.3,
                   color: AppTheme.textSecondaryColor(context),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: subtitleMaxLines,
+                overflow: subtitleMaxLines != null ? TextOverflow.ellipsis : null,
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/topic.dart';
 import '../models/topic_revision.dart';
 import '../theme/app_theme.dart';
 import '../controllers/courses_controller.dart';
@@ -59,7 +60,7 @@ class TopicRevisionCard extends StatelessWidget {
           Icon(
             revision.isFinished
                 ? Icons.check_circle_rounded
-                : Icons.access_time_rounded,   
+                : Icons.access_time_rounded,
             size: 13,
             color: isDue ? AppTheme.errorColor : dueColor,
           ),
@@ -116,10 +117,6 @@ class TopicRevisionCard extends StatelessWidget {
             ),
             const HGapXs(),
           ],
-          if (showTypeBadge) ...[
-            const _TopicTypeBadge(),
-            const HGapXs(),
-          ],
           TopicRevisionBadge(revision: revision),
         ],
       ),
@@ -163,46 +160,6 @@ class TopicRevisionCard extends StatelessWidget {
     if (revision.isFinished) return AppTheme.successColor;
     if (isDue) return AppTheme.errorColor;
     return AppTheme.textSecondaryColor(context);
-  }
-}
-
-/// Pastel tag identifying the item as a single topic revision.
-class _TopicTypeBadge extends StatelessWidget {
-  const _TopicTypeBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.pastelIndigo(context),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: AppTheme.pastelIndigoBorder(context),
-          width: 0.8,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.topic_outlined,
-            size: 11,
-            color: AppTheme.pastelIndigoText(context),
-          ),
-          const HGapXs(),
-          Text(
-            'Topic',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.pastelIndigoText(context),
-              height: 1.1,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -607,7 +607,9 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
       MaterialPageRoute(
         builder: (_) => SessionTimerScreen(
           title: widget.isRevision ? 'Revision Session' : 'Study Session',
-          subtitle: '${widget.moduleTitle} • ${widget.courseTitle.isNotEmpty ? widget.courseTitle : 'C1'}',
+          subtitle: widget.courseTitle.isNotEmpty
+              ? '${widget.courseTitle} > ${widget.moduleTitle}'
+              : widget.moduleTitle,
           courseId: widget.courseId,
           courseTitle: widget.courseTitle,
           moduleId: widget.moduleId,

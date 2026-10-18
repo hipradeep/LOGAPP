@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import 'move_to_revision_dialog.dart';
 
 /// Confirmation dialog matching the reference designs:
 /// - Top icon (Purple calendar for Archive, Red trash for Delete)
@@ -128,6 +129,63 @@ class StudyConfirmationDialog extends StatelessWidget {
       ),
     );
     return result ?? false;
+  }
+
+  /// Displays the "Remove Topic from Revision?" confirmation dialog
+  static Future<bool> showRemoveRevisionTopic(BuildContext context, {String topicTitle = ''}) async {
+    final title = topicTitle.isNotEmpty ? 'Remove "$topicTitle" from Revision?' : 'Remove from Revision?';
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.bookmark_remove_outlined,
+        iconColor: AppTheme.errorColor,
+        title: title,
+        message: 'This topic will be removed from your revision schedule.\n\nAll study logs and streak records are permanently preserved and will not be lost. If you add this topic back later, it will start with a fresh revision ladder.',
+        confirmText: 'Remove',
+        confirmColor: AppTheme.errorColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Reset Revision Ladder to R1?" confirmation dialog
+  static Future<bool> showResetRevision(
+    BuildContext context, {
+    String title = '',
+    String currentLevelLabel = '',
+  }) async {
+    final header = title.isNotEmpty ? 'Reset "$title" to R1?' : 'Reset Revision Ladder to R1?';
+    final levelInfo = currentLevelLabel.isNotEmpty ? ' (currently at $currentLevelLabel)' : '';
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.restart_alt_rounded,
+        iconColor: AppTheme.warningColor,
+        title: header,
+        message:
+            'This will send this revision ladder$levelInfo back to Level 1 (R1) and schedule it for tomorrow.\n\nAll historical study logs and minutes are safely preserved.',
+        confirmText: 'Reset to R1',
+        confirmColor: AppTheme.warningColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Move to Revision?" dialog when a topic is completed for first-time study
+  static Future<bool> showMoveToRevision(
+    BuildContext context, {
+    String topicTitle = '',
+    String courseTitle = '',
+    String moduleTitle = '',
+  }) {
+    return MoveToRevisionDialog.show(
+      context,
+      topicTitle: topicTitle,
+      courseTitle: courseTitle,
+      moduleTitle: moduleTitle,
+    );
   }
 
   /// Displays the "Delete Account & Clean All Data?" dialog with strong warning

@@ -41,7 +41,6 @@ class AddModuleScreen extends StatefulWidget {
 class _AddModuleScreenState extends State<AddModuleScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _orderController;
   late String _selectedCourseTitle;
   late String _selectedCourseId;
 
@@ -53,7 +52,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
     super.initState();
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
-    _orderController = TextEditingController();
     _descriptionController.addListener(_onDescChanged);
     _selectedCourseTitle = widget.courseTitle;
     _selectedCourseId = widget.courseId;
@@ -62,7 +60,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
     if (editing != null) {
       _titleController.text = editing.title;
       _descriptionController.text = editing.description;
-      _orderController.text = '${editing.orderIndex}';
       _descLength = editing.description.length;
       _selectedCourseId = editing.courseId.isNotEmpty ? editing.courseId : widget.courseId;
     }
@@ -73,7 +70,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
     _descriptionController.removeListener(_onDescChanged);
     _titleController.dispose();
     _descriptionController.dispose();
-    _orderController.dispose();
     super.dispose();
   }
 
@@ -87,8 +83,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
   void _handleBack() {
     Navigator.of(context).pop();
   }
-
-
 
   void _handleSubmit() async {
     final title = _titleController.text.trim();
@@ -107,7 +101,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
     }
 
     final description = _descriptionController.text.trim();
-    final order = int.tryParse(_orderController.text.trim()) ?? 0;
     setState(() => _isSubmitting = true);
 
     try {
@@ -120,14 +113,12 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
           editing.copyWith(
             title: title,
             description: description,
-            orderIndex: order,
           ),
         );
       } else {
         await controller.addModule(
           title: title,
           description: description,
-          orderIndex: order,
           status: 'active',
         );
       }
@@ -199,7 +190,7 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
               ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
@@ -221,19 +212,6 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                     const VGapLg(),
                     BorderlessDescriptionField(
                       controller: _descriptionController,
-                    ),
-                    const VGapLg(),
-                    UnderlineInputField(
-                      label: 'Order (Optional)',
-                      controller: _orderController,
-                      hintText: 'Enter order (e.g., 1, 2, 3)',
-                      keyboardType: TextInputType.number,
-                      fontSize: 16,
-                      suffixIcon: Icon(
-                        Icons.unfold_more_rounded,
-                        color: AppTheme.textMutedColor(context),
-                        size: 22,
-                      ),
                     ),
                   ],
                 ),

@@ -9,8 +9,13 @@ import '../models/topic.dart';
 /// colour alone.
 class TopicStatusIndicator extends StatelessWidget {
   final TopicStatus status;
+  final Color? completedColor;
 
-  const TopicStatusIndicator({super.key, required this.status});
+  const TopicStatusIndicator({
+    super.key,
+    required this.status,
+    this.completedColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -19,8 +24,8 @@ class TopicStatusIndicator extends StatelessWidget {
         return Container(
           width: 28,
           height: 28,
-          decoration: const BoxDecoration(
-            color: AppTheme.successColor,
+          decoration: BoxDecoration(
+            color: completedColor ?? AppTheme.successColor,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,

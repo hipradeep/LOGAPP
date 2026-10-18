@@ -22,9 +22,8 @@ import '../services/database_service.dart';
 import 'session_setup_screen.dart';
 import 'topic_detail_screen.dart';
 
-/// Type filter in the unified revision stream.
+/// Type filter in the revision stream: individual topics or topics grouped by module.
 enum RevisionTypeFilter {
-  all('All'),
   topics('Topics'),
   modules('Modules');
 
@@ -82,7 +81,7 @@ class RevisionScreen extends StatefulWidget {
 }
 
 class _RevisionScreenState extends State<RevisionScreen> {
-  RevisionTypeFilter _typeFilter = RevisionTypeFilter.all;
+  RevisionTypeFilter _typeFilter = RevisionTypeFilter.topics;
   int? _levelFilter;
   RevisionScope _scope = RevisionScope.all;
   RevisionSortMode _sortMode = RevisionSortMode.dueDate;
@@ -300,13 +299,13 @@ class _RevisionScreenState extends State<RevisionScreen> {
           topicLevelCounts[tr.currentLevel] =
               (topicLevelCounts[tr.currentLevel] ?? 0) + 1;
         }
-        if (_typeFilter != RevisionTypeFilter.modules) {
+        if (_typeFilter == RevisionTypeFilter.topics) {
           allItems.add(UnifiedTopicRevisionItem(tr));
         }
       }
     }
 
-    // 2. Ingest Module Revisions
+    // 2. Ingest Modules (topics grouped by module roll-up)
     int activeModulesCount = 0;
     int finishedModulesCount = 0;
     final moduleLevelCounts = <int, int>{};
@@ -318,7 +317,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
         moduleLevelCounts[r.currentLevel] =
             (moduleLevelCounts[r.currentLevel] ?? 0) + 1;
       }
-      if (_typeFilter != RevisionTypeFilter.topics) {
+      if (_typeFilter == RevisionTypeFilter.modules) {
         final title = ongoing?.moduleTitleFor(r.moduleId) ?? '';
         final topicCount = ongoing?.topicCountForModule(r.moduleId) ?? 0;
         allItems.add(UnifiedModuleRevisionItem(
@@ -329,7 +328,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
       }
     }
 
-    // 3. Combined Level Counts based on active type filter
+    // 3. Level Counts based on active type filter (Topics or Modules)
     final int activeTotal;
     final int finishedTotal;
     final Map<int, int> aggregatedLevelCounts = {};
@@ -338,17 +337,10 @@ class _RevisionScreenState extends State<RevisionScreen> {
       activeTotal = activeTopicsCount;
       finishedTotal = finishedTopicsCount;
       aggregatedLevelCounts.addAll(topicLevelCounts);
-    } else if (_typeFilter == RevisionTypeFilter.modules) {
+    } else {
       activeTotal = activeModulesCount;
       finishedTotal = finishedModulesCount;
       aggregatedLevelCounts.addAll(moduleLevelCounts);
-    } else {
-      activeTotal = activeTopicsCount + activeModulesCount;
-      finishedTotal = finishedTopicsCount + finishedModulesCount;
-      for (int lvl = 1; lvl <= 5; lvl++) {
-        aggregatedLevelCounts[lvl] =
-            (topicLevelCounts[lvl] ?? 0) + (moduleLevelCounts[lvl] ?? 0);
-      }
     }
 
     // 4. Compute scope counts based on current type and level filters
@@ -510,34 +502,23 @@ class _RevisionScreenState extends State<RevisionScreen> {
     final topicCtrl = _topicRevisionController;
 
     final String typeLabel = switch (_typeFilter) {
-      RevisionTypeFilter.all => 'Revisions',
       RevisionTypeFilter.topics => 'Topics',
       RevisionTypeFilter.modules => 'Modules',
     };
 
     final String sectionTitle;
     if (_levelFilter == 6) {
-      sectionTitle = _typeFilter == RevisionTypeFilter.all
-          ? 'Finished'
-          : 'Finished $typeLabel';
+      sectionTitle = 'Finished $typeLabel';
     } else if (_levelFilter != null) {
       sectionTitle = 'R$_levelFilter $typeLabel';
     } else if (_scope == RevisionScope.dueToday) {
-      sectionTitle = _typeFilter == RevisionTypeFilter.all
-          ? 'Due Today'
-          : 'Due Today ($typeLabel)';
+      sectionTitle = 'Due Today ($typeLabel)';
     } else if (_scope == RevisionScope.upcoming) {
-      sectionTitle = _typeFilter == RevisionTypeFilter.all
-          ? 'Upcoming Revisions'
-          : 'Upcoming $typeLabel';
+      sectionTitle = 'Upcoming $typeLabel';
     } else if (_scope == RevisionScope.finished) {
-      sectionTitle = _typeFilter == RevisionTypeFilter.all
-          ? 'Finished Revisions'
-          : 'Finished $typeLabel';
+      sectionTitle = 'Finished $typeLabel';
     } else {
-      sectionTitle = _typeFilter == RevisionTypeFilter.all
-          ? 'All Revisions'
-          : typeLabel;
+      sectionTitle = typeLabel;
     }
 
     final bool isInitialLoading =
@@ -564,7 +545,6 @@ class _RevisionScreenState extends State<RevisionScreen> {
           typeFilter: _typeFilter,
           title: sectionTitle,
           count: state.visibleItems.length,
-          allCount: state.activeTopicsCount + state.activeModulesCount,
           topicsCount: state.activeTopicsCount,
           modulesCount: state.activeModulesCount,
           sortMode: _sortMode,
@@ -587,9 +567,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
                       onRefresh: _handleRefresh,
                       color: AppTheme.primaryColor,
                       child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
+                        physics: const AlwaysScrollableScrollPhysics(),
                         child: AppEmptyState(
                           icon: Icons.sync_rounded,
                           title: _emptyTitleFor(),
@@ -602,9 +580,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
                       onRefresh: _handleRefresh,
                       color: AppTheme.primaryColor,
                       child: ListView.separated(
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
+                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           16,
                           2,
@@ -679,9 +655,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
   String _emptyTitleFor() {
     final type = _typeFilter == RevisionTypeFilter.topics
         ? 'topic revisions'
-        : (_typeFilter == RevisionTypeFilter.modules
-            ? 'module revisions'
-            : 'revisions');
+        : 'module revisions';
     if (_levelFilter == 6) return 'No finished $type';
     if (_levelFilter != null) return 'No R$_levelFilter $type';
     switch (_scope) {
@@ -699,9 +673,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
   String _emptyDescriptionFor() {
     final type = _typeFilter == RevisionTypeFilter.topics
         ? 'topics'
-        : (_typeFilter == RevisionTypeFilter.modules
-            ? 'modules'
-            : 'topics or modules');
+        : 'modules';
     if (_levelFilter == 6) {
       return 'Complete the R5 level of any $type to see them here.';
     }
@@ -710,7 +682,9 @@ class _RevisionScreenState extends State<RevisionScreen> {
     }
     switch (_scope) {
       case RevisionScope.all:
-        return 'Add individual topics or completed modules to Revision to start spaced repetition.';
+        return _typeFilter == RevisionTypeFilter.topics
+            ? 'Add topics to Revision to start spaced repetition.'
+            : 'Add modules with topics to Revision to start spaced repetition.';
       case RevisionScope.dueToday:
         return 'You are all caught up! Revisions appear here once their scheduled date arrives.';
       case RevisionScope.upcoming:
@@ -745,7 +719,7 @@ class _RevisionLevelFilterRow extends StatelessWidget {
       height: 40,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         children: [
           _AllPillTab(
@@ -973,7 +947,6 @@ class _RevisionSectionHeader extends StatelessWidget {
   final RevisionTypeFilter typeFilter;
   final String title;
   final int count;
-  final int allCount;
   final int topicsCount;
   final int modulesCount;
   final RevisionSortMode sortMode;
@@ -986,7 +959,6 @@ class _RevisionSectionHeader extends StatelessWidget {
     required this.typeFilter,
     required this.title,
     required this.count,
-    required this.allCount,
     required this.topicsCount,
     required this.modulesCount,
     required this.sortMode,
@@ -1012,15 +984,6 @@ class _RevisionSectionHeader extends StatelessWidget {
             ),
             elevation: 6,
             itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: RevisionTypeFilter.all,
-                child: _TypeMenuItem(
-                  icon: Icons.layers_outlined,
-                  title: 'All Revisions',
-                  count: allCount,
-                  isSelected: typeFilter == RevisionTypeFilter.all,
-                ),
-              ),
               PopupMenuItem(
                 value: RevisionTypeFilter.topics,
                 child: _TypeMenuItem(
@@ -1449,46 +1412,6 @@ class _ItemRowEntry extends _StreamRowEntry {
   const _ItemRowEntry(this.item);
 }
 
-/// Pastel tag identifying the item as a whole module revision.
-class _ModuleTypeBadge extends StatelessWidget {
-  const _ModuleTypeBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.pastelBlue(context),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: AppTheme.pastelBlueBorder(context),
-          width: 0.8,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.folder_outlined,
-            size: 11,
-            color: AppTheme.pastelBlueText(context),
-          ),
-          const HGapXs(),
-          Text(
-            'Module',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.pastelBlueText(context),
-              height: 1.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Item card for a module revision:
 /// - Leading course icon chip
 /// - Title with [Module] type pill and [R-level] pill
@@ -1513,10 +1436,12 @@ class _RevisionItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final days = revision.daysUntilDue(now);
-    final isDue = revision.isDueAt(now);
-    final dueColor = _dueColor(context, days, isDue, revision);
+    final (completedCount, totalCount) = _resolveCounts(revision, topicCount);
+    final isAllCompleted =
+        revision.isFinished || (totalCount > 0 && completedCount == totalCount);
+    final progressLabel = totalCount == 1
+        ? '$completedCount/$totalCount topic'
+        : '$completedCount/$totalCount topics';
 
     return CompactListItem(
       margin: EdgeInsets.zero,
@@ -1527,72 +1452,32 @@ class _RevisionItemCard extends StatelessWidget {
       ),
       title: _moduleTitleFor(revision),
       courseName: _courseFor(revision),
-      moduleName: _topicCountLabel(topicCount, revision),
       bottom: Row(
         children: [
           Icon(
-            revision.isFinished
+            isAllCompleted
                 ? Icons.check_circle_rounded
-                : Icons.access_time_rounded,
+                : Icons.checklist_rounded,
             size: 13,
-            color: isDue ? AppTheme.errorColor : dueColor,
+            color: isAllCompleted
+                ? AppTheme.successColor
+                : AppTheme.textSecondaryColor(context),
           ),
           const HGapXs(),
           Expanded(
             child: Text(
-              _dueLabel(days, isDue, revision),
+              progressLabel,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: isDue ? AppTheme.errorColor : dueColor,
+                color: isAllCompleted
+                    ? AppTheme.successColor
+                    : AppTheme.textSecondaryColor(context),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (!revision.isFinished && onQuickComplete != null && isDue) ...[
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onQuickComplete,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.successColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.successColor.withValues(alpha: 0.3),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.check_rounded,
-                        size: 13,
-                        color: AppTheme.successColor,
-                      ),
-                      const HGapXs(),
-                      Text(
-                        'Complete',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.successColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const HGapXs(),
-          ],
-          const _ModuleTypeBadge(),
-          const HGapXs(),
           _RevisionLevelPill(
             level: revision.currentLevel,
             isFinished: revision.isFinished,
@@ -1602,6 +1487,32 @@ class _RevisionItemCard extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
     );
+  }
+
+  static (int, int) _resolveCounts(Revision revision, int fallbackTotal) {
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      final topics = getIt<TopicRevisionController>()
+          .topicRevisions
+          .where((tr) => tr.moduleId == revision.moduleId)
+          .toList();
+      if (topics.isNotEmpty) {
+        final completed = topics
+            .where(
+                (t) => t.levelStatus == TopicStatus.completed || t.isFinished)
+            .length;
+        return (completed, topics.length);
+      }
+    }
+    final total = fallbackTotal > 0
+        ? fallbackTotal
+        : (revision.totalTopicsCount > 0
+            ? revision.totalTopicsCount
+            : (getIt.isRegistered<OngoingModulesController>()
+                ? getIt<OngoingModulesController>()
+                    .topicCountForModule(revision.moduleId)
+                : 0));
+    final completed = revision.isFinished ? total : 0;
+    return (completed, total);
   }
 
   static String _moduleTitleFor(Revision revision) {
@@ -1617,36 +1528,6 @@ class _RevisionItemCard extends StatelessWidget {
       if (course != null && course.title.isNotEmpty) return course.title;
     }
     return '';
-  }
-
-  static String _topicCountLabel(int topicCount, Revision revision) {
-    final count = topicCount > 0
-        ? topicCount
-        : (getIt.isRegistered<OngoingModulesController>()
-            ? getIt<OngoingModulesController>()
-                .topicCountForModule(revision.moduleId)
-            : 0);
-    if (count > 0) {
-      return count == 1 ? '1 topic' : '$count topics';
-    }
-    return 'Module';
-  }
-
-  static String _dueLabel(int days, bool isDue, Revision revision) {
-    if (revision.isFinished) return 'Completed';
-    if (isDue) return days < 0 ? 'Overdue ${days.abs()}d' : 'Due today';
-    if (days <= 0) return 'Due today';
-    if (days == 1) return 'Due tomorrow';
-    return 'In ${days}d';
-  }
-
-  static Color _dueColor(
-      BuildContext context, int days, bool isDue, Revision revision) {
-    if (revision.isFinished) return AppTheme.successColor;
-    if (isDue) {
-      return AppTheme.errorColor;
-    }
-    return AppTheme.textSecondaryColor(context);
   }
 }
 

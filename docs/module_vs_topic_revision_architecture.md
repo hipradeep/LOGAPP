@@ -87,3 +87,29 @@ Proposed Architecture:
 2. **Transform Module Revision**: Convert `ModuleRevision` from an independent entity into a computed view derived from its topics' revision dates and levels.
 3. **Batch Session Launcher**: The "Start Module Revision" button launches a `SessionSetupScreen` pre-populated with only the topics from that module that are currently due (`isDue == true`).
 4. **Preserve Clean UI**: Retain both Topic and Module detail screens, but ensure the Module screen reflects the aggregated state of its topics.
+
+---
+
+## Implementation Status (Completed)
+
+1. **[RevisionModule](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/models/revision_module.dart)**:
+   - Added `RevisionModule.fromTopicRevisions` factory dynamically aggregating active and mastered topics into a single roll-up view.
+   - Computes `dueTopicsCount`, `masteredTopicsCount`, `totalTopicsCount`, and `masteryPercentage`.
+   - `currentLevel` dynamically derived from the lowest active topic level.
+   - `nextRevisionAt` dynamically derived from earliest due topic.
+
+2. **[RevisionController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/revision_controller.dart)**:
+   - Refactored into a reactive aggregator listening directly to [TopicRevisionController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/topic_revision_controller.dart).
+   - Automatically migrates legacy module revisions in SQLite `revisions` table into individual `topic_revisions`.
+   - `completeCurrentLevel()` batch-advances all due topics in the target module.
+   - `deleteRevision()` / `resetRevision()` cascades directly to the module's topics.
+
+3. **[RevisionDetailScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/revision_detail_screen.dart)**:
+   - Displays real module topics with individual spaced repetition status (`R1..R5` / `Mastered`) using [TopicListItem](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/widgets/topic_list_item.dart) and [TopicRevisionBadge](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/widgets/topic_revision_badge.dart).
+   - "Revise Module" / "Start Session" acts as a **Batch Session Launcher** pre-populated with currently due topics.
+   - Quick checkmark advances topic revision levels with instant feedback.
+   - "Progress" tab displays the R1..R5 timeline along with topic counts at each stage.
+
+4. **[SessionTimerScreen](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/screens/session_timer_screen.dart)**:
+   - Completing topics in revision sessions advances them in [TopicRevisionController](file:///c:/Users/hipradeep/Documents/android_apps/log_app/study_log/lib/controllers/topic_revision_controller.dart), keeping topic and module roll-up state in sync.
+

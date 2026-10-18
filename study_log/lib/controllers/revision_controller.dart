@@ -3,49 +3,51 @@ import 'package:flutter/foundation.dart';
 import '../models/course.dart';
 import '../models/revision.dart';
 import '../models/module.dart';
+import '../models/topic_revision.dart';
 import '../models/study_log.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
 import 'ongoing_modules_controller.dart';
 import 'progress_controller.dart';
+import 'topic_revision_controller.dart';
 
-/// Owns the R1 -> R5 spaced repetition ladder.
+/// Aggregates and presents module-level spaced repetition views derived
+/// from [TopicRevisionController] as the single source of truth.
 ///
-/// A revision is created the moment every topic in a Module is completed
-/// (level R1, unlocking after 1 day). Each later level unlocks only after the
-/// previous level is completed *and* its date has arrived:
-///
-///   R1 -> +1 day, R2 -> +3 days, R3 -> +7 days, R4 -> +14 days, R5 -> +30 days
-///
-/// Progression is automatic — there is no manual "mark done" step. Whenever a
-/// due level's Module is still fully completed, [reconcile] advances the
-/// record and schedules the next date from the completion moment. Finishing R5
-/// flips the record to [RevisionStatus.finished].
+/// Under the Hybrid Roll-Up Architecture:
+/// - Individual topics track true R1..R5 spaced repetition intervals in `topic_revisions`.
+/// - [RevisionController] computes dynamic roll-up views ([RevisionModule]) for each module:
+///   • `currentLevel`: Minimum active level among unfinished topics (or R5 if all cleared).
+///   • `nextRevisionAt`: Earliest scheduled date among active topics.
+///   • `dueCount`: Count of topics in this module currently due.
+///   • `masteryPercentage`: Fraction of topics at R5.
+/// - Batch action: Completing a module revision advances all currently due topics in that module.
 class RevisionController extends ChangeNotifier {
   final CoursesController _coursesController;
   final OngoingModulesController _ongoingController;
   final DatabaseService _dbService;
+  final TopicRevisionController _topicRevisionController;
 
-  StreamSubscription<List<Revision>>? _revisionsSubscription;
-
-  List<Revision> _revisions = [];
+  List<RevisionModule> _revisions = [];
   bool _isLoading = true;
   bool _isReconciling = false;
+  bool _reconcileQueued = false;
 
   RevisionController({
     CoursesController? coursesController,
     OngoingModulesController? ongoingController,
     DatabaseService? databaseService,
+    TopicRevisionController? topicRevisionController,
   })  : _coursesController = coursesController ?? getIt<CoursesController>(),
         _ongoingController =
             ongoingController ?? getIt<OngoingModulesController>(),
-        _dbService = databaseService ?? getIt<DatabaseService>() {
+        _dbService = databaseService ?? getIt<DatabaseService>(),
+        _topicRevisionController =
+            topicRevisionController ?? getIt<TopicRevisionController>() {
     _coursesController.addListener(_onCoursesChanged);
-    // OngoingModulesController notifies on every course change and on every
-    // topic toggle, add or delete, which is exactly when the ladder must be
-    // re-evaluated.
     _ongoingController.addListener(_onOngoingChanged);
+    _topicRevisionController.addListener(_onTopicRevisionsChanged);
     _load();
   }
 
@@ -55,30 +57,32 @@ class RevisionController extends ChangeNotifier {
     return c != null && c.isArchived;
   }
 
-  List<Revision> get _activeRevisions =>
+  List<RevisionModule> get _activeRevisions =>
       _revisions.where((r) => !_isCourseArchived(r.courseId)).toList();
 
-  List<Revision> get revisions => List.unmodifiable(_activeRevisions);
+  List<RevisionModule> get revisions => List.unmodifiable(_activeRevisions);
   bool get isLoading => _isLoading;
 
-  /// Revisions whose current level has unlocked, soonest first.
-  List<Revision> get dueRevisions {
+  /// Modules with topics whose current level has unlocked, soonest first.
+  List<RevisionModule> get dueRevisions {
     final now = DateTime.now();
     final due = _activeRevisions.where((r) => r.isDueAt(now)).toList()
       ..sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
     return due;
   }
 
-  /// Revisions still counting down to their next level.
-  List<Revision> get upcomingRevisions {
+  /// Modules still counting down to their next level.
+  List<RevisionModule> get upcomingRevisions {
     final now = DateTime.now();
-    final upcoming = _activeRevisions.where((r) => !r.isFinished && !r.isDueAt(now)).toList()
+    final upcoming = _activeRevisions
+        .where((r) => !r.isFinished && !r.isDueAt(now))
+        .toList()
       ..sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
     return upcoming;
   }
 
-  /// Revisions that have cleared R5.
-  List<Revision> get finishedRevisions {
+  /// Modules where 100% of enrolled topics have cleared R5.
+  List<RevisionModule> get finishedRevisions {
     final done = _activeRevisions.where((r) => r.isFinished).toList()
       ..sort((a, b) => (b.completedAt ?? b.updatedAt)
           .compareTo(a.completedAt ?? a.updatedAt));
@@ -87,8 +91,8 @@ class RevisionController extends ChangeNotifier {
 
   int get dueCount => dueRevisions.length;
 
-  /// Revisions due on the current calendar day (or already unlocked/overdue) and not yet finished.
-  List<Revision> get revisionsDueToday {
+  /// Modules due on the current calendar day (or overdue) and not yet finished.
+  List<RevisionModule> get revisionsDueToday {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     return _activeRevisions.where((r) {
@@ -115,43 +119,75 @@ class RevisionController extends ChangeNotifier {
   }
 
   /// Every record in one continuous list, most urgent due date first.
-  /// Finished records sink to the bottom because they have nothing left due.
-  List<Revision> get scheduledRevisions => _sorted(List<Revision>.of(_activeRevisions));
+  List<RevisionModule> get scheduledRevisions =>
+      _sorted(List<RevisionModule>.of(_activeRevisions));
 
-  /// Records matching a level filter, or all of them when [level] is null.
-  List<Revision> revisionsAtLevel(int? level) {
+  /// Records matching a level filter, or all when [level] is null.
+  List<RevisionModule> revisionsAtLevel(int? level) {
     if (level == null) return scheduledRevisions;
     return scheduledRevisions.where((r) => r.currentLevel == level).toList();
   }
 
-  /// Marks the current level as revised and moves the ladder on.
-  ///
-  /// This is the only path that advances a level, so a record stays due — and
-  /// keeps offering its "Start Rn" button — until the user acts. Returns true
-  /// when something changed.
+  /// Returns the computed roll-up revision for [moduleId], or by [moduleTitle].
+  RevisionModule? revisionForModule(String moduleId, {String? moduleTitle}) {
+    for (final revision in _revisions) {
+      if (moduleId.isNotEmpty && revision.moduleId == moduleId) return revision;
+      if (moduleTitle != null && moduleTitle.trim().isNotEmpty) {
+        final mod = _ongoingController.getModuleById(revision.moduleId);
+        if (mod != null &&
+            mod.title.trim().toLowerCase() == moduleTitle.trim().toLowerCase()) {
+          return revision;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Completes the currently due revision level for the module by batch-advancing
+  /// all due topics in that module through [TopicRevisionController].
   Future<bool> completeCurrentLevel(String revisionId, {DateTime? at}) async {
     final now = at ?? DateTime.now();
-    final index = _revisions.indexWhere((r) => r.id == revisionId);
-    if (index == -1) return false;
+    final modId = revisionId.startsWith('mod_rev_')
+        ? revisionId.substring('mod_rev_'.length)
+        : revisionId;
 
-    final current = _revisions[index];
-    if (current.isFinished) return false;
+    final targetIndex = _revisions.indexWhere(
+      (r) => r.id == revisionId || r.moduleId == modId || r.moduleId == revisionId,
+    );
+    if (targetIndex == -1) return false;
 
-    final advanced = current.advance(now);
-    _revisions = _sorted(List<Revision>.of(_revisions)..[index] = advanced);
-    await _dbService.saveRevisions(_revisions);
+    final currentModRev = _revisions[targetIndex];
+    if (currentModRev.isFinished) return false;
 
-    final courseTitle = _coursesController.getCourseById(current.courseId)?.title ?? '';
-    final moduleTitle = _ongoingController.moduleTitleFor(current.moduleId);
+    final targetModuleId = currentModRev.moduleId;
+    final topics = _topicRevisionController.topicRevisions
+        .where((tr) => tr.moduleId == targetModuleId)
+        .toList();
+
+    // Advance topics that are due, or topics sitting at the current module level
+    final dueTopics = topics.where((tr) => tr.isDueAt(now) && !tr.isFinished).toList();
+    final toAdvance = dueTopics.isNotEmpty
+        ? dueTopics
+        : topics.where((tr) => tr.currentLevel == currentModRev.currentLevel && !tr.isFinished).toList();
+
+    if (toAdvance.isEmpty) return false;
+
+    for (final tr in toAdvance) {
+      await _topicRevisionController.completeCurrentLevel(tr.id, at: now);
+    }
+
+    final courseTitle =
+        _coursesController.getCourseById(currentModRev.courseId)?.title ?? '';
+    final moduleTitle = _ongoingController.moduleTitleFor(currentModRev.moduleId);
 
     final log = StudyLog(
-      id: 'rev_${current.id}_${now.millisecondsSinceEpoch}',
+      id: 'rev_${currentModRev.id}_${now.millisecondsSinceEpoch}',
       type: StudyLogType.revisionModuleCompleted,
-      courseId: current.courseId,
+      courseId: currentModRev.courseId,
       courseTitle: courseTitle,
-      moduleId: current.moduleId,
+      moduleId: currentModRev.moduleId,
       moduleTitle: moduleTitle,
-      revisionLevel: current.currentLevel,
+      revisionLevel: currentModRev.currentLevel,
       timestamp: now,
       createdAt: now,
     );
@@ -159,41 +195,116 @@ class RevisionController extends ChangeNotifier {
     if (getIt.isRegistered<ProgressController>()) {
       unawaited(getIt<ProgressController>().refresh());
     }
-    notifyListeners();
-    await _pushToDatabase(advanced, isNew: false);
+
+    _recomputeRollups();
     return true;
   }
 
-  /// Sends a record back to R1, re-anchored to [at] (defaults to now).
+  /// Sends all topics in this module back to R1 in [TopicRevisionController].
   Future<void> resetRevision(String revisionId, {DateTime? at}) async {
     final now = at ?? DateTime.now();
-    final index = _revisions.indexWhere((r) => r.id == revisionId);
-    if (index == -1) return;
+    final modId = revisionId.startsWith('mod_rev_')
+        ? revisionId.substring('mod_rev_'.length)
+        : revisionId;
 
-    final reset = _revisions[index].copyWith(
-      currentLevel: 1,
-      status: RevisionStatus.active,
-      nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),
-      clearCompletedAt: true,
-      updatedAt: now,
-    );
-    _revisions = _sorted(List<Revision>.of(_revisions)..[index] = reset);
-    await _dbService.saveRevisions(_revisions);
-    notifyListeners();
-    await _pushToDatabase(reset, isNew: false);
+    final topics = _topicRevisionController.topicRevisions
+        .where((tr) => tr.moduleId == modId || tr.id == revisionId)
+        .toList();
+
+    for (final tr in topics) {
+      await _topicRevisionController.resetTopicRevision(tr.id, at: now);
+    }
+    _recomputeRollups();
   }
 
-  Revision? revisionForModule(String moduleId, {String? moduleTitle}) {
-    for (final revision in _revisions) {
-      if (moduleId.isNotEmpty && revision.moduleId == moduleId) return revision;
-      if (moduleTitle != null && moduleTitle.trim().isNotEmpty) {
-        final mod = _ongoingController.getModuleById(revision.moduleId);
-        if (mod != null && mod.title.trim().toLowerCase() == moduleTitle.trim().toLowerCase()) {
-          return revision;
-        }
-      }
+  /// Removes all topic revisions for this module and cleans up legacy storage.
+  Future<void> deleteRevision(String revisionId) async {
+    if (revisionId.isEmpty) return;
+
+    final modId = revisionId.startsWith('mod_rev_')
+        ? revisionId.substring('mod_rev_'.length)
+        : revisionId;
+
+    final topics = _topicRevisionController.topicRevisions
+        .where((tr) => tr.moduleId == modId || tr.id == revisionId)
+        .toList();
+
+    for (final tr in topics) {
+      await _topicRevisionController.deleteTopicRevision(tr.id);
     }
-    return null;
+
+    try {
+      await _dbService.deleteRevision(revisionId);
+      if (modId != revisionId) {
+        await _dbService.deleteRevision(modId);
+      }
+      await _dbService.saveRevisionTopics(revisionId, []);
+    } catch (e) {
+      debugPrint('Error cleaning up legacy revision records: $e');
+    }
+
+    _recomputeRollups();
+  }
+
+  /// Enrolls all completed topics (or all topics if none completed) of [moduleId]
+  /// into [TopicRevisionController] spaced repetition.
+  Future<RevisionModule> createOrEnsureRevision({
+    required String courseId,
+    required String moduleId,
+    String? courseTitle,
+    String? moduleTitle,
+    String? moduleDescription,
+  }) async {
+    final existing = revisionForModule(moduleId, moduleTitle: moduleTitle);
+    if (existing != null) {
+      return existing;
+    }
+
+    final baseTopics = await _dbService.getTopics(moduleId: moduleId);
+    var toEnroll = baseTopics.where((t) => t.isCompleted).toList();
+    if (toEnroll.isEmpty) {
+      toEnroll = baseTopics;
+    }
+
+    final now = DateTime.now();
+    for (final topic in toEnroll) {
+      await _topicRevisionController.enrollTopicInRevision(
+        courseId: courseId,
+        moduleId: moduleId,
+        topicId: topic.id,
+        title: topic.title,
+        anchorDate: now,
+      );
+    }
+
+    _recomputeRollups();
+    unawaited(_ongoingController.refresh());
+    return revisionForModule(moduleId, moduleTitle: moduleTitle) ??
+        RevisionModule(
+          id: 'mod_rev_$moduleId',
+          courseId: courseId,
+          moduleId: moduleId,
+          currentLevel: 1,
+          status: RevisionStatus.active,
+          nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),
+          createdAt: now,
+          updatedAt: now,
+          totalTopicsCount: toEnroll.length,
+          dueTopicsCount: 0,
+        );
+  }
+
+  /// Removes all topic revisions belonging to [courseId].
+  Future<void> removeRevisionsForCourse(String courseId) async {
+    if (courseId.isEmpty) return;
+    await _topicRevisionController.removeRevisionsForCourse(courseId);
+    try {
+      final dbRevisions = await _dbService.getRevisions();
+      for (final r in dbRevisions.where((r) => r.courseId == courseId)) {
+        await _dbService.deleteRevision(r.id);
+      }
+    } catch (_) {}
+    _recomputeRollups();
   }
 
   void _onCoursesChanged() {
@@ -204,50 +315,18 @@ class RevisionController extends ChangeNotifier {
     unawaited(reconcile());
   }
 
+  void _onTopicRevisionsChanged() {
+    _recomputeRollups();
+  }
+
   Future<void> _load() async {
-    final cached = await _dbService.getRevisions();
-    if (_revisions.isEmpty && cached.isNotEmpty) {
-      _revisions = _sorted(cached);
-      _isLoading = false;
-      notifyListeners();
-    }
-    _listenToDatabase();
     await reconcile();
   }
 
-  void _listenToDatabase() {
-    _revisionsSubscription?.cancel();
-    try {
-      _revisionsSubscription = _dbService.streamRevisions().listen(
-        (remote) {
-          _mergeRemote(remote);
-        },
-        onError: (Object error) {
-          debugPrint('Error streaming revisions: $error');
-        },
-      );
-    } catch (e) {
-      debugPrint('Revision stream unavailable: $e');
-    }
-  }
-
-  void _mergeRemote(List<Revision> remote) {
-    _revisions = _sorted(remote);
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  /// Creates R1 for newly completed Modules and keeps a record's mirrored
-  /// module description in sync.
-  ///
-  /// Progression is deliberately *not* done here. Levels only move forward when
-  /// the user taps "Start Rn" on the revision detail screen, via
-  /// [completeCurrentLevel]. Advancing automatically would consume the due
-  /// window before the UI ever renders, so the button would never appear.
-  bool _reconcileQueued = false;
-
-  /// Creates R1 for newly completed Modules and keeps a record's mirrored
-  /// module description in sync.
+  /// Reconciles state:
+  /// 1. Migrates any legacy records from `revisions` SQLite table to `topic_revisions`.
+  /// 2. Purges records belonging to archived courses.
+  /// 3. Computes active module roll-up views.
   Future<void> reconcile() async {
     if (_isReconciling) {
       _reconcileQueued = true;
@@ -258,181 +337,106 @@ class RevisionController extends ChangeNotifier {
     try {
       do {
         _reconcileQueued = false;
-        await _performReconcile();
+        await _performMigrationAndReconcile();
       } while (_reconcileQueued);
     } catch (e) {
       debugPrint('Error reconciling revisions: $e');
     } finally {
       _isReconciling = false;
       _isLoading = false;
-      notifyListeners();
+      _recomputeRollups();
     }
   }
 
-  /// Creates R1 for a specific completed module immediately and ensures it is persisted.
-  /// Enforces that a module can only be added to revision ONE time (no duplicates).
-  Future<Revision> createOrEnsureRevision({
-    required String courseId,
-    required String moduleId,
-    String? courseTitle,
-    String? moduleTitle,
-    String? moduleDescription,
-  }) async {
-    final now = DateTime.now();
+  Future<void> _performMigrationAndReconcile() async {
+    try {
+      final legacyRevisions = await _dbService.getRevisions();
+      if (legacyRevisions.isNotEmpty) {
+        final existingTopicRevisions = _topicRevisionController.topicRevisions;
+        final enrolledModuleIds =
+            existingTopicRevisions.map((tr) => tr.moduleId).toSet();
 
-    // 1. Check in-memory list first by moduleId or title
-    final existingIndex = _revisions.indexWhere(
-      (r) => (moduleId.isNotEmpty && r.moduleId == moduleId) ||
-          (moduleTitle != null && moduleTitle.trim().isNotEmpty &&
-              r.moduleId.isNotEmpty &&
-              _ongoingController.getModuleById(r.moduleId)?.title.trim().toLowerCase() == moduleTitle.trim().toLowerCase()),
-    );
+        for (final legacy in legacyRevisions) {
+          if (_isCourseArchived(legacy.courseId)) {
+            await _dbService.deleteRevision(legacy.id);
+            continue;
+          }
 
-    if (existingIndex != -1) {
-      return _revisions[existingIndex];
+          if (!enrolledModuleIds.contains(legacy.moduleId)) {
+            final baseTopics =
+                await _dbService.getTopics(moduleId: legacy.moduleId);
+            var toEnroll = baseTopics.where((t) => t.isCompleted).toList();
+            if (toEnroll.isEmpty) {
+              toEnroll = baseTopics;
+            }
+
+            for (final t in toEnroll) {
+              final newTr = await _topicRevisionController.enrollTopicInRevision(
+                courseId: legacy.courseId,
+                moduleId: legacy.moduleId,
+                topicId: t.id,
+                title: t.title,
+                anchorDate: legacy.createdAt,
+              );
+
+              if (legacy.currentLevel > 1 || legacy.isFinished) {
+                final updatedTr = newTr.copyWith(
+                  currentLevel: legacy.currentLevel,
+                  status: legacy.status,
+                  nextRevisionAt: legacy.nextRevisionAt,
+                  completedAt: legacy.completedAt,
+                );
+                try {
+                  await _dbService.updateTopicRevision(updatedTr);
+                } catch (_) {}
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error migrating legacy module revisions: $e');
+    }
+  }
+
+  void _recomputeRollups() {
+    final Map<String, List<TopicRevision>> byModule = {};
+    for (final tr in _topicRevisionController.topicRevisions) {
+      if (_isCourseArchived(tr.courseId)) continue;
+      byModule.putIfAbsent(tr.moduleId, () => []).add(tr);
     }
 
-    // 2. Check database
-    try {
-      final dbRevisions = await _dbService.getRevisions();
-      final existingInDb = dbRevisions.where((r) => r.moduleId == moduleId).toList();
-      if (existingInDb.isNotEmpty) {
-        final existingRev = existingInDb.first;
-        if (!_revisions.any((r) => r.id == existingRev.id)) {
-          _revisions = _sorted(List<Revision>.of(_revisions)..add(existingRev));
-          notifyListeners();
-        }
-        return existingRev;
-      }
-    } catch (_) {}
+    final rollups = <RevisionModule>[];
+    for (final entry in byModule.entries) {
+      final moduleId = entry.key;
+      final topics = entry.value;
+      if (topics.isEmpty) continue;
+      final courseId = topics.first.courseId;
+      rollups.add(RevisionModule.fromTopicRevisions(
+        courseId: courseId,
+        moduleId: moduleId,
+        topics: topics,
+      ));
+    }
 
-    // 4. Create revision ONLY once on explicit manual user request
-    final newRevision = Revision(
-      id: 'revision_${moduleId.isNotEmpty ? moduleId : 'module'}_${now.millisecondsSinceEpoch}',
-      courseId: courseId,
-      moduleId: moduleId,
-      currentLevel: 1,
-      status: RevisionStatus.active,
-      nextRevisionAt: now.add(RevisionSchedule.intervalFor(1)),
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    _revisions = _sorted(List<Revision>.of(_revisions)..add(newRevision));
+    _revisions = _sorted(rollups);
     _isLoading = false;
     notifyListeners();
-    await _pushToDatabase(newRevision, isNew: true);
-    unawaited(_ongoingController.refresh());
-    return newRevision;
   }
 
-  Future<void> _performReconcile() async {
-    final working = List<Revision>.of(_revisions);
-    var changed = false;
-
-    // Only purge revisions belonging to archived courses
-    final toRemove = <String>[];
-    for (final revision in working) {
-      if (_isCourseArchived(revision.courseId)) {
-        toRemove.add(revision.id);
-      }
-    }
-
-    if (toRemove.isNotEmpty) {
-      working.removeWhere((r) => toRemove.contains(r.id));
-      changed = true;
-      for (final id in toRemove) {
-        try {
-          await _dbService.deleteRevision(id);
-        } catch (_) {}
-      }
-    }
-
-    if (changed) {
-      _revisions = _sorted(working);
-      notifyListeners();
-      unawaited(_ongoingController.refresh());
-    }
-  }
-
-  /// Deletes a single revision record entirely from memory and SQLite database.
-  Future<void> deleteRevision(String revisionId) async {
-    if (revisionId.isEmpty) return;
-
-    // 1. Immediately remove from local list for surgical UI update
-    _revisions = _revisions.where((r) => r.id != revisionId).toList();
-    notifyListeners();
-
-    // 2. Clean up revision topics belonging strictly to this revision
-    try {
-      await _dbService.saveRevisionTopics(revisionId, []);
-    } catch (e) {
-      debugPrint('Error cleaning up revision topics: $e');
-    }
-
-    // 3. Delete ONLY the target revision row from SQLite
-    try {
-      await _dbService.deleteRevision(revisionId);
-    } catch (e) {
-      debugPrint('Error deleting revision from database: $e');
-    }
-  }
-
-  /// Removes all existing revision records for a course.
-  /// Used when a course is archived, and ensuring restored courses start
-  /// fresh with a new revision ID when added to revision later.
-  Future<void> removeRevisionsForCourse(String courseId) async {
-    if (courseId.isEmpty) return;
-    final toRemove = _revisions.where((r) => r.courseId == courseId).toList();
-    if (toRemove.isEmpty) return;
-
-    _revisions = _revisions.where((r) => r.courseId != courseId).toList();
-    notifyListeners();
-    unawaited(_ongoingController.refresh());
-
-    for (final r in toRemove) {
-      try {
-        await _dbService.deleteRevision(r.id);
-      } catch (e) {
-        debugPrint('Error deleting revision for course $courseId: $e');
-      }
-    }
-  }
-
-  List<Course> _activeCourses() {
-    return _coursesController.courses.where((course) {
-      final status = course.status.toLowerCase();
-      return status != 'archived';
-    }).toList();
-  }
-
-
-
-  Future<void> _pushToDatabase(Revision revision, {required bool isNew}) async {
-    try {
-      if (isNew) {
-        await _dbService.addRevision(revision);
-      } else {
-        await _dbService.updateRevision(revision);
-      }
-    } catch (e) {
-      debugPrint('Database revision write error: $e');
-    }
-  }
-
-  static List<Revision> _sorted(List<Revision> revisions) {
-    revisions.sort((a, b) {
+  static List<RevisionModule> _sorted(List<RevisionModule> list) {
+    list.sort((a, b) {
       if (a.isFinished != b.isFinished) return a.isFinished ? 1 : -1;
       return a.nextRevisionAt.compareTo(b.nextRevisionAt);
     });
-    return revisions;
+    return list;
   }
 
   @override
   void dispose() {
     _coursesController.removeListener(_onCoursesChanged);
     _ongoingController.removeListener(_onOngoingChanged);
-    _revisionsSubscription?.cancel();
+    _topicRevisionController.removeListener(_onTopicRevisionsChanged);
     super.dispose();
   }
 }

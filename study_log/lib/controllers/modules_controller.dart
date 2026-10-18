@@ -151,6 +151,33 @@ class ModulesController extends ChangeNotifier {
     }
   }
 
+  Future<void> reorderModules(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _modules.length) return;
+    if (newIndex < 0 || newIndex > _modules.length) return;
+    if (oldIndex == newIndex) return;
+
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+
+    final item = _modules.removeAt(oldIndex);
+    _modules.insert(newIndex, item);
+
+    final updatedList = <Module>[];
+    for (int i = 0; i < _modules.length; i++) {
+      final mod = _modules[i].copyWith(orderIndex: i);
+      _modules[i] = mod;
+      updatedList.add(mod);
+    }
+    notifyListeners();
+
+    try {
+      await _dbService.updateModuleOrders(updatedList);
+    } catch (e) {
+      debugPrint('Database updateModuleOrders error: $e');
+    }
+  }
+
   @override
   void dispose() {
     _modulesSubscription?.cancel();

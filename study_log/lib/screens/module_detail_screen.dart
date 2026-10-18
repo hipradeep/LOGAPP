@@ -51,6 +51,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   DateTime? _lastUpdatedAt;
   int _totalMinutesExpended = 0;
   final _togglingTopicIndices = <int>{};
+  bool _isReordering = false;
 
   @override
   void initState() {
@@ -63,6 +64,46 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   void dispose() {
     _topicsSubscription?.cancel();
     super.dispose();
+  }
+
+  void _handleBack() {
+    if (_isReordering) {
+      setState(() => _isReordering = false);
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
+  void _toggleReordering() {
+    setState(() => _isReordering = !_isReordering);
+  }
+
+  void _handleReorderTopics(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _topics.length) return;
+    if (newIndex < 0 || newIndex > _topics.length) return;
+    if (oldIndex == newIndex) return;
+
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+
+    setState(() {
+      final item = _topics.removeAt(oldIndex);
+      _topics.insert(newIndex, item);
+    });
+
+    final updatedList = <Topic>[];
+    for (int i = 0; i < _topics.length; i++) {
+      final updated = _topics[i].copyWith(orderIndex: i);
+      _topics[i] = updated;
+      updatedList.add(updated);
+    }
+
+    try {
+      await DatabaseService.instance.updateTopicOrders(updatedList);
+    } catch (e) {
+      debugPrint('Database updateTopicOrders error: $e');
+    }
   }
 
   List<Topic> _deduplicateTopics(List<Topic> topics) {
@@ -146,6 +187,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           .streamTopics(moduleId: widget.moduleId)
           .listen((remoteTopics) {
         if (!mounted) return;
+        if (_isReordering) return;
         if (remoteTopics.isNotEmpty) {
           final merged = _mergeTopics(_topics, remoteTopics);
           setState(() => _topics = merged);
@@ -232,10 +274,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     } catch (e) {
       debugPrint('Error loading module stats: $e');
     }
-  }
-
-  void _handleBack() {
-    Navigator.of(context).pop();
   }
 
   Future<void> _recordModuleCompletionLog({DateTime? timestamp}) async {
@@ -463,6 +501,18 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
     try {
       final current = _topics[index];
+      final topicRevCtrl = getIt.isRegistered<TopicRevisionController>()
+          ? getIt<TopicRevisionController>()
+          : null;
+      final topicRev = topicRevCtrl?.topicRevisionFor(current.id);
+
+      // If already enrolled in spaced repetition, toggle its revision level status
+      if (topicRev != null) {
+        await topicRevCtrl!.toggleLevelStatus(topicRev.id);
+        return;
+      }
+
+      // First-time study: manage topic.status (notStarted -> inProgress -> completed -> notStarted)
       final TopicStatus next;
       switch (current.status) {
         case TopicStatus.notStarted:
@@ -522,6 +572,34 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         await DatabaseService.instance.addStudyLog(studyLog);
         if (getIt.isRegistered<ProgressController>()) {
           unawaited(getIt<ProgressController>().refresh());
+        }
+
+        // Show dialog asking to move into revision schedule
+        if (mounted && topicRevCtrl != null && !topicRevCtrl.isTopicEnrolled(updated.id)) {
+          final shouldMove = await StudyConfirmationDialog.showMoveToRevision(
+            context,
+            topicTitle: updated.title,
+            courseTitle: widget.courseTitle,
+            moduleTitle: widget.moduleTitle,
+          );
+          if (shouldMove && mounted) {
+            await topicRevCtrl.enrollTopicInRevision(
+              courseId: courseId,
+              moduleId: moduleId,
+              topicId: updated.id,
+              title: updated.title,
+            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('"${updated.title}" added to revision schedule (R1)'),
+                  backgroundColor: AppTheme.successColor,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            }
+          }
         }
       } else {
         if (getIt.isRegistered<ProgressController>()) {
@@ -613,7 +691,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   Future<void> _handleOpenTopicDetail(int index) async {
     final topic = _topics[index];
-    await Navigator.push<Topic?>(
+    final updatedTopic = await Navigator.push<Topic?>(
       context,
       MaterialPageRoute(
         builder: (_) => TopicDetailScreen(
@@ -626,10 +704,19 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       ),
     );
 
+    if (updatedTopic != null && mounted) {
+      setState(() {
+        _topics[index] = updatedTopic;
+      });
+    }
+
     // Refresh topics from storage in case status, notes, or full topic was modified/deleted
     await _loadTopics();
     await _syncModuleCompletion();
     unawaited(_loadModuleStats());
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      unawaited(getIt<TopicRevisionController>().refresh());
+    }
   }
 
   Future<void> _handleDuplicateTopic(int index) async {
@@ -850,102 +937,123 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     final totalCount = _topics.length;
     final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background(context),
-      floatingActionButton: _topics.isNotEmpty
-          ? FloatingActionButton(
-              onPressed: () async {
-                final result = await Navigator.push<dynamic>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SessionSetupScreen(
-                      courseTitle: widget.courseTitle,
-                      courseId: widget.courseId,
-                      moduleTitle: widget.moduleTitle,
-                      moduleId: widget.moduleId,
-                      topics: _topics,
-                      isRevision: progress >= 1.0,
+    return PopScope(
+      canPop: !_isReordering,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_isReordering) {
+          setState(() => _isReordering = false);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background(context),
+        floatingActionButton: (_topics.isNotEmpty && !_isReordering)
+            ? FloatingActionButton(
+                onPressed: () async {
+                  final result = await Navigator.push<dynamic>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SessionSetupScreen(
+                        courseTitle: widget.courseTitle,
+                        courseId: widget.courseId,
+                        moduleTitle: widget.moduleTitle,
+                        moduleId: widget.moduleId,
+                        topics: _topics,
+                        isRevision: progress >= 1.0,
+                      ),
                     ),
-                  ),
-                );
-                await _loadTopics();
-                await _loadModuleStats();
-                final allDone = (result == true) ||
-                    (result is Map && result['allCompleted'] == true) ||
-                    (_topics.isNotEmpty && _topics.every((t) => t.isCompleted));
-                if (allDone) {
-                  await _recordModuleCompletionLog();
-                  await _syncModuleCompletion();
-                  if (getIt.isRegistered<OngoingModulesController>()) {
-                    await getIt<OngoingModulesController>().refresh();
+                  );
+                  await _loadTopics();
+                  await _loadModuleStats();
+                  final allDone = (result == true) ||
+                      (result is Map && result['allCompleted'] == true) ||
+                      (_topics.isNotEmpty && _topics.every((t) => t.isCompleted));
+                  if (allDone) {
+                    await _recordModuleCompletionLog();
+                    await _syncModuleCompletion();
+                    if (getIt.isRegistered<OngoingModulesController>()) {
+                      await getIt<OngoingModulesController>().refresh();
+                    }
+                    if (getIt.isRegistered<ProgressController>()) {
+                      unawaited(getIt<ProgressController>().refresh());
+                    }
+                    if (mounted) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          _showModuleCompletedDialog(isInRevision: result is Map && result['isRevision'] == true);
+                        }
+                      });
+                    }
                   }
-                  if (getIt.isRegistered<ProgressController>()) {
-                    unawaited(getIt<ProgressController>().refresh());
-                  }
-                  if (mounted) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        _showModuleCompletedDialog(isInRevision: result is Map && result['isRevision'] == true);
-                      }
-                    });
-                  }
-                }
-              },
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              elevation: 4,
-              shape: const CircleBorder(),
-              tooltip: progress >= 1.0 ? 'Start Revision Session' : 'Start Study Session',
-              child: const Icon(Icons.play_arrow_rounded, size: 28),
-            )
-          : null,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CustomAppBar(
-              title: widget.courseTitle.isNotEmpty ? widget.courseTitle : 'MODULE',
-              onBack: _handleBack,
-              actions: [
-                AddPillButton(
-                  label: 'Add Topic',
-                  onPressed: _openAddTopicScreen,
-                ),
-              ],
-            ),
-            _CompactModuleHeader(
-              moduleTitle: widget.moduleTitle,
-              courseId: widget.courseId,
-              courseTitle: widget.courseTitle,
-              completedCount: completedCount,
-              totalCount: totalCount,
-              progress: progress,
-              lastUpdatedAt: _lastUpdatedAt ?? DateTime.now(),
-              totalMinutesExpended: _totalMinutesExpended,
-            ),
-            const VGapXs(),
-            Divider(
-              height: 12,
-              thickness: 1.0,
-              color: AppTheme.borderColor(context),
-            ),
-            const VGapXs(),
-            Expanded(
-              child: _TopicsListView(
-                topics: _topics,
-                moduleTitle: widget.moduleTitle,
-                courseTitle: widget.courseTitle,
-                courseId: widget.courseId,
-                moduleId: widget.moduleId,
-                onToggle: _toggleTopicStatus,
-                onOpenDetail: _handleOpenTopicDetail,
-                onEdit: _handleEditTopic,
-                onDuplicate: _handleDuplicateTopic,
-                onDelete: _handleDeleteTopic,
-                bottomPadding: bottomSafe + 84,
+                },
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shape: const CircleBorder(),
+                tooltip: progress >= 1.0 ? 'Start Revision Session' : 'Start Study Session',
+                child: const Icon(Icons.play_arrow_rounded, size: 28),
+              )
+            : null,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CustomAppBar(
+                title: _isReordering
+                    ? 'REORDER TOPICS'
+                    : (widget.courseTitle.isNotEmpty ? widget.courseTitle : 'MODULE'),
+                onBack: _handleBack,
+                actions: [
+                  if (_isReordering)
+                    AddPillButton(
+                      label: 'Done',
+                      icon: Icons.check_rounded,
+                      onPressed: _toggleReordering,
+                    )
+                  else
+                    AddPillButton(
+                      label: 'Add Topic',
+                      onPressed: _openAddTopicScreen,
+                    ),
+                ],
               ),
-            ),
-          ],
+              _CompactModuleHeader(
+                moduleTitle: widget.moduleTitle,
+                courseId: widget.courseId,
+                courseTitle: widget.courseTitle,
+                completedCount: completedCount,
+                totalCount: totalCount,
+                progress: progress,
+                lastUpdatedAt: _lastUpdatedAt ?? DateTime.now(),
+                totalMinutesExpended: _totalMinutesExpended,
+              ),
+              const VGapXs(),
+              Divider(
+                height: 12,
+                thickness: 1.0,
+                color: AppTheme.borderColor(context),
+              ),
+              const VGapXs(),
+              Expanded(
+                child: _TopicsListView(
+                  topics: _topics,
+                  moduleTitle: widget.moduleTitle,
+                  courseTitle: widget.courseTitle,
+                  courseId: widget.courseId,
+                  moduleId: widget.moduleId,
+                  isReordering: _isReordering,
+                  onReorderTopics: _handleReorderTopics,
+                  onOrderTopic: _toggleReordering,
+                  onToggle: _toggleTopicStatus,
+                  onOpenDetail: _handleOpenTopicDetail,
+                  onEdit: _handleEditTopic,
+                  onDuplicate: _handleDuplicateTopic,
+                  onDelete: _handleDeleteTopic,
+                  bottomPadding: bottomSafe + 84,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1016,6 +1124,9 @@ class _TopicsListView extends StatelessWidget {
   final String courseTitle;
   final String courseId;
   final String moduleId;
+  final bool isReordering;
+  final void Function(int, int)? onReorderTopics;
+  final VoidCallback? onOrderTopic;
   final ValueChanged<int> onToggle;
   final ValueChanged<int> onOpenDetail;
   final ValueChanged<int> onEdit;
@@ -1029,6 +1140,9 @@ class _TopicsListView extends StatelessWidget {
     required this.courseTitle,
     required this.courseId,
     required this.moduleId,
+    this.isReordering = false,
+    this.onReorderTopics,
+    this.onOrderTopic,
     required this.onToggle,
     required this.onOpenDetail,
     required this.onEdit,
@@ -1083,28 +1197,75 @@ class _TopicsListView extends StatelessWidget {
         ),
       );
     }
-
-    final isModuleCompleted = topics.isNotEmpty && topics.every((t) => t.isCompleted);
     final topicRevCtrl = getIt.isRegistered<TopicRevisionController>()
         ? getIt<TopicRevisionController>()
         : null;
 
     Widget buildList(BuildContext context) {
-      return ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
-        itemCount: topics.length + (isModuleCompleted ? 1 : 0),
-        itemBuilder: (context, index) {
-          // "Add to Revision" footer button for completed modules
-          if (isModuleCompleted && index == topics.length) {
-            return _AddToRevisionFooter(
-              moduleTitle: moduleTitle,
-              courseTitle: courseTitle,
-              courseId: courseId,
-              moduleId: moduleId,
-            );
-          }
+      if (isReordering) {
+        return ReorderableListView.builder(
+          buildDefaultDragHandles: false,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
+          itemCount: topics.length,
+          onReorder: onReorderTopics ?? (_, __) {},
+          itemBuilder: (context, index) {
+            final item = topics[index];
+            final topicRev = topicRevCtrl?.topicRevisionFor(item.id);
 
+            return Column(
+              key: ValueKey(item.id.isNotEmpty ? item.id : 'topic_$index'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ReorderableDelayedDragStartListener(
+                  index: index,
+                  child: TopicListItem(
+                    topic: item,
+                    topicRevision: topicRev,
+                    subtitle: 'Drag to reorder',
+                    trailing: ReorderableDragStartListener(
+                      index: index,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                        child: Icon(
+                          Icons.reorder_rounded,
+                          color: AppTheme.primaryColor,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                    showTrailing: false,
+                    onCheckboxTap: null,
+                    onTap: null,
+                    onLongPress: null,
+                    onOptionsTap: null,
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  indent: 52,
+                  endIndent: 16,
+                  color: AppTheme.borderColor(context),
+                ),
+              ],
+            );
+          },
+        );
+      }
+
+      return ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
+        itemCount: topics.length,
+        separatorBuilder: (context, index) => Divider(
+          height: 1,
+          thickness: 0.6,
+          indent: 52,
+          endIndent: 16,
+          color: AppTheme.borderColor(context),
+        ),
+        itemBuilder: (context, index) {
           final item = topics[index];
           final topicRev = topicRevCtrl?.topicRevisionFor(item.id);
 
@@ -1116,6 +1277,7 @@ class _TopicsListView extends StatelessWidget {
               courseTitle: courseTitle,
               courseId: courseId,
               moduleId: moduleId,
+              onOrderTopic: onOrderTopic,
               onEdit: () => onEdit(index),
               onDuplicate: () => onDuplicate(index),
               onDelete: () => onDelete(index),
@@ -1144,142 +1306,3 @@ class _TopicsListView extends StatelessWidget {
     return buildList(context);
   }
 }
-
-/// Footer button shown at the bottom of a completed module's topic list.
-class _AddToRevisionFooter extends StatelessWidget {
-  final String moduleTitle;
-  final String courseTitle;
-  final String courseId;
-  final String moduleId;
-
-  const _AddToRevisionFooter({
-    required this.moduleTitle,
-    required this.courseTitle,
-    required this.courseId,
-    required this.moduleId,
-  });
-
-  Future<void> _handleTap(BuildContext context, bool isInRevision) async {
-    if (!getIt.isRegistered<RevisionController>()) return;
-    final revisionCtrl = getIt<RevisionController>();
-    if (isInRevision) {
-      final rev = revisionCtrl.revisionForModule(moduleId, moduleTitle: moduleTitle);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            rev != null
-                ? '"$moduleTitle" is in revision schedule (Level R${rev.currentLevel})'
-                : '"$moduleTitle" is already in revision schedule',
-          ),
-          backgroundColor: AppTheme.primaryColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-          ),
-        ),
-      );
-      return;
-    }
-
-    try {
-      final rev = await revisionCtrl.createOrEnsureRevision(
-        courseId: courseId,
-        moduleId: moduleId,
-        courseTitle: courseTitle,
-        moduleTitle: moduleTitle,
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"$moduleTitle" added to revision schedule (Level R${rev.currentLevel})'),
-            backgroundColor: AppTheme.successColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to add to revision: $e'),
-            backgroundColor: AppTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final revisionCtrl = getIt.isRegistered<RevisionController>()
-        ? getIt<RevisionController>()
-        : null;
-
-    if (revisionCtrl == null) return const SizedBox.shrink();
-
-    return ListenableBuilder(
-      listenable: revisionCtrl,
-      builder: (context, _) {
-        final existingRevision = revisionCtrl.revisionForModule(
-          moduleId,
-          moduleTitle: moduleTitle,
-        );
-        final isInRevision = existingRevision != null;
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _handleTap(context, isInRevision),
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isInRevision
-                      ? AppTheme.successColor.withValues(alpha: 0.1)
-                      : AppTheme.primaryColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isInRevision
-                        ? AppTheme.successColor.withValues(alpha: 0.4)
-                        : AppTheme.primaryColor.withValues(alpha: 0.35),
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isInRevision ? Icons.check_circle_rounded : Icons.replay_rounded,
-                      color: isInRevision ? AppTheme.successColor : AppTheme.primaryColor,
-                      size: 20,
-                    ),
-                    const HGapSm(),
-                    Text(
-                      isInRevision
-                          ? 'In Revision Schedule (Level R${existingRevision.currentLevel})'
-                          : 'Add to Revision',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: isInRevision ? AppTheme.successColor : AppTheme.primaryColor,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-

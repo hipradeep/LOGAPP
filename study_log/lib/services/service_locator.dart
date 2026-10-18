@@ -43,11 +43,11 @@ void setupLocator() {
   if (!getIt.isRegistered<OngoingModulesController>()) {
     getIt.registerLazySingleton<OngoingModulesController>(() => OngoingModulesController());
   }
-  if (!getIt.isRegistered<RevisionController>()) {
-    getIt.registerLazySingleton<RevisionController>(() => RevisionController());
-  }
   if (!getIt.isRegistered<TopicRevisionController>()) {
     getIt.registerLazySingleton<TopicRevisionController>(() => TopicRevisionController());
+  }
+  if (!getIt.isRegistered<RevisionController>()) {
+    getIt.registerLazySingleton<RevisionController>(() => RevisionController());
   }
   if (!getIt.isRegistered<ProgressController>()) {
     getIt.registerLazySingleton<ProgressController>(() => ProgressController());
@@ -67,16 +67,16 @@ Future<void> warmupControllers() async {
     await DatabaseService.instance.init();
     final courses = getIt<CoursesController>();
     final ongoing = getIt<OngoingModulesController>();
-    final revision = getIt<RevisionController>();
     final topicRevision = getIt<TopicRevisionController>();
+    final revision = getIt<RevisionController>();
     final progress = getIt<ProgressController>();
 
     await Future.wait([
       courses.loadCourses(),
       ongoing.refresh(),
-      revision.reconcile(),
       topicRevision.refresh(),
     ]);
+    await revision.reconcile();
     await progress.load();
     if (getIt.isRegistered<NotificationController>()) {
       await getIt<NotificationController>().syncAllNotifications();

@@ -57,18 +57,25 @@ class RevisionOptionsSheet extends StatelessWidget {
         break;
 
       case RevisionOptionAction.resetToR1:
-        await revisionController.resetRevision(revision.id);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Reset "$moduleTitle" to R1'),
-              backgroundColor: AppTheme.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        final confirmedReset = await StudyConfirmationDialog.showResetRevision(
+          context,
+          title: moduleTitle,
+          currentLevelLabel: revision.levelLabel,
+        );
+        if (confirmedReset && context.mounted) {
+          await revisionController.resetRevision(revision.id);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Reset "$moduleTitle" to R1'),
+                backgroundColor: AppTheme.primaryColor,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
         break;
 
