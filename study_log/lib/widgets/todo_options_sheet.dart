@@ -53,18 +53,7 @@ class TodoOptionsSheet extends StatelessWidget {
 
   Future<void> _handleDelete(BuildContext context) async {
     Navigator.pop(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => StudyConfirmationDialog(
-        icon: Icons.delete_outline_rounded,
-        iconColor: AppTheme.errorColor,
-        title: 'Delete Task?',
-        message: 'Are you sure you want to delete "${todo.title}" and its subtasks? This action cannot be undone.',
-        confirmText: 'Delete',
-        confirmColor: AppTheme.errorColor,
-      ),
-    );
+    final confirmed = await StudyConfirmationDialog.showDeleteTask(context, taskTitle: todo.title);
     if (confirmed == true) {
       onDelete?.call();
     }

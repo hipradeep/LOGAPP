@@ -6,6 +6,8 @@ import '../widgets/study_schedule_card.dart';
 import '../widgets/today_progress_card.dart';
 import '../widgets/your_courses_carousel.dart';
 import '../widgets/tab_header.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/google_sync_progress_dialog.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
@@ -23,7 +25,7 @@ import 'module_detail_screen.dart';
 import '../widgets/recent_activity_card.dart';
 
 /// Redesigned Home Screen matching the reference design:
-/// - "Hi, <UserName>" / "Study/Log" greeting
+/// - "Hi, `<UserName>`" / "Study/Log" greeting
 /// - "Your Courses" horizontal carousel with progress bars and indicator dots
 /// - "Today's Progress" with formatted date and 4 statistics
 /// - "Current Modules" fetching ongoing courses and active ongoing modules
@@ -35,7 +37,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
@@ -147,6 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
     final ongoingController = getIt<OngoingModulesController>();
 
@@ -221,53 +227,7 @@ class _HomeGreetingHeader extends StatelessWidget {
   Future<void> _handleCloudSignIn(BuildContext context, CloudSyncController? ctrl) async {
     if (ctrl == null || ctrl.isBusy) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      useRootNavigator: true,
-      builder: (_) => PopScope(
-        canPop: false,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor(context)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.shadowColor(context),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-                const HGapMd(),
-                Text(
-                  'Connecting to Google...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    GoogleSyncProgressDialog.show(context);
 
     bool success = false;
     try {
@@ -528,7 +488,12 @@ class _CurrentModulesSliverList extends StatelessWidget {
 
         if (items.isEmpty) {
           return const SliverToBoxAdapter(
-            child: _EmptyOngoingModulesCard(),
+            child: AppEmptyState(
+              icon: Icons.auto_stories_outlined,
+              title: 'No running or upcoming modules',
+              description: 'Add modules to your courses to see your study schedule here.',
+              showCard: true,
+            ),
           );
         }
 
@@ -591,49 +556,6 @@ class _CurrentModulesSliverList extends StatelessWidget {
           },
         );
       },
-    );
-  }
-}
-
-class _EmptyOngoingModulesCard extends StatelessWidget {
-  const _EmptyOngoingModulesCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.auto_stories_outlined,
-            size: 36,
-            color: AppTheme.textSecondaryColor(context),
-          ),
-          const VGapMd(),
-          Text(
-            'No running or upcoming modules',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-          const VGapXs(),
-          Text(
-            'Add modules to your courses to see your study schedule here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: AppTheme.textSecondaryColor(context),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

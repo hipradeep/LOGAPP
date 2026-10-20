@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../models/course.dart';
 import '../models/module.dart';
 import '../models/topic.dart';
-import '../models/study_log.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
@@ -347,8 +346,6 @@ class OngoingModulesController extends ChangeNotifier {
           if (studyStatus == ModuleStudyStatus.completed) {
             courseCompletedModules++;
           }
-
-          final isMovedToRevision = revisionModuleIds.contains(module.id);
 
           // Exclude completed courses, OR completed modules (only in-progress or not-started belong here)
           if (isCourseMarkedComplete || studyStatus == ModuleStudyStatus.completed) {

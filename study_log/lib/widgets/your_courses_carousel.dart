@@ -78,7 +78,7 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
         ListenableBuilder(
           listenable: Listenable.merge([
             controller,
-            if (ongoing != null) ongoing,
+            ?ongoing,
           ]),
           builder: (context, _) {
             if (controller.isLoading && controller.courses.isEmpty) {
@@ -128,7 +128,7 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
                 physics: const BouncingScrollPhysics(),
                 padding: EdgeInsets.zero,
                 itemCount: displayed.length + (showMore ? 1 : 0),
-                separatorBuilder: (_, __) => const HGapMd(),
+                separatorBuilder: (_, _) => const HGapMd(),
                 itemBuilder: (context, index) {
                   if (showMore && index == displayed.length) {
                     return _MoreCoursesCard(onTap: widget.onMoreTap);

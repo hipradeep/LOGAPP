@@ -49,16 +49,16 @@ class SheetHeaderBadge extends StatelessWidget {
 
 /// Standardized header with squircle badge, bold title, and subtitle.
 class SheetHeader extends StatelessWidget {
-  final Widget badge;
+  final Widget? badge;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final int? subtitleMaxLines;
 
   const SheetHeader({
     super.key,
-    required this.badge,
+    this.badge,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     this.subtitleMaxLines,
   });
 
@@ -67,8 +67,10 @@ class SheetHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        badge,
-        const HGapSm(),
+        if (badge != null) ...[
+          badge!,
+          const HGapSm(),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,18 +87,20 @@ class SheetHeader extends StatelessWidget {
                   letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                softWrap: true,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.3,
-                  color: AppTheme.textSecondaryColor(context),
+              if (subtitle != null && subtitle!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  softWrap: true,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.3,
+                    color: AppTheme.textSecondaryColor(context),
+                  ),
+                  maxLines: subtitleMaxLines,
+                  overflow: subtitleMaxLines != null ? TextOverflow.ellipsis : null,
                 ),
-                maxLines: subtitleMaxLines,
-                overflow: subtitleMaxLines != null ? TextOverflow.ellipsis : null,
-              ),
+              ],
             ],
           ),
         ),
@@ -282,6 +286,66 @@ class SheetCancelButton extends StatelessWidget {
             color: AppTheme.textPrimaryColor(context),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Full-width primary action button for modal bottom sheets.
+class SheetSubmitButton extends StatelessWidget {
+  final String text;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final bool isLoading;
+
+  const SheetSubmitButton({
+    super.key,
+    required this.text,
+    this.onPressed,
+    this.icon,
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 44,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 18),
+                    const HGapSm(),
+                  ],
+                  Text(
+                    text,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

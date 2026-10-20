@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/entity_detail_header.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/topic_list_item.dart';
 import '../widgets/revision_options_sheet.dart';
 import '../models/revision.dart';
@@ -579,7 +579,12 @@ class _RevisionTopicsView extends StatelessWidget {
     }
 
     if (topics.isEmpty) {
-      return const _RevisionTopicsEmptyState();
+      return const AppEmptyState(
+        icon: Icons.playlist_add_rounded,
+        title: 'No revision topics yet',
+        description: 'Only completed topics added to revision appear here.',
+        showCard: false,
+      );
     }
 
     return ListView.builder(
@@ -599,56 +604,6 @@ class _RevisionTopicsView extends StatelessWidget {
           onTap: () => onTopicTap(topic),
         );
       },
-    );
-  }
-}
-
-class _RevisionTopicsEmptyState extends StatelessWidget {
-  const _RevisionTopicsEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppTheme.pastelPurple(context),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.playlist_add_rounded,
-                size: 30,
-                color: AppTheme.pastelPurpleText(context),
-              ),
-            ),
-            const VGapMd(),
-            Text(
-              'No revision topics yet',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimaryColor(context),
-              ),
-            ),
-            const VGapXs(),
-            Text(
-              'Only completed topics added to revision appear here.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondaryColor(context),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/tab_header.dart';
+import '../widgets/google_sync_progress_dialog.dart';
 import '../services/service_locator.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -10,6 +11,7 @@ import '../controllers/cloud_sync_controller.dart';
 import 'my_progress_screen.dart';
 import 'activity_screen.dart';
 import 'courses_screen.dart';
+import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
 
 /// Profile Screen:
@@ -26,7 +28,11 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   late final ProgressController _progressController;
   
 
@@ -66,10 +72,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-
+  void _openBookmarks(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BookmarksScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
@@ -122,6 +134,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _ProfileMenuCard(
                               onActivityTap: () => _openActivity(context),
                               onCoursesTap: () => _openCourses(context),
+                              onBookmarksTap: () => _openBookmarks(context),
                             ),
                           ],
                         );
@@ -145,53 +158,7 @@ class _UserProfileCard extends StatelessWidget {
   Future<void> _handleSignIn(BuildContext context, CloudSyncController? ctrl) async {
     if (ctrl == null || ctrl.isBusy) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      useRootNavigator: true,
-      builder: (_) => PopScope(
-        canPop: false,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            decoration: BoxDecoration(
-              color: AppTheme.surface(context),
-              borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
-              border: Border.all(color: AppTheme.borderColor(context)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.shadowColor(context),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-                const HGapMd(),
-                Text(
-                  'Connecting to Google...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    GoogleSyncProgressDialog.show(context);
 
     bool success = false;
     try {
@@ -246,10 +213,10 @@ class _UserProfileCard extends StatelessWidget {
 
     return ListenableBuilder(
       listenable: Listenable.merge([
-        if (syncCtrl != null) syncCtrl,
-        if (coursesCtrl != null) coursesCtrl,
-        if (revisionCtrl != null) revisionCtrl,
-        if (progressCtrl != null) progressCtrl,
+        ?syncCtrl,
+        ?coursesCtrl,
+        ?revisionCtrl,
+        ?progressCtrl,
       ]),
       builder: (context, _) {
         final isSignedIn = syncCtrl?.isSignedIn ?? false;
@@ -332,7 +299,7 @@ class _UserProfileCard extends StatelessWidget {
                                 width: 40,
                                 height: 40,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Text(
+                                errorBuilder: (_, _, _) => Text(
                                   userInitial,
                                   style: const TextStyle(
                                     fontSize: 18,
@@ -610,10 +577,12 @@ class _SectionHeader extends StatelessWidget {
 class _ProfileMenuCard extends StatelessWidget {
   final VoidCallback onActivityTap;
   final VoidCallback onCoursesTap;
+  final VoidCallback onBookmarksTap;
 
   const _ProfileMenuCard({
     required this.onActivityTap,
     required this.onCoursesTap,
+    required this.onBookmarksTap,
   });
 
   @override
@@ -656,6 +625,19 @@ class _ProfileMenuCard extends StatelessWidget {
             title: 'Courses',
             onTap: onCoursesTap,
           ),
+          Divider(
+            height: 1,
+            thickness: 0.6,
+            indent: 52,
+            color: AppTheme.borderColor(context),
+          ),
+          _MenuTile(
+            icon: Icons.bookmark_rounded,
+            iconColor: const Color(0xFF8B5CF6),
+            iconBgColor: AppTheme.pastelPurple(context),
+            title: 'Bookmarks',
+            onTap: onBookmarksTap,
+          ),
         ],
       ),
     );
@@ -667,7 +649,6 @@ class _MenuTile extends StatelessWidget {
   final Color iconColor;
   final Color iconBgColor;
   final String title;
-  final Color? textColor;
   final VoidCallback onTap;
 
   const _MenuTile({
@@ -675,7 +656,6 @@ class _MenuTile extends StatelessWidget {
     required this.iconColor,
     required this.iconBgColor,
     required this.title,
-    this.textColor,
     required this.onTap,
   });
 
@@ -707,13 +687,13 @@ class _MenuTile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: textColor ?? AppTheme.textPrimaryColor(context),
+                    color: AppTheme.textPrimaryColor(context),
                   ),
                 ),
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: textColor ?? AppTheme.textMutedColor(context),
+                color: AppTheme.textMutedColor(context),
                 size: 18,
               ),
             ],

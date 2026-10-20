@@ -10,6 +10,7 @@ import '../controllers/progress_controller.dart';
 import '../controllers/notification_controller.dart';
 import '../controllers/cloud_sync_controller.dart';
 import '../controllers/todo_controller.dart';
+import '../controllers/bookmarks_controller.dart';
 import 'database_service.dart';
 import 'database_backup_service.dart';
 import 'notification_service.dart';
@@ -56,6 +57,9 @@ void setupLocator() {
   if (!getIt.isRegistered<TodoController>()) {
     getIt.registerLazySingleton<TodoController>(() => TodoController());
   }
+  if (!getIt.isRegistered<BookmarksController>()) {
+    getIt.registerLazySingleton<BookmarksController>(() => BookmarksController());
+  }
   if (!getIt.isRegistered<NotificationService>()) {
     getIt.registerLazySingleton<NotificationService>(() => NotificationService());
   }
@@ -75,12 +79,14 @@ Future<void> warmupControllers() async {
     final revision = getIt<RevisionController>();
     final progress = getIt<ProgressController>();
     final todo = getIt<TodoController>();
+    final bookmarks = getIt<BookmarksController>();
 
     await Future.wait([
       courses.loadCourses(),
       ongoing.refresh(),
       topicRevision.refresh(),
       todo.refresh(),
+      bookmarks.refresh(),
     ]);
     await revision.reconcile();
     await progress.load();

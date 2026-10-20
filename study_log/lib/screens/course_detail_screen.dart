@@ -8,6 +8,8 @@ import '../widgets/custom_app_bar.dart';
 import '../widgets/course_context_pill.dart';
 import '../widgets/module_options_sheet.dart';
 import '../widgets/compact_list_item.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/underline_tab_item.dart';
 import '../controllers/modules_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
@@ -254,58 +256,18 @@ class _CourseTabsRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _TabItem(
+            UnderlineTabItem(
               label: 'Modules ($modulesCount)',
               isActive: activeIndex == 0,
               onTap: () => onTabSelected(0),
             ),
             const HGapLg(),
-            _TabItem(
+            UnderlineTabItem(
               label: 'Overview',
               isActive: activeIndex == 1,
               onTap: () => onTabSelected(1),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TabItem extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _TabItem({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        decoration: BoxDecoration(
-          border: isActive
-              ? const Border(
-                  bottom: BorderSide(
-                    color: AppTheme.primaryColor,
-                    width: 2.5,
-                  ),
-                )
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context),
-          ),
         ),
       ),
     );
@@ -465,47 +427,11 @@ class _CourseModulesListView extends StatelessWidget {
             : null;
 
         if (dynamicModules.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: AppTheme.pastelIndigo(context),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppTheme.pastelIndigoBorder(context)),
-                    ),
-                    child: Icon(
-                      Icons.layers_clear_outlined,
-                      size: 30,
-                      color: AppTheme.pastelIndigoText(context),
-                    ),
-                  ),
-                  const VGapMd(),
-                  Text(
-                    'No modules yet',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimaryColor(context),
-                    ),
-                  ),
-                  const VGapXs(),
-                  Text(
-                    'Add a module from the top bar to start tracking topics.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          return const AppEmptyState(
+            icon: Icons.layers_clear_outlined,
+            title: 'No modules yet',
+            description: 'Add a module from the top bar to start tracking topics.',
+            showCard: false,
           );
         }
 

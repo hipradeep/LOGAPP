@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../models/course.dart';
 import '../models/revision_module.dart';
 import '../models/topic.dart';
 import '../models/topic_revision.dart';
@@ -51,48 +50,73 @@ class TopicRevisionController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
-  /// Topic revisions whose current level has unlocked, soonest first.
-  List<TopicRevision> get dueTopics {
-    final now = DateTime.now();
-    final due = _activeTopicRevisions.where((tr) => tr.isDueAt(now)).toList()
-      ..sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
-    return due;
-  }
+  List<TopicRevision> _cachedDueTopics = const [];
+  List<TopicRevision> _cachedUpcomingTopics = const [];
+  List<TopicRevision> _cachedFinishedTopics = const [];
+  List<TopicRevision> _cachedTopicsDueToday = const [];
 
-  /// Topic revisions still counting down to their next level.
-  List<TopicRevision> get upcomingTopics {
-    final now = DateTime.now();
-    final upcoming = _activeTopicRevisions
-        .where((tr) => !tr.isFinished && !tr.isDueAt(now))
-        .toList()
-      ..sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
-    return upcoming;
-  }
-
-  /// Topic revisions that have cleared R5.
-  List<TopicRevision> get finishedTopics {
-    final done = _activeTopicRevisions.where((tr) => tr.isFinished).toList()
-      ..sort((a, b) => (b.completedAt ?? b.updatedAt)
-          .compareTo(a.completedAt ?? a.updatedAt));
-    return done;
-  }
-
-  int get dueCount => dueTopics.length;
-
-  /// Topics due on the current calendar day (or overdue) and not yet finished.
-  List<TopicRevision> get topicsDueToday {
+  void _recomputeBuckets() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    return _activeTopicRevisions.where((tr) {
-      if (tr.isFinished) return false;
-      final dueDay = DateTime(
-        tr.nextRevisionAt.year,
-        tr.nextRevisionAt.month,
-        tr.nextRevisionAt.day,
-      );
-      return dueDay.isAtSameMomentAs(today) || tr.isDueAt(now);
-    }).toList();
+    final active = _activeTopicRevisions;
+
+    final due = <TopicRevision>[];
+    final upcoming = <TopicRevision>[];
+    final finished = <TopicRevision>[];
+    final dueToday = <TopicRevision>[];
+
+    for (final tr in active) {
+      if (tr.isFinished) {
+        finished.add(tr);
+      } else {
+        final isDue = tr.isDueAt(now);
+        if (isDue) {
+          due.add(tr);
+        } else {
+          upcoming.add(tr);
+        }
+
+        final dueDay = DateTime(
+          tr.nextRevisionAt.year,
+          tr.nextRevisionAt.month,
+          tr.nextRevisionAt.day,
+        );
+        if (dueDay.isAtSameMomentAs(today) || isDue) {
+          dueToday.add(tr);
+        }
+      }
+    }
+
+    due.sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
+    upcoming.sort((a, b) => a.nextRevisionAt.compareTo(b.nextRevisionAt));
+    finished.sort((a, b) =>
+        (b.completedAt ?? b.updatedAt).compareTo(a.completedAt ?? a.updatedAt));
+
+    _cachedDueTopics = due;
+    _cachedUpcomingTopics = upcoming;
+    _cachedFinishedTopics = finished;
+    _cachedTopicsDueToday = dueToday;
   }
+
+  @override
+  void notifyListeners() {
+    _recomputeBuckets();
+    super.notifyListeners();
+  }
+
+  /// Topic revisions whose current level has unlocked, soonest first.
+  List<TopicRevision> get dueTopics => _cachedDueTopics;
+
+  /// Topic revisions still counting down to their next level.
+  List<TopicRevision> get upcomingTopics => _cachedUpcomingTopics;
+
+  /// Topic revisions that have cleared R5.
+  List<TopicRevision> get finishedTopics => _cachedFinishedTopics;
+
+  int get dueCount => _cachedDueTopics.length;
+
+  /// Topics due on the current calendar day (or overdue) and not yet finished.
+  List<TopicRevision> get topicsDueToday => _cachedTopicsDueToday;
 
   /// Full scheduled list: active records by due date first, finished at the bottom.
   List<TopicRevision> get scheduledTopics =>

@@ -933,7 +933,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
                 itemCount: total,
-                separatorBuilder: (_, __) => const VGapXs(),
+                separatorBuilder: (_, _) => const VGapXs(),
                 itemBuilder: (ctx, index) {
                   final isCurrent = index == _currentTopicIndex;
                   final isDone = _isTopicCompletedAt(index);
@@ -1277,7 +1277,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     final isAlreadyDone = _isCurrentTopicCompleted && !allDone;
     final remainingTopics = total - completed;
 
-    final VoidCallback? onNextAndSave = allDone
+    final VoidCallback onNextAndSave = allDone
         ? () {
             _sessionTimer?.cancel();
             _isRunningNotifier.value = false;

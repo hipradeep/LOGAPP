@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/archived_course_options_sheet.dart';
 import '../widgets/course_icon_chip.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/custom_app_bar.dart';
 import 'archived_course_detail_screen.dart';
 
@@ -174,42 +175,13 @@ class _ArchivedEmptyState extends StatelessWidget {
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(24, 72, 24, bottomPadding),
-      children: [
-        Center(
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppTheme.pastelPurple(context),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-            ),
-            child: Icon(
-              Icons.archive_outlined,
-              color: AppTheme.pastelPurpleText(context),
-              size: 30,
-            ),
-          ),
-        ),
-        const VGapMd(),
-        Text(
-          'No archived courses',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapXs(),
-        Text(
-          'Courses you archive will be moved here.\nOpen one to review its modules and topics, or restore it anytime.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondaryColor(context),
-            height: 1.4,
-          ),
+      children: const [
+        AppEmptyState(
+          icon: Icons.archive_outlined,
+          title: 'No archived courses',
+          description:
+              'Courses you archive will be moved here.\nOpen one to review its modules and topics, or restore it anytime.',
+          showCard: false,
         ),
       ],
     );

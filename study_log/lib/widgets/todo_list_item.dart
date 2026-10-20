@@ -20,6 +20,7 @@ class TodoListItem extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onCheckboxTap;
+  final EdgeInsetsGeometry? margin;
 
   static final DateFormat _dueDateFormat = DateFormat('d MMM');
 
@@ -29,6 +30,7 @@ class TodoListItem extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onCheckboxTap,
+    this.margin,
   });
 
   @override
@@ -36,6 +38,7 @@ class TodoListItem extends StatelessWidget {
     return CompactListItem(
       key: ValueKey(todo.id),
       isCard: true,
+      margin: margin,
       isCompleted: todo.isCompleted,
       leading: _buildLeadingIndicator(context),
       title: todo.title,
@@ -60,7 +63,7 @@ class TodoListItem extends StatelessWidget {
           value: todo.progressRatio,
           strokeWidth: 2.8,
           color: AppTheme.primaryColor,
-          backgroundColor: const Color(0xFFE8E5FF),
+          backgroundColor: AppTheme.pastelIndigo(context),
         ),
       );
     } else if (todo.status == TodoStatus.inProgress) {

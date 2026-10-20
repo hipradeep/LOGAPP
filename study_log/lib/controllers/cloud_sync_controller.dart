@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_profile.dart';
@@ -42,6 +41,7 @@ class CloudSyncController extends ChangeNotifier with WidgetsBindingObserver {
 
   Timer? _debounceTimer;
   StreamSubscription<String>? _dbChangeSubscription;
+  StreamSubscription<GoogleSignInAccount?>? _authSubscription;
   static const Duration _debounceDuration = Duration(seconds: 4);
 
   CloudSyncController({
@@ -55,7 +55,7 @@ class CloudSyncController extends ChangeNotifier with WidgetsBindingObserver {
         _dbService = dbService ?? getIt<DatabaseService>() {
     WidgetsBinding.instance.addObserver(this);
 
-    _authService.onCurrentUserChanged.listen((account) {
+    _authSubscription = _authService.onCurrentUserChanged.listen((account) {
       if (account != null) {
         _cachedActiveEmail = account.email.trim().toLowerCase();
         _cachedDisplayName = account.displayName?.trim();
@@ -523,6 +523,7 @@ class CloudSyncController extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _debounceTimer?.cancel();
     _dbChangeSubscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

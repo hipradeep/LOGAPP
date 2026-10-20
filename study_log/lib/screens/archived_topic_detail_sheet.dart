@@ -34,7 +34,6 @@ class ArchivedTopicDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
     final hasDescription = topic.description.trim().isNotEmpty;
 
     return SheetContainer(
@@ -97,7 +96,8 @@ class ArchivedTopicDetailSheet extends StatelessWidget {
         ),
         const VGapMd(),
         ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: media.size.height * 0.45),
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.45),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: hasDescription

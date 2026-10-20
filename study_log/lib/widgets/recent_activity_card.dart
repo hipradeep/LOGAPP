@@ -32,7 +32,7 @@ class RecentActivityCard extends StatefulWidget {
 }
 
 class RecentActivityCardState extends State<RecentActivityCard> {
-  bool _showAll = false;
+  final bool _showAll = false;
 
   static final DateFormat _dateFormat = DateFormat('d MMM yyyy');
   static final DateFormat _weekdayFormat = DateFormat('EEE');

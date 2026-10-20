@@ -233,7 +233,7 @@ class TodoSubtask {
       'isCompleted': isCompleted ? 1 : 0,
       'orderIndex': orderIndex,
       'createdAt': createdAt.toIso8601String(),
-      if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
     };
   }
 

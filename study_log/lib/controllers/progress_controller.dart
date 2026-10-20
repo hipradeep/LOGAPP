@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/revision.dart';
-import '../models/topic_revision.dart';
-import '../models/topic.dart';
 import '../models/study_log.dart';
 import '../models/user_profile.dart';
 import '../services/database_service.dart';
-import '../services/service_locator.dart';
 
 /// Activity level for strike heatmap visualization.
 enum StrikeActivityLevel {
@@ -84,8 +81,8 @@ class ProgressController extends ChangeNotifier {
   int get totalTopicsFinished => _totalTopicsFinished;
   int get totalTopicRevisions => _totalTopicRevisions;
   UserProfile? get userProfile => _userProfile;
-  String get userName => (_userProfile?.name?.isNotEmpty == true && _userProfile!.name != 'Pradeep Maurya') ? _userProfile!.name : 'Learner';
-  String get userHeadline => (_userProfile?.headline?.isNotEmpty == true && _userProfile!.headline != 'Software Developer') ? _userProfile!.headline : 'Student';
+  String get userName => (_userProfile?.name.isNotEmpty == true && _userProfile!.name != 'Pradeep Maurya') ? _userProfile!.name : 'Learner';
+  String get userHeadline => (_userProfile?.headline.isNotEmpty == true && _userProfile!.headline != 'Software Developer') ? _userProfile!.headline : 'Student';
   String get userInitial {
     final name = userName;
     final trimmed = name.trim();

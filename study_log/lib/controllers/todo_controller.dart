@@ -306,7 +306,7 @@ class TodoController extends ChangeNotifier {
 
     // If all subtasks completed, auto-advance task status
     final remaining = item.subtasks.where((s) => s.id != subtaskId && !s.isCompleted).length;
-    if (willComplete && remaining == 0 && item.status == TodoStatus.todo) {
+    if (willComplete && remaining == 0 && item.status != TodoStatus.done) {
       await updateStatus(todoId, TodoStatus.done);
     } else if (!willComplete && item.status == TodoStatus.done) {
       await updateStatus(todoId, TodoStatus.inProgress);

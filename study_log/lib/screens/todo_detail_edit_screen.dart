@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/todo_item.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
@@ -9,6 +8,7 @@ import '../widgets/add_pill_button.dart';
 import '../widgets/study_text_fields.dart';
 import '../widgets/study_confirmation_dialog.dart';
 import '../controllers/todo_controller.dart';
+import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import 'session_timer_screen.dart';
 
@@ -31,6 +31,7 @@ class TodoDetailEditScreen extends StatefulWidget {
 
 class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
   late final TodoController _todoController;
+  late final DatabaseService _dbService;
   late final TextEditingController _titleController;
   late final UrlHighlightEditingController _descController;
 
@@ -51,6 +52,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
   void initState() {
     super.initState();
     _todoController = getIt<TodoController>();
+    _dbService = getIt<DatabaseService>();
     final t = widget.todo;
 
     _titleController = TextEditingController(text: t?.title ?? '');
@@ -134,14 +136,48 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
     });
   }
 
-  void _toggleSubtaskItem(int idx) {
+  Future<void> _toggleSubtaskItem(int idx) async {
+    if (idx < 0 || idx >= _subtasks.length) return;
+    final s = _subtasks[idx];
+    final willComplete = !s.isCompleted;
+    final now = DateTime.now();
+    final updated = s.copyWith(
+      isCompleted: willComplete,
+      completedAt: willComplete ? now : null,
+    );
+
     setState(() {
-      final s = _subtasks[idx];
-      _subtasks[idx] = s.copyWith(
-        isCompleted: !s.isCompleted,
-        completedAt: !s.isCompleted ? DateTime.now() : null,
-      );
+      _subtasks[idx] = updated;
     });
+
+    if (widget.todo != null) {
+      final currentTitle = idx < _subtaskControllers.length
+          ? _subtaskControllers[idx].text.trim()
+          : '';
+      final subtaskToPersist = updated.copyWith(
+        todoId: widget.todo!.id,
+        title: currentTitle.isNotEmpty
+            ? currentTitle
+            : (updated.title.isNotEmpty ? updated.title : 'Subtask'),
+      );
+      await _dbService.insertSubtask(subtaskToPersist);
+
+      final allDone = _subtasks.isNotEmpty && _subtasks.every((st) => st.isCompleted);
+      if (willComplete && allDone && _selectedStatus != TodoStatus.done) {
+        setState(() => _selectedStatus = TodoStatus.done);
+        await _todoController.updateStatus(widget.todo!.id, TodoStatus.done);
+      } else if (!willComplete && _selectedStatus == TodoStatus.done) {
+        setState(() => _selectedStatus = TodoStatus.inProgress);
+        await _todoController.updateStatus(widget.todo!.id, TodoStatus.inProgress);
+      }
+    } else {
+      final allDone = _subtasks.isNotEmpty && _subtasks.every((st) => st.isCompleted);
+      if (willComplete && allDone && _selectedStatus != TodoStatus.done) {
+        setState(() => _selectedStatus = TodoStatus.done);
+      } else if (!willComplete && _selectedStatus == TodoStatus.done) {
+        setState(() => _selectedStatus = TodoStatus.todo);
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -229,9 +265,21 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
     }
 
     final parentId = widget.todo?.id ?? 'todo_${now.millisecondsSinceEpoch}';
+    final allSubtasksDone =
+        nonBlankSubtasks.isNotEmpty && nonBlankSubtasks.every((s) => s.isCompleted);
+    final isDone = _selectedStatus == TodoStatus.done || allSubtasksDone;
+    final finalStatus = isDone ? TodoStatus.done : _selectedStatus;
+
     final reindexedSubtasks = [
       for (int i = 0; i < nonBlankSubtasks.length; i++)
-        nonBlankSubtasks[i].copyWith(todoId: parentId, orderIndex: i)
+        nonBlankSubtasks[i].copyWith(
+          todoId: parentId,
+          orderIndex: i,
+          isCompleted: isDone ? true : nonBlankSubtasks[i].isCompleted,
+          completedAt: isDone
+              ? (nonBlankSubtasks[i].completedAt ?? now)
+              : (nonBlankSubtasks[i].isCompleted ? nonBlankSubtasks[i].completedAt : null),
+        )
     ];
 
     if (widget.todo == null) {
@@ -239,7 +287,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
         id: parentId,
         title: title,
         description: _descController.text.trim(),
-        status: _selectedStatus,
+        status: finalStatus,
         priority: _selectedPriority,
         deadline: deadline,
         reminderTime: deadline,
@@ -248,7 +296,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
         subtasks: reindexedSubtasks,
         createdAt: now,
         updatedAt: now,
-        completedAt: _selectedStatus == TodoStatus.done ? now : null,
+        completedAt: finalStatus == TodoStatus.done ? now : null,
       );
 
       await _todoController.addTodo(newTodo, initialSubtasks: reindexedSubtasks);
@@ -256,7 +304,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
       final updatedTodo = widget.todo!.copyWith(
         title: title,
         description: _descController.text.trim(),
-        status: _selectedStatus,
+        status: finalStatus,
         priority: _selectedPriority,
         deadline: deadline,
         clearDeadline: deadline == null,
@@ -266,7 +314,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
         recurrenceRule: rule,
         subtasks: reindexedSubtasks,
         updatedAt: now,
-        completedAt: _selectedStatus == TodoStatus.done ? (widget.todo!.completedAt ?? now) : null,
+        completedAt: finalStatus == TodoStatus.done ? (widget.todo!.completedAt ?? now) : null,
       );
 
       await _todoController.updateTodo(updatedTodo);
@@ -279,18 +327,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
 
   Future<void> _confirmDelete() async {
     if (widget.todo == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => StudyConfirmationDialog(
-        icon: Icons.delete_outline_rounded,
-        iconColor: AppTheme.errorColor,
-        title: 'Delete Task?',
-        message: 'Are you sure you want to delete "${widget.todo!.title}" and its subtasks? This action cannot be undone.',
-        confirmText: 'Delete',
-        confirmColor: AppTheme.errorColor,
-      ),
-    );
+    final confirmed = await StudyConfirmationDialog.showDeleteTask(context, taskTitle: widget.todo!.title);
     if (confirmed == true && mounted) {
       await _todoController.deleteTodo(widget.todo!.id);
       if (mounted) {
@@ -299,13 +336,10 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // UI Builders
-  // ─────────────────────────────────────────────────────────────────────────
-
   void _startPomodoroSession() {
     final title = _titleController.text.trim();
-    final taskTitle = title.isNotEmpty ? title : (widget.todo?.title ?? 'Task Focus');
+    final taskTitle =
+        title.isNotEmpty ? title : (widget.todo?.title ?? 'Task Focus');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SessionTimerScreen(
@@ -328,15 +362,6 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _startPomodoroSession,
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        shape: const CircleBorder(),
-        tooltip: 'Start Focus Session',
-        child: const Icon(Icons.play_arrow_rounded, size: 28),
-      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -345,6 +370,21 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
               title: widget.todo != null ? 'Edit Task' : 'Add Task & Subtasks',
               onBack: () => Navigator.of(context).pop(),
               actions: [
+                if (widget.todo != null) ...[
+                  IconButton(
+                    icon: const Icon(Icons.timer_outlined, size: 22),
+                    color: AppTheme.primaryColor,
+                    tooltip: 'Start Focus Session',
+                    onPressed: _startPomodoroSession,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 22),
+                    color: AppTheme.errorColor,
+                    tooltip: 'Delete Task',
+                    onPressed: _confirmDelete,
+                  ),
+                  const HGapXs(),
+                ],
                 AddPillButton(
                   label: 'Save',
                   icon: Icons.check_rounded,
@@ -360,7 +400,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
                   left: 20,
                   right: 20,
                   top: 12,
-                  bottom: bottomSafe + 80,
+                  bottom: bottomSafe + 24,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,6 +524,9 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
     final isDeleting = _deletingSubtaskIndex == idx;
     final controller = _subtaskControllers[idx];
     final focusNode = _subtaskFocusNodes[idx];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedBorderColor =
+        isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
 
     return Container(
       key: ValueKey(item.id),
@@ -499,6 +542,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
         child: Row(
           children: [
             GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
                 if (isDeleting) {
                   setState(() => _deletingSubtaskIndex = null);
@@ -506,23 +550,28 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
                   _toggleSubtaskItem(idx);
                 }
               },
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: item.isCompleted ? AppTheme.primaryColor : Colors.transparent,
-                  border: Border.all(
-                    color: item.isCompleted ? AppTheme.primaryColor : AppTheme.borderColor(context),
-                    width: 1.5,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: item.isCompleted ? AppTheme.primaryColor : Colors.transparent,
+                    border: Border.all(
+                      color: item.isCompleted
+                          ? AppTheme.primaryColor
+                          : unselectedBorderColor,
+                      width: 2.0,
+                    ),
                   ),
+                  child: item.isCompleted
+                      ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                      : null,
                 ),
-                child: item.isCompleted
-                    ? const Icon(Icons.check, size: 13, color: Colors.white)
-                    : null,
               ),
             ),
-            const HGapMd(),
+            const HGapSm(),
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
@@ -537,7 +586,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
                   focusNode: focusNode,
                   readOnly: isDeleting,
                   keyboardType: TextInputType.text,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: item.isCompleted
                         ? AppTheme.textSecondaryColor(context).withValues(alpha: 0.5)
                         : AppTheme.textPrimaryColor(context),
@@ -547,7 +596,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
                   ),
                   decoration: InputDecoration(
                     hintText: 'Sub-task title',
-                    hintStyle: GoogleFonts.inter(
+                    hintStyle: TextStyle(
                       color: AppTheme.textSecondaryColor(context).withValues(alpha: 0.35),
                       fontSize: 15,
                     ),

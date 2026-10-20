@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../models/course.dart';
 import '../models/revision.dart';
-import '../models/module.dart';
-import '../models/topic_revision.dart';
 import '../models/study_log.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';

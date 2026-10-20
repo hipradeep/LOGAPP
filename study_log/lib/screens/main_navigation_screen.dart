@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/topic_revision_controller.dart';
@@ -16,13 +17,14 @@ import '../controllers/todo_controller.dart';
 
 import 'dart:async';
 import 'course_detail_screen.dart';
+import 'bookmarks_screen.dart';
 import '../models/notification_payload.dart';
 import '../services/notification_service.dart';
 
 /// Root navigation screen housing the 4 core tabs:
 /// - Home
-/// - TODO (Daily todos, checklists, deadlines)
 /// - Revision (R1 -> R5 spaced repetition ladder)
+/// - TODO (Daily todos, checklists, deadlines)
 /// - Profile
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -43,11 +45,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     super.initState();
     _pages = [
       const HomeScreen(),
-      const TodoScreen(),
       RevisionScreen(
         revisionController: getIt<RevisionController>(),
         onOpenRevision: _openRevisionDetail,
       ),
+      const TodoScreen(),
       const ProfileScreen(),
     ];
 
@@ -79,10 +81,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       case 'open_home':
         _onTabSelected(0);
         break;
-      case 'open_todo':
+      case 'open_revision':
         _onTabSelected(1);
         break;
-      case 'open_revision':
+      case 'open_todo':
         _onTabSelected(2);
         break;
       case 'open_course':
@@ -104,7 +106,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         break;
       case 'open_timer':
         // Jump directly to Revision tab
-        _onTabSelected(2);
+        _onTabSelected(1);
+        break;
+      case 'open_bookmarks':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => BookmarksScreen(highlightBookmarkId: payload.targetId),
+          ),
+        );
         break;
       default:
         _onTabSelected(0);
@@ -130,15 +139,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _onTabSelected(int index) {
     if (_currentIndex.value == index) {
       if (index == 1) {
-        if (getIt.isRegistered<TodoController>()) {
-          getIt<TodoController>().refresh();
-        }
-      } else if (index == 2) {
         if (getIt.isRegistered<RevisionController>()) {
           getIt<RevisionController>().reconcile();
         }
         if (getIt.isRegistered<TopicRevisionController>()) {
           getIt<TopicRevisionController>().refresh();
+        }
+      } else if (index == 2) {
+        if (getIt.isRegistered<TodoController>()) {
+          getIt<TodoController>().refresh();
         }
       } else if (index == 3 && getIt.isRegistered<ProgressController>()) {
         getIt<ProgressController>().refresh();
@@ -147,15 +156,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
     _currentIndex.value = index;
     if (index == 1) {
-      if (getIt.isRegistered<TodoController>()) {
-        getIt<TodoController>().refresh();
-      }
-    } else if (index == 2) {
       if (getIt.isRegistered<RevisionController>()) {
         getIt<RevisionController>().reconcile();
       }
       if (getIt.isRegistered<TopicRevisionController>()) {
         getIt<TopicRevisionController>().refresh();
+      }
+    } else if (index == 2) {
+      if (getIt.isRegistered<TodoController>()) {
+        getIt<TodoController>().refresh();
       }
     } else if (index == 3) {
       if (getIt.isRegistered<CoursesController>()) {
@@ -275,17 +284,17 @@ class _StudyBottomNav extends StatelessWidget {
           _NavItem(
             index: 1,
             currentIndex: currentIndex,
-            label: '#TODO',
-            selectedIcon: Icons.task_alt_rounded,
-            unselectedIcon: Icons.task_alt_outlined,
+            label: 'Revision',
+            selectedIcon: Icons.sync_rounded,
+            unselectedIcon: Icons.sync_outlined,
             onTap: onTap,
           ),
           _NavItem(
             index: 2,
             currentIndex: currentIndex,
-            label: 'Revision',
-            selectedIcon: Icons.sync_rounded,
-            unselectedIcon: Icons.sync_outlined,
+            label: '#TODO',
+            selectedIcon: Icons.task_alt_rounded,
+            unselectedIcon: Icons.task_alt_outlined,
             onTap: onTap,
           ),
           _NavItem(
@@ -339,7 +348,7 @@ class _NavItem extends StatelessWidget {
               color: color,
               size: 24,
             ),
-            const SizedBox(height: 3),
+            const VGapXs(),
             Text(
               label,
               style: TextStyle(

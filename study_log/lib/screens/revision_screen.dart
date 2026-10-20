@@ -4,6 +4,7 @@ import '../theme/revision_level_palette.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/tab_header.dart';
+import '../widgets/sheet_action_widgets.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/compact_list_item.dart';
 import '../widgets/revision_options_sheet.dart';
@@ -12,7 +13,6 @@ import '../widgets/topic_revision_card.dart';
 import '../widgets/topic_options_sheet.dart';
 import '../models/revision.dart';
 import '../models/topic.dart';
-import '../models/topic_revision.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/topic_revision_controller.dart';
 import '../controllers/courses_controller.dart';
@@ -80,7 +80,11 @@ class RevisionScreen extends StatefulWidget {
   State<RevisionScreen> createState() => _RevisionScreenState();
 }
 
-class _RevisionScreenState extends State<RevisionScreen> {
+class _RevisionScreenState extends State<RevisionScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   RevisionTypeFilter _typeFilter = RevisionTypeFilter.topics;
   int? _levelFilter;
   RevisionScope _scope = RevisionScope.all;
@@ -473,6 +477,7 @@ class _RevisionScreenState extends State<RevisionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final topicCtrl = _topicRevisionController;
     final Listenable mergedListenable = topicCtrl != null
         ? Listenable.merge([widget.revisionController, topicCtrl])
@@ -980,9 +985,14 @@ class _RevisionSectionHeader extends StatelessWidget {
             position: PopupMenuPosition.under,
             color: AppTheme.surface(context),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+              side: BorderSide(
+                color: AppTheme.borderColor(context),
+                width: 1.0,
+              ),
             ),
-            elevation: 6,
+            elevation: 4,
+            shadowColor: AppTheme.shadowColor(context),
             itemBuilder: (ctx) => [
               PopupMenuItem(
                 value: RevisionTypeFilter.topics,
@@ -1003,40 +1013,51 @@ class _RevisionSectionHeader extends StatelessWidget {
                 ),
               ),
             ],
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                    letterSpacing: -0.3,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceVariant(context).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+                border: Border.all(
+                  color: AppTheme.borderColor(context).withValues(alpha: 0.8),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimaryColor(context),
+                      letterSpacing: -0.3,
+                    ),
                   ),
-                ),
-                const HGapXs(),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.textPrimaryColor(context),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-          const HGapSm(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppTheme.pastelIndigo(context),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.pastelIndigoText(context),
+                  const HGapXs(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.pastelIndigo(context),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.pastelIndigoText(context),
+                      ),
+                    ),
+                  ),
+                  const HGapXs(),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppTheme.textSecondaryColor(context),
+                    size: 18,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1047,9 +1068,13 @@ class _RevisionSectionHeader extends StatelessWidget {
             position: PopupMenuPosition.under,
             color: AppTheme.surface(context),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+              side: BorderSide(
+                color: AppTheme.borderColor(context),
+                width: 1.0,
+              ),
             ),
-            elevation: 8,
+            elevation: 4,
             shadowColor: AppTheme.shadowColor(context),
             itemBuilder: (ctx) => [
               for (final mode in RevisionSortMode.values)
@@ -1068,44 +1093,55 @@ class _RevisionSectionHeader extends StatelessWidget {
                   ),
                 ),
             ],
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  sortMode.label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondaryColor(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceVariant(context).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+                border: Border.all(
+                  color: AppTheme.borderColor(context).withValues(alpha: 0.8),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    sortMode.label,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondaryColor(context),
+                    ),
                   ),
-                ),
-                const HGapXs(),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppTheme.textSecondaryColor(context),
-                  size: 18,
-                ),
-              ],
+                  const HGapXs(),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppTheme.textSecondaryColor(context),
+                    size: 16,
+                  ),
+                ],
+              ),
             ),
           ),
           const HGapSm(),
           Material(
             color: scope != RevisionScope.all
                 ? AppTheme.pastelIndigo(context)
-                : AppTheme.surfaceVariant(context),
-            shape: const CircleBorder(),
+                : AppTheme.surfaceVariant(context).withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
             child: InkWell(
               onTap: onFilterPressed,
-              customBorder: const CircleBorder(),
+              borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
               child: Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
                   border: Border.all(
                     color: scope != RevisionScope.all
                         ? AppTheme.pastelIndigoBorder(context)
-                        : AppTheme.borderColor(context),
+                        : AppTheme.borderColor(context).withValues(alpha: 0.8),
                     width: 0.8,
                   ),
                 ),
@@ -1220,63 +1256,46 @@ class _RevisionFilterSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const VGapSm(),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppTheme.borderColor(context),
-              borderRadius: BorderRadius.circular(2),
+    return SheetContainer(
+      children: [
+        const SheetHandleBar(),
+        const VGapSm(),
+        const SheetHeader(
+          title: 'Filter revisions',
+        ),
+        const VGapSm(),
+        for (final scope in RevisionScope.values)
+          ListTile(
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            onTap: () => onSelectScope(scope),
+            leading: Icon(
+              scopeIconFor(scope),
+              color: scope == currentScope
+                  ? AppTheme.primaryColor
+                  : AppTheme.textSecondaryColor(context),
+              size: 20,
             ),
-          ),
-          const VGapMd(),
-          Text(
-            'Filter revisions',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-          const VGapSm(),
-          for (final scope in RevisionScope.values)
-            ListTile(
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              onTap: () => onSelectScope(scope),
-              leading: Icon(
-                scopeIconFor(scope),
+            title: Text(
+              scope.label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight:
+                    scope == currentScope ? FontWeight.bold : FontWeight.w500,
                 color: scope == currentScope
                     ? AppTheme.primaryColor
-                    : AppTheme.textSecondaryColor(context),
-                size: 20,
+                    : AppTheme.textPrimaryColor(context),
               ),
-              title: Text(
-                scope.label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight:
-                      scope == currentScope ? FontWeight.bold : FontWeight.w500,
-                  color: scope == currentScope
-                      ? AppTheme.primaryColor
-                      : AppTheme.textPrimaryColor(context),
-                ),
-              ),
-              trailing: scope == currentScope
-                  ? const Icon(
-                      Icons.check_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 18,
-                    )
-                  : null,
             ),
-          const VGapSm(),
-        ],
-      ),
+            trailing: scope == currentScope
+                ? const Icon(
+                    Icons.check_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 18,
+                  )
+                : null,
+          ),
+      ],
     );
   }
 }

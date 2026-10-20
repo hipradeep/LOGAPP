@@ -13,6 +13,7 @@ import '../models/user_profile.dart';
 import '../models/notification_settings.dart';
 import '../models/topic_revision.dart';
 import '../models/todo_item.dart';
+import '../models/bookmark.dart';
 
 /// Central SQLite Database Service for the Study app.
 ///
@@ -47,6 +48,8 @@ class DatabaseService {
       StreamController<List<TopicRevision>>.broadcast();
   final _todosStreamController =
       StreamController<List<TodoItem>>.broadcast();
+  final _bookmarksStreamController =
+      StreamController<List<Bookmark>>.broadcast();
   final _studyLogsStreamController =
       StreamController<List<StudyLog>>.broadcast();
   final _databaseChangeController =
@@ -55,6 +58,9 @@ class DatabaseService {
   /// Reactive broadcast stream that emits the affected table name whenever
   /// any entity is inserted, updated, or deleted.
   Stream<String> get onDatabaseChanged => _databaseChangeController.stream;
+
+  /// Reactive stream for real-time bookmark updates.
+  Stream<List<Bookmark>> get bookmarksStream => _bookmarksStreamController.stream;
 
   bool _suppressChangeEvents = false;
 
@@ -199,6 +205,40 @@ class DatabaseService {
         await db.execute('CREATE INDEX IF NOT EXISTS idx_todos_status_deadline ON todos(status, deadline);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_todos_deadline ON todos(deadline);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_todo_subtasks_todoId_order ON todo_subtasks(todoId, orderIndex);');
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS bookmarks (
+            id          TEXT PRIMARY KEY,
+            url         TEXT NOT NULL,
+            title       TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            host        TEXT NOT NULL DEFAULT '',
+            imageUrl    TEXT,
+            courseId    TEXT,
+            moduleId    TEXT,
+            topicId     TEXT,
+            tags        TEXT NOT NULL DEFAULT '[]',
+            isPinned    INTEGER NOT NULL DEFAULT 0,
+            isArchived  INTEGER NOT NULL DEFAULT 0,
+            createdAt   TEXT NOT NULL,
+            updatedAt   TEXT NOT NULL,
+            FOREIGN KEY (courseId) REFERENCES courses(id) ON DELETE SET NULL,
+            FOREIGN KEY (topicId) REFERENCES topics(id) ON DELETE SET NULL
+          );
+        ''');
+
+        // Safe migration for existing installations
+        try {
+          await db.execute('ALTER TABLE bookmarks ADD COLUMN imageUrl TEXT;');
+        } catch (_) {}
+        try {
+          await db.execute('ALTER TABLE bookmarks ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0;');
+        } catch (_) {}
+
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_createdAt ON bookmarks(createdAt DESC);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_courseId ON bookmarks(courseId);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_topicId ON bookmarks(topicId);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_isPinned ON bookmarks(isPinned);');
       },
     );
   }
@@ -389,6 +429,28 @@ class DatabaseService {
       );
     ''');
 
+    // 11. Bookmarks Table
+    batch.execute('''
+      CREATE TABLE bookmarks (
+        id          TEXT PRIMARY KEY,
+        url         TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        host        TEXT NOT NULL DEFAULT '',
+        imageUrl    TEXT,
+        courseId    TEXT,
+        moduleId    TEXT,
+        topicId     TEXT,
+        tags        TEXT NOT NULL DEFAULT '[]',
+        isPinned    INTEGER NOT NULL DEFAULT 0,
+        isArchived  INTEGER NOT NULL DEFAULT 0,
+        createdAt   TEXT NOT NULL,
+        updatedAt   TEXT NOT NULL,
+        FOREIGN KEY (courseId) REFERENCES courses(id) ON DELETE SET NULL,
+        FOREIGN KEY (topicId) REFERENCES topics(id) ON DELETE SET NULL
+      );
+    ''');
+
     // Indexes for fast querying
     batch.execute('CREATE INDEX idx_modules_courseId ON modules(courseId);');
     batch.execute('CREATE INDEX idx_topics_moduleId ON topics(moduleId);');
@@ -403,6 +465,10 @@ class DatabaseService {
     batch.execute('CREATE INDEX idx_todos_status_deadline ON todos(status, deadline);');
     batch.execute('CREATE INDEX idx_todos_deadline ON todos(deadline);');
     batch.execute('CREATE INDEX idx_todo_subtasks_todoId_order ON todo_subtasks(todoId, orderIndex);');
+    batch.execute('CREATE INDEX idx_bookmarks_createdAt ON bookmarks(createdAt DESC);');
+    batch.execute('CREATE INDEX idx_bookmarks_courseId ON bookmarks(courseId);');
+    batch.execute('CREATE INDEX idx_bookmarks_topicId ON bookmarks(topicId);');
+    batch.execute('CREATE INDEX idx_bookmarks_isPinned ON bookmarks(isPinned);');
 
     await batch.commit(noResult: true);
   }
@@ -424,10 +490,12 @@ class DatabaseService {
       await txn.delete('study_logs');
       await txn.delete('todos');
       await txn.delete('todo_subtasks');
+      await txn.delete('bookmarks');
       await txn.delete('user_profile');
       await txn.delete('notification_settings');
     });
 
+    _bookmarksStreamController.add([]);
     _todosStreamController.add([]);
     _coursesStreamController.add([]);
     _revisionsStreamController.add([]);
@@ -1231,6 +1299,18 @@ class DatabaseService {
     return maps.map((m) => StudyLog.fromMap(m)).toList();
   }
 
+  Future<List<StudyLog>> getStudyLogsByTopic(String topicId) async {
+    if (topicId.isEmpty) return const [];
+    final db = await database;
+    final maps = await db.query(
+      'study_logs',
+      where: 'topicId = ?',
+      whereArgs: [topicId],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => StudyLog.fromMap(m)).toList();
+  }
+
   Stream<List<StudyLog>> streamStudyLogs() async* {
     yield await getStudyLogs();
     yield* _studyLogsStreamController.stream;
@@ -1637,6 +1717,8 @@ class DatabaseService {
 
   Future<void> insertTodo(TodoItem item, {List<TodoSubtask>? initialSubtasks}) async {
     final db = await database;
+    final now = DateTime.now();
+    final isDone = item.status == TodoStatus.done;
     await db.transaction((txn) async {
       await txn.insert(
         'todos',
@@ -1645,7 +1727,13 @@ class DatabaseService {
       );
       final subtasks = initialSubtasks ?? item.subtasks;
       for (int i = 0; i < subtasks.length; i++) {
-        final s = subtasks[i].copyWith(orderIndex: i, todoId: item.id);
+        var s = subtasks[i].copyWith(orderIndex: i, todoId: item.id);
+        if (isDone && !s.isCompleted) {
+          s = s.copyWith(
+            isCompleted: true,
+            completedAt: item.completedAt ?? now,
+          );
+        }
         await txn.insert(
           'todo_subtasks',
           s.toMap(),
@@ -1655,11 +1743,14 @@ class DatabaseService {
     });
 
     _notifyChange('todos');
+    _notifyChange('todo_subtasks');
     _todosStreamController.add(await getTodos());
   }
 
   Future<void> updateTodo(TodoItem item) async {
     final db = await database;
+    final now = DateTime.now();
+    final isDone = item.status == TodoStatus.done;
     await db.transaction((txn) async {
       await txn.update(
         'todos',
@@ -1675,7 +1766,13 @@ class DatabaseService {
         whereArgs: [item.id],
       );
       for (int i = 0; i < item.subtasks.length; i++) {
-        final s = item.subtasks[i].copyWith(orderIndex: i, todoId: item.id);
+        var s = item.subtasks[i].copyWith(orderIndex: i, todoId: item.id);
+        if (isDone && !s.isCompleted) {
+          s = s.copyWith(
+            isCompleted: true,
+            completedAt: item.completedAt ?? now,
+          );
+        }
         await txn.insert(
           'todo_subtasks',
           s.toMap(),
@@ -1685,22 +1782,40 @@ class DatabaseService {
     });
 
     _notifyChange('todos');
+    _notifyChange('todo_subtasks');
     _todosStreamController.add(await getTodos());
   }
 
   Future<void> updateTodoStatus(String id, TodoStatus status, {DateTime? completedAt}) async {
     final db = await database;
-    await db.update(
-      'todos',
-      {
-        'status': status.value,
-        'updatedAt': DateTime.now().toIso8601String(),
-        'completedAt': status == TodoStatus.done ? (completedAt ?? DateTime.now()).toIso8601String() : null,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final now = DateTime.now();
+    await db.transaction((txn) async {
+      await txn.update(
+        'todos',
+        {
+          'status': status.value,
+          'updatedAt': now.toIso8601String(),
+          'completedAt': status == TodoStatus.done ? (completedAt ?? now).toIso8601String() : null,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (status == TodoStatus.done) {
+        // When completing a todo, all its subtasks must also be completed
+        await txn.update(
+          'todo_subtasks',
+          {
+            'isCompleted': 1,
+            'completedAt': (completedAt ?? now).toIso8601String(),
+          },
+          where: 'todoId = ?',
+          whereArgs: [id],
+        );
+      }
+    });
     _notifyChange('todos');
+    _notifyChange('todo_subtasks');
     _todosStreamController.add(await getTodos());
   }
 
@@ -1786,12 +1901,140 @@ class DatabaseService {
     _todosStreamController.add(await getTodos());
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Bookmarks Operations
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Stream<List<Bookmark>> watchBookmarks() => _bookmarksStreamController.stream;
+
+  Future<List<Bookmark>> getBookmarks({
+    String? courseId,
+    String? topicId,
+  }) async {
+    final db = await database;
+    String? whereClause;
+    List<dynamic>? whereArgs;
+
+    if (courseId != null && topicId != null) {
+      whereClause = 'courseId = ? AND topicId = ?';
+      whereArgs = [courseId, topicId];
+    } else if (courseId != null) {
+      whereClause = 'courseId = ?';
+      whereArgs = [courseId];
+    } else if (topicId != null) {
+      whereClause = 'topicId = ?';
+      whereArgs = [topicId];
+    }
+
+    final maps = await db.query(
+      'bookmarks',
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: 'isPinned DESC, createdAt DESC',
+    );
+    return maps.map((m) => Bookmark.fromMap(m)).toList();
+  }
+
+  Future<Bookmark?> getBookmarkById(String id) async {
+    final db = await database;
+    final maps = await db.query(
+      'bookmarks',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Bookmark.fromMap(maps.first);
+  }
+
+  Future<void> insertBookmark(Bookmark bookmark) async {
+    final db = await database;
+    await db.insert(
+      'bookmarks',
+      bookmark.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _notifyChange('bookmarks');
+    _bookmarksStreamController.add(await getBookmarks());
+  }
+
+  Future<void> updateBookmark(Bookmark bookmark) async {
+    final db = await database;
+    await db.update(
+      'bookmarks',
+      bookmark.toMap(),
+      where: 'id = ?',
+      whereArgs: [bookmark.id],
+    );
+    _notifyChange('bookmarks');
+    _bookmarksStreamController.add(await getBookmarks());
+  }
+
+  Future<void> toggleBookmarkPinned(String id, bool isPinned) async {
+    final db = await database;
+    await db.update(
+      'bookmarks',
+      {
+        'isPinned': isPinned ? 1 : 0,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _notifyChange('bookmarks');
+    _bookmarksStreamController.add(await getBookmarks());
+  }
+
+  Future<void> toggleBookmarkArchived(String id, bool isArchived) async {
+    final db = await database;
+    final Map<String, dynamic> values = {
+      'isArchived': isArchived ? 1 : 0,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    if (isArchived) {
+      values['isPinned'] = 0; // Unpin when archiving
+    }
+    await db.update(
+      'bookmarks',
+      values,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _notifyChange('bookmarks');
+    _bookmarksStreamController.add(await getBookmarks());
+  }
+
+  Future<void> deleteBookmark(String id) async {
+    final db = await database;
+    await db.delete(
+      'bookmarks',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _notifyChange('bookmarks');
+    _bookmarksStreamController.add(await getBookmarks());
+  }
+
+  Future<List<Bookmark>> searchBookmarks(String query) async {
+    if (query.trim().isEmpty) return getBookmarks();
+    final db = await database;
+    final term = '%${query.trim()}%';
+    final maps = await db.query(
+      'bookmarks',
+      where: 'title LIKE ? OR description LIKE ? OR url LIKE ? OR host LIKE ? OR tags LIKE ?',
+      whereArgs: [term, term, term, term, term],
+      orderBy: 'isPinned DESC, createdAt DESC',
+    );
+    return maps.map((m) => Bookmark.fromMap(m)).toList();
+  }
+
   /// Reloads and pushes latest data across all active broadcast streams.
   Future<void> reloadAllStreams() async {
     _coursesStreamController.add(await getCourses());
     _revisionsStreamController.add(await getRevisions());
     _studyLogsStreamController.add(await getStudyLogs());
     _todosStreamController.add(await getTodos());
+    _bookmarksStreamController.add(await getBookmarks());
 
     for (final courseId in _modulesStreamControllers.keys) {
       _modulesStreamControllers[courseId]

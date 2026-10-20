@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/course.dart';
-import '../models/module.dart';
 import '../models/topic.dart';
 import '../services/database_service.dart';
 import '../theme/app_theme.dart';

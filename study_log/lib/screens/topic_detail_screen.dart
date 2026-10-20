@@ -16,11 +16,10 @@ import '../theme/revision_level_palette.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/entity_detail_header.dart';
-import '../widgets/module_context_pill.dart';
 import '../widgets/study_confirmation_dialog.dart';
 import '../widgets/study_text_fields.dart';
+import '../widgets/underline_tab_item.dart';
 import '../widgets/topic_options_sheet.dart';
-import '../widgets/topic_revision_badge.dart';
 import 'add_topic_screen.dart';
 import 'session_setup_screen.dart';
 
@@ -53,7 +52,6 @@ final DateFormat _dayMonthYearFormat = DateFormat('d MMM, yyyy');
 
 class _TopicDetailScreenState extends State<TopicDetailScreen> {
   late Topic _topic;
-  List<StudyLog> _topicLogs = [];
   int _totalMinutesExpended = 0;
   DateTime? _lastUpdatedAt;
   final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
@@ -105,11 +103,8 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
 
     // 2. Load study logs for this specific topic and precompute metrics
     try {
-      final allLogs = await DatabaseService.instance.getStudyLogs();
-      final filtered = allLogs
-          .where((l) => l.topicId == _topic.id)
-          .toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      final filtered =
+          await DatabaseService.instance.getStudyLogsByTopic(_topic.id);
 
       int minutes = 0;
       for (final l in filtered) {
@@ -140,7 +135,6 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
 
       if (mounted) {
         setState(() {
-          _topicLogs = filtered;
           _totalMinutesExpended = minutes;
           _lastUpdatedAt = lastDate;
         });
@@ -318,6 +312,7 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
       if (_topic.id.isNotEmpty) {
         await DatabaseService.instance.deleteTopic(_topic.id);
       }
+      if (!mounted) return;
       if (getIt.isRegistered<TopicRevisionController>() && _topic.id.isNotEmpty) {
         unawaited(getIt<TopicRevisionController>().deleteByTopicId(_topic.id));
       }
@@ -882,58 +877,18 @@ class _TopicTabsRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _TabItem(
+            UnderlineTabItem(
               label: 'Notes',
               isActive: activeIndex == 0,
               onTap: () => onTabSelected(0),
             ),
             const HGapLg(),
-            _TabItem(
+            UnderlineTabItem(
               label: progressLabel,
               isActive: activeIndex == 1,
               onTap: () => onTabSelected(1),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TabItem extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _TabItem({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        decoration: BoxDecoration(
-          border: isActive
-              ? const Border(
-                  bottom: BorderSide(
-                    color: AppTheme.primaryColor,
-                    width: 2.5,
-                  ),
-                )
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? AppTheme.primaryColor : AppTheme.textSecondaryColor(context),
-          ),
         ),
       ),
     );

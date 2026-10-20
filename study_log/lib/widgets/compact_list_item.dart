@@ -173,6 +173,12 @@ class CompactListItem extends StatelessWidget {
                                     color: isCompleted
                                         ? AppTheme.textSecondaryColor(context)
                                         : AppTheme.textPrimaryColor(context),
+                                    decoration: isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    decorationColor:
+                                        AppTheme.textSecondaryColor(context)
+                                            .withValues(alpha: 0.5),
                                   ),
                                   maxLines: titleMaxLines,
                                   overflow: titleMaxLines != null

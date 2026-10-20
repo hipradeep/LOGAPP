@@ -5,6 +5,7 @@ import '../models/topic.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
+import '../widgets/app_empty_state.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import '../controllers/progress_controller.dart';
@@ -623,7 +624,7 @@ class _CalendarDateStrip extends StatelessWidget {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: days.length,
-            separatorBuilder: (_, __) => const HGapSm(),
+            separatorBuilder: (_, _) => const HGapSm(),
             itemBuilder: (context, index) {
               final date = days[index];
               final isSelected = date.year == selectedDate.year &&
@@ -804,7 +805,7 @@ class _RecentActivityBody extends StatelessWidget {
               physics: const NeverScrollableScrollPhysics(),
               padding: EdgeInsets.zero,
               itemCount: logs.length,
-              separatorBuilder: (_, __) => const VGapSm(),
+              separatorBuilder: (_, _) => const VGapSm(),
               itemBuilder: (context, index) {
                 final log = logs[index];
                 return _StudyLogListItem(
@@ -1069,45 +1070,11 @@ class _EmptyLogsPlaceholder extends StatelessWidget {
         selectedDate.month == now.month &&
         selectedDate.day == now.day;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppTheme.pastelIndigo(context),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.pastelIndigoBorder(context)),
-            ),
-            child: Icon(
-              Icons.event_note_rounded,
-              size: 30,
-              color: AppTheme.pastelIndigoText(context),
-            ),
-          ),
-          const VGapMd(),
-          Text(
-            isToday ? 'No logs recorded today yet' : 'No study logs on ${_shortDateFormat.format(selectedDate)}',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-          const VGapXs(),
-          Text(
-            'Complete topics or revisions to build your study trail.',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppTheme.textSecondaryColor(context),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+    return AppEmptyState(
+      icon: Icons.event_note_rounded,
+      title: isToday ? 'No logs recorded today yet' : 'No study logs on ${_shortDateFormat.format(selectedDate)}',
+      description: 'Complete topics or revisions to build your study trail.',
+      showCard: false,
     );
   }
 }
@@ -1207,7 +1174,6 @@ class _StudyLogListItem extends StatelessWidget {
     final int? minutes = (log.durationMinutes != null && log.durationMinutes! > 0)
         ? log.durationMinutes
         : null;
-    final durationLabel = (minutes != null && minutes > 0) ? _formatDuration(minutes) : null;
 
     return Container(
       padding: const EdgeInsets.all(12),

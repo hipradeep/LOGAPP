@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/sheet_action_widgets.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/study_text_fields.dart';
 import '../services/service_locator.dart';
@@ -129,86 +130,60 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const VGapMd(),
-                Text(
-                  'Select Course Icon',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                const VGapMd(),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(ctx).height * 0.45,
-                  ),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const BouncingScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 6,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemCount: icons.length,
-                    itemBuilder: (context, index) {
-                      final icon = icons[index];
-                      final isSelected = icon == _selectedIcon;
-                      return InkWell(
-                        onTap: () {
-                          setState(() => _selectedIcon = icon);
-                          Navigator.pop(ctx);
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? _selectedColor.withValues(alpha: 0.12)
-                                : const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected ? _selectedColor : AppTheme.borderColor(context),
-                              width: isSelected ? 1.5 : 1.0,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(
-                            icon,
-                            color: isSelected ? _selectedColor : const Color(0xFF4B5563),
-                            size: 24,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const VGapMd(),
-              ],
+        return SheetContainer(
+          children: [
+            const SheetHandleBar(),
+            const VGapSm(),
+            const SheetHeader(
+              title: 'Select Course Icon',
             ),
-          ),
+            const VGapMd(),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(ctx).height * 0.45,
+              ),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: icons.length,
+                itemBuilder: (context, index) {
+                  final icon = icons[index];
+                  final isSelected = icon == _selectedIcon;
+                  return InkWell(
+                    onTap: () {
+                      setState(() => _selectedIcon = icon);
+                      Navigator.pop(ctx);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? _selectedColor.withValues(alpha: 0.12)
+                            : AppTheme.surfaceVariant(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? _selectedColor : AppTheme.borderColor(context),
+                          width: isSelected ? 1.5 : 1.0,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        icon,
+                        color: isSelected ? _selectedColor : AppTheme.textSecondaryColor(context),
+                        size: 24,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const VGapSm(),
+          ],
         );
       },
     );

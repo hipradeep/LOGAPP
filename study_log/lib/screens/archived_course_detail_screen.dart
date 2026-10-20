@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/custom_app_bar.dart';
+import '../widgets/app_empty_state.dart';
 import 'archived_topic_detail_sheet.dart';
 
 /// Detail page for a single archived course: completion summary, restore/delete
@@ -121,7 +122,18 @@ class _ArchivedCourseDetailScreenState
             ),
             Expanded(
               child: course == null
-                  ? _ArchivedEmptyDetail(bottomPadding: bottomSafe + 24)
+                  ? ListView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(24, 72, 24, bottomSafe + 24),
+                      children: const [
+                        AppEmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: 'Course unavailable',
+                          description: 'This course may have been restored or deleted.',
+                          showCard: false,
+                        ),
+                      ],
+                    )
                   : ListView(
                       physics: const BouncingScrollPhysics(
                         parent: AlwaysScrollableScrollPhysics(),
@@ -144,7 +156,12 @@ class _ArchivedCourseDetailScreenState
                             ),
                           )
                         else if (_modules.isEmpty)
-                          const _ArchivedNoModulesCard()
+                          const AppEmptyState(
+                            icon: Icons.folder_open_outlined,
+                            title: 'No modules in this course',
+                            description: 'This archived course does not contain any modules.',
+                            showCard: true,
+                          )
                         else
                           _ArchivedModulesSection(
                             modules: _modules,
@@ -758,80 +775,3 @@ class _ArchivedTopicRow extends StatelessWidget {
   }
 }
 
-class _ArchivedNoModulesCard extends StatelessWidget {
-  const _ArchivedNoModulesCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderColor(context)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.folder_open_outlined,
-            size: 36,
-            color: AppTheme.textMutedColor(context),
-          ),
-          const VGapSm(),
-          Text(
-            'No modules in this course',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ArchivedEmptyDetail extends StatelessWidget {
-  final double bottomPadding;
-
-  const _ArchivedEmptyDetail({required this.bottomPadding});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(24, 72, 24, bottomPadding),
-      children: [
-        Center(
-          child: Icon(
-            Icons.search_off_rounded,
-            size: 44,
-            color: AppTheme.textMutedColor(context),
-          ),
-        ),
-        const VGapMd(),
-        Text(
-          'Course unavailable',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapXs(),
-        Text(
-          'This course may have been restored or deleted.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondaryColor(context),
-          ),
-        ),
-      ],
-    );
-  }
-}

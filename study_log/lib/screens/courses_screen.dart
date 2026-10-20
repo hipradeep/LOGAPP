@@ -7,6 +7,7 @@ import '../widgets/custom_app_bar.dart';
 import '../widgets/course_icon_chip.dart';
 import '../widgets/course_options_sheet.dart';
 import '../widgets/compact_list_item.dart';
+import '../widgets/app_empty_state.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
@@ -311,40 +312,11 @@ class _CoursesEmptyState extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(24, 72, 24, bottomPadding),
       children: [
-        Center(
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppTheme.pastelPurple(context),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
-            ),
-            child: Icon(
-              Icons.school_outlined,
-              color: AppTheme.pastelPurpleText(context),
-              size: 30,
-            ),
-          ),
-        ),
-        const VGapMd(),
-        Text(
-          'No courses yet',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor(context),
-          ),
-        ),
-        const VGapXs(),
-        Text(
-          'Add a course from the top bar to start tracking its modules and topics.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondaryColor(context),
-          ),
+        const AppEmptyState(
+          icon: Icons.school_outlined,
+          title: 'No courses yet',
+          description: 'Add a course from the top bar to start tracking its modules and topics.',
+          showCard: false,
         ),
         if (archivedCount > 0) ...[
           const VGapLg(),

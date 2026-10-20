@@ -225,8 +225,8 @@ There are **0 raw `AppBar(`** and no `SliverAppBar` usages.
 | `topic_detail_screen.dart` | `CustomAppBar` | ❌ 17 hardcoded (URL blue, `0xFF6366F1`) |
 | `revision_screen.dart` | `TabHeader` | ⚠️ mostly theme, 2 hardcoded + `isDark` reads |
 | `revision_detail_screen.dart` | `CustomAppBar` | ⚠️ private `_RevisionFAB` |
-| `todo_screen.dart` | `TabHeader` | ⚠️ `FloatingActionButton.extended` |
-| `todo_detail_edit_screen.dart` | `CustomAppBar` | ❌ only screen using `GoogleFonts` directly |
+| `todo_screen.dart` | `TabHeader` | ✅ 0 hardcoded colors; `FloatingActionButton.extended` (inline 13px label) |
+| `todo_detail_edit_screen.dart` | `CustomAppBar` | ❌ only screen using `GoogleFonts` directly (`:537-550`); hand-rolled subtask `TextField` + dropdown pills |
 | `activity_screen.dart` | `CustomAppBar` | ✅ |
 | `recent_activity_screen.dart` | `CustomAppBar` | ⚠️ custom `_CalendarDateStrip` |
 | `my_progress_screen.dart` | `CustomAppBar` | ❌ **38 hex literals, manual `isDark` branches** |
@@ -307,6 +307,8 @@ Theme prescribes pill radius 28 + `minimumSize(0,52)` + Inter 15/w600, but most
   `study_text_fields.dart`, while `pastelBlueText` (`0xFF3B82F6`) exists.
 - Progress-track "remaining" color `0xFFECEEF6` hardcoded in `study_schedule_card`,
   `topic_progress_header`, `course_detail_screen`, `archived_course_detail_screen`.
+- TODO partial-progress ring track hardcoded `0xFFE8E5FF` in `todo_list_item.dart:63`
+  (light lavender; not theme-aware).
 
 ### 3.4 Typography
 

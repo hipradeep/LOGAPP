@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/entity_detail_header.dart';
-import '../widgets/module_context_pill.dart';
 import '../widgets/study_confirmation_dialog.dart';
 import '../widgets/topic_list_item.dart';
 import '../models/topic.dart';
@@ -1154,47 +1153,11 @@ class _TopicsListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (topics.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppTheme.pastelIndigo(context),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppTheme.pastelIndigoBorder(context)),
-                ),
-                child: Icon(
-                  Icons.format_list_bulleted_rounded,
-                  size: 30,
-                  color: AppTheme.pastelIndigoText(context),
-                ),
-              ),
-              const VGapMd(),
-              Text(
-                'No topics yet',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimaryColor(context),
-                ),
-              ),
-              const VGapXs(),
-              Text(
-                'Add a topic from the top bar to start learning.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondaryColor(context),
-                ),
-              ),
-            ],
-          ),
-        ),
+      return const AppEmptyState(
+        icon: Icons.format_list_bulleted_rounded,
+        title: 'No topics yet',
+        description: 'Add a topic from the top bar to start learning.',
+        showCard: false,
       );
     }
     final topicRevCtrl = getIt.isRegistered<TopicRevisionController>()
@@ -1208,7 +1171,7 @@ class _TopicsListView extends StatelessWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(top: 0, bottom: bottomPadding),
           itemCount: topics.length,
-          onReorder: onReorderTopics ?? (_, __) {},
+          onReorder: onReorderTopics ?? (_, _) {},
           itemBuilder: (context, index) {
             final item = topics[index];
             final topicRev = topicRevCtrl?.topicRevisionFor(item.id);

@@ -200,7 +200,7 @@ class EntityDetailHeader extends StatelessWidget {
                   text: durationText!,
                 ),
               ...additionalChips,
-              if (statusWidget != null) statusWidget!,
+              ?statusWidget,
             ],
           ),
           if (showDivider) ...[

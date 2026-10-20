@@ -73,6 +73,13 @@ class NotificationPayload {
         targetId: courseId,
       );
 
+  /// Factory for Saved Bookmark -> Bookmarks Screen.
+  factory NotificationPayload.bookmarkSaved({String? bookmarkId}) =>
+      NotificationPayload(
+        action: 'open_bookmarks',
+        targetId: bookmarkId,
+      );
+
   Map<String, dynamic> toMap() {
     return {
       'action': action,

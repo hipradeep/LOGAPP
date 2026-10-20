@@ -106,101 +106,75 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final durations = [15, 20, 25, 30, 45, 60];
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppTheme.borderColor(context),
-                      borderRadius: BorderRadius.circular(2),
+        return SheetContainer(
+          children: [
+            const SheetHandleBar(),
+            const VGapSm(),
+            const SheetHeader(
+              title: 'Select Session Duration',
+            ),
+            const VGapSm(),
+            ...durations.map((mins) {
+              final isSelected = _selectedDurationMinutes == mins;
+              final isDefault = mins == 15;
+              return InkWell(
+                onTap: () {
+                  setState(() => _selectedDurationMinutes = mins);
+                  Navigator.of(ctx).pop();
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primaryColor.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.borderColor(context),
+                      width: isSelected ? 1.5 : 1.0,
                     ),
                   ),
-                ),
-                const VGapSm(),
-                Text(
-                  'Select Session Duration',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                  ),
-                ),
-                const VGapSm(),
-                ...durations.map((mins) {
-                  final isSelected = _selectedDurationMinutes == mins;
-                  final isDefault = mins == 15;
-                  return InkWell(
-                    onTap: () {
-                      setState(() => _selectedDurationMinutes = mins);
-                      Navigator.of(ctx).pop();
-                    },
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 3),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppTheme.primaryColor.withValues(alpha: 0.08)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppTheme.primaryColor
-                              : AppTheme.borderColor(context),
-                          width: isSelected ? 1.5 : 1.0,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.access_time_rounded,
-                                size: 16,
-                                color: isSelected
-                                    ? AppTheme.primaryColor
-                                    : AppTheme.textSecondaryColor(context),
-                              ),
-                              const HGapSm(),
-                              Text(
-                                '$mins minutes${isDefault ? ' (Default)' : ''}',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  color: isSelected
-                                      ? AppTheme.primaryColor
-                                      : AppTheme.textPrimaryColor(context),
-                                ),
-                              ),
-                            ],
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 16,
+                            color: isSelected
+                                ? AppTheme.primaryColor
+                                : AppTheme.textSecondaryColor(context),
                           ),
-                          if (isSelected)
-                            const Icon(
-                              Icons.check_circle_rounded,
-                              color: AppTheme.primaryColor,
-                              size: 20,
+                          const HGapSm(),
+                          Text(
+                            '$mins minutes${isDefault ? ' (Default)' : ''}',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.textPrimaryColor(context),
                             ),
+                          ),
                         ],
                       ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
+                      if (isSelected)
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppTheme.primaryColor,
+                          size: 20,
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
         );
       },
     );
@@ -525,75 +499,75 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
     bool enabled = true,
     required ValueChanged<bool>? onChanged,
   }) {
+    final alphaMultiplier = enabled ? 1.0 : 0.6;
     return InkWell(
       onTap: enabled && onChanged != null ? () => onChanged(!value) : null,
       borderRadius: BorderRadius.circular(10),
-      child: Opacity(
-        opacity: enabled ? 1.0 : 0.6,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: value
+              ? AppTheme.primaryColor.withValues(alpha: 0.05 * alphaMultiplier)
+              : AppTheme.surfaceVariant(context).withValues(alpha: 0.25 * alphaMultiplier),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
             color: value
-                ? AppTheme.primaryColor.withValues(alpha: 0.05)
-                : AppTheme.surfaceVariant(context).withValues(alpha: 0.25),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: value
-                  ? AppTheme.primaryColor.withValues(alpha: 0.3)
-                  : AppTheme.borderColor(context),
+                ? AppTheme.primaryColor.withValues(alpha: 0.3 * alphaMultiplier)
+                : AppTheme.borderColor(context).withValues(alpha: alphaMultiplier),
+          ),
+        ),
+        child: Row(
+          children: [
+            Checkbox(
+              value: value,
+              onChanged: enabled && onChanged != null ? (v) => onChanged(v ?? false) : null,
+              activeColor: AppTheme.primaryColor.withValues(alpha: alphaMultiplier),
+              checkColor: Colors.white,
+              side: BorderSide(
+                color: value
+                    ? AppTheme.primaryColor
+                    : AppTheme.borderColor(context).withValues(alpha: alphaMultiplier),
+                width: 1.5,
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Checkbox(
-                value: value,
-                onChanged: enabled && onChanged != null ? (v) => onChanged(v ?? false) : null,
-                activeColor: AppTheme.primaryColor,
-                checkColor: Colors.white,
-                side: BorderSide(
-                  color: value ? AppTheme.primaryColor : AppTheme.borderColor(context),
-                  width: 1.5,
-                ),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
+            const HGapSm(),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimaryColor(context).withValues(alpha: alphaMultiplier),
+                    ),
+                  ),
+                  const VGapXs(),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondaryColor(context).withValues(alpha: alphaMultiplier),
+                    ),
+                  ),
+                ],
               ),
+            ),
+            if (!enabled) ...[
               const HGapSm(),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimaryColor(context),
-                      ),
-                    ),
-                    const VGapXs(),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AppTheme.textSecondaryColor(context),
-                      ),
-                    ),
-                  ],
-                ),
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 16,
+                color: AppTheme.textSecondaryColor(context).withValues(alpha: alphaMultiplier),
               ),
-              if (!enabled) ...[
-                const HGapSm(),
-                Icon(
-                  Icons.lock_outline_rounded,
-                  size: 16,
-                  color: AppTheme.textSecondaryColor(context),
-                ),
-              ],
             ],
-          ),
+          ],
         ),
       ),
     );

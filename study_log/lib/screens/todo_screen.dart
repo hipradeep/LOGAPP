@@ -261,15 +261,13 @@ class _TodoGroupSliver extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final item = todos[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: TodoListItem(
-                          key: ValueKey(item.id),
-                          todo: item,
-                          onTap: () => onTapItem(item),
-                          onCheckboxTap: () => controller.toggleTodoStatus(item.id),
-                          onLongPress: () => onLongPressItem(item),
-                        ),
+                      return TodoListItem(
+                        key: ValueKey(item.id),
+                        todo: item,
+                        margin: const EdgeInsets.only(bottom: 5),
+                        onTap: () => onTapItem(item),
+                        onCheckboxTap: () => controller.toggleTodoStatus(item.id),
+                        onLongPress: () => onLongPressItem(item),
                       );
                     },
                     childCount: todos.length,

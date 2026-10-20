@@ -9,11 +9,47 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.logapp.studylog/share"
+    private var initialSharedText: String? = null
+    private var methodChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        if (Intent.ACTION_SEND == intent.action && intent.type?.startsWith("text/") == true) {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!sharedText.isNullOrBlank()) {
+                val channel = methodChannel
+                if (channel != null) {
+                    channel.invokeMethod("onSharedTextReceived", sharedText)
+                } else {
+                    initialSharedText = sharedText
+                }
+            }
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel = channel
+
+        channel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "getInitialSharedText" -> {
+                    val text = initialSharedText
+                    initialSharedText = null
+                    result.success(text)
+                }
                 "shareFile" -> {
                     val filePath = call.argument<String>("filePath") ?: ""
                     val title = call.argument<String>("title") ?: "Share Course JSON"
@@ -77,6 +113,14 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("URL_ERROR", e.localizedMessage ?: "Failed to open URL", null)
+                    }
+                }
+                "sendToBackground" -> {
+                    try {
+                        moveTaskToBack(true)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("BACKGROUND_ERROR", e.localizedMessage ?: "Failed to move task to back", null)
                     }
                 }
                 else -> {

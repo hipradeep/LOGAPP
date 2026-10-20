@@ -26,6 +26,95 @@ class StudyConfirmationDialog extends StatelessWidget {
     required this.confirmColor,
   });
 
+  /// Displays the "Delete Task?" dialog
+  static Future<bool> showDeleteTask(BuildContext context, {required String taskTitle}) async {
+    final title = taskTitle.isNotEmpty ? 'Delete "$taskTitle"?' : 'Delete Task?';
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.delete_outline_rounded,
+        iconColor: AppTheme.errorColor,
+        title: title,
+        message: 'Are you sure you want to delete ${taskTitle.isNotEmpty ? '"$taskTitle"' : 'this task'} and its subtasks? This action cannot be undone.',
+        confirmText: 'Delete',
+        confirmColor: AppTheme.errorColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Delete Bookmark?" dialog
+  static Future<bool> showDeleteBookmark(BuildContext context, {required String bookmarkTitle}) async {
+    final title = bookmarkTitle.isNotEmpty ? 'Delete "$bookmarkTitle"?' : 'Delete Bookmark?';
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.delete_outline_rounded,
+        iconColor: AppTheme.errorColor,
+        title: title,
+        message: 'Are you sure you want to remove ${bookmarkTitle.isNotEmpty ? '"$bookmarkTitle"' : 'this bookmark'}? This cannot be undone.',
+        confirmText: 'Delete',
+        confirmColor: AppTheme.errorColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Restore Backup?" dialog
+  static Future<bool> showRestoreBackup(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => const StudyConfirmationDialog(
+        icon: Icons.restore_rounded,
+        iconColor: AppTheme.primaryColor,
+        title: 'Restore Database Backup?',
+        message:
+            'Restoring from a backup will replace your current courses, topics, logs, and progress with the data from the backup file.',
+        confirmText: 'Select File & Restore',
+        confirmColor: AppTheme.primaryColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Log Out from Google?" dialog
+  static Future<bool> showSignOut(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => const StudyConfirmationDialog(
+        icon: Icons.logout_rounded,
+        iconColor: AppTheme.errorColor,
+        title: 'Log Out from Google?',
+        message:
+            'Your latest study progress will be backed up to Google Drive, and local data will be cleared from this device.',
+        confirmText: 'Log Out',
+        confirmColor: AppTheme.errorColor,
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Displays the "Delete Reminder?" dialog
+  static Future<bool> showDeleteReminderSlot(BuildContext context, {required String slotDescription}) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StudyConfirmationDialog(
+        icon: Icons.notifications_off_outlined,
+        iconColor: AppTheme.errorColor,
+        title: 'Delete Reminder?',
+        message: 'Delete $slotDescription?',
+        confirmText: 'Delete',
+        confirmColor: AppTheme.errorColor,
+      ),
+    );
+    return result ?? false;
+  }
+
   /// Displays the "Archive Course?" dialog with explicit warning matching requirements
   static Future<bool> showArchiveCourse(BuildContext context, {String courseTitle = ''}) async {
     final title = courseTitle.isNotEmpty ? 'Archive "$courseTitle"?' : 'Archive Course?';

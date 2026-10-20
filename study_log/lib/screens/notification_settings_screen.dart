@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/notification_settings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/tile_divider.dart';
 import '../widgets/custom_app_bar.dart';
 import '../services/service_locator.dart';
 import '../controllers/notification_controller.dart';
@@ -73,7 +74,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                                         )
                                       : null,
                                 ),
-                                const _TileDivider(),
+                                const TileDivider(indent: 42, endIndent: 14),
                                 _StudyRemindersAccordionTile(
                                   controller: controller,
                                 ),
@@ -102,7 +103,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                                   value: controller.revisionDueEnabled,
                                   onChanged: controller.setRevisionDue,
                                 ),
-                                const _TileDivider(),
+                                const TileDivider(indent: 42, endIndent: 14),
                                 _NotificationOptionTile(
                                   icon: Icons.local_fire_department_rounded,
                                   iconColor: const Color(0xFFF97316),
@@ -122,7 +123,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                                         )
                                       : null,
                                 ),
-                                const _TileDivider(),
+                                const TileDivider(indent: 42, endIndent: 14),
                                 _NotificationOptionTile(
                                   icon: Icons.calendar_today_rounded,
                                   iconColor: const Color(0xFF10B981),
@@ -1018,17 +1019,4 @@ class _TimePickerRow extends StatelessWidget {
   }
 }
 
-class _TileDivider extends StatelessWidget {
-  const _TileDivider();
 
-  @override
-  Widget build(BuildContext context) {
-    return Divider(
-      height: 1,
-      thickness: 0.6,
-      indent: 42,
-      endIndent: 14,
-      color: AppTheme.borderColor(context),
-    );
-  }
-}

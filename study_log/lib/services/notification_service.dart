@@ -49,6 +49,12 @@ class NotificationService {
   static const String _deadlineChannelDescription =
       'Alerts for course deadlines due today.';
 
+  static const String _bookmarkChannelId = 'study_bookmark_channel';
+  static const String _bookmarkChannelName = 'Saved Bookmarks';
+  static const String _bookmarkChannelDescription =
+      'Notifications when a new bookmark is saved from other apps.';
+
+  static const int bookmarkSavedNotificationId = 4001;
   static const int morningBriefingNotificationId = 1000;
   static const int courseNotificationId = 1001;
   static const int streakNotificationId = 1002;
@@ -204,6 +210,14 @@ class NotificationService {
           _deadlineChannelId,
           _deadlineChannelName,
           description: _deadlineChannelDescription,
+          importance: Importance.high,
+        ),
+      );
+      await android.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _bookmarkChannelId,
+          _bookmarkChannelName,
+          description: _bookmarkChannelDescription,
           importance: Importance.high,
         ),
       );
@@ -756,7 +770,7 @@ class NotificationService {
 
       final alertId = todoBaseNotificationId + (todoId.hashCode.abs() % 4000);
       final tzScheduled = tz.TZDateTime.from(reminderTime, tz.local);
-      final payload = const NotificationPayload(action: 'open_todo', tabIndex: 1).toJson();
+      final payload = const NotificationPayload(action: 'open_todo', tabIndex: 2).toJson();
 
       await _plugin.zonedSchedule(
         id: alertId,
@@ -800,6 +814,41 @@ class NotificationService {
       debugPrint('NotificationService: Cancelled all production reminders.');
     } catch (e) {
       debugPrint('NotificationService cancelAllReminders error: $e');
+    }
+  }
+
+  /// Displays an immediate notification when a URL or link is shared and saved into Bookmarks.
+  Future<void> showBookmarkSavedNotification({
+    required String title,
+    required String url,
+    String? bookmarkId,
+  }) async {
+    try {
+      await init();
+      const androidDetails = AndroidNotificationDetails(
+        _bookmarkChannelId,
+        _bookmarkChannelName,
+        channelDescription: _bookmarkChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      );
+      const details = NotificationDetails(android: androidDetails);
+      final bodyText = title.isNotEmpty && title != url
+          ? '$title\n$url'
+          : url;
+
+      await _plugin.show(
+        id: bookmarkSavedNotificationId,
+        title: 'Bookmark Saved 📌',
+        body: bodyText,
+        notificationDetails: details,
+        payload: NotificationPayload.bookmarkSaved(bookmarkId: bookmarkId).toJson(),
+      );
+      debugPrint('NotificationService: Showed bookmark saved notification for "$title"');
+    } catch (e) {
+      debugPrint('NotificationService showBookmarkSavedNotification error: $e');
     }
   }
 }

@@ -5,7 +5,6 @@ import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/course_context_pill.dart';
 import '../widgets/study_text_fields.dart';
-import '../services/service_locator.dart';
 import '../controllers/modules_controller.dart';
 import '../models/module.dart';
 

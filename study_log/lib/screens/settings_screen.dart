@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/tile_divider.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/appearance_sheet.dart';
 import '../services/service_locator.dart';
@@ -69,7 +70,7 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class _PreferencesSection extends StatelessWidget {
-  const _PreferencesSection({super.key});
+  const _PreferencesSection();
 
   void _onAppearance(BuildContext context) => AppearanceSheet.show(context);
 
@@ -129,7 +130,7 @@ class _PreferencesSection extends StatelessWidget {
                 badgeText: 'System',
                 onTap: () => _onAppearance(context),
               ),
-            const _TileDivider(),
+            const TileDivider(),
             _SettingsTile(
               icon: Icons.notifications_none_rounded,
               iconBgColor: const Color(0xFFE0E7FF),
@@ -137,7 +138,7 @@ class _PreferencesSection extends StatelessWidget {
               title: 'Notifications',
               onTap: () => _onNotifications(context),
             ),
-            const _TileDivider(),
+            const TileDivider(),
             _SettingsTile(
               icon: Icons.widgets_outlined,
               iconBgColor: const Color(0xFFEDE9FE),
@@ -154,7 +155,7 @@ class _PreferencesSection extends StatelessWidget {
 }
 
 class _LocalBackupSection extends StatelessWidget {
-  const _LocalBackupSection({super.key});
+  const _LocalBackupSection();
 
   Future<void> _handleExportBackup(BuildContext context) async {
     final backupService = getIt.isRegistered<DatabaseBackupService>()
@@ -201,32 +202,7 @@ class _LocalBackupSection extends StatelessWidget {
         : null;
     if (backupService == null) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Restore Database Backup?'),
-        content: const Text(
-          'Restoring from a backup will replace your current courses, topics, logs, and progress with the data from the backup file.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Select File & Restore'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await StudyConfirmationDialog.showRestoreBackup(context);
 
     if (confirmed != true || !context.mounted) return;
 
@@ -279,7 +255,7 @@ class _LocalBackupSection extends StatelessWidget {
               subtitle: 'Save database backup to JSON file',
               onTap: () => _handleExportBackup(context),
             ),
-            const _TileDivider(),
+            const TileDivider(),
             _SettingsTile(
               icon: Icons.file_upload_outlined,
               iconBgColor: const Color(0xFFFEF3C7),
@@ -296,7 +272,7 @@ class _LocalBackupSection extends StatelessWidget {
 }
 
 class _CurriculumSection extends StatelessWidget {
-  const _CurriculumSection({super.key});
+  const _CurriculumSection();
 
   void _openUploadJson(BuildContext context) {
     Navigator.push(
@@ -329,7 +305,7 @@ class _CurriculumSection extends StatelessWidget {
 }
 
 class _AboutSection extends StatelessWidget {
-  const _AboutSection({super.key});
+  const _AboutSection();
 
   void _showAboutDialog(BuildContext context) {
     showDialog<void>(
@@ -404,7 +380,7 @@ class _AboutSection extends StatelessWidget {
 }
 
 class _AccountAndDataSection extends StatelessWidget {
-  const _AccountAndDataSection({super.key});
+  const _AccountAndDataSection();
 
   Future<void> _handleDeleteAccount(BuildContext context) async {
     final confirmed = await StudyConfirmationDialog.showDeleteAccountAndData(context);
@@ -490,7 +466,7 @@ class _AccountAndDataSection extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final String title;
 
-  const _SectionHeader({super.key, required this.title});
+  const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -512,7 +488,7 @@ class _SectionHeader extends StatelessWidget {
 class _SettingsCard extends StatelessWidget {
   final List<Widget> children;
 
-  const _SettingsCard({super.key, required this.children});
+  const _SettingsCard({required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -549,7 +525,6 @@ class _SettingsTile extends StatelessWidget {
   final bool isDestructive;
 
   const _SettingsTile({
-    super.key,
     required this.icon,
     required this.iconBgColor,
     required this.iconColor,
@@ -650,7 +625,7 @@ class _SettingsTile extends StatelessWidget {
 class _CloudSyncCard extends StatelessWidget {
   static final _dateFormat = DateFormat('MMM d, h:mm a');
 
-  const _CloudSyncCard({super.key});
+  const _CloudSyncCard();
 
   Future<void> _handleSignIn(BuildContext context, CloudSyncController ctrl) async {
     _showBlockingLoadingDialog(context, 'Connecting to Google...');
@@ -716,28 +691,7 @@ class _CloudSyncCard extends StatelessWidget {
   }
 
   Future<void> _handleSignOut(BuildContext context, CloudSyncController ctrl) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Log Out from Google?'),
-        content: const Text(
-          'Your latest study progress will be backed up to Google Drive, and local data will be cleared from this device.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
-            child: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await StudyConfirmationDialog.showSignOut(context);
 
     if (confirmed == true && context.mounted) {
       _showBlockingLoadingDialog(context, 'Backing up and logging out...');
@@ -801,7 +755,7 @@ class _CloudSyncCard extends StatelessWidget {
                       ? _handleSignOut(context, syncCtrl)
                       : _handleSignIn(context, syncCtrl),
             ),
-            const _TileDivider(),
+            const TileDivider(),
             _SettingsTile(
               icon: Icons.cloud_upload_rounded,
               iconBgColor: const Color(0xFFE0F2FE),
@@ -835,7 +789,6 @@ class _AccountAuthButton extends StatelessWidget {
   final VoidCallback onSignOut;
 
   const _AccountAuthButton({
-    super.key,
     required this.isSignedIn,
     required this.isBusy,
     required this.onSignIn,
@@ -887,19 +840,7 @@ class _AccountAuthButton extends StatelessWidget {
   }
 }
 
-class _TileDivider extends StatelessWidget {
-  const _TileDivider({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Divider(
-      height: 1,
-      thickness: 0.6,
-      indent: 48,
-      color: AppTheme.borderColor(context),
-    );
-  }
-}
 
 /// Non-dismissible loading dialog that prevents user interaction while operations run
 void _showBlockingLoadingDialog(BuildContext context, String message) {

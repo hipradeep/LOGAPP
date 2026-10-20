@@ -4,7 +4,6 @@ import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../services/service_locator.dart';
 import '../controllers/progress_controller.dart';
-import '../widgets/recent_activity_card.dart';
 import 'my_progress_screen.dart';
 import 'recent_activity_screen.dart';
 
