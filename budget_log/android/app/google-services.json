@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "608865694471",
+    "firebase_url": "https://budgetlog-ae21c-default-rtdb.firebaseio.com",
+    "project_id": "budgetlog-ae21c",
+    "storage_bucket": "budgetlog-ae21c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608865694471:android:78d60228b448728e794ba2",
+        "android_client_info": {
+          "package_name": "in.logapp.budget"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4QIZS5af5YHotjVgI-klYB58skn91CUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608865694471:android:c259dbd761438bb8794ba2",
+        "android_client_info": {
+          "package_name": "in.logapp.budget_log"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4QIZS5af5YHotjVgI-klYB58skn91CUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

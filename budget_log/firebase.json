@@ -1,0 +1,10 @@
+{
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Budget Log",
+        "supportEmail": "pradeepmaurya.cse@gmail.com"
+      }
+    }
+  }
+}
