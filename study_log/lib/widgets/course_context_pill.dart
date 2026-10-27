@@ -12,12 +12,14 @@ import 'app_spacers.dart';
 class CourseContextPill extends StatelessWidget {
   final String courseTitle;
   final String? courseId;
+  final bool showCard;
   final EdgeInsetsGeometry? padding;
 
   const CourseContextPill({
     super.key,
     required this.courseTitle,
     this.courseId,
+    this.showCard = true,
     this.padding,
   });
 
@@ -37,11 +39,55 @@ class CourseContextPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (courseTitle.isEmpty) return const SizedBox.shrink();
-
     final course = _lookupCourse();
+    final resolvedCourseTitle = courseTitle.isNotEmpty
+        ? courseTitle
+        : (course?.title ?? '');
+
+    if (resolvedCourseTitle.isEmpty) return const SizedBox.shrink();
+
     final IconData iconData =
         courseIconFrom(course?.iconCodePoint, fallback: Icons.school_rounded);
+
+    if (!showCard) {
+      final Color courseColor = course?.colorValue != null
+          ? Color(course!.colorValue!)
+          : AppTheme.textSecondaryColor(context);
+
+      final breadcrumbStyle = TextStyle(
+        fontSize: 11.0,
+        fontWeight: FontWeight.w500,
+        color: AppTheme.textSecondaryColor(context),
+        letterSpacing: 0,
+      );
+
+      Widget plain = Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 5.0),
+                child: Icon(
+                  iconData,
+                  size: 13.0,
+                  color: courseColor,
+                ),
+              ),
+            ),
+            TextSpan(
+              text: resolvedCourseTitle,
+              style: breadcrumbStyle,
+            ),
+          ],
+        ),
+      );
+
+      if (padding != null) {
+        plain = Padding(padding: padding!, child: plain);
+      }
+      return plain;
+    }
 
     final Color fgColor;
     final Color bgColor;

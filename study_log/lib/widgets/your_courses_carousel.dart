@@ -125,7 +125,7 @@ class _YourCoursesCarouselState extends State<YourCoursesCarousel> {
               child: ListView.separated(
                 controller: _scrollController,
                 scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.zero,
                 itemCount: displayed.length + (showMore ? 1 : 0),
                 separatorBuilder: (_, _) => const HGapMd(),

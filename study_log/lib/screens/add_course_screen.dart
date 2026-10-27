@@ -144,7 +144,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
               ),
               child: GridView.builder(
                 shrinkWrap: true,
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 6,
                   crossAxisSpacing: 10,
@@ -290,7 +290,7 @@ class _AddCourseScreenState extends State<AddCourseScreen> {
             ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
@@ -454,7 +454,7 @@ class _CourseIconAndColorRow extends StatelessWidget {
                 height: 48,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
+                  physics: const ClampingScrollPhysics(),
                   child: Row(
                     children: _availableColors.map((color) {
                       final isSelected = color == selectedColor;

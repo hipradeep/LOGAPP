@@ -7,11 +7,14 @@ import '../services/database_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/google_drive_service.dart';
 import '../services/service_locator.dart';
+import 'bookmarks_controller.dart';
 import 'courses_controller.dart';
 import 'notification_controller.dart';
 import 'ongoing_modules_controller.dart';
 import 'progress_controller.dart';
 import 'revision_controller.dart';
+import 'todo_controller.dart';
+import 'topic_revision_controller.dart';
 
 /// Controller coordinating Google Sign-In and Google Drive Cloud Sync.
 ///
@@ -251,6 +254,15 @@ class CloudSyncController extends ChangeNotifier with WidgetsBindingObserver {
     if (getIt.isRegistered<ProgressController>()) {
       getIt<ProgressController>().reset();
     }
+    if (getIt.isRegistered<BookmarksController>()) {
+      getIt<BookmarksController>().refresh();
+    }
+    if (getIt.isRegistered<TodoController>()) {
+      getIt<TodoController>().refresh();
+    }
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      getIt<TopicRevisionController>().refresh();
+    }
   }
 
   Future<void> _refreshAllControllers() async {
@@ -263,8 +275,17 @@ class CloudSyncController extends ChangeNotifier with WidgetsBindingObserver {
     if (getIt.isRegistered<RevisionController>()) {
       await getIt<RevisionController>().reconcile();
     }
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      await getIt<TopicRevisionController>().refresh();
+    }
     if (getIt.isRegistered<ProgressController>()) {
       await getIt<ProgressController>().load();
+    }
+    if (getIt.isRegistered<TodoController>()) {
+      await getIt<TodoController>().refresh();
+    }
+    if (getIt.isRegistered<BookmarksController>()) {
+      await getIt<BookmarksController>().refresh();
     }
     if (getIt.isRegistered<NotificationController>()) {
       await getIt<NotificationController>().syncAllNotifications();

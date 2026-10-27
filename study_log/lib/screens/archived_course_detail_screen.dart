@@ -123,7 +123,7 @@ class _ArchivedCourseDetailScreenState
             Expanded(
               child: course == null
                   ? ListView(
-                      physics: const BouncingScrollPhysics(),
+                      physics: const ClampingScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(24, 72, 24, bottomSafe + 24),
                       children: const [
                         AppEmptyState(
@@ -135,9 +135,7 @@ class _ArchivedCourseDetailScreenState
                       ],
                     )
                   : ListView(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
                       children: [
                         _ArchivedCourseCompletionHeader(

@@ -7,6 +7,34 @@ enum TopicStatus {
   notStarted,
 }
 
+/// Difficulty tier of a single topic.
+enum TopicDifficulty {
+  low('LOW', 1),
+  medium('MEDIUM', 2),
+  hard('HARD', 3);
+
+  final String value;
+  final int weight;
+
+  const TopicDifficulty(this.value, this.weight);
+
+  /// Lenient parsing: `mid`/`high` are accepted as aliases, and an unknown or
+  /// missing value degrades to [TopicDifficulty.medium].
+  static TopicDifficulty fromString(String? val) {
+    switch (val?.trim().toLowerCase()) {
+      case 'low':
+        return TopicDifficulty.low;
+      case 'hard':
+      case 'high':
+        return TopicDifficulty.hard;
+      case 'mid':
+      case 'medium':
+      default:
+        return TopicDifficulty.medium;
+    }
+  }
+}
+
 /// A topic belonging to a Module — the leaf of the Course → Module → Topic tree.
 ///
 /// [moduleId] is the stable identity used to resolve topics for a module;
@@ -22,7 +50,9 @@ class Topic {
   final int orderIndex;
   final int? iconCodePoint;
   final int? colorValue;
+  final TopicDifficulty difficulty;
   final DateTime? completedAt;
+  final DateTime? updatedAt;
 
   const Topic({
     required this.id,
@@ -34,7 +64,9 @@ class Topic {
     this.orderIndex = 0,
     this.iconCodePoint,
     this.colorValue,
+    this.difficulty = TopicDifficulty.medium,
     this.completedAt,
+    this.updatedAt,
   });
 
   bool get isCompleted => status == TopicStatus.completed;
@@ -49,8 +81,11 @@ class Topic {
     int? orderIndex,
     int? iconCodePoint,
     int? colorValue,
+    TopicDifficulty? difficulty,
     DateTime? completedAt,
     bool clearCompletedAt = false,
+    DateTime? updatedAt,
+    bool clearUpdatedAt = false,
   }) {
     return Topic(
       id: id ?? this.id,
@@ -62,7 +97,9 @@ class Topic {
       orderIndex: orderIndex ?? this.orderIndex,
       iconCodePoint: iconCodePoint ?? this.iconCodePoint,
       colorValue: colorValue ?? this.colorValue,
+      difficulty: difficulty ?? this.difficulty,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
+      updatedAt: clearUpdatedAt ? null : (updatedAt ?? this.updatedAt),
     );
   }
 
@@ -81,11 +118,17 @@ class Topic {
       'orderIndex': orderIndex,
       'iconCodePoint': iconCodePoint,
       'colorValue': colorValue,
+      'difficulty': difficulty.name,
       'completedAt': completedAt == null
           ? null
           : (forLocalJson
               ? completedAt!.toIso8601String()
               : Timestamp.fromDate(completedAt!)),
+      'updatedAt': updatedAt == null
+          ? null
+          : (forLocalJson
+              ? updatedAt!.toIso8601String()
+              : Timestamp.fromDate(updatedAt!)),
     };
   }
 
@@ -106,7 +149,9 @@ class Topic {
       orderIndex: (map['orderIndex'] as num?)?.toInt() ?? 0,
       iconCodePoint: (map['iconCodePoint'] as num?)?.toInt(),
       colorValue: (map['colorValue'] as num?)?.toInt(),
+      difficulty: TopicDifficulty.fromString(map['difficulty']?.toString()),
       completedAt: parseDateTime(map['completedAt']),
+      updatedAt: parseDateTime(map['updatedAt']),
     );
   }
 

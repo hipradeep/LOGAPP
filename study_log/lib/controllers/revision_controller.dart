@@ -227,7 +227,7 @@ class RevisionController extends ChangeNotifier {
         .toList();
 
     for (final tr in topics) {
-      await _topicRevisionController.deleteTopicRevision(tr.id);
+      await _topicRevisionController.removeTopicFromRevision(tr.topicId, moduleId: tr.moduleId);
     }
 
     try {
@@ -389,6 +389,8 @@ class RevisionController extends ChangeNotifier {
               }
             }
           }
+          // Delete legacy record after migration so it doesn't resurrect when removed later
+          await _dbService.deleteRevision(legacy.id);
         }
       }
     } catch (e) {

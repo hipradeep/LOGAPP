@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:sqflite/sqflite.dart';
+import '../controllers/bookmarks_controller.dart';
 import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/revision_controller.dart';
+import '../controllers/todo_controller.dart';
+import '../controllers/topic_revision_controller.dart';
 import 'database_service.dart';
 import 'service_locator.dart';
 
@@ -28,7 +31,11 @@ class DatabaseBackupService {
     final topics = await db.query('topics');
     final revisions = await db.query('revisions');
     final revisionTopics = await db.query('revision_topics');
+    final topicRevisions = await db.query('topic_revisions');
     final studyLogs = await db.query('study_logs');
+    final todos = await db.query('todos');
+    final todoSubtasks = await db.query('todo_subtasks');
+    final bookmarks = await db.query('bookmarks');
     final userProfile = await db.query('user_profile', limit: 1);
     final notificationSettings = await db.query('notification_settings');
 
@@ -40,7 +47,11 @@ class DatabaseBackupService {
       'topics': topics,
       'revisions': revisions,
       'revisionTopics': revisionTopics,
+      'topicRevisions': topicRevisions,
       'studyLogs': studyLogs,
+      'todos': todos,
+      'todoSubtasks': todoSubtasks,
+      'bookmarks': bookmarks,
       'userProfile': userProfile.isNotEmpty ? userProfile.first : null,
       'notificationSettings': notificationSettings,
     };
@@ -121,7 +132,11 @@ class DatabaseBackupService {
       await txn.delete('topics');
       await txn.delete('revisions');
       await txn.delete('revision_topics');
+      await txn.delete('topic_revisions');
       await txn.delete('study_logs');
+      await txn.delete('todo_subtasks');
+      await txn.delete('todos');
+      await txn.delete('bookmarks');
       await txn.delete('user_profile');
       await txn.delete('notification_settings');
 
@@ -189,7 +204,9 @@ class DatabaseBackupService {
               'orderIndex': (raw['orderIndex'] as num?)?.toInt() ?? tIdx,
               'iconCodePoint': (raw['iconCodePoint'] as num?)?.toInt(),
               'colorValue': (raw['colorValue'] as num?)?.toInt(),
+              'difficulty': (raw['difficulty'] ?? 'medium').toString(),
               'completedAt': raw['completedAt']?.toString(),
+              'updatedAt': raw['updatedAt']?.toString(),
             };
             await txn.insert('topics', topicMap,
                 conflictAlgorithm: ConflictAlgorithm.replace);
@@ -307,6 +324,118 @@ class DatabaseBackupService {
           }
         }
       }
+
+      // 9. Topic Revisions
+      final topicRevisionsList = data['topicRevisions'] ?? data['topic_revisions'];
+      if (topicRevisionsList is List) {
+        for (final row in topicRevisionsList) {
+          if (row is Map) {
+            final raw = Map<String, dynamic>.from(row);
+            final trMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'courseId': (raw['courseId'] ?? '').toString(),
+              'moduleId': (raw['moduleId'] ?? '').toString(),
+              'topicId': (raw['topicId'] ?? '').toString(),
+              'title': (raw['title'] ?? '').toString(),
+              'currentLevel': (raw['currentLevel'] as num?)?.toInt() ?? 1,
+              'status': (raw['status'] ?? 'active').toString(),
+              'levelStatus': (raw['levelStatus'] ?? 'notStarted').toString(),
+              'nextRevisionAt': (raw['nextRevisionAt'] ?? nowIso).toString(),
+              'completedAt': raw['completedAt']?.toString(),
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('topic_revisions', trMap,
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 10. Todos
+      if (data['todos'] is List) {
+        for (final row in (data['todos'] as List)) {
+          if (row is Map) {
+            final raw = Map<String, dynamic>.from(row);
+            final todoMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'title': (raw['title'] ?? 'Untitled Todo').toString(),
+              'description': (raw['description'] ?? '').toString(),
+              'status': (raw['status'] ?? 'TODO').toString(),
+              'priority': (raw['priority'] ?? 'MED').toString(),
+              'deadline': raw['deadline']?.toString(),
+              'reminderTime': raw['reminderTime']?.toString(),
+              'isRecurring': (raw['isRecurring'] == 1 || raw['isRecurring'] == true) ? 1 : 0,
+              'recurrenceRule': raw['recurrenceRule']?.toString(),
+              'courseId': raw['courseId']?.toString(),
+              'moduleId': raw['moduleId']?.toString(),
+              'topicId': raw['topicId']?.toString(),
+              'estimatedPomodoros': (raw['estimatedPomodoros'] as num?)?.toInt() ?? 1,
+              'completedPomodoros': (raw['completedPomodoros'] as num?)?.toInt() ?? 0,
+              'totalMinutesSpent': (raw['totalMinutesSpent'] as num?)?.toInt() ?? 0,
+              'orderIndex': (raw['orderIndex'] as num?)?.toInt() ?? 0,
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+              'completedAt': raw['completedAt']?.toString(),
+            };
+            await txn.insert('todos', todoMap,
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 11. Todo Subtasks
+      final subtasksList = data['todoSubtasks'] ?? data['todo_subtasks'];
+      if (subtasksList is List) {
+        for (final row in subtasksList) {
+          if (row is Map) {
+            final raw = Map<String, dynamic>.from(row);
+            final subtaskMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'todoId': (raw['todoId'] ?? '').toString(),
+              'title': (raw['title'] ?? '').toString(),
+              'isCompleted': (raw['isCompleted'] == 1 || raw['isCompleted'] == true) ? 1 : 0,
+              'orderIndex': (raw['orderIndex'] as num?)?.toInt() ?? 0,
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'completedAt': raw['completedAt']?.toString(),
+            };
+            await txn.insert('todo_subtasks', subtaskMap,
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 12. Bookmarks
+      if (data['bookmarks'] is List) {
+        for (final row in (data['bookmarks'] as List)) {
+          if (row is Map) {
+            final raw = Map<String, dynamic>.from(row);
+            String tagsJson = '[]';
+            if (raw['tags'] is String) {
+              tagsJson = raw['tags'].toString();
+            } else if (raw['tags'] is List) {
+              tagsJson = jsonEncode(raw['tags']);
+            }
+            final bookmarkMap = <String, dynamic>{
+              'id': raw['id'].toString(),
+              'url': (raw['url'] ?? '').toString(),
+              'title': (raw['title'] ?? '').toString(),
+              'description': (raw['description'] ?? '').toString(),
+              'host': (raw['host'] ?? '').toString(),
+              'imageUrl': raw['imageUrl']?.toString(),
+              'courseId': raw['courseId']?.toString(),
+              'moduleId': raw['moduleId']?.toString(),
+              'topicId': raw['topicId']?.toString(),
+              'tags': tagsJson,
+              'isPinned': (raw['isPinned'] == 1 || raw['isPinned'] == true) ? 1 : 0,
+              'isArchived': (raw['isArchived'] == 1 || raw['isArchived'] == true) ? 1 : 0,
+              'createdAt': (raw['createdAt'] ?? nowIso).toString(),
+              'updatedAt': (raw['updatedAt'] ?? nowIso).toString(),
+            };
+            await txn.insert('bookmarks', bookmarkMap,
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
     });
 
       // Notify all active broadcast streams with freshly restored data
@@ -323,8 +452,17 @@ class DatabaseBackupService {
     if (getIt.isRegistered<RevisionController>()) {
       await getIt<RevisionController>().reconcile();
     }
+    if (getIt.isRegistered<TopicRevisionController>()) {
+      await getIt<TopicRevisionController>().refresh();
+    }
     if (getIt.isRegistered<ProgressController>()) {
       await getIt<ProgressController>().load();
+    }
+    if (getIt.isRegistered<TodoController>()) {
+      await getIt<TodoController>().refresh();
+    }
+    if (getIt.isRegistered<BookmarksController>()) {
+      await getIt<BookmarksController>().refresh();
     }
   }
 }

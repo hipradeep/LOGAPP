@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_fab.dart';
 import '../widgets/tab_header.dart';
 import '../widgets/todo_group_header.dart';
 import '../widgets/todo_list_item.dart';
@@ -84,40 +85,34 @@ class _TodoScreenState extends State<TodoScreen> with AutomaticKeepAliveClientMi
   Widget build(BuildContext context) {
     super.build(context);
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final topSafe = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: AppFab(
         onPressed: _openAddTask,
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        shape: const CircleBorder(),
         tooltip: 'Add Task',
-        child: const Icon(Icons.add_rounded, size: 28),
+        icon: Icons.add_rounded,
       ),
-      body: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) {
-          final dueToday = _controller.dueTodayTodos;
-          final upcoming = _controller.upcomingTodos;
-          final finished = _controller.finishedTodos;
-          final archived = _controller.archivedTodos;
-          final totalCount = _controller.allTodos.length;
+      body: SafeArea(
+        bottom: false,
+        child: ListenableBuilder(
+          listenable: _controller,
+          builder: (context, _) {
+            final dueToday = _controller.dueTodayTodos;
+            final upcoming = _controller.upcomingTodos;
+            final finished = _controller.finishedTodos;
+            final archived = _controller.archivedTodos;
+            final totalCount = _controller.allTodos.length;
 
-          final subtitle = '${dueToday.length} due today • ${finished.length} finished';
+            final subtitle = '${dueToday.length} due today • ${finished.length} finished';
 
-          return Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.only(top: topSafe),
-                child: TabHeader(
+            return Column(
+              children: [
+                TabHeader(
                   title: '#TODO',
                   subtitle: subtitle,
                 ),
-              ),
-              Expanded(
+                Expanded(
                 child: RefreshIndicator(
                   onRefresh: _controller.refresh,
                   color: AppTheme.primaryColor,
@@ -204,8 +199,9 @@ class _TodoScreenState extends State<TodoScreen> with AutomaticKeepAliveClientMi
           ),
         ),
       ],
-    );
-  },
+            );
+          },
+        ),
       ),
     );
   }

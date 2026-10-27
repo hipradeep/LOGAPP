@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import 'app_spacers.dart';
+import 'course_context_pill.dart';
 import 'module_context_pill.dart';
 
 /// Reusable and optimized metadata chip used inside [EntityDetailHeader].
@@ -96,7 +97,8 @@ class DetailStatusBadge extends StatelessWidget {
 /// - Topic detail & Revision topic detail
 /// - Module detail & Revision module detail
 class EntityDetailHeader extends StatelessWidget {
-  final String title;
+  final String? title;
+  final String? moduleTitle;
   final String? courseTitle;
   final String? courseId;
   final Widget? trailingAction;
@@ -116,7 +118,8 @@ class EntityDetailHeader extends StatelessWidget {
 
   const EntityDetailHeader({
     super.key,
-    required this.title,
+    this.title,
+    this.moduleTitle,
     this.courseTitle,
     this.courseId,
     this.trailingAction,
@@ -147,38 +150,96 @@ class EntityDetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titlePill = ModuleContextPill(
-      moduleTitle: title,
-      courseId: courseId,
-      courseTitle: courseTitle,
-    );
+    final bool hasModuleContext = moduleTitle != null && moduleTitle!.isNotEmpty;
+    final bool hasCourseContext = (courseTitle != null && courseTitle!.isNotEmpty) ||
+                                  (courseId != null && courseId!.isNotEmpty);
+
+    final Widget? breadcrumbWidget;
+    if (hasModuleContext) {
+      breadcrumbWidget = ModuleContextPill(
+        moduleTitle: moduleTitle!,
+        courseId: courseId,
+        courseTitle: courseTitle,
+        showBreadcrumb: true,
+        showCard: false,
+      );
+    } else if (hasCourseContext) {
+      breadcrumbWidget = CourseContextPill(
+        courseTitle: courseTitle ?? '',
+        courseId: courseId,
+        showCard: false,
+      );
+    } else {
+      breadcrumbWidget = null;
+    }
+
+    final hasSubsequentContent = (title != null && title!.isNotEmpty) ||
+        (countText != null && countText!.isNotEmpty) ||
+        (dateText != null && dateText!.isNotEmpty) ||
+        (durationText != null && durationText!.isNotEmpty) ||
+        additionalChips.isNotEmpty ||
+        statusWidget != null;
+
+    if (breadcrumbWidget == null && !hasSubsequentContent && trailingAction == null) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: hasSubsequentContent ? 4.0 : 0.0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (trailingAction != null)
-            Row(
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: titlePill,
+          if (breadcrumbWidget != null) ...[
+            if (trailingAction != null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: breadcrumbWidget,
+                    ),
                   ),
-                ),
-                const HGapSm(),
-                trailingAction!,
-              ],
-            )
-          else
+                  const HGapSm(),
+                  trailingAction!,
+                ],
+              )
+            else
+              Align(
+                alignment: Alignment.centerLeft,
+                child: breadcrumbWidget,
+              ),
+            if (hasSubsequentContent) const VGapSm(),
+          ] else if (trailingAction != null) ...[
             Align(
-              alignment: Alignment.centerLeft,
-              child: titlePill,
+              alignment: Alignment.centerRight,
+              child: trailingAction!,
             ),
-          const VGapXs(),
-          Wrap(
+            const VGapXs(),
+          ],
+          if (title != null && title!.isNotEmpty) ...[
+            Text(
+              title!,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimaryColor(context),
+                letterSpacing: 0,
+                height: 1.25,
+              ),
+            ),
+            const VGapSm(),
+          ],
+          if ((countText != null && countText!.isNotEmpty) ||
+              (dateText != null && dateText!.isNotEmpty) ||
+              (durationText != null && durationText!.isNotEmpty) ||
+              additionalChips.isNotEmpty ||
+              statusWidget != null)
+            Wrap(
             spacing: 8.0,
             runSpacing: 4.0,
             crossAxisAlignment: WrapCrossAlignment.center,

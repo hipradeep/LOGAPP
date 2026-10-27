@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Available app themes.
 enum AppThemeType {
@@ -186,18 +185,18 @@ class AppTheme {
   static const Color bnbInactiveColor = Color(0xFF9CA3AF);
   static const double bnbHeight = 72.0;
 
-  static const EdgeInsets defaultScreenPadding = EdgeInsets.symmetric(horizontal: 20.0);
-  static const EdgeInsets defaultCardPadding = EdgeInsets.all(18.0);
+  static const EdgeInsets defaultScreenPadding = EdgeInsets.symmetric(horizontal: 16.0);
+  static const EdgeInsets defaultCardPadding = EdgeInsets.all(12.0);
 
   // Radii matching modern soft rounded cards.
-  static const double cardBorderRadius = 20.0;
-  static const double pillBorderRadius = 28.0;
-  static const double defaultBorderRadius = 16.0;
-  static const double smallBorderRadius = 12.0;
-  static const double iconBoxRadius = 14.0;
+  static const double cardBorderRadius = 12.0;
+  static const double pillBorderRadius = 20.0;
+  static const double defaultBorderRadius = 12.0;
+  static const double smallBorderRadius = 8.0;
+  static const double iconBoxRadius = 8.0;
 
   // Standard Heights.
-  static const double buttonHeight = 52.0;
+  static const double buttonHeight = 40.0;
 
   // Standard Spacings.
   static const double spacingXs = 4.0;
@@ -291,47 +290,54 @@ class AppTheme {
   static TextStyle get bodySmall => _bodySmall(_palette);
   static TextStyle get actionText => _actionText(_palette);
 
-  static TextStyle _headingLarge(_Palette p) => GoogleFonts.outfit(
-        fontSize: 28,
-        fontWeight: FontWeight.bold,
+  static TextStyle _headingLarge(_Palette p) => TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
         color: p.textPrimary,
-        letterSpacing: -0.5,
+        letterSpacing: 0,
       );
 
-  static TextStyle _headingMedium(_Palette p) => GoogleFonts.outfit(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: p.textPrimary,
-        letterSpacing: -0.3,
-      );
-
-  static TextStyle _headingSmall(_Palette p) => GoogleFonts.outfit(
+  static TextStyle _headingMedium(_Palette p) => TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: p.textPrimary,
+        letterSpacing: 0,
       );
 
-  static TextStyle _bodyLarge(_Palette p) => GoogleFonts.inter(
+  static TextStyle _headingSmall(_Palette p) => TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: p.textPrimary,
+        letterSpacing: 0,
+      );
+
+  static TextStyle _bodyLarge(_Palette p) => TextStyle(
         fontSize: 15,
+        fontWeight: FontWeight.w400,
         color: p.textPrimary,
         height: 1.4,
+        letterSpacing: 0,
       );
 
-  static TextStyle _bodyMedium(_Palette p) => GoogleFonts.inter(
-        fontSize: 13,
+  static TextStyle _bodyMedium(_Palette p) => TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
         color: p.textSecondary,
         height: 1.4,
+        letterSpacing: 0,
       );
 
-  static TextStyle _bodySmall(_Palette p) => GoogleFonts.inter(
-        fontSize: 11,
+  static TextStyle _bodySmall(_Palette p) => TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
         color: p.textSecondary,
+        letterSpacing: 0,
       );
 
-  static TextStyle _actionText(_Palette p) => GoogleFonts.inter(
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.5,
+  static TextStyle _actionText(_Palette p) => TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 0,
         color: primaryColor,
       );
 
@@ -346,11 +352,11 @@ class AppTheme {
       useMaterial3: true,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(),
           TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: ZoomPageTransitionsBuilder(),
         },
       ),
       brightness: brightness,
@@ -361,6 +367,11 @@ class AppTheme {
       canvasColor: palette.background,
       splashColor: primaryColor.withValues(alpha: 0.08),
       highlightColor: primaryColor.withValues(alpha: 0.04),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: primaryColor,
+        selectionColor: primaryColor.withValues(alpha: 0.25),
+        selectionHandleColor: primaryColor,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -368,16 +379,53 @@ class AppTheme {
         iconTheme: IconThemeData(color: palette.textPrimary),
       ),
       iconTheme: IconThemeData(color: palette.textPrimary),
+      cardTheme: CardThemeData(
+        color: palette.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cardBorderRadius),
+          side: BorderSide(color: palette.border, width: 1),
+        ),
+        margin: EdgeInsets.zero,
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: palette.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(defaultBorderRadius)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: palette.surface,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 64,
+        backgroundColor: palette.surface,
+        indicatorColor: primaryColor.withValues(alpha: 0.12),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: primaryColor, size: 22);
+          }
+          return IconThemeData(color: palette.textSecondary, size: 22);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: primaryColor,
+              letterSpacing: 0,
+            );
+          }
+          return TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: palette.textSecondary,
+            letterSpacing: 0,
+          );
+        }),
       ),
       colorScheme: ColorScheme(
         brightness: brightness,
@@ -390,13 +438,17 @@ class AppTheme {
         onSurface: palette.textPrimary,
         onError: textOnDark,
       ),
-      textTheme: GoogleFonts.interTextTheme().copyWith(
-        displayLarge: _headingLarge(palette),
-        displayMedium: _headingMedium(palette),
-        titleLarge: _headingSmall(palette),
-        bodyLarge: _bodyLarge(palette),
-        bodyMedium: _bodyMedium(palette),
-        bodySmall: _bodySmall(palette),
+      textTheme: TextTheme(
+        displayLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: palette.textPrimary, letterSpacing: 0),
+        displayMedium: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: palette.textPrimary, letterSpacing: 0),
+        titleLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: palette.textPrimary, letterSpacing: 0),
+        titleMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: palette.textPrimary, letterSpacing: 0),
+        titleSmall: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: palette.textPrimary, letterSpacing: 0),
+        bodyLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: palette.textPrimary, height: 1.4, letterSpacing: 0),
+        bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: palette.textSecondary, height: 1.4, letterSpacing: 0),
+        bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: palette.textSecondary, letterSpacing: 0),
+        labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: primaryColor, letterSpacing: 0),
+        labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: palette.textSecondary, letterSpacing: 0),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -406,15 +458,39 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(pillBorderRadius),
           ),
-          textStyle: GoogleFonts.inter(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+          elevation: 0,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: onPrimary,
+          minimumSize: const Size(0, buttonHeight),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(pillBorderRadius),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
           ),
           elevation: 0,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: primaryColor),
+        style: TextButton.styleFrom(
+          foregroundColor: primaryColor,
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+        ),
       ),
       dividerTheme: DividerThemeData(color: palette.border, space: 1, thickness: 1),
     );

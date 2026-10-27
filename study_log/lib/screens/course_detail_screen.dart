@@ -5,7 +5,6 @@ import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
-import '../widgets/course_context_pill.dart';
 import '../widgets/module_options_sheet.dart';
 import '../widgets/compact_list_item.dart';
 import '../widgets/app_empty_state.dart';
@@ -13,6 +12,7 @@ import '../widgets/underline_tab_item.dart';
 import '../controllers/modules_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../services/service_locator.dart';
+import '../utils/course_icon_util.dart';
 import 'module_detail_screen.dart';
 import 'add_module_screen.dart';
 
@@ -127,7 +127,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               child: Column(
                 children: [
                   CustomAppBar(
-                    title: isReordering ? 'REORDER MODULES' : 'COURSE',
+                    title: isReordering ? 'REORDER MODULES' : null,
                     onBack: _handleBack,
                     actions: [
                       if (isReordering)
@@ -172,9 +172,29 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 6.0),
                             child: Align(
                               alignment: Alignment.centerLeft,
-                              child: CourseContextPill(
-                                courseTitle: widget.course.title,
-                                courseId: widget.course.id,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    courseIconFrom(widget.course.iconCodePoint, fallback: Icons.school_rounded),
+                                    size: 36,
+                                    color: widget.course.colorValue != null
+                                        ? Color(widget.course.colorValue!)
+                                        : AppTheme.primaryColor,
+                                  ),
+                                  const VGapSm(),
+                                  Text(
+                                    widget.course.title,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textPrimaryColor(context),
+                                      letterSpacing: 0,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -286,7 +306,7 @@ class _CourseOverviewView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: bottomPadding),
       children: [
         Container(

@@ -11,6 +11,22 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.logapp.studylog/share"
     private var initialSharedText: String? = null
     private var methodChannel: MethodChannel? = null
+    private var isNativeLockActive = false
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isNativeLockActive) {
+            // Re-assert MainActivity if user attempts to leave during active Zen Mode lock
+            try {
+                val intent = Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Failed to bring to front onUserLeaveHint: ${e.message}")
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,10 +139,110 @@ class MainActivity : FlutterActivity() {
                         result.error("BACKGROUND_ERROR", e.localizedMessage ?: "Failed to move task to back", null)
                     }
                 }
+                "startNativeLockMode" -> {
+                    val enablePinning = call.argument<Boolean>("enablePinning") ?: true
+                    try {
+                        isNativeLockActive = true
+                        runOnUiThread {
+                            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                                setShowWhenLocked(true)
+                                setTurnScreenOn(true)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                window.addFlags(
+                                    android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                                )
+                            }
+                            // Lock Task pinning: restricts Home, Recents, and secondary apps only if enablePinning is requested
+                            if (enablePinning) {
+                                try {
+                                    startLockTask()
+                                } catch (e: Exception) {
+                                    android.util.Log.w("MainActivity", "startLockTask failed: ${e.message}")
+                                }
+                            }
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("LOCK_ERROR", e.localizedMessage ?: "Failed to activate native lock", null)
+                    }
+                }
+                "stopNativeLockMode" -> {
+                    try {
+                        isNativeLockActive = false
+                        runOnUiThread {
+                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                                setShowWhenLocked(false)
+                                setTurnScreenOn(false)
+                            }
+                            try {
+                                stopLockTask()
+                            } catch (e: Exception) {
+                                android.util.Log.w("MainActivity", "stopLockTask failed: ${e.message}")
+                            }
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("UNLOCK_ERROR", e.localizedMessage ?: "Failed to deactivate native lock", null)
+                    }
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+
+        val timerChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TIMER_CHANNEL)
+        timerMethodChannel = timerChannel
+
+        timerChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "showNotification" -> {
+                    val title = call.argument<String>("title") ?: "Study Session"
+                    val subtitle = call.argument<String>("subtitle") ?: "Focus Timer"
+                    val remainingSeconds = call.argument<Int>("remainingSeconds") ?: 0
+                    val isRunning = call.argument<Boolean>("isRunning") ?: true
+                    StudyTimerNotificationManager.showNotification(
+                        applicationContext,
+                        title,
+                        subtitle,
+                        remainingSeconds,
+                        isRunning
+                    )
+                    result.success(true)
+                }
+                "dismissNotification" -> {
+                    StudyTimerNotificationManager.dismissNotification(applicationContext)
+                    result.success(true)
+                }
                 else -> {
                     result.notImplemented()
                 }
             }
         }
     }
+
+    override fun onDestroy() {
+        if (timerMethodChannel != null) {
+            timerMethodChannel = null
+        }
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val TIMER_CHANNEL = "com.logapp.studylog/timer_notification"
+        private var timerMethodChannel: MethodChannel? = null
+
+        fun sendTimerActionToFlutter(action: String, remainingSeconds: Int = 0) {
+            val data = mapOf(
+                "action" to action,
+                "remainingSeconds" to remainingSeconds
+            )
+            timerMethodChannel?.invokeMethod("onTimerAction", data)
+        }
+    }
 }
+

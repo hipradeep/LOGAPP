@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../controllers/courses_controller.dart';
 import '../controllers/ongoing_modules_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../controllers/revision_controller.dart';
@@ -327,12 +328,6 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
     }
   }
 
-  String get _resolvedAppBarTitle {
-    if (widget.moduleTitle.isNotEmpty) return widget.moduleTitle;
-    if (widget.courseTitle.isNotEmpty) return widget.courseTitle;
-    return 'Topic';
-  }
-
   void _handlePopInvoked(bool didPop, dynamic result) {
     if (didPop) return;
     Navigator.pop(context, _topic);
@@ -367,7 +362,6 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CustomAppBar(
-                title: _resolvedAppBarTitle,
                 onBack: _handleAppBarBack,
                 actions: [
                   IconButton(
@@ -379,8 +373,10 @@ class _TopicDetailScreenState extends State<TopicDetailScreen> {
               ),
               _TopicHeaderSection(
                 topic: _topic,
-                courseId: widget.courseId,
+                courseId: widget.courseId.isNotEmpty ? widget.courseId : _topic.courseId,
                 courseTitle: widget.courseTitle,
+                moduleId: widget.moduleId.isNotEmpty ? widget.moduleId : _topic.moduleId,
+                moduleTitle: widget.moduleTitle,
                 lastUpdatedAt: _lastUpdatedAt,
                 totalMinutesExpended: _totalMinutesExpended,
                 onStatusChanged: _handleStatusChanged,
@@ -488,10 +484,9 @@ class _TopicFloatingActionButton extends StatelessWidget {
             onPressed: () => onStartStudy(isRevision),
             backgroundColor: fabColor,
             foregroundColor: Colors.white,
-            elevation: 4,
-            shape: const CircleBorder(),
+            elevation: 1.5,
             tooltip: tooltip,
-            child: const Icon(Icons.play_arrow_rounded, size: 28),
+            child: const Icon(Icons.play_arrow_rounded, size: 26),
           );
         },
       );
@@ -515,6 +510,8 @@ class _TopicHeaderSection extends StatelessWidget {
   final Topic topic;
   final String courseId;
   final String courseTitle;
+  final String moduleId;
+  final String moduleTitle;
   final DateTime? lastUpdatedAt;
   final int totalMinutesExpended;
   final ValueChanged<TopicStatus> onStatusChanged;
@@ -524,6 +521,8 @@ class _TopicHeaderSection extends StatelessWidget {
     required this.topic,
     required this.courseId,
     required this.courseTitle,
+    this.moduleId = '',
+    this.moduleTitle = '',
     required this.lastUpdatedAt,
     required this.totalMinutesExpended,
     required this.onStatusChanged,
@@ -541,6 +540,8 @@ class _TopicHeaderSection extends StatelessWidget {
             topicTitle: topic.title,
             courseId: courseId,
             courseTitle: courseTitle,
+            moduleId: moduleId,
+            moduleTitle: moduleTitle,
             status: topic.status,
             topicRevision: rev,
             lastUpdatedAt: lastUpdatedAt ?? DateTime.now(),
@@ -556,6 +557,8 @@ class _TopicHeaderSection extends StatelessWidget {
       topicTitle: topic.title,
       courseId: courseId,
       courseTitle: courseTitle,
+      moduleId: moduleId,
+      moduleTitle: moduleTitle,
       status: topic.status,
       lastUpdatedAt: lastUpdatedAt ?? DateTime.now(),
       totalMinutesExpended: totalMinutesExpended,
@@ -695,6 +698,8 @@ class _CompactTopicHeader extends StatelessWidget {
   final String topicTitle;
   final String courseId;
   final String courseTitle;
+  final String moduleId;
+  final String moduleTitle;
   final TopicStatus status;
   final TopicRevision? topicRevision;
   final DateTime lastUpdatedAt;
@@ -706,6 +711,8 @@ class _CompactTopicHeader extends StatelessWidget {
     required this.topicTitle,
     required this.courseId,
     required this.courseTitle,
+    this.moduleId = '',
+    this.moduleTitle = '',
     required this.status,
     this.topicRevision,
     required this.lastUpdatedAt,
@@ -786,12 +793,27 @@ class _CompactTopicHeader extends StatelessWidget {
       }
     }
 
+    final resolvedCourseId = courseId.isNotEmpty ? courseId : '';
+    String resolvedCourse = courseTitle;
+    if (resolvedCourse.isEmpty && resolvedCourseId.isNotEmpty && getIt.isRegistered<CoursesController>()) {
+      try {
+        final c = getIt<CoursesController>().courses.firstWhere((c) => c.id == resolvedCourseId);
+        resolvedCourse = c.title;
+      } catch (_) {}
+    }
+
+    String resolvedModule = moduleTitle;
+    if (resolvedModule.isEmpty && moduleId.isNotEmpty && getIt.isRegistered<OngoingModulesController>()) {
+      resolvedModule = getIt<OngoingModulesController>().moduleTitleFor(moduleId);
+    }
+
     final displayTitle = topicTitle.isNotEmpty ? topicTitle : 'Topic';
 
     return EntityDetailHeader(
       title: displayTitle,
-      courseId: courseId,
-      courseTitle: courseTitle,
+      moduleTitle: resolvedModule,
+      courseId: resolvedCourseId,
+      courseTitle: resolvedCourse,
       horizontalPadding: 16.0,
       dateText: dateStr,
       durationText: hoursStr,

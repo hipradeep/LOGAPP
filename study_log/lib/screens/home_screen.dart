@@ -19,6 +19,7 @@ import '../controllers/cloud_sync_controller.dart';
 import '../services/notification_service.dart';
 import '../models/course.dart';
 import 'activity_screen.dart';
+import 'recent_activity_screen.dart';
 import 'course_detail_screen.dart';
 import 'courses_screen.dart';
 import 'module_detail_screen.dart';
@@ -293,79 +294,63 @@ class _HomeGreetingHeader extends StatelessWidget {
         }
 
         return TabHeader(
-          titleWidget: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  titleText,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor(context),
-                    letterSpacing: -0.3,
-                    height: 1.15,
+          title: titleText,
+          subtitle: 'Keep learning, keep growing!',
+          actions: [
+            if (isSignedIn)
+              Tooltip(
+                message: 'Cloud Sync Connected (${syncCtrl?.userEmail ?? ""})',
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  child: const Icon(
+                    Icons.cloud_done_rounded,
+                    size: 18,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
-              ),
-              const HGapSm(),
-              if (isSignedIn)
-                Tooltip(
-                  message: 'Cloud Sync Connected (${syncCtrl?.userEmail ?? ""})',
+              )
+            else
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _handleCloudSignIn(context, syncCtrl),
+                  borderRadius: BorderRadius.circular(16),
                   child: Container(
-                    padding: const EdgeInsets.all(5),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.cloud_done_rounded,
-                      size: 18,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                )
-              else
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _handleCloudSignIn(context, syncCtrl),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                        ),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.25),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.cloud_upload_outlined,
-                            size: 16,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.cloud_upload_outlined,
+                          size: 16,
+                          color: AppTheme.primaryColor,
+                        ),
+                        const HGapXs(),
+                        Text(
+                          'Sign In',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                             color: AppTheme.primaryColor,
                           ),
-                          const HGapXs(),
-                          Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-            ],
-          ),
-          subtitle: 'Keep learning, keep growing!',
+              ),
+          ],
         );
       },
     );
@@ -595,7 +580,14 @@ class _HomeRecentActivitySection extends StatelessWidget {
               controller: progressCtrl,
               maxDays: 3,
               showHeader: false,
-              onItemTap: (_) => onOpenActivity(),
+              onItemTap: (item) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RecentActivityScreen(initialDate: item.date),
+                  ),
+                );
+              },
             );
           },
         ),

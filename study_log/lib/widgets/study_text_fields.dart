@@ -23,6 +23,7 @@ class UnderlineInputField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final int? minLines;
   final int? maxLines;
+  final EdgeInsetsGeometry? contentPadding;
 
   const UnderlineInputField({
     super.key,
@@ -37,6 +38,7 @@ class UnderlineInputField extends StatelessWidget {
     this.onChanged,
     this.minLines,
     this.maxLines = 1,
+    this.contentPadding,
   });
 
   @override
@@ -45,36 +47,38 @@ class UnderlineInputField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isRequired)
-          RichText(
-            text: TextSpan(
-              text: label,
+        if (label.isNotEmpty) ...[
+          if (isRequired)
+            RichText(
+              text: TextSpan(
+                text: label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimaryColor(context),
+                ),
+                children: [
+                  TextSpan(
+                    text: ' *',
+                    style: TextStyle(
+                      color: AppTheme.errorColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              label,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimaryColor(context),
               ),
-              children: [
-                TextSpan(
-                  text: ' *',
-                  style: TextStyle(
-                    color: AppTheme.errorColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
             ),
-          )
-        else
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimaryColor(context),
-            ),
-          ),
-        const VGapSm(),
+          const VGapSm(),
+        ],
         TextField(
           controller: controller,
           keyboardType: keyboardType,
@@ -95,7 +99,7 @@ class UnderlineInputField extends StatelessWidget {
             ),
             suffixIcon: suffixIcon,
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            contentPadding: contentPadding ?? const EdgeInsets.symmetric(vertical: 10),
             border: UnderlineInputBorder(
               borderSide: BorderSide(color: AppTheme.borderColor(context)),
             ),

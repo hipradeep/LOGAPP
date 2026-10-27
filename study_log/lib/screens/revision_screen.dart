@@ -236,6 +236,10 @@ class _RevisionScreenState extends State<RevisionScreen>
       courseTitle: courseTitle,
       courseId: topicRev.courseId,
       moduleId: topicRev.moduleId,
+      showRemoveFromRevision: true,
+      onRevisionChanged: () {
+        if (mounted) setState(() {});
+      },
     );
   }
 

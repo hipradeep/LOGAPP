@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- Left side: Topic / Title and Timer -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Title / Topic Name -->
+        <TextView
+            android:id="@+id/notification_timer_title"
+            style="@style/TextAppearance.Compat.Notification.Title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Study Session"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:includeFontPadding="false" />
+
+        <!-- Subtitle (Subject / Course) -->
+        <TextView
+            android:id="@+id/notification_timer_subtitle"
+            style="@style/TextAppearance.Compat.Notification.Line2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginTop="2dp"
+            android:includeFontPadding="false"
+            android:visibility="gone" />
+
+        <!-- FrameLayout for live countdown vs paused time -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp">
+
+            <!-- Running Live Chronometer -->
+            <Chronometer
+                android:id="@+id/notification_timer_chronometer"
+                style="@style/TextAppearance.Compat.Notification.Time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:includeFontPadding="false"
+                android:visibility="visible" />
+
+            <!-- Paused Static Time Display -->
+            <TextView
+                android:id="@+id/notification_timer_static_time"
+                style="@style/TextAppearance.Compat.Notification.Time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="28sp"
+                android:textColor="#F59E0B"
+                android:textStyle="bold"
+                android:visibility="gone"
+                android:includeFontPadding="false" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- Right side: Round Play/Pause Button -->
+    <FrameLayout
+        android:id="@+id/notification_timer_action_btn"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="16dp">
+
+        <!-- Round circular background -->
+        <ImageView
+            android:id="@+id/notification_timer_action_bg"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/notification_round_bg" />
+
+        <!-- Pause icon (shown when running) -->
+        <ImageView
+            android:id="@+id/notification_timer_pause_icon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:scaleType="centerInside"
+            android:src="@drawable/notification_pause_icon"
+            android:visibility="visible" />
+
+        <!-- Play icon (shown when paused) -->
+        <ImageView
+            android:id="@+id/notification_timer_play_icon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:layout_marginStart="1.5dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/notification_play_icon"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

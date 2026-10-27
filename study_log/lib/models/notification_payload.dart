@@ -80,6 +80,13 @@ class NotificationPayload {
         targetId: bookmarkId,
       );
 
+  /// Factory for Active Session Notification -> Resume Timer Screen.
+  factory NotificationPayload.activeSession({String? targetId}) =>
+      NotificationPayload(
+        action: 'open_session',
+        targetId: targetId,
+      );
+
   Map<String, dynamic> toMap() {
     return {
       'action': action,

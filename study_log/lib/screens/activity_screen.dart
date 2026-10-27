@@ -31,10 +31,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     });
   }
 
-  void _openRecentActivity(BuildContext context) {
+  void _openRecentActivity(BuildContext context, [DateTime? date]) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const RecentActivityScreen()),
+      MaterialPageRoute(builder: (_) => RecentActivityScreen(initialDate: date)),
     );
   }
 
@@ -50,12 +50,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
             CustomAppBar(
               title: 'Activity',
               onBack: () => Navigator.pop(context),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  color: AppTheme.textPrimaryColor(context),
+                  tooltip: 'All Activity',
+                  onPressed: () => _openRecentActivity(context),
+                ),
+              ],
             ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
                 child: ListenableBuilder(
                   listenable: _progressController,
@@ -79,8 +85,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         const VGapMd(),
                         RecentActivityCard(
                           controller: _progressController,
+                          maxDays: 7,
+                          showConsecutiveDays: true,
                           showViewAll: false,
-                          onItemTap: (_) => _openRecentActivity(context),
+                          onItemTap: (item) => _openRecentActivity(context, item.date),
                         ),
                         const VGapSm(),
                         GestureDetector(

@@ -53,9 +53,7 @@ class ArchivedCoursesScreen extends StatelessWidget {
                   child: archivedCourses.isEmpty
                       ? _ArchivedEmptyState(bottomPadding: bottomSafe + 24)
                       : ListView.separated(
-                          physics: const BouncingScrollPhysics(
-                            parent: AlwaysScrollableScrollPhysics(),
-                          ),
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: EdgeInsets.fromLTRB(
                             16,
                             8,
@@ -173,7 +171,7 @@ class _ArchivedEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(24, 72, 24, bottomPadding),
       children: const [
         AppEmptyState(

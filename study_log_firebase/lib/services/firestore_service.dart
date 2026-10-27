@@ -346,16 +346,22 @@ class FirestoreService {
     final ref = _topicsRef;
     if (ref == null) return;
     final docRef = topic.id.isEmpty ? ref.doc() : ref.doc(topic.id);
-    final subToSave = topic.id.isEmpty ? topic.copyWith(id: docRef.id) : topic;
-    await docRef.set(subToSave.toMap());
+    final stamped = topic.copyWith(
+      id: topic.id.isEmpty ? docRef.id : topic.id,
+      updatedAt: DateTime.now(),
+    );
+    await docRef.set(stamped.toMap());
   }
 
   Future<void> updateTopic(Topic topic) async {
     final ref = _topicsRef;
     if (ref == null) return;
     final docRef = topic.id.isEmpty ? ref.doc() : ref.doc(topic.id);
-    final subToSave = topic.id.isEmpty ? topic.copyWith(id: docRef.id) : topic;
-    await docRef.set(subToSave.toMap(), SetOptions(merge: true));
+    final stamped = topic.copyWith(
+      id: topic.id.isEmpty ? docRef.id : topic.id,
+      updatedAt: DateTime.now(),
+    );
+    await docRef.set(stamped.toMap(), SetOptions(merge: true));
   }
 
   Future<void> deleteTopic(String topicId) async {

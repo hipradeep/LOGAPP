@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/todo_item.dart';
@@ -10,7 +11,6 @@ import '../widgets/study_confirmation_dialog.dart';
 import '../controllers/todo_controller.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
-import 'session_timer_screen.dart';
 
 /// Screen for creating and editing a Todo item and its subtasks.
 /// Adheres strictly to the milestone task UX from log_app, topic input styling,
@@ -47,6 +47,7 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
 
   int? _deletingSubtaskIndex;
   bool _isSaving = false;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -78,13 +79,14 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
       for (final s in t.subtasks) {
         _subtasks.add(s);
         _subtaskControllers.add(TextEditingController(text: s.title));
-        _subtaskFocusNodes.add(FocusNode());
+        _subtaskFocusNodes.add(_createSubtaskFocusNode());
       }
     }
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _titleController.dispose();
     _descController.dispose();
     for (final c in _subtaskControllers) {
@@ -96,6 +98,105 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
     super.dispose();
   }
 
+  FocusNode _createSubtaskFocusNode() {
+    final fn = FocusNode();
+    if (widget.todo != null) {
+      fn.addListener(() {
+        if (!fn.hasFocus) {
+          _debounceTimer?.cancel();
+          _autoSaveSubtasks();
+        }
+      });
+    }
+    return fn;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Auto-Save in Edit Mode
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void _debounceAutoSave() {
+    if (widget.todo == null) return;
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _autoSaveSubtasks();
+      }
+    });
+  }
+
+  Future<void> _autoSaveSubtasks() async {
+    if (widget.todo == null) return;
+    final now = DateTime.now();
+
+    final nonBlankSubtasks = <TodoSubtask>[];
+    for (int i = 0; i < _subtasks.length; i++) {
+      final t = i < _subtaskControllers.length ? _subtaskControllers[i].text.trim() : '';
+      if (t.isNotEmpty) {
+        nonBlankSubtasks.add(_subtasks[i].copyWith(
+          todoId: widget.todo!.id,
+          title: t,
+          orderIndex: nonBlankSubtasks.length,
+        ));
+      }
+    }
+
+    final allSubtasksDone =
+        nonBlankSubtasks.isNotEmpty && nonBlankSubtasks.every((s) => s.isCompleted);
+    final isDone = _selectedStatus == TodoStatus.done || allSubtasksDone;
+    final finalStatus = isDone ? TodoStatus.done : _selectedStatus;
+
+    final reindexedSubtasks = [
+      for (int i = 0; i < nonBlankSubtasks.length; i++)
+        nonBlankSubtasks[i].copyWith(
+          isCompleted: isDone ? true : nonBlankSubtasks[i].isCompleted,
+          completedAt: isDone
+              ? (nonBlankSubtasks[i].completedAt ?? now)
+              : (nonBlankSubtasks[i].isCompleted ? nonBlankSubtasks[i].completedAt : null),
+        )
+    ];
+
+    final currentTitle = _titleController.text.trim();
+    final effectiveTitle = currentTitle.isNotEmpty ? currentTitle : widget.todo!.title;
+
+    final rule = RecurrenceRule(
+      type: _selectedRecurrence,
+      interval: 1,
+      daysOfWeek: _selectedRecurrence == RecurrenceType.weekly
+          ? [_weeklyDay]
+          : const [],
+    );
+
+    DateTime? deadline;
+    if (_selectedDate != null) {
+      deadline = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        23,
+        59,
+      );
+    }
+
+    final updatedTodo = widget.todo!.copyWith(
+      title: effectiveTitle,
+      description: _descController.text.trim(),
+      status: finalStatus,
+      priority: _selectedPriority,
+      deadline: deadline,
+      clearDeadline: deadline == null,
+      reminderTime: deadline,
+      clearReminderTime: deadline == null,
+      isRecurring: rule.isRepeating,
+      recurrenceRule: rule,
+      subtasks: reindexedSubtasks,
+      updatedAt: now,
+      completedAt: finalStatus == TodoStatus.done ? (widget.todo!.completedAt ?? now) : null,
+    );
+
+    await _todoController.updateTodo(updatedTodo);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Subtasks Operations
   // ─────────────────────────────────────────────────────────────────────────
@@ -103,6 +204,9 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
   void _addSubtask() {
     final subtaskId = 'subtask_${DateTime.now().microsecondsSinceEpoch}';
     final parentId = widget.todo?.id ?? '';
+    final newController = TextEditingController();
+    final newFocusNode = _createSubtaskFocusNode();
+
     setState(() {
       _subtasks.add(
         TodoSubtask(
@@ -114,8 +218,8 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
           createdAt: DateTime.now(),
         ),
       );
-      _subtaskControllers.add(TextEditingController());
-      _subtaskFocusNodes.add(FocusNode());
+      _subtaskControllers.add(newController);
+      _subtaskFocusNodes.add(newFocusNode);
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -126,14 +230,22 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
   }
 
   void _deleteSubtask(int idx) {
+    if (idx < 0 || idx >= _subtasks.length) return;
+    final removed = _subtasks.removeAt(idx);
+    final c = _subtaskControllers.removeAt(idx);
+    c.dispose();
+    final f = _subtaskFocusNodes.removeAt(idx);
+    f.dispose();
+
     setState(() {
-      _subtasks.removeAt(idx);
-      final c = _subtaskControllers.removeAt(idx);
-      c.dispose();
-      final f = _subtaskFocusNodes.removeAt(idx);
-      f.dispose();
       _deletingSubtaskIndex = null;
     });
+
+    if (widget.todo != null) {
+      _debounceTimer?.cancel();
+      _dbService.deleteSubtask(removed.id);
+      _autoSaveSubtasks();
+    }
   }
 
   Future<void> _toggleSubtaskItem(int idx) async {
@@ -150,33 +262,16 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
       _subtasks[idx] = updated;
     });
 
-    if (widget.todo != null) {
-      final currentTitle = idx < _subtaskControllers.length
-          ? _subtaskControllers[idx].text.trim()
-          : '';
-      final subtaskToPersist = updated.copyWith(
-        todoId: widget.todo!.id,
-        title: currentTitle.isNotEmpty
-            ? currentTitle
-            : (updated.title.isNotEmpty ? updated.title : 'Subtask'),
-      );
-      await _dbService.insertSubtask(subtaskToPersist);
+    final allDone = _subtasks.isNotEmpty && _subtasks.every((st) => st.isCompleted);
+    if (willComplete && allDone && _selectedStatus != TodoStatus.done) {
+      setState(() => _selectedStatus = TodoStatus.done);
+    } else if (!willComplete && _selectedStatus == TodoStatus.done) {
+      setState(() => _selectedStatus = widget.todo != null ? TodoStatus.inProgress : TodoStatus.todo);
+    }
 
-      final allDone = _subtasks.isNotEmpty && _subtasks.every((st) => st.isCompleted);
-      if (willComplete && allDone && _selectedStatus != TodoStatus.done) {
-        setState(() => _selectedStatus = TodoStatus.done);
-        await _todoController.updateStatus(widget.todo!.id, TodoStatus.done);
-      } else if (!willComplete && _selectedStatus == TodoStatus.done) {
-        setState(() => _selectedStatus = TodoStatus.inProgress);
-        await _todoController.updateStatus(widget.todo!.id, TodoStatus.inProgress);
-      }
-    } else {
-      final allDone = _subtasks.isNotEmpty && _subtasks.every((st) => st.isCompleted);
-      if (willComplete && allDone && _selectedStatus != TodoStatus.done) {
-        setState(() => _selectedStatus = TodoStatus.done);
-      } else if (!willComplete && _selectedStatus == TodoStatus.done) {
-        setState(() => _selectedStatus = TodoStatus.todo);
-      }
+    if (widget.todo != null) {
+      _debounceTimer?.cancel();
+      await _autoSaveSubtasks();
     }
   }
 
@@ -336,63 +431,51 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
     }
   }
 
-  void _startPomodoroSession() {
-    final title = _titleController.text.trim();
-    final taskTitle =
-        title.isNotEmpty ? title : (widget.todo?.title ?? 'Task Focus');
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SessionTimerScreen(
-          title: 'Task: $taskTitle',
-          subtitle: 'Pomodoro Focus Session',
-          durationMinutes: 25,
-        ),
-      ),
-    );
-  }
-
   // ─────────────────────────────────────────────────────────────────────────
   // UI Builders
   // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _handleBack() async {
+    if (widget.todo != null) {
+      _debounceTimer?.cancel();
+      await _autoSaveSubtasks();
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _handlePopInvoked(bool didPop, dynamic result) {
+    if (didPop) return;
+    _handleBack();
+  }
 
   @override
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom +
         MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background(context),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Custom App Bar strictly matching study_log standard
-            CustomAppBar(
-              title: widget.todo != null ? 'Edit Task' : 'Add Task & Subtasks',
-              onBack: () => Navigator.of(context).pop(),
-              actions: [
-                if (widget.todo != null) ...[
-                  IconButton(
-                    icon: const Icon(Icons.timer_outlined, size: 22),
-                    color: AppTheme.primaryColor,
-                    tooltip: 'Start Focus Session',
-                    onPressed: _startPomodoroSession,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handlePopInvoked,
+      child: Scaffold(
+        backgroundColor: AppTheme.background(context),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Custom App Bar strictly matching study_log standard
+              CustomAppBar(
+                title: widget.todo != null ? 'Edit Task' : 'Add Task & Subtasks',
+                onBack: _handleBack,
+                actions: [
+                  AddPillButton(
+                    label: 'Save',
+                    icon: Icons.check_rounded,
+                    isLoading: _isSaving,
+                    onPressed: _handleSave,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, size: 22),
-                    color: AppTheme.errorColor,
-                    tooltip: 'Delete Task',
-                    onPressed: _confirmDelete,
-                  ),
-                  const HGapXs(),
                 ],
-                AddPillButton(
-                  label: 'Save',
-                  icon: Icons.check_rounded,
-                  isLoading: _isSaving,
-                  onPressed: _handleSave,
-                ),
-              ],
-            ),
+              ),
             Expanded(
               child: SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
@@ -460,8 +543,9 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSubtasksSection() {
     return Column(
@@ -487,6 +571,10 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
                 final focusNode = _subtaskFocusNodes.removeAt(oldIndex);
                 _subtaskFocusNodes.insert(newIndex, focusNode);
               });
+              if (widget.todo != null) {
+                _debounceTimer?.cancel();
+                _autoSaveSubtasks();
+              }
             },
             itemBuilder: (context, idx) {
               final item = _subtasks[idx];
@@ -606,6 +694,11 @@ class _TodoDetailEditScreenState extends State<TodoDetailEditScreen> {
                   ),
                   onChanged: (val) {
                     _subtasks[idx] = _subtasks[idx].copyWith(title: val);
+                    _debounceAutoSave();
+                  },
+                  onSubmitted: (_) {
+                    _debounceTimer?.cancel();
+                    _autoSaveSubtasks();
                   },
                 ),
               ),

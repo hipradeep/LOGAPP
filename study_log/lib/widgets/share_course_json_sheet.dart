@@ -358,7 +358,7 @@ class ShareCourseJsonSheet extends StatelessWidget {
             border: Border.all(color: AppTheme.borderColor(context)),
           ),
           child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
+            physics: const ClampingScrollPhysics(),
             child: SelectableText(
               jsonString,
               style: TextStyle(

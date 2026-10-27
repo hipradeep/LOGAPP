@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -54,6 +56,12 @@ class NotificationService {
   static const String _bookmarkChannelDescription =
       'Notifications when a new bookmark is saved from other apps.';
 
+  static const String sessionChannelId = 'study_session_ongoing_channel';
+  static const String sessionChannelName = 'Active Study Session';
+  static const String sessionChannelDescription =
+      'Shows live countdown on lock screen and status bar when session is minimized.';
+
+  static const int sessionNotificationId = 9999;
   static const int bookmarkSavedNotificationId = 4001;
   static const int morningBriefingNotificationId = 1000;
   static const int courseNotificationId = 1001;
@@ -70,18 +78,29 @@ class NotificationService {
   static const int maxStudySlots = 10;
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  static const MethodChannel _timerNativeChannel =
+      MethodChannel('com.logapp.studylog/timer_notification');
   final StreamController<NotificationPayload> _payloadStreamController =
       StreamController<NotificationPayload>.broadcast();
+  final StreamController<String> _actionStreamController =
+      StreamController<String>.broadcast();
 
   /// Stream of notification tap payloads for deep-linking.
   Stream<NotificationPayload> get onPayloadTapped =>
       _payloadStreamController.stream;
+
+  /// Stream of notification action button triggers (e.g. 'pause_session', 'resume_session', 'stop_session').
+  Stream<String> get onActionTapped =>
+      _actionStreamController.stream;
 
   AndroidFlutterLocalNotificationsPlugin? _android;
   Future<void>? _initFuture;
   bool _isRequestingPermission = false;
 
   void _onNotificationResponse(NotificationResponse response) {
+    if (response.actionId != null && response.actionId!.isNotEmpty) {
+      _actionStreamController.add(response.actionId!);
+    }
     final payload = NotificationPayload.fromJson(response.payload);
     if (payload != null) {
       _payloadStreamController.add(payload);
@@ -179,6 +198,19 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
 
+    _timerNativeChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onTimerAction') {
+        if (call.arguments is Map) {
+          final action = (call.arguments as Map)['action'] as String?;
+          if (action != null && action.isNotEmpty) {
+            _actionStreamController.add(action);
+          }
+        } else if (call.arguments is String) {
+          _actionStreamController.add(call.arguments as String);
+        }
+      }
+    });
+
     final android = _android ??= _resolveAndroid();
     if (android != null) {
       await android.createNotificationChannel(
@@ -219,6 +251,17 @@ class NotificationService {
           _bookmarkChannelName,
           description: _bookmarkChannelDescription,
           importance: Importance.high,
+        ),
+      );
+      await android.createNotificationChannel(
+        const AndroidNotificationChannel(
+          sessionChannelId,
+          sessionChannelName,
+          description: sessionChannelDescription,
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
+          showBadge: false,
         ),
       );
     }
@@ -849,6 +892,155 @@ class NotificationService {
       debugPrint('NotificationService: Showed bookmark saved notification for "$title"');
     } catch (e) {
       debugPrint('NotificationService showBookmarkSavedNotification error: $e');
+    }
+  }
+
+  /// Displays or updates an ongoing background notification with a native chronometer countdown.
+  /// Android OS natively ticks the countdown on the lock screen / status bar with 0 CPU wakeups.
+  Future<void> showSessionTimerNotification({
+    required String title,
+    required String subtitle,
+    required int remainingSeconds,
+    String? targetId,
+  }) async {
+    try {
+      if (Platform.isAndroid) {
+        await _timerNativeChannel.invokeMethod('showNotification', {
+          'title': title,
+          'subtitle': subtitle,
+          'remainingSeconds': remainingSeconds,
+          'isRunning': true,
+        });
+        return;
+      }
+      await init();
+      final whenEpoch = DateTime.now().millisecondsSinceEpoch + (remainingSeconds * 1000);
+      final androidDetails = AndroidNotificationDetails(
+        sessionChannelId,
+        sessionChannelName,
+        channelDescription: sessionChannelDescription,
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        showWhen: true,
+        when: whenEpoch,
+        usesChronometer: true,
+        chronometerCountDown: true,
+        playSound: false,
+        enableVibration: false,
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction('pause_session', 'Pause'),
+          AndroidNotificationAction('stop_session', 'End Session'),
+        ],
+      );
+      final details = NotificationDetails(android: androidDetails);
+      await _plugin.show(
+        id: sessionNotificationId,
+        title: title,
+        body: subtitle,
+        notificationDetails: details,
+        payload: NotificationPayload.activeSession(targetId: targetId).toJson(),
+      );
+    } catch (e) {
+      debugPrint('NotificationService showSessionTimerNotification error: $e');
+    }
+  }
+
+  /// Displays a static "Paused" notification with remaining time.
+  Future<void> showSessionPausedNotification({
+    required String title,
+    required String subtitle,
+    required int remainingSeconds,
+    String? targetId,
+  }) async {
+    try {
+      if (Platform.isAndroid) {
+        await _timerNativeChannel.invokeMethod('showNotification', {
+          'title': title,
+          'subtitle': subtitle,
+          'remainingSeconds': remainingSeconds,
+          'isRunning': false,
+        });
+        return;
+      }
+      await init();
+      final minutes = remainingSeconds ~/ 60;
+      final seconds = remainingSeconds % 60;
+      final timeStr = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+
+      const androidDetails = AndroidNotificationDetails(
+        sessionChannelId,
+        sessionChannelName,
+        channelDescription: sessionChannelDescription,
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        showWhen: false,
+        usesChronometer: false,
+        playSound: false,
+        enableVibration: false,
+        actions: <AndroidNotificationAction>[
+          AndroidNotificationAction('resume_session', 'Resume'),
+          AndroidNotificationAction('stop_session', 'End Session'),
+        ],
+      );
+      const details = NotificationDetails(android: androidDetails);
+      await _plugin.show(
+        id: sessionNotificationId,
+        title: '$title (Paused)',
+        body: '$timeStr remaining • $subtitle',
+        notificationDetails: details,
+        payload: NotificationPayload.activeSession(targetId: targetId).toJson(),
+      );
+    } catch (e) {
+      debugPrint('NotificationService showSessionPausedNotification error: $e');
+    }
+  }
+
+  /// Displays a completion alert with sound and vibration when session completes in background.
+  Future<void> showSessionCompleteNotification({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      await init();
+      await dismissSessionTimerNotification();
+      const androidDetails = AndroidNotificationDetails(
+        _courseChannelId,
+        _courseChannelName,
+        channelDescription: _courseChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      );
+      const details = NotificationDetails(android: androidDetails);
+      await _plugin.show(
+        id: sessionNotificationId + 1,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: const NotificationPayload(action: 'open_home', tabIndex: 0).toJson(),
+      );
+    } catch (e) {
+      debugPrint('NotificationService showSessionCompleteNotification error: $e');
+    }
+  }
+
+  /// Dismisses the ongoing session timer notification.
+  Future<void> dismissSessionTimerNotification() async {
+    try {
+      if (Platform.isAndroid) {
+        await _timerNativeChannel.invokeMethod('dismissNotification');
+      }
+      await init();
+      await _plugin.cancel(id: sessionNotificationId);
+    } catch (e) {
+      debugPrint('NotificationService dismissSessionTimerNotification error: $e');
     }
   }
 }

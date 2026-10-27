@@ -7,6 +7,7 @@ import '../models/study_log.dart';
 import '../services/database_service.dart';
 import '../services/service_locator.dart';
 import 'courses_controller.dart';
+import 'ongoing_modules_controller.dart';
 import 'progress_controller.dart';
 
 /// Manages the spaced repetition ladder for individual [Topic] entities.
@@ -412,16 +413,67 @@ class TopicRevisionController extends ChangeNotifier {
     }
   }
 
-  /// Deletes a topic revision by its [topicId].
+  /// Deletes a topic revision by its [topicId] or revision [id].
   Future<void> deleteByTopicId(String topicId) async {
     if (topicId.isEmpty) return;
-    _topicRevisions = _topicRevisions.where((tr) => tr.topicId != topicId).toList();
+    _topicRevisions =
+        _topicRevisions.where((tr) => tr.topicId != topicId && tr.id != topicId).toList();
     notifyListeners();
 
     try {
       await _dbService.deleteTopicRevisionByTopicId(topicId);
     } catch (e) {
       debugPrint('Error deleting topic revision by topicId: $e');
+    }
+  }
+
+  /// Removes a topic from the revision schedule, ensures its state in SQLite
+  /// is marked [TopicStatus.completed], cleans up empty module revisions, and notifies controllers.
+  Future<void> removeTopicFromRevision(String topicId, {String? moduleId}) async {
+    if (topicId.isEmpty) return;
+
+    final tr = topicRevisionFor(topicId);
+    final resolvedModuleId = (moduleId != null && moduleId.isNotEmpty)
+        ? moduleId
+        : (tr?.moduleId ?? '');
+
+    // 1. Remove from in-memory list and SQLite topic_revisions
+    await deleteByTopicId(topicId);
+
+    // 2. Mark the Topic itself as completed in SQLite
+    try {
+      final topics = resolvedModuleId.isNotEmpty
+          ? await _dbService.getTopics(moduleId: resolvedModuleId)
+          : await _dbService.getAllTopics();
+      final existing = topics.where((t) => t.id == topicId).firstOrNull;
+      if (existing != null) {
+        final updated = existing.copyWith(
+          status: TopicStatus.completed,
+          completedAt: existing.completedAt ?? DateTime.now(),
+        );
+        await _dbService.updateTopic(updated);
+      }
+    } catch (e) {
+      debugPrint('Error marking topic completed on removal from revision: $e');
+    }
+
+    // 3. Clean up legacy module revisions if no topic revisions remain for this module
+    if (resolvedModuleId.isNotEmpty) {
+      final remaining = revisionsForModule(resolvedModuleId);
+      if (remaining.isEmpty) {
+        try {
+          await _dbService.deleteRevision('mod_rev_$resolvedModuleId');
+          await _dbService.deleteRevision(resolvedModuleId);
+        } catch (_) {}
+      }
+    }
+
+    // 4. Notify controllers so ongoing module details and progress update immediately
+    if (getIt.isRegistered<OngoingModulesController>()) {
+      unawaited(getIt<OngoingModulesController>().refresh());
+    }
+    if (getIt.isRegistered<ProgressController>()) {
+      unawaited(getIt<ProgressController>().refresh());
     }
   }
 

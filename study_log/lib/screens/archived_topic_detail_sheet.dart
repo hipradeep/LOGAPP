@@ -99,7 +99,7 @@ class ArchivedTopicDetailSheet extends StatelessWidget {
           constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(context).height * 0.45),
           child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
+            physics: const ClampingScrollPhysics(),
             child: hasDescription
                 ? Text(
                     topic.description,

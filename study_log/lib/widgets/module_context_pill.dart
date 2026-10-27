@@ -6,13 +6,16 @@ import '../theme/app_theme.dart';
 import '../utils/course_icon_util.dart';
 import 'app_spacers.dart';
 
-/// Reusable pastel pill displaying the module name with the course icon.
+/// Reusable pastel pill displaying the module name with the course icon,
+/// with optional breadcrumb navigation display (`[icon] Course Name > Module Name`).
 ///
-/// Matches the styling on [AddTopicScreen] and [ModuleDetailScreen].
+/// Matches the styling on [AddTopicScreen], [TopicDetailScreen], and [ModuleDetailScreen].
 class ModuleContextPill extends StatelessWidget {
   final String moduleTitle;
   final String? courseId;
   final String? courseTitle;
+  final bool showBreadcrumb;
+  final bool? showCard;
   final EdgeInsetsGeometry? padding;
 
   const ModuleContextPill({
@@ -20,6 +23,8 @@ class ModuleContextPill extends StatelessWidget {
     required this.moduleTitle,
     this.courseId,
     this.courseTitle,
+    this.showBreadcrumb = false,
+    this.showCard,
     this.padding,
   });
 
@@ -47,6 +52,69 @@ class ModuleContextPill extends StatelessWidget {
       fallback: Icons.auto_stories_rounded,
     );
 
+    final resolvedCourseTitle = courseTitle?.isNotEmpty == true
+        ? courseTitle!
+        : (course?.title ?? '');
+
+    final bool effectiveShowCard = showCard ?? !showBreadcrumb;
+
+    if (!effectiveShowCard) {
+      final Color courseColor = course?.colorValue != null
+          ? Color(course!.colorValue!)
+          : AppTheme.textSecondaryColor(context);
+
+      final breadcrumbStyle = TextStyle(
+        fontSize: 11.0,
+        fontWeight: FontWeight.w500,
+        color: AppTheme.textSecondaryColor(context),
+        letterSpacing: 0,
+      );
+
+      Widget plain = Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 5.0),
+                child: Icon(
+                  iconData,
+                  size: 13.0,
+                  color: courseColor,
+                ),
+              ),
+            ),
+            if (showBreadcrumb && resolvedCourseTitle.isNotEmpty) ...[
+              TextSpan(
+                text: resolvedCourseTitle,
+                style: breadcrumbStyle,
+              ),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 13.0,
+                    color: AppTheme.textMutedColor(context),
+                  ),
+                ),
+              ),
+            ],
+            TextSpan(
+              text: moduleTitle,
+              style: breadcrumbStyle,
+            ),
+          ],
+        ),
+      );
+
+      if (padding != null) {
+        plain = Padding(padding: padding!, child: plain);
+      }
+      return plain;
+    }
+
     final Color fgColor;
     final Color bgColor;
     final Color borderColor;
@@ -63,7 +131,7 @@ class ModuleContextPill extends StatelessWidget {
     }
 
     Widget pill = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.5),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8.0),
@@ -75,18 +143,44 @@ class ModuleContextPill extends StatelessWidget {
         children: [
           Icon(
             iconData,
-            size: 14,
+            size: 13.5,
             color: fgColor,
           ),
-          const HGapXs(),
+          if (showBreadcrumb && resolvedCourseTitle.isNotEmpty) ...[
+            const HGapXs(),
+            Flexible(
+              child: Text(
+                resolvedCourseTitle,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: fgColor,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3.5),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 13,
+                color: fgColor.withValues(alpha: 0.7),
+              ),
+            ),
+          ] else ...[
+            const HGapXs(),
+          ],
           Flexible(
             child: Text(
               moduleTitle,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w600,
                 color: fgColor,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

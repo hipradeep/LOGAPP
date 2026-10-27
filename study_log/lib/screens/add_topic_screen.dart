@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import '../controllers/courses_controller.dart';
+import '../controllers/ongoing_modules_controller.dart';
+import '../models/topic.dart';
+import '../services/database_service.dart';
+import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
-import '../widgets/module_context_pill.dart';
+import '../widgets/entity_detail_header.dart';
+import '../widgets/sheet_action_widgets.dart';
 import '../widgets/study_text_fields.dart';
-import '../services/database_service.dart';
-import '../services/service_locator.dart';
-import '../models/topic.dart';
-import '../controllers/ongoing_modules_controller.dart';
 
 /// Screen 9: Add Topic Screen matching the reference design:
 /// - Top bar with Back arrow, "Add Topic" title, and solid purple "Save" button
@@ -48,6 +50,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
   late final TextEditingController _descriptionController;
 
   late String _selectedModuleTitle;
+  late TopicDifficulty _difficulty;
   bool _isSaving = false;
 
   @override
@@ -56,6 +59,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
     _nameController = TextEditingController();
     _descriptionController = UrlHighlightEditingController();
     _selectedModuleTitle = widget.moduleTitle;
+    _difficulty = widget.topicToEdit?.difficulty ?? TopicDifficulty.medium;
     _descriptionController.addListener(_onDescriptionChanged);
 
     final editing = widget.topicToEdit;
@@ -75,6 +79,88 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
 
   void _onDescriptionChanged() {
     setState(() {});
+  }
+
+  static String _difficultyLabel(TopicDifficulty difficulty) {
+    switch (difficulty) {
+      case TopicDifficulty.low:
+        return 'Low';
+      case TopicDifficulty.medium:
+        return 'Mid';
+      case TopicDifficulty.hard:
+        return 'Hard';
+    }
+  }
+
+  static IconData _difficultyIcon(TopicDifficulty difficulty) {
+    switch (difficulty) {
+      case TopicDifficulty.low:
+        return Icons.trending_down_rounded;
+      case TopicDifficulty.medium:
+        return Icons.trending_flat_rounded;
+      case TopicDifficulty.hard:
+        return Icons.trending_up_rounded;
+    }
+  }
+
+  static String _difficultyHint(TopicDifficulty difficulty) {
+    switch (difficulty) {
+      case TopicDifficulty.low:
+        return 'Quick win, light effort';
+      case TopicDifficulty.medium:
+        return 'Balanced effort';
+      case TopicDifficulty.hard:
+        return 'Deep concentration required';
+    }
+  }
+
+  Future<void> _pickDifficulty() async {
+    final picked = await showModalBottomSheet<TopicDifficulty>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return SheetContainer(
+          children: [
+            const SheetHandleBar(),
+            const VGapSm(),
+            SheetHeader(
+              badge: SheetHeaderBadge(
+                backgroundColor: AppTheme.pastelPurple(ctx),
+                child: Icon(
+                  Icons.speed_rounded,
+                  color: AppTheme.pastelPurpleText(ctx),
+                  size: 20,
+                ),
+              ),
+              title: 'Difficulty',
+              subtitle: 'How hard does this topic feel?',
+            ),
+            const VGapSm(),
+            for (final level in TopicDifficulty.values)
+              SheetActionRow(
+                icon: _difficultyIcon(level),
+                title: _difficultyLabel(level),
+                subtitle: _difficultyHint(level),
+                trailing: level == _difficulty
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: AppTheme.primaryColor,
+                        size: 18,
+                      )
+                    : null,
+                onTap: () => Navigator.pop(ctx, level),
+              ),
+            const VGapSm(),
+            const SheetCancelButton(),
+          ],
+        );
+      },
+    );
+
+    if (picked != null && mounted) {
+      setState(() => _difficulty = picked);
+    }
   }
 
   void _handleBack() {
@@ -142,6 +228,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
           title: name,
           description: description,
           orderIndex: order,
+          difficulty: _difficulty,
         );
 
         await DatabaseService.instance.updateTopic(savedTopic);
@@ -157,6 +244,7 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
           status: TopicStatus.notStarted,
           description: description,
           orderIndex: order,
+          difficulty: _difficulty,
         );
 
         await DatabaseService.instance.addTopic(savedTopic);
@@ -199,6 +287,19 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
 
+    String resolvedCourse = widget.courseTitle;
+    if (resolvedCourse.isEmpty && widget.courseId.isNotEmpty && getIt.isRegistered<CoursesController>()) {
+      try {
+        final c = getIt<CoursesController>().courses.firstWhere((c) => c.id == widget.courseId);
+        resolvedCourse = c.title;
+      } catch (_) {}
+    }
+
+    String resolvedModule = _selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle;
+    if (resolvedModule.isEmpty && widget.moduleId.isNotEmpty && getIt.isRegistered<OngoingModulesController>()) {
+      resolvedModule = getIt<OngoingModulesController>().moduleTitleFor(widget.moduleId);
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.background(context),
       body: SafeArea(
@@ -216,39 +317,56 @@ class _AddTopicScreenState extends State<AddTopicScreen> {
                 ),
               ],
             ),
-            if ((_selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle).isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 6.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: ModuleContextPill(
-                    moduleTitle: _selectedModuleTitle.isNotEmpty ? _selectedModuleTitle : widget.moduleTitle,
-                    courseId: widget.courseId,
-                  ),
-                ),
-              ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
-                  top: 16,
+                  top: 8,
                   bottom: bottomSafe + 32,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    EntityDetailHeader(
+                      moduleTitle: resolvedModule,
+                      courseId: widget.courseId,
+                      courseTitle: resolvedCourse,
+                      horizontalPadding: 0.0,
+                    ),
+                    const VGapXs(),
                     UnderlineInputField(
-                      label: 'Topic Name',
+                      label: '',
                       controller: _nameController,
                       hintText: 'Enter topic name',
-                      isRequired: true,
                       minLines: 1,
                       maxLines: 4,
                       keyboardType: TextInputType.multiline,
+                      contentPadding: const EdgeInsets.only(top: 4, bottom: 10),
                     ),
-                    const VGapLg(),
+                    const VGapXs(),
+                    Wrap(
+                      spacing: AppTheme.spacingSm,
+                      runSpacing: AppTheme.spacingXs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: _pickDifficulty,
+                          child: DetailMetaChip(
+                            icon: Icons.speed_rounded,
+                            text: _difficultyLabel(_difficulty),
+                          ),
+                        ),
+                        DetailMetaChip(
+                          icon: Icons.calendar_today_rounded,
+                          text: EntityDetailHeader.formatDate(
+                            widget.topicToEdit?.updatedAt ?? DateTime.now(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const VGapMd(),
                     BorderlessDescriptionField.topic(
                       controller: _descriptionController,
                     ),

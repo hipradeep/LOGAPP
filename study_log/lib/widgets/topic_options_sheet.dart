@@ -29,6 +29,7 @@ class TopicOptionsSheet extends StatelessWidget {
   final String courseTitle;
   final String courseId;
   final String moduleId;
+  final bool showRemoveFromRevision;
   final VoidCallback? onEdit;
   final VoidCallback? onOrderTopic;
   final VoidCallback? onDuplicate;
@@ -42,6 +43,7 @@ class TopicOptionsSheet extends StatelessWidget {
     this.courseTitle = '',
     this.courseId = '',
     this.moduleId = '',
+    this.showRemoveFromRevision = false,
     this.onEdit,
     this.onOrderTopic,
     this.onDuplicate,
@@ -56,6 +58,8 @@ class TopicOptionsSheet extends StatelessWidget {
     String courseTitle = '',
     String courseId = '',
     String moduleId = '',
+    bool showRemoveFromRevision = false,
+    VoidCallback? onRevisionChanged,
     VoidCallback? onEdit,
     VoidCallback? onOrderTopic,
     VoidCallback? onDuplicate,
@@ -72,6 +76,7 @@ class TopicOptionsSheet extends StatelessWidget {
         courseTitle: courseTitle,
         courseId: courseId,
         moduleId: moduleId,
+        showRemoveFromRevision: showRemoveFromRevision,
         onEdit: onEdit,
         onOrderTopic: onOrderTopic,
         onDuplicate: onDuplicate,
@@ -102,12 +107,15 @@ class TopicOptionsSheet extends StatelessWidget {
           courseId: courseId.isNotEmpty ? courseId : topic.courseId,
           moduleId: moduleId.isNotEmpty ? moduleId : topic.moduleId,
         );
+        onRevisionChanged?.call();
         break;
       case TopicOptionAction.removeFromRevision:
         await _handleRemoveFromRevision(context, topic: topic);
+        onRevisionChanged?.call();
         break;
       case TopicOptionAction.resetRevision:
         await _handleResetRevision(context, topic: topic);
+        onRevisionChanged?.call();
         break;
       case TopicOptionAction.delete:
         if (onDelete != null) {
@@ -188,11 +196,14 @@ class TopicOptionsSheet extends StatelessWidget {
 
     if (!getIt.isRegistered<TopicRevisionController>()) return;
     try {
-      await getIt<TopicRevisionController>().deleteByTopicId(topic.id);
+      await getIt<TopicRevisionController>().removeTopicFromRevision(
+        topic.id,
+        moduleId: topic.moduleId,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('"${topic.title}" removed from revision schedule'),
+            content: Text('"${topic.title}" removed from revision (marked completed)'),
             backgroundColor: AppTheme.primaryColor,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -282,16 +293,18 @@ class TopicOptionsSheet extends StatelessWidget {
           subtitle: subtitle,
         ),
         const VGapSm(),
-        SheetActionRow(
-          icon: Icons.edit_outlined,
-          title: 'Edit Topic',
-          onTap: () => Navigator.pop(context, TopicOptionAction.edit),
-        ),
-        SheetActionRow(
-          icon: Icons.reorder_rounded,
-          title: 'Order Topic',
-          onTap: () => Navigator.pop(context, TopicOptionAction.order),
-        ),
+        if (onEdit != null)
+          SheetActionRow(
+            icon: Icons.edit_outlined,
+            title: 'Edit Topic',
+            onTap: () => Navigator.pop(context, TopicOptionAction.edit),
+          ),
+        if (onOrderTopic != null)
+          SheetActionRow(
+            icon: Icons.reorder_rounded,
+            title: 'Order Topic',
+            onTap: () => Navigator.pop(context, TopicOptionAction.order),
+          ),
         if (topicRev == null) ...[
           SheetActionRow(
             icon: Icons.replay_rounded,
@@ -310,17 +323,20 @@ class TopicOptionsSheet extends StatelessWidget {
             title: 'Reset Revision Ladder',
             onTap: () => Navigator.pop(context, TopicOptionAction.resetRevision),
           ),
-          SheetActionRow(
-            icon: Icons.bookmark_remove_outlined,
-            title: 'Remove from Revision',
-            onTap: () => Navigator.pop(context, TopicOptionAction.removeFromRevision),
+          if (showRemoveFromRevision)
+            SheetActionRow(
+              icon: Icons.bookmark_remove_outlined,
+              title: 'Remove from Revision',
+              onTap: () => Navigator.pop(context, TopicOptionAction.removeFromRevision),
+            ),
+        ],
+        if (onDelete != null) ...[
+          const VGapXs(),
+          SheetDestructiveButton(
+            title: 'Delete Topic',
+            onTap: () => Navigator.pop(context, TopicOptionAction.delete),
           ),
         ],
-        const VGapXs(),
-        SheetDestructiveButton(
-          title: 'Delete Topic',
-          onTap: () => Navigator.pop(context, TopicOptionAction.delete),
-        ),
         const VGapSm(),
         const SheetCancelButton(),
       ],

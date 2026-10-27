@@ -15,16 +15,18 @@ class RecentActivityCard extends StatefulWidget {
   final bool showViewAll;
   final bool showHeader;
   final String title;
+  final bool showConsecutiveDays;
 
   const RecentActivityCard({
     super.key,
     required this.controller,
-    this.maxDays = 4,
+    this.maxDays = 7,
     this.onViewAll,
     this.onItemTap,
     this.showViewAll = true,
     this.showHeader = true,
     this.title = 'Recent Activity',
+    this.showConsecutiveDays = false,
   });
 
   @override
@@ -51,8 +53,27 @@ class RecentActivityCardState extends State<RecentActivityCard> {
 
   @override
   Widget build(BuildContext context) {
-    final allRecent = widget.controller.recentActivities;
-    final displayItems = _showAll ? allRecent : allRecent.take(widget.maxDays).toList();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final List<DailyProgressActivity> displayItems;
+    if (widget.showConsecutiveDays) {
+      displayItems = List.generate(widget.maxDays, (i) {
+        final d = DateTime(today.year, today.month, today.day - i);
+        return widget.controller.activitiesInRange.firstWhere(
+          (a) => a.date.year == d.year && a.date.month == d.month && a.date.day == d.day,
+          orElse: () => DailyProgressActivity(
+            date: d,
+            topicsFinished: 0,
+            revisionsDone: 0,
+            studyMinutes: 0,
+          ),
+        );
+      });
+    } else {
+      final allRecent = widget.controller.recentActivities;
+      displayItems = _showAll ? allRecent : allRecent.take(widget.maxDays).toList();
+    }
 
     return Container(
       width: double.infinity,
@@ -151,12 +172,12 @@ class RecentActivityCardState extends State<RecentActivityCard> {
                   onTap: () {
                     if (widget.onItemTap != null) {
                       widget.onItemTap!(item);
-                    } else if (widget.onViewAll != null) {
-                      widget.onViewAll!();
                     } else {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const RecentActivityScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => RecentActivityScreen(initialDate: item.date),
+                        ),
                       );
                     }
                   },

@@ -497,8 +497,7 @@ class _UploadJsonScreenState extends State<UploadJsonScreen> {
             ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics()),
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,

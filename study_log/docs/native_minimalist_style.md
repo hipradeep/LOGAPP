@@ -128,38 +128,38 @@ Rationale: M3 defaults (card 12, button 20, chip 8) are already native and compa
 ## 7. Refactor Roadmap
 
 ### Phase 1 — Tokens & ThemeData (`lib/theme/app_theme.dart`)
-- [ ] Remove `google_fonts`; rebuild `textTheme` from system defaults with the
+- [x] Remove `google_fonts`; rebuild `textTheme` from system defaults with the
       compact scale in §2; delete Outfit/Inter getters (map to M3 roles).
-- [ ] Update radii: card 12, default 12, small 8, pill 20; gutters 16; card pad 12;
+- [x] Update radii: card 12, default 12, small 8, pill 20; gutters 16; card pad 12;
       button height 40.
-- [ ] `pageTransitionsTheme` → `ZoomPageTransitionsBuilder`.
-- [ ] Add `navigationBarTheme`, restyle `elevatedButtonTheme`/`filledButtonTheme`
+- [x] `pageTransitionsTheme` → `ZoomPageTransitionsBuilder`.
+- [x] Add `navigationBarTheme`, restyle `elevatedButtonTheme`/`filledButtonTheme`
       to M3 defaults; `dialogTheme` radius 16; `bottomSheetTheme` radius 16.
-- [ ] Update `revision_level_palette.dart` callers to small-dot rendering.
-- [ ] Remove `google_fonts` from `pubspec.yaml`.
+- [x] Update `revision_level_palette.dart` callers to small-dot rendering.
+- [x] Remove `google_fonts` from `pubspec.yaml`.
 
 ### Phase 2 — Shared components
-- [ ] Restyle `custom_app_bar`, `tab_header`, `pill_button`, `add_pill_button`,
+- [x] Restyle `custom_app_bar`, `tab_header`, `pill_button`, `add_pill_button`,
       `app_empty_state`, `compact_list_item`, `sheet_action_widgets`,
       `study_confirmation_dialog`, `study_text_fields` to the new tokens.
-- [ ] Replace `_StudyBottomNav` with M3 `NavigationBar` in `main_navigation_screen`.
-- [ ] Introduce shared FAB (replaces 4 variants).
+- [x] Replace `_StudyBottomNav` with M3 `NavigationBar` in `main_navigation_screen`.
+- [x] Introduce shared FAB (`AppFab`, replaces 4 variants).
 
 ### Phase 3 — Screens (adopt shared components + strip decorative styling)
-- [ ] **P0:** `upload_json_screen` (theme-blind palette), `my_progress_screen`
+- [x] **P0:** `upload_json_screen` (theme-blind palette), `my_progress_screen`
       (second palette + `isDark` branches).
-- [ ] **P1:** dedupe `revision_completion_dialog` → `RevisionLevelPalette`;
+- [x] **P1:** dedupe `revision_completion_dialog` → `RevisionLevelPalette`;
       dedupe settings/notification pastel pairs → tokens; `0xFFECEEF6` track → token;
       8 empty-state clones → `AppEmptyState`; inline `AlertDialog`s → shared dialog.
-- [ ] **P2:** remove confetti/gradients; `BouncingScrollPhysics` → default;
+- [x] **P2:** remove confetti/gradients; `BouncingScrollPhysics` → default;
       raw `SizedBox` → spacers; screen-level `TextStyle` → `textTheme`.
 
 ### Phase 4 — Cleanup & verify
-- [ ] Delete dead widgets (`activity_card`, `activity_list_tile`, `full_screen_page`,
+- [x] Delete dead widgets (`activity_card`, `activity_list_tile`, `full_screen_page`,
       `topic_status_label`, `topic_progress_header`, `edit_course_sheet`,
       `profile_sheet`, `add_module_sheet`, `revision_completion_dialog`).
-- [ ] `flutter analyze` → 0 issues.
-- [ ] `flutter build apk` (final phase only).
+- [x] `flutter analyze` → 0 issues.
+- [x] `flutter build apk` (final phase only).
 
 ---
 

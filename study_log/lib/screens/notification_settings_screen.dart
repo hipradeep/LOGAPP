@@ -29,9 +29,7 @@ class NotificationSettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
                 child: ListenableBuilder(
                   listenable: controller,

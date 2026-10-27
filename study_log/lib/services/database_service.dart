@@ -161,6 +161,18 @@ class DatabaseService {
             "UPDATE topic_revisions SET levelStatus = 'notStarted' WHERE levelStatus = 'inProgress';",
           );
         } catch (_) {}
+        try {
+          await db.execute(
+            "ALTER TABLE topics ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium';",
+          );
+        } catch (_) {
+          // Column already exists
+        }
+        try {
+          await db.execute('ALTER TABLE topics ADD COLUMN updatedAt TEXT;');
+        } catch (_) {
+          // Column already exists
+        }
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_topicId ON topic_revisions(topicId);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_due ON topic_revisions(nextRevisionAt, status);');
         await db.execute('CREATE INDEX IF NOT EXISTS idx_topic_revisions_courseId ON topic_revisions(courseId);');
@@ -288,7 +300,9 @@ class DatabaseService {
         orderIndex    INTEGER NOT NULL DEFAULT 0,
         iconCodePoint INTEGER,
         colorValue    INTEGER,
+        difficulty    TEXT NOT NULL DEFAULT 'medium',
         completedAt   TEXT,
+        updatedAt     TEXT,
         FOREIGN KEY (moduleId) REFERENCES modules(id) ON DELETE CASCADE
       );
     ''');
@@ -814,33 +828,35 @@ class DatabaseService {
 
   Future<void> addTopic(Topic topic) async {
     final db = await database;
+    final stamped = topic.copyWith(updatedAt: DateTime.now());
     await db.insert(
       'topics',
-      topic.toMap(),
+      stamped.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    _getTopicController(topic.moduleId)
-        .add(await getTopics(moduleId: topic.moduleId));
+    _getTopicController(stamped.moduleId)
+        .add(await getTopics(moduleId: stamped.moduleId));
     _notifyChange('topics');
   }
 
   Future<void> updateTopic(Topic topic) async {
     final db = await database;
+    final stamped = topic.copyWith(updatedAt: DateTime.now());
     final count = await db.update(
       'topics',
-      topic.toMap(),
+      stamped.toMap(),
       where: 'id = ?',
-      whereArgs: [topic.id],
+      whereArgs: [stamped.id],
     );
     if (count == 0) {
       await db.insert(
         'topics',
-        topic.toMap(),
+        stamped.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
-    _getTopicController(topic.moduleId)
-        .add(await getTopics(moduleId: topic.moduleId));
+    _getTopicController(stamped.moduleId)
+        .add(await getTopics(moduleId: stamped.moduleId));
     _notifyChange('topics');
   }
 
@@ -1241,8 +1257,8 @@ class DatabaseService {
     final db = await database;
     await db.delete(
       'topic_revisions',
-      where: 'topicId = ?',
-      whereArgs: [topicId],
+      where: 'topicId = ? OR id = ?',
+      whereArgs: [topicId, topicId],
     );
     _topicRevisionsStreamController.add(await getTopicRevisions());
     _notifyChange('topic_revisions');
@@ -2032,6 +2048,7 @@ class DatabaseService {
   Future<void> reloadAllStreams() async {
     _coursesStreamController.add(await getCourses());
     _revisionsStreamController.add(await getRevisions());
+    _topicRevisionsStreamController.add(await getTopicRevisions());
     _studyLogsStreamController.add(await getStudyLogs());
     _todosStreamController.add(await getTodos());
     _bookmarksStreamController.add(await getBookmarks());

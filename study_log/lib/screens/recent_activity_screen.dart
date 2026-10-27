@@ -36,7 +36,12 @@ class DayActivityItem {
 /// - Detailed list of study log entries specifically for the selected date
 /// - Adheres strictly to [optimize.md] and [aa-rules.md]
 class RecentActivityScreen extends StatefulWidget {
-  const RecentActivityScreen({super.key});
+  final DateTime? initialDate;
+
+  const RecentActivityScreen({
+    super.key,
+    this.initialDate,
+  });
 
   @override
   State<RecentActivityScreen> createState() => _RecentActivityScreenState();
@@ -52,11 +57,17 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    final now = widget.initialDate ?? DateTime.now();
     _selectedDate = DateTime(now.year, now.month, now.day);
     final days = _getCalendarDays();
     final index = days.indexWhere((d) => _isSameDay(d, _selectedDate));
-    final initialOffset = index == days.length - 1 ? 999999.0 : (index * 60.0);
+    final double initialOffset;
+    if (index == -1 || index == days.length - 1) {
+      initialOffset = 999999.0;
+    } else {
+      final centerOffset = (16.0 + index * 60.0 + 26.0) - 195.0;
+      initialOffset = centerOffset > 0 ? centerOffset : 0.0;
+    }
     _dateStripController = ScrollController(initialScrollOffset: initialOffset);
     _progressController = getIt<ProgressController>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -354,7 +365,7 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
 
   void _scrollToSelectedDate([bool animate = true]) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_dateStripController.hasClients) return;
+      if (!mounted || !_dateStripController.hasClients) return;
       final days = _getCalendarDays();
       final index = days.indexWhere((d) => _isSameDay(d, _selectedDate));
       if (index == -1) return;
@@ -393,12 +404,14 @@ class _RecentActivityScreenState extends State<RecentActivityScreen> {
   List<DateTime> _getCalendarDays() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    DateTime start = today.subtract(const Duration(days: 30));
+    DateTime start = DateTime(today.year, today.month, today.day - 30);
     if (_selectedDate.isBefore(start)) {
       start = DateTime(_selectedDate.year, _selectedDate.month, 1);
     }
     final int count = today.difference(start).inDays + 1;
-    return List<DateTime>.generate(count, (i) => start.add(Duration(days: i)));
+    return List<DateTime>.generate(count, (i) {
+      return DateTime(start.year, start.month, start.day + i);
+    });
   }
 
   Set<DateTime> _getActiveDates() {
@@ -621,7 +634,7 @@ class _CalendarDateStrip extends StatelessWidget {
           child: ListView.separated(
             controller: scrollController,
             scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
+            physics: const ClampingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: days.length,
             separatorBuilder: (_, _) => const HGapSm(),
@@ -783,7 +796,7 @@ class _RecentActivityBody extends StatelessWidget {
       onRefresh: onRefresh,
       color: AppTheme.primaryColor,
       child: ListView(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPadding),
         children: [
           _SelectedDateSummaryCard(

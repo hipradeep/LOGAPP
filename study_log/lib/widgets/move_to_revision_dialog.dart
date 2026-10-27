@@ -253,52 +253,18 @@ class _StudyCelebrationBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 76,
-      height: 54,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Positioned(top: 2, left: 12, child: _Dot(color: Color(0xFF42A5F5), size: 5)),
-          const Positioned(top: 0, right: 16, child: _Dot(color: Color(0xFFFF7043), size: 5)),
-          const Positioned(top: 10, right: 4, child: _Dot(color: Color(0xFF7C4DFF), size: 4)),
-          const Positioned(bottom: 4, left: 8, child: _Dot(color: Color(0xFFFF5252), size: 5)),
-          const Positioned(bottom: 2, right: 10, child: _Dot(color: Color(0xFF26A69A), size: 4)),
-          const Positioned(top: 0, left: 34, child: _Dot(color: Color(0xFFFFCA28), size: 4)),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: AppTheme.successColor,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.check_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Dot extends StatelessWidget {
-  final Color color;
-  final double size;
-
-  const _Dot({required this.color, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        color: AppTheme.successColor,
         shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.check_rounded,
+        color: Colors.white,
+        size: 26,
       ),
     );
   }

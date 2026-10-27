@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_spacers.dart';
 import '../services/service_locator.dart';
 import '../controllers/revision_controller.dart';
 import '../controllers/topic_revision_controller.dart';
@@ -114,6 +113,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             builder: (_) => BookmarksScreen(highlightBookmarkId: payload.targetId),
           ),
         );
+      case 'open_session':
+        // SessionTimerScreen is already top-of-stack; resuming brings it into view
         break;
       default:
         _onTabSelected(0);
@@ -248,117 +249,41 @@ class _StudyBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
-
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         border: Border(
-          top: BorderSide(color: AppTheme.borderColor(context), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.shadowColor(context),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+          top: BorderSide(
+            color: AppTheme.borderColor(context),
+            width: 0.8,
           ),
-        ],
+        ),
       ),
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: bottomSafe > 0 ? bottomSafe : 8,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _NavItem(
-            index: 0,
-            currentIndex: currentIndex,
+      child: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: onTap,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
             label: 'Home',
-            selectedIcon: Icons.home_rounded,
-            unselectedIcon: Icons.home_outlined,
-            onTap: onTap,
           ),
-          _NavItem(
-            index: 1,
-            currentIndex: currentIndex,
+          NavigationDestination(
+            icon: Icon(Icons.sync_outlined),
+            selectedIcon: Icon(Icons.sync_rounded),
             label: 'Revision',
-            selectedIcon: Icons.sync_rounded,
-            unselectedIcon: Icons.sync_outlined,
-            onTap: onTap,
           ),
-          _NavItem(
-            index: 2,
-            currentIndex: currentIndex,
+          NavigationDestination(
+            icon: Icon(Icons.task_alt_outlined),
+            selectedIcon: Icon(Icons.task_alt_rounded),
             label: '#TODO',
-            selectedIcon: Icons.task_alt_rounded,
-            unselectedIcon: Icons.task_alt_outlined,
-            onTap: onTap,
           ),
-          _NavItem(
-            index: 3,
-            currentIndex: currentIndex,
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
             label: 'Profile',
-            selectedIcon: Icons.person_rounded,
-            unselectedIcon: Icons.person_outline_rounded,
-            onTap: onTap,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final int index;
-  final int currentIndex;
-  final String label;
-  final IconData selectedIcon;
-  final IconData unselectedIcon;
-  final ValueChanged<int> onTap;
-
-  const _NavItem({
-    required this.index,
-    required this.currentIndex,
-    required this.label,
-    required this.selectedIcon,
-    required this.unselectedIcon,
-    required this.onTap,
-  });
-
-  void _handleTap() => onTap(index);
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = index == currentIndex;
-    final color = isSelected ? AppTheme.bnbActiveColor : AppTheme.bnbInactiveColor;
-
-    return InkWell(
-      onTap: _handleTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? selectedIcon : unselectedIcon,
-              color: color,
-              size: 24,
-            ),
-            const VGapXs(),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

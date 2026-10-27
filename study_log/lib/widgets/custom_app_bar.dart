@@ -91,9 +91,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                     textAlign: centerTitle ? TextAlign.center : TextAlign.start,
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimaryColor(context),
-                      letterSpacing: -0.2,
+                      letterSpacing: 0,
                     ),
                   ),
                 )

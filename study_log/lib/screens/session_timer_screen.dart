@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_spacers.dart';
 import '../models/topic.dart';
@@ -12,6 +13,9 @@ import '../controllers/revision_controller.dart';
 import '../controllers/topic_revision_controller.dart';
 import '../controllers/progress_controller.dart';
 import '../widgets/sheet_action_widgets.dart';
+import '../widgets/phone_lock_settings_sheet.dart';
+import '../widgets/timed_lock_overlay_screen.dart';
+import '../services/notification_service.dart';
 
 /// Running Study / Revision Session screen adhering to Screens 3, 4, 5, 8, 9, 10
 /// from the design specification.
@@ -38,8 +42,8 @@ class SessionTimerScreen extends StatefulWidget {
   final int initialTopicIndex;
   final bool trackSession;
   final bool allowPause;
-  final bool isRestrictMode;
   final bool allowReset;
+  final PhoneLockConfig lockConfig;
 
   const SessionTimerScreen({
     super.key,
@@ -57,22 +61,26 @@ class SessionTimerScreen extends StatefulWidget {
     this.initialTopicIndex = 0,
     this.trackSession = true,
     this.allowPause = true,
-    this.isRestrictMode = false,
     this.allowReset = true,
+    this.lockConfig = const PhoneLockConfig(),
   });
 
   @override
   State<SessionTimerScreen> createState() => _SessionTimerScreenState();
 }
 
-class _SessionTimerScreenState extends State<SessionTimerScreen> {
+class _SessionTimerScreenState extends State<SessionTimerScreen> with WidgetsBindingObserver {
   late int _totalSeconds;
   late final ValueNotifier<int> _secondsRemainingNotifier;
   late final ValueNotifier<bool> _isRunningNotifier;
   late final ValueNotifier<bool> _isCompletedNotifier;
+  late final ValueNotifier<bool> _isLockOverlayActiveNotifier;
 
   Timer? _sessionTimer;
   int _elapsedSeconds = 0;
+  DateTime? _backgroundEnterTime;
+  StreamSubscription<String>? _actionSubscription;
+  bool _isInBackground = false;
 
   // Active topics list
   late List<Topic> _topics;
@@ -82,10 +90,17 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _totalSeconds = widget.durationMinutes * 60;
     _secondsRemainingNotifier = ValueNotifier<int>(_totalSeconds);
     _isRunningNotifier = ValueNotifier<bool>(true);
     _isCompletedNotifier = ValueNotifier<bool>(false);
+    _isLockOverlayActiveNotifier = ValueNotifier<bool>(widget.lockConfig.isLockModeEnabled);
+
+    if (getIt.isRegistered<NotificationService>()) {
+      _actionSubscription = getIt<NotificationService>().onActionTapped.listen(_handleNotificationAction);
+    }
 
     _topics = List<Topic>.from(widget.topics);
     _revisionTopics = widget.revisionTopics != null
@@ -126,11 +141,105 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _actionSubscription?.cancel();
+    if (getIt.isRegistered<NotificationService>()) {
+      unawaited(getIt<NotificationService>().dismissSessionTimerNotification());
+    }
     _sessionTimer?.cancel();
     _secondsRemainingNotifier.dispose();
     _isRunningNotifier.dispose();
     _isCompletedNotifier.dispose();
+    _isLockOverlayActiveNotifier.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _isInBackground = true;
+      _backgroundEnterTime = DateTime.now();
+      if (!_isCompletedNotifier.value) {
+        _showBackgroundNotification();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      _isInBackground = false;
+      if (_backgroundEnterTime != null && _isRunningNotifier.value && !_isCompletedNotifier.value) {
+        final elapsedInBackground = DateTime.now().difference(_backgroundEnterTime!).inSeconds;
+        _backgroundEnterTime = null;
+        if (elapsedInBackground > 0) {
+          _elapsedSeconds += elapsedInBackground;
+          final remaining = _secondsRemainingNotifier.value - elapsedInBackground;
+          if (remaining <= 0) {
+            _secondsRemainingNotifier.value = 0;
+            _sessionTimer?.cancel();
+            _isRunningNotifier.value = false;
+            _isCompletedNotifier.value = true;
+            _onSessionFinished();
+          } else {
+            _secondsRemainingNotifier.value = remaining;
+          }
+        }
+      } else {
+        _backgroundEnterTime = null;
+      }
+      if (getIt.isRegistered<NotificationService>()) {
+        unawaited(getIt<NotificationService>().dismissSessionTimerNotification());
+      }
+    }
+  }
+
+  void _handleNotificationAction(String action) {
+    if (!mounted || _isCompletedNotifier.value) return;
+    if (action == 'pause_session') {
+      _pauseTimer();
+      _showBackgroundNotification();
+    } else if (action == 'resume_session') {
+      _startTimer();
+      _showBackgroundNotification();
+    } else if (action == 'stop_session') {
+      _sessionTimer?.cancel();
+      _isRunningNotifier.value = false;
+      _isCompletedNotifier.value = true;
+      if (getIt.isRegistered<NotificationService>()) {
+        unawaited(getIt<NotificationService>().dismissSessionTimerNotification());
+      }
+      if (mounted) {
+        Navigator.of(context).maybePop();
+      }
+    }
+  }
+
+  void _showBackgroundNotification() {
+    if (!getIt.isRegistered<NotificationService>() || _isCompletedNotifier.value) return;
+    final notifService = getIt<NotificationService>();
+    final prefix = widget.isRevision ? 'Revision' : 'Study';
+    final rawTopic = _currentTopicTitle.trim();
+    final topicName = rawTopic.isNotEmpty
+        ? rawTopic
+        : (widget.moduleTitle.trim().isNotEmpty ? widget.moduleTitle.trim() : 'Session');
+    final displayTitle = '$prefix: $topicName';
+
+    if (_isRunningNotifier.value && _secondsRemainingNotifier.value > 0) {
+      unawaited(notifService.showSessionTimerNotification(
+        title: displayTitle,
+        subtitle: '',
+        remainingSeconds: _secondsRemainingNotifier.value,
+        targetId: widget.moduleId,
+      ));
+    } else {
+      unawaited(notifService.showSessionPausedNotification(
+        title: displayTitle,
+        subtitle: '',
+        remainingSeconds: _secondsRemainingNotifier.value,
+        targetId: widget.moduleId,
+      ));
+    }
+  }
+
+  void _minimizeSession() {
+    _showBackgroundNotification();
+    const MethodChannel('com.logapp.studylog/share').invokeMethod('sendToBackground');
   }
 
   void _startTimer() {
@@ -156,6 +265,9 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   void _pauseTimer() {
     _sessionTimer?.cancel();
     _isRunningNotifier.value = false;
+    if (_isInBackground) {
+      _showBackgroundNotification();
+    }
   }
 
   void _togglePauseResume() {
@@ -164,10 +276,16 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     } else {
       _startTimer();
     }
+    if (_isInBackground) {
+      _showBackgroundNotification();
+    }
   }
 
-  bool get _canPause => widget.allowPause && !widget.isRestrictMode;
-  bool get _canReset => widget.allowReset && !widget.isRestrictMode;
+  bool get _isLockModeActive =>
+      widget.lockConfig.isLockModeEnabled && _isLockOverlayActiveNotifier.value;
+
+  bool get _canPause => widget.allowPause && !_isLockModeActive;
+  bool get _canReset => widget.allowReset && !_isLockModeActive;
 
   int get _totalTopicsCount {
     return (widget.isRevision && _revisionTopics.isNotEmpty)
@@ -529,6 +647,16 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       }
     }
 
+    if (getIt.isRegistered<NotificationService>()) {
+      unawaited(getIt<NotificationService>().dismissSessionTimerNotification());
+      if (_isInBackground) {
+        unawaited(getIt<NotificationService>().showSessionCompleteNotification(
+          title: '${widget.title} Completed! 🎉',
+          body: 'You focused for $elapsedMinutes mins on $_currentTopicTitle.',
+        ));
+      }
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -541,14 +669,16 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     }
   }
 
+  Future<void> _handleEmergencyLockExit() async {
+    await _handleExitSession();
+  }
+
   Future<void> _handleExitSession() async {
     _pauseTimer();
 
-    final isStrict = widget.isRestrictMode;
-
     final confirm = await showDialog<bool>(
       context: context,
-      barrierDismissible: !isStrict,
+      barrierDismissible: true,
       builder: (ctx) => Dialog(
         backgroundColor: AppTheme.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -560,15 +690,13 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                isStrict
-                    ? Icons.lock_outline_rounded
-                    : Icons.pause_circle_outline_rounded,
+                Icons.pause_circle_outline_rounded,
                 size: 38,
-                color: isStrict ? AppTheme.pastelOrangeText(context) : AppTheme.primaryColor,
+                color: AppTheme.primaryColor,
               ),
               const VGapMd(),
               Text(
-                isStrict ? 'Strict Mode Active' : 'Exit Session?',
+                'Exit Session?',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
@@ -578,9 +706,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
               ),
               const VGapXs(),
               Text(
-                isStrict
-                    ? 'Strict focus discipline is active. Are you sure you want to break focus and quit the session early?'
-                    : 'End this session?\nCompleted progress will be saved.',
+                'End this session?\nCompleted progress will be saved.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -600,19 +726,17 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                           _startTimer();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isStrict
-                              ? AppTheme.primaryColor
-                              : AppTheme.pastelIndigo(context),
-                          foregroundColor: isStrict ? Colors.white : AppTheme.primaryColor,
+                          backgroundColor: AppTheme.pastelIndigo(context),
+                          foregroundColor: AppTheme.primaryColor,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                         ),
-                        child: Text(
-                          isStrict ? 'Keep Focusing' : 'Resume',
-                          style: const TextStyle(
+                        child: const Text(
+                          'Resume',
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
@@ -627,21 +751,17 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(ctx).pop(true),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isStrict
-                              ? AppTheme.surfaceVariant(context)
-                              : AppTheme.primaryColor,
-                          foregroundColor: isStrict
-                              ? AppTheme.errorColor
-                              : Colors.white,
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                         ),
-                        child: Text(
-                          isStrict ? 'Quit Session' : 'End & Exit',
-                          style: const TextStyle(
+                        child: const Text(
+                          'End & Exit',
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
@@ -658,6 +778,7 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     );
 
     if (confirm == true && mounted) {
+      _isLockOverlayActiveNotifier.value = false;
       if (_elapsedSeconds >= 60 && widget.trackSession) {
         await _onSessionFinished();
       }
@@ -694,6 +815,10 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
+          if (widget.lockConfig.isLockModeEnabled) {
+            // Silently consume back button in Lock Mode without alert
+            return;
+          }
           _handleExitSession();
         }
       },
@@ -756,6 +881,33 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                 right: 16,
                 child: _buildBottomControls(context),
               ),
+
+              // Layer 4: Zen Lock Mode Overlay (Full-screen timed phone lock)
+              if (widget.lockConfig.isLockModeEnabled)
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isLockOverlayActiveNotifier,
+                  builder: (context, isLocked, _) {
+                    if (!isLocked) return const SizedBox.shrink();
+                    return Positioned.fill(
+                      child: TimedLockOverlayScreen(
+                        title: widget.isRevision ? 'Revision Session' : 'Study Session',
+                        subtitle: _currentTopicTitle,
+                        breadcrumbs: _breadcrumbs,
+                        currentTopicIndex: _currentTopicIndex,
+                        currentTopicTitle: _currentTopicTitle,
+                        completedTopicsCount: _completedTopicsCount,
+                        totalTopicsCount: _totalTopicsCount,
+                        durationSeconds: _totalSeconds,
+                        secondsRemainingNotifier: _secondsRemainingNotifier,
+                        lockConfig: widget.lockConfig,
+                        onEmergencyExit: _handleEmergencyLockExit,
+                        onSessionComplete: () {
+                          _isLockOverlayActiveNotifier.value = false;
+                        },
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
         ),
@@ -769,30 +921,12 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
       _totalSeconds += addedSeconds;
     });
     _secondsRemainingNotifier.value += addedSeconds;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added +$minutes minutes to session'),
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _resetTimer() {
     _pauseTimer();
     _secondsRemainingNotifier.value = _totalSeconds;
     _startTimer();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Timer reset to initial duration'),
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _openSessionOptionsSheet() {
@@ -807,15 +941,15 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
             const VGapMd(),
             SheetHeader(
               badge: SheetHeaderBadge(
-                backgroundColor: widget.isRestrictMode
-                    ? AppTheme.pastelOrange(context)
+                backgroundColor: widget.lockConfig.isLockModeEnabled
+                    ? const Color(0xFFDC2626).withValues(alpha: 0.15)
                     : AppTheme.pastelIndigo(context),
                 child: Icon(
-                  widget.isRestrictMode
-                      ? Icons.shield_outlined
+                  widget.lockConfig.isLockModeEnabled
+                      ? Icons.lock_clock_rounded
                       : (widget.isRevision ? Icons.sync_rounded : Icons.timer_outlined),
-                  color: widget.isRestrictMode
-                      ? AppTheme.pastelOrangeText(context)
+                  color: widget.lockConfig.isLockModeEnabled
+                      ? const Color(0xFFDC2626)
                       : AppTheme.primaryColor,
                   size: 24,
                 ),
@@ -824,30 +958,30 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
               subtitle: '${widget.moduleTitle} • ${_formatTime(_secondsRemainingNotifier.value)} remaining',
             ),
             const VGapMd(),
-            if (widget.isRestrictMode) ...[
+            if (widget.lockConfig.isLockModeEnabled) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
-                  color: AppTheme.pastelOrange(context),
+                  color: const Color(0xFFDC2626).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.pastelOrangeBorder(context)),
+                  border: Border.all(color: const Color(0xFFDC2626).withValues(alpha: 0.25)),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
                     Icon(
-                      Icons.lock_outline_rounded,
+                      Icons.screen_lock_portrait_rounded,
                       size: 15,
-                      color: AppTheme.pastelOrangeText(context),
+                      color: Color(0xFFDC2626),
                     ),
-                    const HGapSm(),
+                    HGapSm(),
                     Expanded(
                       child: Text(
-                        'Strict Mode active: pause & reset are locked.',
+                        'Lock Mode active: device is locked & navigation pinned.',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.pastelOrangeText(context),
+                          color: Color(0xFFDC2626),
                         ),
                       ),
                     ),
@@ -1037,8 +1171,19 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Balanced spacer to keep title centered opposite the settings button
-        const SizedBox(width: 40),
+        // Minimize Button to send to background and show custom notification
+        IconButton(
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 26,
+          ),
+          color: widget.lockConfig.isLockModeEnabled
+              ? const Color(0xFFDC2626)
+              : AppTheme.textSecondaryColor(context),
+          tooltip: 'Minimize Session',
+          visualDensity: VisualDensity.compact,
+          onPressed: _minimizeSession,
+        ),
 
         // Session Title
         Row(
@@ -1052,22 +1197,35 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                 color: AppTheme.textPrimaryColor(context),
               ),
             ),
-            if (widget.isRestrictMode) ...[
-              const HGapXs(),
+            if (widget.lockConfig.isLockModeEnabled) ...[
+              const HGapSm(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                 decoration: BoxDecoration(
-                  color: AppTheme.pastelOrange(context),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'STRICT',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.pastelOrangeText(context),
-                    letterSpacing: 0.5,
+                  color: AppTheme.pastelIndigo(context),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.35),
                   ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.lock_rounded,
+                      size: 12,
+                      color: AppTheme.primaryColor,
+                    ),
+                    HGapXs(),
+                    Text(
+                      'Lock',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1078,8 +1236,8 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
         IconButton(
           icon: Icon(
             Icons.settings_outlined,
-            color: widget.isRestrictMode
-                ? AppTheme.pastelOrangeText(context)
+            color: widget.lockConfig.isLockModeEnabled
+                ? const Color(0xFFDC2626)
                 : AppTheme.textSecondaryColor(context),
             size: 20,
           ),
@@ -1094,34 +1252,6 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
   void _handleTimerTap() {
     if (_canPause) {
       _togglePauseResume();
-    } else {
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                widget.isRestrictMode ? Icons.lock_outline_rounded : Icons.info_outline_rounded,
-                color: Colors.white,
-                size: 16,
-              ),
-              const HGapSm(),
-              Expanded(
-                child: Text(
-                  widget.isRestrictMode
-                      ? 'Strict Mode: Continuous focus active (pause locked)'
-                      : 'Pause is disabled for this session',
-                  style: const TextStyle(fontSize: 12.5, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: widget.isRestrictMode ? const Color(0xFFC2410C) : AppTheme.primaryColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
     }
   }
 
@@ -1205,8 +1335,8 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
                         : (isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded),
                     size: 20,
                     color: !canPause
-                        ? (widget.isRestrictMode
-                            ? AppTheme.pastelOrangeText(context)
+                        ? (_isLockModeActive
+                            ? const Color(0xFFDC2626)
                             : AppTheme.textMutedColor(context))
                         : AppTheme.textSecondaryColor(context),
                   );
@@ -1298,7 +1428,9 @@ class _SessionTimerScreenState extends State<SessionTimerScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
-              onTap: _handleExitSession,
+              onTap: widget.lockConfig.isLockModeEnabled
+                  ? _handleEmergencyLockExit
+                  : _handleExitSession,
               child: Container(
                 width: 44,
                 height: 44,

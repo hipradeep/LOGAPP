@@ -96,7 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 IconButton(
                   icon: Icon(
                     Icons.settings_rounded,
-                    color: AppTheme.textPrimaryColor(context),
+                    color: AppTheme.textSecondaryColor(context),
                     size: 22,
                   ),
                   onPressed: () => _openSettings(context),
@@ -108,7 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.only(
                   left: 16,
                   right: 16,

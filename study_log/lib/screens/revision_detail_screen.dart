@@ -5,6 +5,7 @@ import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/entity_detail_header.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_fab.dart';
 import '../widgets/topic_list_item.dart';
 import '../widgets/revision_options_sheet.dart';
 import '../models/revision.dart';
@@ -424,14 +425,10 @@ class _RevisionFAB extends StatelessWidget {
     if (!hasTopics) {
       return const SizedBox.shrink();
     }
-    return FloatingActionButton(
+    return AppFab(
       onPressed: onPressed,
-      backgroundColor: AppTheme.primaryColor,
-      foregroundColor: Colors.white,
-      elevation: 4,
-      shape: const CircleBorder(),
       tooltip: 'Start Batch Revision Session',
-      child: const Icon(Icons.play_arrow_rounded, size: 28),
+      icon: Icons.play_arrow_rounded,
     );
   }
 }

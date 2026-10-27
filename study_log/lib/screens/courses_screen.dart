@@ -226,7 +226,7 @@ class _CoursesFilteredList extends StatelessWidget {
 
         if (filtered.isEmpty) {
           return ListView(
-            physics: const BouncingScrollPhysics(),
+            physics: const ClampingScrollPhysics(),
             padding: EdgeInsets.only(
                 left: 16, right: 16, top: 48, bottom: bottomPadding),
             children: [
@@ -249,7 +249,7 @@ class _CoursesFilteredList extends StatelessWidget {
         }
 
         return ListView.builder(
-          physics: const BouncingScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           padding: EdgeInsets.only(left: 16, right: 16, top: 8, bottom: bottomPadding),
           itemCount: filtered.length + 1,
           itemBuilder: (context, index) {
@@ -309,7 +309,7 @@ class _CoursesEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(24, 72, 24, bottomPadding),
       children: [
         const AppEmptyState(

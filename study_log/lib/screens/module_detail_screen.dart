@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_pill_button.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_fab.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/entity_detail_header.dart';
@@ -947,7 +948,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       child: Scaffold(
         backgroundColor: AppTheme.background(context),
         floatingActionButton: (_topics.isNotEmpty && !_isReordering)
-            ? FloatingActionButton(
+            ? AppFab(
                 onPressed: () async {
                   final result = await Navigator.push<dynamic>(
                     context,
@@ -985,12 +986,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     }
                   }
                 },
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                elevation: 4,
-                shape: const CircleBorder(),
+                
                 tooltip: progress >= 1.0 ? 'Start Revision Session' : 'Start Study Session',
-                child: const Icon(Icons.play_arrow_rounded, size: 28),
+                icon: Icons.play_arrow_rounded,
               )
             : null,
         body: SafeArea(
@@ -998,9 +996,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CustomAppBar(
-                title: _isReordering
-                    ? 'REORDER TOPICS'
-                    : (widget.courseTitle.isNotEmpty ? widget.courseTitle : 'MODULE'),
+                title: _isReordering ? 'REORDER TOPICS' : null,
                 onBack: _handleBack,
                 actions: [
                   if (_isReordering)
@@ -1048,6 +1044,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   onEdit: _handleEditTopic,
                   onDuplicate: _handleDuplicateTopic,
                   onDelete: _handleDeleteTopic,
+                  onRefresh: () {
+                    unawaited(_loadTopics());
+                    unawaited(_loadModuleStats());
+                  },
                   bottomPadding: bottomSafe + 84,
                 ),
               ),
@@ -1099,10 +1099,18 @@ class _CompactModuleHeader extends StatelessWidget {
         : AppTheme.pastelPurpleText(context);
     final statusLabel = isComplete ? 'Completed' : 'In Progress';
 
+    String resolvedCourse = courseTitle;
+    if (resolvedCourse.isEmpty && courseId.isNotEmpty && getIt.isRegistered<CoursesController>()) {
+      try {
+        final c = getIt<CoursesController>().courses.firstWhere((c) => c.id == courseId);
+        resolvedCourse = c.title;
+      } catch (_) {}
+    }
+
     return EntityDetailHeader(
       title: moduleTitle,
       courseId: courseId,
-      courseTitle: courseTitle,
+      courseTitle: resolvedCourse,
       horizontalPadding: 16.0,
       countText: countStr,
       dateText: dateStr,
@@ -1131,6 +1139,7 @@ class _TopicsListView extends StatelessWidget {
   final ValueChanged<int> onEdit;
   final ValueChanged<int> onDuplicate;
   final ValueChanged<int> onDelete;
+  final VoidCallback? onRefresh;
   final double bottomPadding;
 
   const _TopicsListView({
@@ -1147,6 +1156,7 @@ class _TopicsListView extends StatelessWidget {
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
+    this.onRefresh,
     required this.bottomPadding,
   });
 
@@ -1240,6 +1250,8 @@ class _TopicsListView extends StatelessWidget {
               courseTitle: courseTitle,
               courseId: courseId,
               moduleId: moduleId,
+              showRemoveFromRevision: false,
+              onRevisionChanged: onRefresh,
               onOrderTopic: onOrderTopic,
               onEdit: () => onEdit(index),
               onDuplicate: () => onDuplicate(index),

@@ -39,9 +39,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.fromLTRB(16, 8, 16, bottomSafe + 32),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

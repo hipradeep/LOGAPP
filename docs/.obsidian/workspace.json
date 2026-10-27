@@ -11,14 +11,10 @@
             "id": "a1b71be0dffd2806",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "firebse_google_singin_drive_sync.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "firebse_google_singin_drive_sync"
+              "title": "New tab"
             }
           }
         ]
