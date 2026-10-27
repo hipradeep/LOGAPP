@@ -14,7 +14,6 @@ import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'sms_inbox_screen.dart';
 import 'transaction_log_screen.dart';
-import 'udar_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -33,7 +32,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   @override
   void initState() {
     super.initState();
-    _selectedIndex = widget.initialIndex.clamp(0, 4).toInt();
+    _selectedIndex = widget.initialIndex.clamp(0, 2).toInt();
     WidgetsBinding.instance.addObserver(this);
     if (getIt.isRegistered<SmsInboxController>()) {
       final smsController = getIt<SmsInboxController>();
@@ -73,6 +72,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         builder: (_) => SmsInboxScreen(
           initialValidationId: target.id,
           initialValidationKind: target.kind,
+          initialValidationAction: target.action,
         ),
       ),
     );
@@ -83,6 +83,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     setState(() => _selectedIndex = index);
   }
 
+  void _openTransactionLog() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const TransactionLogScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,12 +99,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         index: _selectedIndex,
         children: [
           HomeScreen(
-            onNavigateToLog: () => _select(2),
+            onNavigateToLog: _openTransactionLog,
             onNavigateToBudget: () => _select(1),
           ),
           const BudgetScreen(),
-          const TransactionLogScreen(),
-          const UdarScreen(),
           const ProfileScreen(),
         ],
       ),
@@ -113,16 +119,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet_rounded),
             label: 'Budgets',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            label: 'Log',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_alt_outlined),
-            selectedIcon: Icon(Icons.people_alt_rounded),
-            label: 'Udar',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),

@@ -28,9 +28,9 @@ class SmsNativeBridge {
     return _recordsFromResult(result);
   }
 
-  Future<void> syncPendingValidations(Set<String> ids) async {
+  Future<void> syncPendingValidations(List<SmsValidationEntry> entries) async {
     await _methodChannel.invokeMethod<void>('syncPendingValidations', {
-      'ids': ids.toList(growable: false),
+      'items': entries.map((entry) => entry.toMap()).toList(growable: false),
     });
   }
 

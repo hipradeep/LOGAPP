@@ -13,8 +13,8 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_fab.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/custom_app_bar.dart';
 import '../widgets/sheet_action_widgets.dart';
+import '../widgets/tab_header.dart';
 import '../widgets/transaction_tile.dart';
 import 'add_budget_screen.dart';
 import 'add_transaction_screen.dart';
@@ -64,10 +64,9 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            CustomAppBar(
+            TabHeader(
               title: 'Budget Log',
               subtitle: AppFormat.monthYear(DateTime.now()),
-              showBackButton: false,
             ),
             Expanded(
               child: ListenableBuilder(

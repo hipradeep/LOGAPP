@@ -6,7 +6,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_fab.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
-import '../widgets/custom_app_bar.dart';
+import '../widgets/tab_header.dart';
 import '../widgets/transaction_tile.dart';
 import 'add_transaction_screen.dart';
 
@@ -96,10 +96,9 @@ class _TransactionLogScreenState extends State<TransactionLogScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            CustomAppBar(
+            TabHeader(
               title: 'Transaction log',
               subtitle: 'Search, filter and edit every entry.',
-              showBackButton: false,
               actions: [
                 IconButton(
                   onPressed: _clearFilter,

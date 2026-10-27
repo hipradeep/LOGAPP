@@ -42,27 +42,32 @@ object SmsValidationScheduler {
         }
     }
 
-    fun enqueue(context: Context, id: String, kind: String) {
+    fun enqueue(context: Context, item: SmsValidationItem) {
         synchronized(lock) {
             val items = loadQueue(context)
-            if (items.none { it.id == id }) {
-                items.add(SmsValidationItem(id, kind))
-                saveQueue(context, items)
+            val existingIndex = items.indexOfFirst { it.id == item.id }
+            if (existingIndex >= 0) {
+                items[existingIndex] = merge(existing = items[existingIndex], incoming = item)
+            } else {
+                items.add(item)
             }
+            saveQueue(context, items)
             ensureScheduled(context, items)
         }
     }
 
-    fun syncPendingValidations(context: Context, stagedIds: Set<String>) {
+    fun syncPendingValidations(context: Context, pending: List<SmsValidationItem>) {
         synchronized(lock) {
             val items = loadQueue(context)
+            val incomingById = pending.associateBy { it.id }
             val kept = items
-                .filter { item -> item.kind != "staged" || stagedIds.contains(item.id) }
+                .filter { item -> item.kind != "staged" || incomingById.containsKey(item.id) }
+                .map { item -> incomingById[item.id]?.let { merge(item, it) } ?: item }
                 .toMutableList()
 
-            for (id in stagedIds) {
-                if (kept.none { it.id == id }) {
-                    kept.add(SmsValidationItem(id, "staged"))
+            for (item in pending) {
+                if (kept.none { it.id == item.id }) {
+                    kept.add(item.copy(kind = "staged"))
                 }
             }
 
@@ -210,6 +215,17 @@ object SmsValidationScheduler {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    private fun merge(
+        existing: SmsValidationItem,
+        incoming: SmsValidationItem,
+    ): SmsValidationItem = SmsValidationItem(
+        id = existing.id,
+        kind = incoming.kind,
+        amount = incoming.amount ?: existing.amount,
+        direction = incoming.direction ?: existing.direction,
+        title = incoming.title ?: existing.title,
+    )
+
     private fun loadQueue(context: Context): MutableList<SmsValidationItem> {
         val raw = prefs(context).getString(KEY_QUEUE, null) ?: return mutableListOf()
         return try {
@@ -219,7 +235,16 @@ object SmsValidationScheduler {
                 val json = array.optJSONObject(index) ?: continue
                 val id = json.optString("id")
                 val kind = json.optString("kind", "staged")
-                if (id.isNotEmpty()) items.add(SmsValidationItem(id, kind))
+                if (id.isEmpty()) continue
+                items.add(
+                    SmsValidationItem(
+                        id = id,
+                        kind = kind,
+                        amount = json.optDouble("amount", Double.NaN).takeUnless { it.isNaN() },
+                        direction = json.optString("direction").takeIf { it.isNotEmpty() },
+                        title = json.optString("title").takeIf { it.isNotEmpty() },
+                    ),
+                )
             }
             items
         } catch (_: Exception) {
@@ -233,7 +258,10 @@ object SmsValidationScheduler {
             array.put(
                 JSONObject()
                     .put("id", item.id)
-                    .put("kind", item.kind),
+                    .put("kind", item.kind)
+                    .putOpt("amount", item.amount)
+                    .putOpt("direction", item.direction)
+                    .putOpt("title", item.title),
             )
         }
         prefs(context).edit().putString(KEY_QUEUE, array.toString()).apply()

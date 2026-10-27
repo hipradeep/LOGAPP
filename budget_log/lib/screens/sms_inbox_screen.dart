@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/finance_controller.dart';
 import '../controllers/sms_inbox_controller.dart';
 import '../models/budget_transaction.dart';
+import '../models/category.dart';
 import '../models/debt_record.dart';
+import '../models/payment_mode.dart';
 import '../models/staged_sms_transaction.dart';
 import '../services/notification_service.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../utils/format_utils.dart';
+import '../utils/id_utils.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/confirmation_dialog.dart';
 import '../widgets/custom_app_bar.dart';
@@ -17,12 +21,14 @@ class SmsInboxScreen extends StatefulWidget {
   final SmsInboxController? controller;
   final String? initialValidationId;
   final String? initialValidationKind;
+  final String? initialValidationAction;
 
   const SmsInboxScreen({
     super.key,
     this.controller,
     this.initialValidationId,
     this.initialValidationKind,
+    this.initialValidationAction,
   });
 
   @override
@@ -62,7 +68,45 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
       }
     }
     if (match == null) return;
+
+    if (widget.initialValidationAction == 'ignore') {
+      await _controller.reject(match.id);
+      return;
+    }
+    if (widget.initialValidationAction == 'validate') {
+      final accepted = await _acceptFromNotification(match);
+      if (!accepted && mounted) await _review(match);
+      return;
+    }
     await _review(match);
+  }
+
+  Future<bool> _acceptFromNotification(StagedSmsTransaction staged) async {
+    final amount = staged.extractedAmount;
+    if (amount == null || amount <= 0) return false;
+
+    final type = staged.isCredit ? 'income' : 'expense';
+    final finance = getIt.isRegistered<FinanceController>()
+        ? getIt<FinanceController>()
+        : null;
+    final List<Category> categories =
+        finance?.categoriesForType(type) ?? const [];
+    final List<PaymentMode> paymentModes = finance?.paymentModes ?? const [];
+
+    return _controller.accept(
+      staged: staged,
+      transaction: BudgetTransaction(
+        id: IdUtils.generate('txn'),
+        amount: amount,
+        type: type,
+        categoryId: categories.isEmpty ? null : categories.first.id,
+        paymentModeId: paymentModes.isEmpty ? null : paymentModes.first.id,
+        title: _titleFor(staged),
+        note: 'Imported from SMS · ${staged.smsSender}',
+        timestamp: staged.smsTimestamp,
+        createdAt: DateTime.now(),
+      ),
+    );
   }
 
   @override

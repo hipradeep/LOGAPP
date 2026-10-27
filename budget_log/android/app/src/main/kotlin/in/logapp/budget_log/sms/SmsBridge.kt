@@ -28,7 +28,13 @@ class SmsBridge(
         val kind = intent.getStringExtra(SmsValidationNotifier.EXTRA_VALIDATION_KIND)
             ?.takeIf { it.isNotBlank() }
             ?: "staged"
-        val target = mapOf("id" to id, "kind" to kind)
+        val action = intent.getStringExtra(SmsValidationNotifier.EXTRA_VALIDATION_ACTION)
+            ?.takeIf { it.isNotBlank() }
+        val target = buildMap<String, Any> {
+            put("id", id)
+            put("kind", kind)
+            if (action != null) put("action", action)
+        }
         pendingTarget = target
         emitPendingTarget()
     }
@@ -80,11 +86,10 @@ class SmsBridge(
             }
 
             "syncPendingValidations" -> {
-                val ids = call.argument<List<*>>("ids")
-                    ?.mapNotNull { it as? String }
-                    ?.toSet()
+                val items = call.argument<List<*>>("items")
+                    ?.mapNotNull(::parseValidationItem)
                     .orEmpty()
-                SmsValidationScheduler.syncPendingValidations(context, ids)
+                SmsValidationScheduler.syncPendingValidations(context, items)
                 result.success(true)
             }
 
@@ -116,6 +121,21 @@ class SmsBridge(
 
             else -> result.notImplemented()
         }
+    }
+
+    private fun parseValidationItem(raw: Any?): SmsValidationItem? {
+        val map = raw as? Map<*, *> ?: return null
+        val id = map["id"] as? String
+        if (id.isNullOrBlank()) return null
+        val kind = map["kind"] as? String ?: "staged"
+        val amount = (map["amount"] as? Number)?.toDouble()
+        return SmsValidationItem(
+            id = id,
+            kind = kind,
+            amount = amount,
+            direction = (map["direction"] as? String)?.takeIf { it.isNotBlank() },
+            title = (map["title"] as? String)?.takeIf { it.isNotBlank() },
+        )
     }
 
     companion object {

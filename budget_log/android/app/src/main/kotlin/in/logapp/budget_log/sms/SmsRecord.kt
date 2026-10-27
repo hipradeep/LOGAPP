@@ -19,4 +19,7 @@ data class SmsRecord(
 data class SmsValidationItem(
     val id: String,
     val kind: String,
+    val amount: Double? = null,
+    val direction: String? = null,
+    val title: String? = null,
 )

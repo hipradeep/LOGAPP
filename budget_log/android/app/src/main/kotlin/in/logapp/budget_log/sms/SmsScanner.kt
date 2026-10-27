@@ -22,7 +22,7 @@ object SmsScanner {
             throw SecurityException("READ_SMS permission is required")
         }
 
-        val safeDays = days.coerceIn(1, 365)
+        val safeDays = days.coerceIn(1, 30)
         val safeLimit = limit.coerceIn(1, 1000)
         val cutoff = System.currentTimeMillis() - (safeDays * DAY_MILLIS)
         val projection = arrayOf(

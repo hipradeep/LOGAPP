@@ -5,7 +5,6 @@ import '../widgets/full_screen_page.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/glow_blob.dart';
 import 'manage_budget_screen.dart';
-import 'manage_budget1_screen.dart';
 import 'manage_budget2_screen.dart';
 import 'expense_category_screen.dart';
 import 'payment_mode_screen.dart';
@@ -200,16 +199,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const ManageBudgetScreen()),
-                );
-              },
-            ),
-            _MenuItem(
-              icon: Icons.pie_chart_outline_rounded,
-              title: 'Manage Budget 1',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ManageBudget1Screen()),
                 );
               },
             ),

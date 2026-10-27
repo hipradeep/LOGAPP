@@ -26,7 +26,9 @@ class _FakeSmsBridge extends SmsNativeBridge {
   Future<List<SmsInboxRecord>> drainCaptured() async => const [];
 
   @override
-  Future<void> syncPendingValidations(Set<String> ids) async {}
+  Future<void> syncPendingValidations(
+    List<SmsValidationEntry> entries,
+  ) async {}
 
   @override
   Future<void> removeValidation(String id) async {
@@ -51,7 +53,7 @@ void main() {
   late DatabaseService databaseService;
   late _FakeSmsBridge bridge;
   late SmsInboxController controller;
-  final fixedDate = DateTime(2026, 1, 15, 10, 30);
+  final fixedDate = DateTime.now().subtract(const Duration(days: 1));
 
   setUp(() async {
     tempDirectory = await Directory.systemTemp.createTemp('sms_screen_test_');

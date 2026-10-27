@@ -30,13 +30,39 @@ class SmsInboxRecord {
 class SmsValidationTarget {
   final String id;
   final String kind;
+  final String? action;
 
-  const SmsValidationTarget({required this.id, required this.kind});
+  const SmsValidationTarget({required this.id, required this.kind, this.action});
 
   factory SmsValidationTarget.fromMap(Map<String, dynamic> map) {
     return SmsValidationTarget(
       id: (map['id'] as String?) ?? '',
       kind: (map['kind'] as String?) ?? 'staged',
+      action: map['action'] as String?,
     );
   }
+}
+
+class SmsValidationEntry {
+  final String id;
+  final String kind;
+  final double? amount;
+  final String? direction;
+  final String? title;
+
+  const SmsValidationEntry({
+    required this.id,
+    this.kind = 'staged',
+    this.amount,
+    this.direction,
+    this.title,
+  });
+
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'kind': kind,
+    if (amount != null) 'amount': amount,
+    if (direction != null) 'direction': direction,
+    if (title != null) 'title': title,
+  };
 }

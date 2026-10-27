@@ -14,6 +14,7 @@ import '../widgets/app_spacers.dart';
 import '../widgets/tab_header.dart';
 import 'settings_screen.dart';
 import 'subscription_screen.dart';
+import 'udar_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -132,10 +133,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                       const VGapSm(),
                       _ProfileActionsCard(
                         activeSubscriptions: _subscriptions.activeCount,
+                        udarBalance: _debt.netBalance,
                         onOpenSubscriptions: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const SubscriptionScreen(),
+                            ),
+                          );
+                        },
+                        onOpenUdar: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const UdarScreen(),
                             ),
                           );
                         },
@@ -433,11 +442,15 @@ class _MiniStat extends StatelessWidget {
 
 class _ProfileActionsCard extends StatelessWidget {
   final int activeSubscriptions;
+  final double udarBalance;
   final VoidCallback onOpenSubscriptions;
+  final VoidCallback onOpenUdar;
 
   const _ProfileActionsCard({
     required this.activeSubscriptions,
+    required this.udarBalance,
     required this.onOpenSubscriptions,
+    required this.onOpenUdar,
   });
 
   @override
@@ -448,27 +461,62 @@ class _ProfileActionsCard extends StatelessWidget {
         ? '1 active subscription'
         : '$activeSubscriptions active subscriptions';
 
+    final udarLabel = udarBalance.abs() < 0.01
+        ? 'All settled'
+        : udarBalance > 0
+        ? 'You are owed ${AppFormat.currency(udarBalance.abs())}'
+        : 'You owe ${AppFormat.currency(udarBalance.abs())}';
+
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        leading: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: AppTheme.pastelIndigo(context),
-            borderRadius: BorderRadius.circular(AppTheme.iconBoxRadius),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppTheme.pastelIndigo(context),
+                borderRadius: BorderRadius.circular(AppTheme.iconBoxRadius),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.autorenew_rounded,
+                color: AppTheme.pastelIndigoText(context),
+                size: 20,
+              ),
+            ),
+            title: const Text('Subscriptions & recurring bills'),
+            subtitle: Text(subtitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onOpenSubscriptions,
           ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.autorenew_rounded,
-            color: AppTheme.pastelIndigoText(context),
-            size: 20,
+          Divider(
+            height: 1,
+            indent: 68,
+            color: AppTheme.borderColor(context),
           ),
-        ),
-        title: const Text('Subscriptions & recurring bills'),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: onOpenSubscriptions,
+          ListTile(
+            leading: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppTheme.pastelBlue(context),
+                borderRadius: BorderRadius.circular(AppTheme.iconBoxRadius),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.people_alt_rounded,
+                color: AppTheme.pastelBlueText(context),
+                size: 20,
+              ),
+            ),
+            title: const Text('Udar & splits'),
+            subtitle: Text(udarLabel),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onOpenUdar,
+          ),
+        ],
       ),
     );
   }

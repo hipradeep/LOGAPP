@@ -33,8 +33,8 @@ class FakeSmsBridge extends SmsNativeBridge {
   }
 
   @override
-  Future<void> syncPendingValidations(Set<String> ids) async {
-    pendingIds = Set<String>.from(ids);
+  Future<void> syncPendingValidations(List<SmsValidationEntry> entries) async {
+    pendingIds = entries.map((e) => e.id).toSet();
   }
 
   @override
@@ -62,19 +62,22 @@ void main() {
   late DatabaseService databaseService;
   late FakeSmsBridge bridge;
   late SmsInboxController controller;
-  final fixedDate = DateTime(2026, 1, 15, 10, 30);
+  final fixedDate = DateTime.now().subtract(const Duration(days: 1));
 
   SmsInboxRecord record(
     String body, {
     String sender = 'HDFCBK',
     int minute = 0,
     String sourceKey = 'native',
+    DateTime? timestamp,
   }) {
     return SmsInboxRecord(
       sourceKey: sourceKey,
       sender: sender,
       body: body,
-      timestamp: DateTime(2026, 1, 15, 10, minute),
+      timestamp:
+          timestamp ??
+          DateTime(fixedDate.year, fixedDate.month, fixedDate.day, 10, minute),
     );
   }
 
@@ -124,6 +127,23 @@ void main() {
     expect(result!.staged, 2);
     expect(controller.pendingCount, 2);
     expect(bridge.pendingIds, hasLength(2));
+  });
+
+  test('ignores SMS older than 30 days', () async {
+    bridge.inbox = [
+      record('Rs 100 debited at Amazon on 15-01-26.', minute: 1),
+      record(
+        'Rs 900 debited at Old Store on 15-01-26.',
+        sourceKey: 'old',
+        timestamp: DateTime.now().subtract(const Duration(days: 31)),
+      ),
+    ];
+
+    final result = await controller.scanNow();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(result!.staged, 1);
+    expect(controller.pendingCount, 1);
   });
 
   test('does not stage the same SMS twice', () async {

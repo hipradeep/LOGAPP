@@ -15,7 +15,9 @@ import 'add_contact_screen.dart';
 import 'contact_detail_screen.dart';
 
 class UdarScreen extends StatelessWidget {
-  const UdarScreen({super.key});
+  final bool showBackButton;
+
+  const UdarScreen({super.key, this.showBackButton = true});
 
   ContactsController get _contactsController => getIt<ContactsController>();
   DebtController get _debtController => getIt<DebtController>();
@@ -34,7 +36,7 @@ class UdarScreen extends StatelessWidget {
             CustomAppBar(
               title: 'Udar',
               subtitle: 'Split money and keep give & owe balances clear.',
-              showBackButton: false,
+              showBackButton: showBackButton,
               actions: [
                 IconButton(
                   onPressed: () => AddContactScreen.navigate(context),

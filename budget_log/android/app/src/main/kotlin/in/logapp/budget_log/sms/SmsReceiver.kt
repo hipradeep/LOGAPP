@@ -29,8 +29,18 @@ class SmsReceiver : BroadcastReceiver() {
                 timestamp = timestamp,
                 providerId = null,
             )
+            val amountInfo = SmsAmountParser.parse(body)
             SmsCaptureStore.append(context, record)
-            SmsValidationScheduler.enqueue(context, record.sourceKey, "candidate")
+            SmsValidationScheduler.enqueue(
+                context,
+                SmsValidationItem(
+                    id = record.sourceKey,
+                    kind = "candidate",
+                    amount = amountInfo.amount,
+                    direction = amountInfo.direction,
+                    title = sender,
+                ),
+            )
         } catch (_: Exception) {
             // A malformed PDU must never crash the receiver.
         }

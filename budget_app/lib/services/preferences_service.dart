@@ -283,42 +283,4 @@ class PreferencesService {
     await savePaymentModes(modes);
   }
 
-  // === Custom Budget Rules ===
-  Future<List<Map<String, dynamic>>> getCustomRules() async {
-    try {
-      final doc = await _firestore
-          .collection('metadata')
-          .doc('bgt_custom_rules')
-          .get()
-          .timeout(const Duration(seconds: 3));
-      if (doc.exists && doc.data() != null && doc.data()!['rules'] is List) {
-        final list = doc.data()!['rules'] as List<dynamic>;
-        final res = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        final cache = await _readLocalCache();
-        cache['custom_rules'] = res;
-        await _writeLocalCache(cache);
-        return res;
-      }
-    } catch (_) {}
-
-    final cache = await _readLocalCache();
-    if (cache.containsKey('custom_rules') && cache['custom_rules'] is List) {
-      return List<Map<String, dynamic>>.from(
-        (cache['custom_rules'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
-      );
-    }
-    return [];
-  }
-
-  Future<void> saveCustomRules(List<Map<String, dynamic>> rules) async {
-    final cache = await _readLocalCache();
-    cache['custom_rules'] = rules;
-    await _writeLocalCache(cache);
-    try {
-      await _firestore.collection('metadata').doc('bgt_custom_rules').set({
-        'rules': rules,
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true)).timeout(const Duration(seconds: 4));
-    } catch (_) {}
-  }
 }

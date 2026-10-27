@@ -22,6 +22,8 @@ class SmsImportResult {
 }
 
 class SmsInboxService {
+  static const int lookbackDays = 30;
+
   SmsInboxService({
     SmsNativeBridge? bridge,
     SmsParserService? parser,
@@ -87,7 +89,10 @@ class SmsInboxService {
     }
   }
 
-  Future<SmsImportResult> scanAndStage({int days = 30, int limit = 500}) async {
+  Future<SmsImportResult> scanAndStage({
+    int days = lookbackDays,
+    int limit = 500,
+  }) async {
     if (!await hasSmsPermission()) {
       return const SmsImportResult(
         scanned: 0,
@@ -97,16 +102,26 @@ class SmsInboxService {
       );
     }
 
-    final records = await _bridge.scanInbox(days: days, limit: limit);
+    final records = await _bridge.scanInbox(
+      days: days.clamp(1, lookbackDays).toInt(),
+      limit: limit,
+    );
     return _stageRecords(records);
   }
 
   Future<SmsImportResult> drainAndStage() async {
     final records = await _bridge.drainCaptured();
+    final cutoff = _recentCutoff();
     var staged = 0;
     var skipped = 0;
 
     for (final record in records) {
+      if (record.timestamp.isBefore(cutoff)) {
+        await _removeValidation(record.sourceKey);
+        skipped++;
+        continue;
+      }
+
       final transaction = _parser.parse(record);
       if (transaction == null) {
         await _removeValidation(record.sourceKey);
@@ -147,8 +162,22 @@ class SmsInboxService {
 
   Future<void> syncPendingValidations() async {
     try {
-      final ids = await _dbService.getPendingStagedSmsIds();
-      await _bridge.syncPendingValidations(ids);
+      final pending = await _dbService.getStagedSmsTransactions(
+        status: 'pending',
+      );
+      final cutoff = _recentCutoff();
+      final entries = pending
+          .where((item) => !item.smsTimestamp.isBefore(cutoff))
+          .map(
+            (item) => SmsValidationEntry(
+              id: item.id,
+              amount: item.extractedAmount,
+              direction: item.extractedType,
+              title: item.extractedMerchant ?? item.smsSender,
+            ),
+          )
+          .toList(growable: false);
+      await _bridge.syncPendingValidations(entries);
     } on PlatformException {
       // The in-app list still works when native scheduling is unavailable.
     } on MissingPluginException {
@@ -160,8 +189,11 @@ class SmsInboxService {
 
   Future<SmsImportResult> _stageRecords(List<SmsInboxRecord> records) async {
     final newItems = <StagedSmsTransaction>[];
+    final cutoff = _recentCutoff();
 
     for (final record in records) {
+      if (record.timestamp.isBefore(cutoff)) continue;
+
       final transaction = _parser.parse(record);
       if (transaction == null) continue;
 
@@ -196,4 +228,7 @@ class SmsInboxService {
       // The in-app list still works when native scheduling is unavailable.
     }
   }
+
+  static DateTime _recentCutoff() =>
+      DateTime.now().subtract(const Duration(days: lookbackDays));
 }
