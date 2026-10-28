@@ -7,7 +7,7 @@ import 'package:googleapis/drive/v3.dart' as drive;
 
 class GoogleAuthService {
   static const String webClientId =
-      '946718224112-nnsndg46igdloksr9fvg8q0nk9e5ra47.apps.googleusercontent.com';
+      '608865694471-efddjku401hadss959ksc71ugbepsjun.apps.googleusercontent.com';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     clientId: kIsWeb ? webClientId : null,
@@ -62,7 +62,7 @@ class GoogleAuthService {
         throw Exception(
           'Developer Error (ApiException 10):\n'
           'Register an Android OAuth client for this app in Google Cloud.\n\n'
-          'Package name: in.logapp.budget_log\n'
+          'Package name: in.logapp.budget\n'
           'SHA-1: 85:44:F8:1E:1B:15:B6:08:DA:3F:27:24:5C:DA:FC:E4:68:F4:C7:9C',
         );
       }

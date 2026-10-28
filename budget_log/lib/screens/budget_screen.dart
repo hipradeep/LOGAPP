@@ -6,17 +6,20 @@ import '../models/budget.dart';
 import '../models/budget_transaction.dart';
 import '../theme/app_theme.dart';
 import '../utils/format_utils.dart';
+import '../widgets/active_budget_switcher.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_fab.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/budget_expense_graph.dart';
 import '../widgets/budget_progress_bar.dart';
+import '../widgets/budget_selector_sheet.dart';
 import '../widgets/category_breakdown_sheet.dart';
 import '../widgets/tab_header.dart';
-import '../widgets/transaction_filter_sheet.dart';
+import '../widgets/transaction_tile.dart';
 import 'add_budget_screen.dart';
 import 'add_transaction_screen.dart';
+import 'budget_transactions_screen.dart';
 
 class BudgetScreen extends StatefulWidget {
   final String? initialBudgetId;
@@ -28,28 +31,40 @@ class BudgetScreen extends StatefulWidget {
 }
 
 class _BudgetScreenState extends State<BudgetScreen> {
-  String? _selectedBudgetId;
-  DateTime? _filterStartDate;
-  DateTime? _filterEndDate;
-  String _filterType = 'all'; // 'all', 'debit', 'credit'
+  bool _initialized = false;
 
   @override
-  void initState() {
-    super.initState();
-    _selectedBudgetId = widget.initialBudgetId;
-    _filterStartDate = DateTime.now().subtract(const Duration(days: 30));
-    _filterEndDate = DateTime.now();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    final initialBudgetId = widget.initialBudgetId;
+    if (initialBudgetId != null) {
+      final controller = AppProvider.read<FinanceController>(context);
+      if (controller.selectedBudgetId != initialBudgetId) {
+        controller.setSelectedBudget(initialBudgetId);
+      }
+    }
   }
 
-  void _openAddBudget(BuildContext context, {Budget? budget, bool isCopy = false}) {
+  Budget? _resolveSelectedBudget(FinanceController controller) {
+    final selected = controller.selectedBudget;
+    if (selected != null) return selected;
+    return controller.activeBudget ??
+        (controller.budgets.isEmpty ? null : controller.budgets.first);
+  }
+
+  void _openAddBudget(
+    BuildContext context, {
+    Budget? budget,
+    bool isCopy = false,
+  }) {
     final effectiveBudget = isCopy && budget != null
         ? budget.copyWith(id: '', name: '${budget.name} (Copy)')
         : budget;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => AddBudgetScreen(
-          existingBudget: effectiveBudget,
-        ),
+        builder: (_) => AddBudgetScreen(existingBudget: effectiveBudget),
       ),
     );
   }
@@ -59,13 +74,10 @@ class _BudgetScreenState extends State<BudgetScreen> {
     Budget budget,
     FinanceController controller,
   ) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AddTransactionScreen(
-          controller: controller,
-          initialBudgetId: budget.id,
-        ),
-      ),
+    AddTransactionScreen.showModal(
+      context,
+      controller: controller,
+      initialBudgetId: budget.id,
     );
   }
 
@@ -74,13 +86,10 @@ class _BudgetScreenState extends State<BudgetScreen> {
     BudgetTransaction transaction,
     FinanceController controller,
   ) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AddTransactionScreen(
-          controller: controller,
-          existingTransaction: transaction,
-        ),
-      ),
+    AddTransactionScreen.showModal(
+      context,
+      controller: controller,
+      existingTransaction: transaction,
     );
   }
 
@@ -117,17 +126,11 @@ class _BudgetScreenState extends State<BudgetScreen> {
                     );
                   }
 
-                  // Default selected budget
-                  Budget? selectedBudget;
-                  if (_selectedBudgetId != null) {
-                    for (final b in budgets) {
-                      if (b.id == _selectedBudgetId) {
-                        selectedBudget = b;
-                        break;
-                      }
-                    }
+                  final selectedBudget = _resolveSelectedBudget(controller);
+                  if (selectedBudget == null) {
+                    return const SizedBox.shrink();
                   }
-                  selectedBudget ??= budgets.first;
+                  final activeBudgets = controller.activeBudgets;
 
                   final bottomPadding = MediaQuery.paddingOf(context).bottom;
 
@@ -144,19 +147,37 @@ class _BudgetScreenState extends State<BudgetScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (activeBudgets.length > 1) ...[
+                            ActiveBudgetSwitcher(
+                              budgets: activeBudgets,
+                              selectedBudgetId: selectedBudget.id,
+                              onSelected: controller.setSelectedBudget,
+                            ),
+                            const VGapSm(),
+                          ],
                           Row(
                             children: [
                               Expanded(
-                                child: _buildBudgetDropdown(budgets, selectedBudget),
+                                child: _buildBudgetDropdown(
+                                  budgets,
+                                  selectedBudget,
+                                ),
                               ),
                               const HGapSm(),
                               _buildCalendarButton(context, selectedBudget),
                               const HGapSm(),
-                              _buildProgressButton(context, selectedBudget, controller),
+                              _buildProgressButton(
+                                context,
+                                selectedBudget,
+                                controller,
+                              ),
                             ],
                           ),
                           const VGapMd(),
-                          _buildSelectedBudgetDetails(selectedBudget, controller),
+                          _buildSelectedBudgetDetails(
+                            selectedBudget,
+                            controller,
+                          ),
                         ],
                       ),
                     ),
@@ -170,28 +191,16 @@ class _BudgetScreenState extends State<BudgetScreen> {
       floatingActionButton: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
-          final budgets = controller.budgets;
-          if (budgets.isEmpty) return const SizedBox.shrink();
-
-          Budget? selectedBudget;
-          if (_selectedBudgetId != null) {
-            for (final b in budgets) {
-              if (b.id == _selectedBudgetId) {
-                selectedBudget = b;
-                break;
-              }
-            }
-          }
-          selectedBudget ??= budgets.first;
-
-          if (selectedBudget.isPeriodOver) {
+          final selectedBudget = _resolveSelectedBudget(controller);
+          if (selectedBudget == null || selectedBudget.isPeriodOver) {
             return const SizedBox.shrink();
           }
 
           return AppFab(
             icon: Icons.add_rounded,
             tooltip: 'Add Transaction',
-            onPressed: () => _showAddTransaction(context, selectedBudget!, controller),
+            onPressed: () =>
+                _showAddTransaction(context, selectedBudget, controller),
           );
         },
       ),
@@ -199,41 +208,47 @@ class _BudgetScreenState extends State<BudgetScreen> {
   }
 
   Widget _buildBudgetDropdown(List<Budget> budgets, Budget current) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-        border: Border.all(
-          color: AppTheme.borderColor(context),
-          width: 1,
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          dropdownColor: AppTheme.surface(context),
-          isExpanded: true,
-          isDense: true,
-          icon: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: AppTheme.textSecondaryColor(context),
-            size: 20,
-          ),
-          value: current.id,
-          items: budgets.map((budget) {
-            String suffix = '';
-            if (budget.isPeriodOver) {
-              suffix = ' (Ended)';
-            } else if (!budget.isActive) {
-              suffix = ' (Inactive)';
+    String suffix = '';
+    if (current.isPeriodOver) {
+      suffix = ' (Ended)';
+    } else if (!current.isActive) {
+      suffix = ' (Inactive)';
+    }
+
+    return InkWell(
+      onTap: () {
+        BudgetSelectorSheet.show(
+          context,
+          budgets: budgets,
+          selectedBudgetId: current.id,
+          onSelected: (id) {
+            if (id != null) {
+              AppProvider.read<FinanceController>(
+                context,
+              ).setSelectedBudget(id);
             }
-            return DropdownMenuItem<String>(
-              value: budget.id,
+          },
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppTheme.surface(context).withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.25),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
               child: Text(
-                '${budget.name}$suffix',
+                '${current.name}$suffix',
                 style: TextStyle(
-                  color: budget.isActive && !budget.isPeriodOver
+                  color: current.isActive && !current.isPeriodOver
                       ? AppTheme.textPrimaryColor(context)
                       : AppTheme.textSecondaryColor(context),
                   fontSize: 13,
@@ -241,33 +256,38 @@ class _BudgetScreenState extends State<BudgetScreen> {
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
-            );
-          }).toList(),
-          onChanged: (id) {
-            if (id != null) {
-              setState(() => _selectedBudgetId = id);
-            }
-          },
+            ),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppTheme.textSecondaryColor(context),
+              size: 20,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSelectedBudgetDetails(Budget budget, FinanceController controller) {
-    final spent = budget.spentForCurrentPeriod(controller.transactions);
-    final percent = budget.limit > 0 ? (spent / budget.limit).clamp(0.0, 1.0) : 0.0;
-    final isOver = budget.isOverBudget(controller.transactions);
+  Widget _buildSelectedBudgetDetails(
+    Budget budget,
+    FinanceController controller,
+  ) {
+    final spent = controller.spentForBudget(budget.id);
+    final percent = budget.limit > 0
+        ? (spent / budget.limit).clamp(0.0, 1.0)
+        : 0.0;
+    final isOver = controller.isOverBudget(budget.id);
     final isActive = budget.isActive;
 
     final Color statusColor = !isActive
         ? AppTheme.successColor
         : (isOver
-            ? AppTheme.errorColor
-            : (percent >= 0.7 ? AppTheme.warningColor : AppTheme.primaryColor));
+              ? AppTheme.errorColor
+              : (percent >= budget.alertThreshold
+                    ? AppTheme.warningColor
+                    : AppTheme.primaryColor));
 
-    final budgetTransactions = controller.transactions
-        .where((t) => t.budgetId == budget.id)
-        .toList();
+    final budgetTransactions = controller.transactionsForBudget(budget.id);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,11 +296,11 @@ class _BudgetScreenState extends State<BudgetScreen> {
         Container(
           padding: const EdgeInsets.all(AppTheme.spacingMd),
           decoration: BoxDecoration(
-            color: AppTheme.surface(context),
-            borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+            color: AppTheme.surface(context).withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: statusColor.withValues(alpha: 0.25),
-              width: 1.0,
+              width: 1.2,
             ),
           ),
           child: Column(
@@ -306,25 +326,29 @@ class _BudgetScreenState extends State<BudgetScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const HGapSm(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                budget.categoryName.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 9,
-                                  color: AppTheme.primaryLight,
-                                  fontWeight: FontWeight.bold,
+                            if (budget.categoryName.trim().isNotEmpty) ...[
+                              const HGapSm(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  budget.categoryName.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 8,
+                                    color: AppTheme.primaryLight,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                             const HGapSm(),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -332,14 +356,22 @@ class _BudgetScreenState extends State<BudgetScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: AppTheme.surfaceVariant(context),
+                                color:
+                                    (budget.period == 'weekly'
+                                            ? AppTheme.pastelBlueText(context)
+                                            : AppTheme.textPrimaryColor(
+                                                context,
+                                              ))
+                                        .withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 budget.period.toUpperCase(),
                                 style: TextStyle(
-                                  fontSize: 9,
-                                  color: AppTheme.textSecondaryColor(context),
+                                  fontSize: 8,
+                                  color: budget.period == 'weekly'
+                                      ? AppTheme.pastelBlueText(context)
+                                      : AppTheme.textSecondaryColor(context),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -368,24 +400,29 @@ class _BudgetScreenState extends State<BudgetScreen> {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.successColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
+                            color: AppTheme.successColor.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: AppTheme.successColor.withValues(alpha: 0.3),
+                              color: AppTheme.successColor.withValues(
+                                alpha: 0.3,
+                              ),
                             ),
                           ),
                           child: const Text(
                             'COMPLETED',
                             style: TextStyle(
                               color: AppTheme.successColor,
-                              fontSize: 9,
+                              fontSize: 8,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       const HGapSm(),
                       GestureDetector(
-                        onTap: () => _showCategoryBreakdown(budget, budgetTransactions),
+                        onTap: () =>
+                            _showCategoryBreakdown(budget, budgetTransactions),
                         child: Container(
                           width: 28,
                           height: 28,
@@ -460,7 +497,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
         const VGapMd(),
 
-        // 3. Filtered Expenses History List
+        // 3. Expense History List (Last 15 transactions)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -472,46 +509,21 @@ class _BudgetScreenState extends State<BudgetScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            IconButton(
-              icon: Icon(
-                Icons.filter_list_rounded,
-                color: (_filterStartDate != null || _filterType != 'all')
-                    ? AppTheme.primaryLight
-                    : AppTheme.textSecondaryColor(context),
-                size: 20,
-              ),
-              onPressed: _showFilterSheet,
-              tooltip: 'Filter Expenses',
-            ),
           ],
         ),
         const VGapSm(),
 
         () {
-          final filteredExpenses = budgetTransactions.where((expense) {
-            if (_filterStartDate != null &&
-                expense.timestamp.isBefore(_filterStartDate!)) {
-              return false;
-            }
-            if (_filterEndDate != null &&
-                expense.timestamp.isAfter(
-                  _filterEndDate!.add(const Duration(days: 1)),
-                )) {
-              return false;
-            }
-            if (_filterType == 'debit' && !expense.isExpense) return false;
-            if (_filterType == 'credit' && expense.isExpense) return false;
-            return true;
-          }).toList();
+          final sortedExpenses = List<BudgetTransaction>.from(
+            budgetTransactions,
+          )..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-          filteredExpenses.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-          if (filteredExpenses.isEmpty) {
+          if (sortedExpenses.isEmpty) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
                 child: Text(
-                  'No matching expenses found.',
+                  'No transactions found for this budget.',
                   style: TextStyle(
                     color: AppTheme.textSecondaryColor(context),
                     fontStyle: FontStyle.italic,
@@ -522,85 +534,61 @@ class _BudgetScreenState extends State<BudgetScreen> {
             );
           }
 
-          return ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            itemCount: filteredExpenses.length,
-            itemBuilder: (context, index) {
-              final expense = filteredExpenses[index];
-              final formattedDate =
-                  DateFormat('d MMM yyyy · h:mm a').format(expense.timestamp);
-              final isGain = !expense.isExpense;
-              final categoryName = _getTagName(expense.title);
-              final icon = _getTagIcon(categoryName);
-              final color = _getTagColor(categoryName);
+          final recentExpenses = sortedExpenses.take(15).toList();
 
-              return GestureDetector(
-                onTap: () => _handleExpenseTap(context, expense, controller),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: recentExpenses.length,
+                separatorBuilder: (_, _) => const VGapSm(),
+                itemBuilder: (context, index) {
+                  final expense = recentExpenses[index];
+                  return TransactionTile(
+                    transaction: expense,
+                    category: controller.categoryById(expense.categoryId),
+                    paymentMode: controller.paymentModeById(
+                      expense.paymentModeId,
+                    ),
+                    onTap: () =>
+                        _handleExpenseTap(context, expense, controller),
+                  );
+                },
+              ),
+              const VGapMd(),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BudgetTransactionsScreen(
+                          initialBudgetId: budget.id,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                  label: Text(
+                    'View All Transactions (${sortedExpenses.length})',
                   ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface(context),
-                    borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
-                    border: Border.all(color: AppTheme.borderColor(context)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(icon, color: color, size: 16),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppTheme.cardBorderRadius,
                       ),
-                      const HGapMd(),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              expense.title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimaryColor(context),
-                                fontSize: 13,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const VGapXs(),
-                            Text(
-                              formattedDate,
-                              style: TextStyle(
-                                color: AppTheme.textSecondaryColor(context),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const HGapMd(),
-                      Text(
-                        '${isGain ? '+' : '-'}${AppFormat.currency(expense.amount)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isGain
-                              ? AppTheme.successColor
-                              : AppTheme.errorColor,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              );
-            },
+              ),
+            ],
           );
         }(),
       ],
@@ -661,7 +649,8 @@ class _BudgetScreenState extends State<BudgetScreen> {
               const HGapSm(),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _openAddBudget(context, budget: budget, isCopy: true),
+                  onPressed: () =>
+                      _openAddBudget(context, budget: budget, isCopy: true),
                   icon: const Icon(Icons.copy_rounded, size: 16),
                   label: const Text('Copy Budget'),
                 ),
@@ -683,11 +672,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 10,
-            color: AppTheme.textSecondaryColor(context),
-          ),
+          Icon(icon, size: 10, color: AppTheme.textSecondaryColor(context)),
           const HGapXs(),
           Text(
             text,
@@ -823,8 +808,10 @@ class _BudgetScreenState extends State<BudgetScreen> {
     final Color statusColor = !isActive
         ? AppTheme.successColor
         : (isOver
-            ? AppTheme.errorColor
-            : (percent >= 0.7 ? AppTheme.warningColor : AppTheme.primaryColor));
+              ? AppTheme.errorColor
+              : (percent >= budget.alertThreshold
+                    ? AppTheme.warningColor
+                    : AppTheme.primaryColor));
 
     return Tooltip(
       message:
@@ -836,9 +823,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
             SnackBar(
               content: Text(
                 'Budget Progress: ${AppFormat.currency(spent)} of ${AppFormat.currency(total)} spent (${(percent * 100).toStringAsFixed(0)}%)',
-                style: TextStyle(
-                  color: AppTheme.textPrimaryColor(context),
-                ),
+                style: TextStyle(color: AppTheme.textPrimaryColor(context)),
               ),
               backgroundColor: AppTheme.surface(context),
               behavior: SnackBarBehavior.floating,
@@ -852,9 +837,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
           decoration: BoxDecoration(
             color: statusColor.withValues(alpha: 0.12),
             shape: BoxShape.circle,
-            border: Border.all(
-              color: statusColor.withValues(alpha: 0.25),
-            ),
+            border: Border.all(color: statusColor.withValues(alpha: 0.25)),
           ),
           child: Center(
             child: SizedBox(
@@ -887,26 +870,6 @@ class _BudgetScreenState extends State<BudgetScreen> {
         getTagIcon: _getTagIcon,
         getTagColor: _getTagColor,
         getTagName: _getTagName,
-      ),
-    );
-  }
-
-  void _showFilterSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => TransactionFilterSheet(
-        initialStartDate: _filterStartDate,
-        initialEndDate: _filterEndDate,
-        initialType: _filterType,
-        onApply: (start, end, type) {
-          setState(() {
-            _filterStartDate = start;
-            _filterEndDate = end;
-            _filterType = type;
-          });
-        },
       ),
     );
   }

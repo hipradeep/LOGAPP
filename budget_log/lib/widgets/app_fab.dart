@@ -7,6 +7,7 @@ class AppFab extends StatelessWidget {
   final String? tooltip;
   final Color? backgroundColor;
   final Color? foregroundColor;
+  final Object? heroTag;
 
   const AppFab({
     super.key,
@@ -16,6 +17,7 @@ class AppFab extends StatelessWidget {
     this.tooltip,
     this.backgroundColor,
     this.foregroundColor,
+    this.heroTag,
   });
 
   @override
@@ -26,6 +28,7 @@ class AppFab extends StatelessWidget {
 
     if (label != null && label!.isNotEmpty) {
       return FloatingActionButton.extended(
+        heroTag: heroTag,
         onPressed: onPressed,
         tooltip: tooltip,
         elevation: 1.5,
@@ -45,6 +48,7 @@ class AppFab extends StatelessWidget {
     }
 
     return FloatingActionButton(
+      heroTag: heroTag,
       onPressed: onPressed,
       tooltip: tooltip,
       elevation: 1.5,

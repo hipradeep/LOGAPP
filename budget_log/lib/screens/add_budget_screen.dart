@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../controllers/finance_controller.dart';
 import '../models/budget.dart';
+import '../models/budget_tag_mapping.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/format_utils.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/budget_tag_selector.dart';
 import '../widgets/confirmation_dialog.dart';
 import '../widgets/custom_app_bar.dart';
 
 class AddBudgetScreen extends StatefulWidget {
   final Budget? existingBudget;
+  final bool isCopy;
 
-  const AddBudgetScreen({super.key, this.existingBudget});
+  const AddBudgetScreen({super.key, this.existingBudget, this.isCopy = false})
+    : assert(!isCopy || existingBudget != null);
 
   @override
   State<AddBudgetScreen> createState() => _AddBudgetScreenState();
@@ -30,14 +35,20 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isSaving = false;
+  bool _tagsInitialized = false;
+  String _activeTagTab = BudgetTagMapping.expenseType;
+  final Set<String> _selectedExpenseTags = {};
+  final Set<String> _selectedIncomeTags = {};
 
-  bool get _isEditing => widget.existingBudget != null;
+  bool get _isEditing => widget.existingBudget != null && !widget.isCopy;
 
   @override
   void initState() {
     super.initState();
     final budget = widget.existingBudget;
-    _nameController = TextEditingController(text: budget?.name ?? '');
+    _nameController = TextEditingController(
+      text: widget.isCopy ? '${budget!.name} (Copy)' : budget?.name ?? '',
+    );
     _categoryController = TextEditingController(
       text: budget?.categoryName ?? '',
     );
@@ -56,6 +67,31 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     _alertThreshold = budget?.alertThreshold ?? 0.7;
     _startDate = budget?.startDate;
     _endDate = budget?.endDate;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_tagsInitialized) return;
+    _tagsInitialized = true;
+
+    final controller = AppProvider.read<FinanceController>(context);
+    final budget = widget.existingBudget;
+    final expenseOptions = controller.budgetTagOptions(expense: true);
+    final incomeOptions = controller.budgetTagOptions(expense: false);
+    final expenseTags = budget == null
+        ? expenseOptions
+        : controller.expenseTagsForBudget(budget.id);
+    final incomeTags = budget == null
+        ? incomeOptions
+        : controller.incomeTagsForBudget(budget.id);
+
+    _selectedExpenseTags
+      ..clear()
+      ..addAll(expenseTags.where(expenseOptions.contains));
+    _selectedIncomeTags
+      ..clear()
+      ..addAll(incomeTags.where(incomeOptions.contains));
   }
 
   @override
@@ -121,18 +157,31 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
       }
     }
 
-    setState(() => _isSaving = true);
     final controller = AppProvider.read<FinanceController>(context);
-    final now = DateTime.now();
     final existing = widget.existingBudget;
+    if (_selectedExpenseTags.isEmpty && _selectedIncomeTags.isEmpty) {
+      _showMessage('Select at least one tag for this budget.');
+      return;
+    }
+    if (_activeBudgetLimitReached(controller)) {
+      _showMessage(
+        'Maximum ${DatabaseService.maxActiveBudgets} budgets can be active '
+        'at a time. Deactivate one first.',
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final now = DateTime.now();
     final name = _nameController.text.trim();
     final category = _categoryController.text.trim();
     final description = _descriptionController.text.trim();
     final custom = _period == 'custom';
     final messenger = ScaffoldMessenger.of(context);
+    final copySource = widget.isCopy ? existing : null;
 
     try {
-      if (existing == null) {
+      if (existing == null || widget.isCopy) {
         await controller.createBudget(
           name: name,
           limit: limit,
@@ -143,6 +192,14 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
           startDate: custom ? _startDate : null,
           endDate: custom ? _endDate : null,
           isActive: _isActive,
+          repeatDays: copySource?.repeatDays,
+          scheduledTime: copySource?.scheduledTime,
+          repeat: copySource?.repeat,
+          salary: copySource?.salary,
+          rule: copySource?.rule,
+          allocations: copySource?.allocations,
+          expenseTags: _selectedExpenseTags.toList(),
+          incomeTags: _selectedIncomeTags.toList(),
         );
       } else {
         await controller.updateBudget(
@@ -166,6 +223,8 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
             createdAt: existing.createdAt,
             updatedAt: now,
           ),
+          expenseTags: _selectedExpenseTags.toList(),
+          incomeTags: _selectedIncomeTags.toList(),
         );
       }
 
@@ -173,7 +232,13 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
       Navigator.of(context).pop();
       messenger.showSnackBar(
         SnackBar(
-          content: Text(_isEditing ? 'Budget updated' : 'Budget created'),
+          content: Text(
+            widget.isCopy
+                ? 'Budget copied'
+                : _isEditing
+                ? 'Budget updated'
+                : 'Budget created',
+          ),
         ),
       );
     } catch (error) {
@@ -183,9 +248,16 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
     }
   }
 
+  bool _activeBudgetLimitReached(FinanceController controller) {
+    if (!_isActive) return false;
+    final existing = widget.existingBudget;
+    if (!widget.isCopy && existing != null && existing.isActive) return false;
+    return controller.activeBudgets.length >= DatabaseService.maxActiveBudgets;
+  }
+
   Future<void> _delete() async {
     final budget = widget.existingBudget;
-    if (budget == null) return;
+    if (!_isEditing || budget == null) return;
 
     final confirmed = await ConfirmationDialog.showDelete(
       context,
@@ -221,6 +293,8 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final controller = AppProvider.watch<FinanceController>(context);
+    final activeLimitReached = _activeBudgetLimitReached(controller);
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
@@ -228,9 +302,15 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
         child: Column(
           children: [
             CustomAppBar(
-              title: _isEditing ? 'Edit budget' : 'New budget',
+              title: _isEditing
+                  ? 'Edit budget'
+                  : widget.isCopy
+                  ? 'Copy budget'
+                  : 'New budget',
               subtitle: _isEditing
                   ? 'Adjust the cap, period or alert threshold.'
+                  : widget.isCopy
+                  ? 'Create a new budget with the same tags and settings.'
                   : 'Set a spending cap and track it automatically.',
               actions: [
                 if (_isEditing)
@@ -334,14 +414,38 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                         ],
                       ),
                     ],
-                    const VGapMd(),
+                    const VGapLg(),
+                    BudgetTagSelector(
+                      categories: controller.categories,
+                      selectedExpenseTags: _selectedExpenseTags,
+                      selectedIncomeTags: _selectedIncomeTags,
+                      activeTab: _activeTagTab,
+                      onTabChanged: (tab) {
+                        setState(() => _activeTagTab = tab);
+                      },
+                      onExpenseTagsChanged: (tags) {
+                        setState(() {
+                          _selectedExpenseTags
+                            ..clear()
+                            ..addAll(tags);
+                        });
+                      },
+                      onIncomeTagsChanged: (tags) {
+                        setState(() {
+                          _selectedIncomeTags
+                            ..clear()
+                            ..addAll(tags);
+                        });
+                      },
+                    ),
+                    const VGapLg(),
                     TextFormField(
                       controller: _categoryController,
                       textCapitalization: TextCapitalization.sentences,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
-                        labelText: 'Category tag',
-                        hintText: 'Expenses, Needs, Wants...',
+                        labelText: 'Budget label',
+                        hintText: 'Optional short label, e.g. Needs',
                       ),
                     ),
                     const VGapMd(),
@@ -386,15 +490,36 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                     ),
                     const VGapMd(),
                     Card(
-                      child: SwitchListTile(
-                        value: _isActive,
-                        onChanged: (value) {
-                          setState(() => _isActive = value);
-                        },
-                        title: const Text('Active budget'),
-                        subtitle: const Text(
-                          'Only one budget can be active at a time.',
-                        ),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            value: _isActive,
+                            onChanged: (value) {
+                              setState(() => _isActive = value);
+                            },
+                            title: const Text('Active budget'),
+                            subtitle: const Text(
+                              'Up to ${DatabaseService.maxActiveBudgets} '
+                              'budgets can be active at once.',
+                            ),
+                          ),
+                          if (activeLimitReached)
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                AppTheme.spacingMd,
+                                0,
+                                AppTheme.spacingMd,
+                                AppTheme.spacingMd,
+                              ),
+                              child: _InlineWarning(
+                                message:
+                                    'Maximum '
+                                    '${DatabaseService.maxActiveBudgets} '
+                                    'budgets can be active at a time. '
+                                    'Deactivate one first.',
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -421,12 +546,57 @@ class _AddBudgetScreenState extends State<AddBudgetScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.check_rounded, size: 18),
-                  label: Text(_isEditing ? 'Save changes' : 'Create budget'),
+                  label: Text(
+                    _isEditing
+                        ? 'Save changes'
+                        : widget.isCopy
+                        ? 'Create copy'
+                        : 'Create budget',
+                  ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InlineWarning extends StatelessWidget {
+  final String message;
+
+  const _InlineWarning({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingSm),
+      decoration: BoxDecoration(
+        color: AppTheme.warningColor.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
+        border: Border.all(
+          color: AppTheme.warningColor.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 18,
+            color: AppTheme.warningColor,
+          ),
+          const HGapSm(),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textPrimaryColor(context),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

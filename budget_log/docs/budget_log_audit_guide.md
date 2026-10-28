@@ -208,8 +208,9 @@ Impact:
 - A malformed but format-valid file can abort after all tables are deleted; the
   transaction rolls back, but the user has no recovery copy if the file itself
   is wrong.
-- Backup version 1 does not describe schema version 2 features such as
-  `is_autopay`.
+- Backup version 1 does not describe later schema features such as
+  `is_autopay` or `budget_tags`. Version 2 adds `budgetTags`, but the envelope
+  still is not a full schema descriptor.
 
 Remediation:
 

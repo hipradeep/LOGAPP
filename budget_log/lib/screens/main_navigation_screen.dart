@@ -84,11 +84,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   }
 
   void _openTransactionLog() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const TransactionLogScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TransactionLogScreen()));
   }
 
   @override

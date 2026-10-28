@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:budget_log/controllers/finance_controller.dart';
+import 'package:budget_log/models/budget.dart';
+import 'package:budget_log/models/budget_tag_mapping.dart';
 import 'package:budget_log/models/budget_transaction.dart';
 import 'package:budget_log/models/contact.dart';
 import 'package:budget_log/models/debt_record.dart';
@@ -174,6 +176,24 @@ void main() {
       throwsArgumentError,
     );
 
+    final shared = await controller.createCategory(
+      name: 'Shared',
+      type: 'both',
+    );
+    expect(shared.isBoth, isTrue);
+    expect(
+      controller
+          .categoriesForType('expense')
+          .any((item) => item.id == shared.id),
+      isTrue,
+    );
+    expect(
+      controller
+          .categoriesForType('income')
+          .any((item) => item.id == shared.id),
+      isTrue,
+    );
+
     await controller.updateCategory(
       category.copyWith(name: ' Trips ', colorIndex: 4),
     );
@@ -215,6 +235,307 @@ void main() {
       isFalse,
     );
     expect(controller.paymentModes.any((item) => item.id == mode.id), isFalse);
+  });
+
+  test('matches budget transactions and log filters by tag mapping', () async {
+    await controller.createBudget(
+      name: 'Tagged',
+      limit: 1000,
+      period: 'monthly',
+      alertThreshold: 0.7,
+      expenseTags: const ['cat_food', BudgetTagMapping.miscExpenseTag],
+      incomeTags: const ['cat_salary'],
+    );
+    final budgetId = controller.selectedBudgetId!;
+    final now = DateTime.now();
+
+    expect(
+      controller.hasBudgetTagMapping(budgetId, BudgetTagMapping.expenseType),
+      isTrue,
+    );
+    expect(controller.expenseTagsForBudget(budgetId), [
+      'cat_food',
+      BudgetTagMapping.miscExpenseTag,
+    ]);
+    expect(controller.incomeTagsForBudget(budgetId), ['cat_salary']);
+
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_food',
+        amount: 200,
+        type: 'expense',
+        categoryId: 'cat_food',
+        paymentModeId: 'pm_cash',
+        title: 'Lunch',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_rent',
+        amount: 300,
+        type: 'expense',
+        categoryId: 'cat_rent',
+        paymentModeId: 'pm_cash',
+        title: 'Rent',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_misc_expense',
+        amount: 50,
+        type: 'expense',
+        paymentModeId: 'pm_cash',
+        title: 'Misc expense',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_salary',
+        amount: 5000,
+        type: 'income',
+        categoryId: 'cat_salary',
+        paymentModeId: 'pm_bank',
+        title: 'Salary',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_misc_income',
+        amount: 100,
+        type: 'income',
+        paymentModeId: 'pm_bank',
+        title: 'Misc income',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+
+    expect(controller.spentForBudget(budgetId), 250);
+    expect(controller.incomeForBudget(budgetId), 5000);
+    expect(controller.selectedBudgetSpent, 250);
+    expect(controller.selectedBudgetIncome, 5000);
+    expect(controller.isOverBudget(budgetId), isFalse);
+
+    final matched = controller
+        .transactionsForBudget(budgetId)
+        .map((transaction) => transaction.id)
+        .toSet();
+    expect(matched, {'txn_food', 'txn_misc_expense', 'txn_salary'});
+
+    controller.setLogFilter(LogFilter(budgetId: budgetId));
+    expect(controller.filteredTransactions, hasLength(3));
+
+    controller.setLogFilter(
+      LogFilter(budgetId: budgetId, type: 'expense', query: 'misc'),
+    );
+    expect(controller.filteredTransactions.single.id, 'txn_misc_expense');
+
+    controller.setLogFilter(LogFilter(budgetId: budgetId, type: 'income'));
+    expect(controller.filteredTransactions.single.id, 'txn_salary');
+  });
+
+  test('defaults new budgets to all category and misc tags', () async {
+    await controller.createBudget(
+      name: 'Default tags',
+      limit: 1000,
+      period: 'monthly',
+    );
+    final budgetId = controller.selectedBudgetId!;
+
+    final expenseTags = controller.expenseTagsForBudget(budgetId);
+    final incomeTags = controller.incomeTagsForBudget(budgetId);
+    expect(
+      expenseTags,
+      containsAll([
+        ...controller.categoriesForType('expense').map((item) => item.id),
+        BudgetTagMapping.miscExpenseTag,
+      ]),
+    );
+    expect(
+      incomeTags,
+      containsAll([
+        ...controller.categoriesForType('income').map((item) => item.id),
+        BudgetTagMapping.miscIncomeTag,
+      ]),
+    );
+  });
+
+  test(
+    'uses legacy budget ids only until explicit tag mappings exist',
+    () async {
+      controller.dispose();
+      controller = FinanceController(
+        dbService: databaseService,
+        watchDatabase: false,
+      );
+      await controller.load();
+
+      final legacy = Budget(
+        id: 'budget_legacy',
+        name: 'Legacy',
+        categoryName: '',
+        limit: 1000,
+        period: 'monthly',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await databaseService.addBudget(legacy, activate: true);
+      await controller.reload();
+
+      final now = DateTime.now();
+      await controller.saveTransaction(
+        BudgetTransaction(
+          id: 'txn_legacy_expense',
+          amount: 300,
+          type: 'expense',
+          categoryId: 'cat_food',
+          budgetId: legacy.id,
+          title: 'Legacy expense',
+          timestamp: now,
+          createdAt: now,
+        ),
+      );
+      await controller.saveTransaction(
+        BudgetTransaction(
+          id: 'txn_legacy_income',
+          amount: 900,
+          type: 'income',
+          categoryId: 'cat_salary',
+          budgetId: legacy.id,
+          title: 'Legacy income',
+          timestamp: now,
+          createdAt: now,
+        ),
+      );
+
+      expect(
+        controller.hasBudgetTagMapping(legacy.id, BudgetTagMapping.expenseType),
+        isFalse,
+      );
+      expect(controller.spentForBudget(legacy.id), 300);
+      expect(controller.incomeForBudget(legacy.id), 900);
+
+      await databaseService.setBudgetTags(
+        legacy.id,
+        expenseTags: const [],
+        incomeTags: const [],
+      );
+      await controller.reload();
+
+      expect(
+        controller.hasBudgetTagMapping(legacy.id, BudgetTagMapping.expenseType),
+        isTrue,
+      );
+      expect(controller.spentForBudget(legacy.id), 0);
+      expect(controller.incomeForBudget(legacy.id), 0);
+      expect(controller.transactionsForBudget(legacy.id), isEmpty);
+    },
+  );
+
+  test(
+    'limits active budgets and falls back when the selected one is deactivated',
+    () async {
+      for (var index = 0; index < 3; index++) {
+        await controller.createBudget(
+          name: 'Active $index',
+          limit: 1000,
+          period: 'monthly',
+        );
+      }
+      await controller.createBudget(
+        name: 'Inactive',
+        limit: 1000,
+        period: 'monthly',
+        isActive: false,
+      );
+
+      expect(controller.activeBudgets, hasLength(3));
+      final activeIds = controller.activeBudgets
+          .map((budget) => budget.id)
+          .toList();
+      final inactiveId = controller.budgets
+          .firstWhere((budget) => !budget.isActive)
+          .id;
+
+      await expectLater(
+        controller.setBudgetActive(inactiveId, true),
+        throwsStateError,
+      );
+
+      await controller.setSelectedBudget(activeIds.first);
+      await controller.setBudgetActive(activeIds.first, false);
+
+      expect(controller.selectedBudgetId, isNot(activeIds.first));
+      expect(controller.selectedBudget?.isActive, isTrue);
+      expect(controller.activeBudgets, hasLength(2));
+    },
+  );
+
+  test('updates tag mappings and reports threshold status', () async {
+    await controller.createBudget(
+      name: 'Threshold',
+      limit: 1000,
+      period: 'monthly',
+      alertThreshold: 0.7,
+      expenseTags: const ['cat_food'],
+      incomeTags: const ['cat_salary'],
+    );
+    final budgetId = controller.selectedBudgetId!;
+    final now = DateTime.now();
+
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_threshold',
+        amount: 700,
+        type: 'expense',
+        categoryId: 'cat_food',
+        title: 'Threshold expense',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+
+    expect(controller.isThresholdExceeded(budgetId), isTrue);
+    expect(controller.isOverBudget(budgetId), isFalse);
+
+    await controller.updateBudget(
+      controller.budgetById(budgetId)!,
+      expenseTags: const ['cat_rent'],
+      incomeTags: const [],
+    );
+
+    expect(controller.expenseTagsForBudget(budgetId), ['cat_rent']);
+    expect(controller.incomeTagsForBudget(budgetId), isEmpty);
+    expect(controller.spentForBudget(budgetId), 0);
+
+    await controller.saveTransaction(
+      BudgetTransaction(
+        id: 'txn_rent',
+        amount: 100,
+        type: 'expense',
+        categoryId: 'cat_rent',
+        title: 'Rent',
+        timestamp: now,
+        createdAt: now,
+      ),
+    );
+    expect(controller.spentForBudget(budgetId), 100);
+
+    await controller.updateBudget(
+      controller.budgetById(budgetId)!,
+      expenseTags: const [],
+      incomeTags: const [],
+    );
+    expect(controller.expenseTagsForBudget(budgetId), isEmpty);
+    expect(controller.spentForBudget(budgetId), 0);
   });
 
   test('saves a split expense with linked debt records', () async {

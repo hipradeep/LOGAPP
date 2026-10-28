@@ -32,7 +32,11 @@ class SmsValidationTarget {
   final String kind;
   final String? action;
 
-  const SmsValidationTarget({required this.id, required this.kind, this.action});
+  const SmsValidationTarget({
+    required this.id,
+    required this.kind,
+    this.action,
+  });
 
   factory SmsValidationTarget.fromMap(Map<String, dynamic> map) {
     return SmsValidationTarget(

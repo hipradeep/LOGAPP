@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'controllers/cloud_sync_controller.dart';
 import 'controllers/finance_controller.dart';
+import 'controllers/sms_inbox_controller.dart';
 import 'controllers/theme_controller.dart';
 import 'screens/main_navigation_screen.dart';
 import 'services/service_locator.dart';
@@ -18,7 +19,10 @@ void main() async {
   setupLocator();
   await initializeServices();
   runApp(const BudgetLogApp());
-  unawaited(getIt<CloudSyncController>().init());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(getIt<SmsInboxController>().requestPermissionOnLaunch());
+    unawaited(getIt<CloudSyncController>().init());
+  });
 }
 
 class BudgetLogApp extends StatelessWidget {

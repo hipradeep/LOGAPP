@@ -6,6 +6,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_fab.dart';
 import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
+import '../widgets/budget_selector_sheet.dart';
 import '../widgets/tab_header.dart';
 import '../widgets/transaction_tile.dart';
 import 'add_transaction_screen.dart';
@@ -20,6 +21,7 @@ class TransactionLogScreen extends StatefulWidget {
 class _TransactionLogScreenState extends State<TransactionLogScreen> {
   final _searchController = TextEditingController();
   String _type = 'all';
+  String? _budgetId;
   DateTime? _startDate;
   DateTime? _endDate;
   bool _initialized = false;
@@ -31,6 +33,7 @@ class _TransactionLogScreenState extends State<TransactionLogScreen> {
     final filter = AppProvider.read<FinanceController>(context).logFilter;
     _searchController.text = filter.query;
     _type = filter.type;
+    _budgetId = filter.budgetId;
     _startDate = filter.startDate;
     _endDate = filter.endDate;
     _initialized = true;
@@ -47,6 +50,7 @@ class _TransactionLogScreenState extends State<TransactionLogScreen> {
       LogFilter(
         query: _searchController.text,
         type: _type,
+        budgetId: _budgetId,
         startDate: _startDate,
         endDate: _endDate,
       ),
@@ -77,10 +81,35 @@ class _TransactionLogScreenState extends State<TransactionLogScreen> {
     _applyFilter();
   }
 
+  Future<void> _pickBudget() async {
+    final controller = AppProvider.read<FinanceController>(context);
+    final budgets = [...controller.activeBudgets];
+    final selectedBudget = _budgetId == null
+        ? null
+        : controller.budgetById(_budgetId!);
+    if (selectedBudget != null &&
+        !budgets.any((budget) => budget.id == selectedBudget.id)) {
+      budgets.add(selectedBudget);
+    }
+
+    await BudgetSelectorSheet.show(
+      context,
+      budgets: budgets,
+      selectedBudgetId: _budgetId,
+      includeAll: true,
+      onSelected: (id) {
+        if (!mounted) return;
+        setState(() => _budgetId = id);
+        _applyFilter();
+      },
+    );
+  }
+
   void _clearFilter() {
     setState(() {
       _searchController.clear();
       _type = 'all';
+      _budgetId = null;
       _startDate = null;
       _endDate = null;
     });
@@ -90,6 +119,9 @@ class _TransactionLogScreenState extends State<TransactionLogScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = AppProvider.read<FinanceController>(context);
+    final selectedBudget = _budgetId == null
+        ? null
+        : controller.budgetById(_budgetId!);
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
@@ -159,6 +191,17 @@ class _TransactionLogScreenState extends State<TransactionLogScreen> {
                     label: 'Income',
                     selected: _type == 'income',
                     onSelected: () => _setType('income'),
+                  ),
+                  const HGapSm(),
+                  FilterChip(
+                    selected: _budgetId != null,
+                    showCheckmark: false,
+                    avatar: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 16,
+                    ),
+                    label: Text(selectedBudget?.name ?? 'Budget'),
+                    onSelected: (_) => _pickBudget(),
                   ),
                   const HGapSm(),
                   FilterChip(

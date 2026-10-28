@@ -13,8 +13,8 @@
 | --- | --- |
 | [Design guide](budget_log_design.md) | Current architecture, schema, navigation, domain flows, SMS pipeline, sync, testing |
 | [Audit guide](budget_log_audit_guide.md) | Severity-ranked findings, pass/fail checklists, release gates |
-| [Migration plan](budget_log_migration_plan.md) | Historical Firebase-to-SQLite migration scope |
 | [Profile plan](profile_screen_plan.md) | Profile and Settings organization intent |
+| [Multi-budget plan](multiple_budgets_and_tag_mapping_plan.md) | Multi-budget (max 3), tag mapping table, expense/income tag selectors, 70% threshold |
 | [SMS parser notes](sms_parser/README.md) | Parser-specific reference |
 | [Legacy Firebase plan](budget_app_plan.md) | Historical `budget_app` Firestore plan. Stale; do not use as current architecture |
 
@@ -62,7 +62,7 @@ Three bottom tabs:
 | 2 | Profile | `ProfileScreen` |
 
 The full transaction log is pushed from Home's "View all" action. It is not a
-bottom tab.
+bottom tab. Manage Budgets is pushed from Home and Budget.
 
 Subscriptions and Udar are pushed from Profile. Settings is pushed from the
 Profile header. SMS inbox is pushed from Settings or a validation notification.
@@ -73,7 +73,7 @@ Tab screens use `TabHeader`. Pushed screens use `CustomAppBar`.
 
 ## Data rules
 
-- Schema version: 2.
+- Schema version: 3.
 - Database: `budget_log.db`.
 - Foreign keys are enabled on every connection.
 - WAL is enabled on open.
@@ -81,7 +81,13 @@ Tab screens use `TabHeader`. Pushed screens use `CustomAppBar`.
 - Timestamps are epoch milliseconds.
 - Money is SQLite `REAL`, formatted as INR with `en_IN`.
 - Nested budget data is JSON text.
-- One active budget is enforced in `DatabaseService`.
+- A maximum of three active budgets is enforced in `DatabaseService`.
+- Budget expense/income tag mappings live in `budget_tags`, unique by
+  `(budget_id, type)`, with cascade delete from `budgets`.
+- Legacy `transactions.budget_id` matching applies only when a budget has no
+  explicit mapping row.
+- Backup format version is 2 and includes `budgetTags`; version 1 remains
+  importable.
 - Backup export blanks raw SMS bodies and excludes `active_account_email`.
 - Restore is a destructive full replacement inside one transaction.
 
@@ -138,6 +144,7 @@ Before merging:
 - [ ] No `.withOpacity()` was added.
 - [ ] New spacing uses `AppSpacers`.
 - [ ] New data paths use transactions and indexes.
+- [ ] New budget paths enforce the three-active limit and tag-mapping semantics.
 - [ ] New SMS paths preserve the 30-day rule and deduplication.
 - [ ] New sync paths preserve backup redaction and account-email exclusion.
 - [ ] New UI has empty, loading, and error states.

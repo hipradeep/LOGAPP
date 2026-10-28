@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 import '../controllers/cloud_sync_controller.dart';
 import '../controllers/debt_controller.dart';
 import '../controllers/finance_controller.dart';
+import '../controllers/sms_inbox_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../utils/format_utils.dart';
-import '../widgets/app_provider.dart';
 import '../widgets/app_spacers.dart';
 import '../widgets/tab_header.dart';
+import 'budget_transactions_screen.dart';
+import 'manage_budgets_screen.dart';
 import 'settings_screen.dart';
+import 'sms_inbox_screen.dart';
 import 'subscription_screen.dart';
 import 'udar_screen.dart';
 
@@ -35,18 +38,52 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   SubscriptionController get _subscriptions => getIt<SubscriptionController>();
 
+  SmsInboxController? get _smsInbox => getIt.isRegistered<SmsInboxController>()
+      ? getIt<SmsInboxController>()
+      : null;
+
   @override
   bool get wantKeepAlive => true;
 
-  Future<void> _openSettings() async {
-    await Navigator.of(
+  void _openSettings() {
+    Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
+  void _openAllTransactions() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const BudgetTransactionsScreen()));
+  }
+
+  void _openManageBudgets() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ManageBudgetsScreen()));
+  }
+
+  void _openSubscriptions() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+  }
+
+  void _openUdar() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const UdarScreen()));
+  }
+
+  void _openSmsInbox() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SmsInboxScreen()));
+  }
+
   Future<void> _signIn() async {
     final cloud = _cloud;
-    if (cloud == null || _isSigningIn || cloud.isSigningIn) return;
+    if (cloud == null || _isSigningIn || cloud.isBusy) return;
 
     setState(() => _isSigningIn = true);
     unawaited(
@@ -63,7 +100,17 @@ class _ProfileScreenState extends State<ProfileScreen>
     Navigator.of(context, rootNavigator: true).pop();
     setState(() => _isSigningIn = false);
 
-    if (!success) {
+    if (success) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Signed in as ${cloud.displayName ?? cloud.userEmail ?? 'User'}!',
+            ),
+          ),
+        );
+    } else {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -77,19 +124,17 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final finance = AppProvider.watch<FinanceController>(context);
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+    final finance = getIt<FinanceController>();
     final cloud = _cloud;
-    final textTheme = Theme.of(context).textTheme;
-    final incomeBase = finance.monthlyIncome > 0
-        ? finance.monthlyIncome
-        : finance.plannedIncome;
-    final savedRate = incomeBase <= 0
-        ? 0.0
-        : (((incomeBase - finance.monthlyExpense) / incomeBase) * 100)
-              .clamp(0, 100)
-              .toDouble();
 
-    final listenable = Listenable.merge([_debt, _subscriptions, ?cloud]);
+    final listenable = Listenable.merge([
+      finance,
+      _debt,
+      _subscriptions,
+      ?_smsInbox,
+      ?cloud,
+    ]);
 
     return Scaffold(
       backgroundColor: AppTheme.background(context),
@@ -98,12 +143,21 @@ class _ProfileScreenState extends State<ProfileScreen>
           children: [
             TabHeader(
               title: 'Profile',
-              subtitle: 'Your financial snapshot & subscriptions.',
+              subtitle: 'Your financial stats & settings',
               actions: [
                 IconButton(
+                  icon: Icon(
+                    Icons.settings_rounded,
+                    color: AppTheme.textSecondaryColor(context),
+                    size: 22,
+                  ),
                   onPressed: _openSettings,
-                  icon: const Icon(Icons.settings_outlined),
                   tooltip: 'Settings',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
                 ),
               ],
             ),
@@ -111,51 +165,38 @@ class _ProfileScreenState extends State<ProfileScreen>
               child: ListenableBuilder(
                 listenable: listenable,
                 builder: (context, _) {
-                  return ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppTheme.spacingMd,
-                      AppTheme.spacingSm,
-                      AppTheme.spacingMd,
-                      AppTheme.spacingXl,
+                  return SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 4,
+                      bottom: bottomSafe + 24,
                     ),
-                    children: [
-                      _ProfileHeroCard(
-                        cloud: cloud,
-                        spent: finance.monthlyExpense,
-                        savedRate: savedRate,
-                        subscriptions: _subscriptions.activeCount,
-                        udar: _debt.netBalance,
-                        isSigningIn: _isSigningIn,
-                        onSignIn: _signIn,
-                      ),
-                      const VGapLg(),
-                      const _SectionLabel('QUICK ACCESS'),
-                      const VGapSm(),
-                      _ProfileActionsCard(
-                        activeSubscriptions: _subscriptions.activeCount,
-                        udarBalance: _debt.netBalance,
-                        onOpenSubscriptions: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SubscriptionScreen(),
-                            ),
-                          );
-                        },
-                        onOpenUdar: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const UdarScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const VGapLg(),
-                      Text(
-                        'Manage categories, payment modes, cloud backups and '
-                        'appearance from Settings.',
-                        style: textTheme.bodySmall,
-                      ),
-                    ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _UserProfileCard(
+                          finance: finance,
+                          cloud: cloud,
+                          isSigningIn: _isSigningIn,
+                          onSignIn: _signIn,
+                        ),
+                        const VGapMd(),
+                        const _SectionHeader(title: 'MENU'),
+                        _ProfileMenuCard(
+                          transactionCount: finance.transactions.length,
+                          budgetCount: finance.budgets.length,
+                          activeSubscriptions: _subscriptions.activeCount,
+                          smsPendingCount: _smsInbox?.pendingCount ?? 0,
+                          onTransactionsTap: _openAllTransactions,
+                          onBudgetsTap: _openManageBudgets,
+                          onSubscriptionsTap: _openSubscriptions,
+                          onUdarTap: _openUdar,
+                          onSmsTap: _openSmsInbox,
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -167,356 +208,604 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 }
 
-class _ProfileHeroCard extends StatelessWidget {
+class _UserProfileCard extends StatelessWidget {
+  final FinanceController finance;
   final CloudSyncController? cloud;
-  final double spent;
-  final double savedRate;
-  final int subscriptions;
-  final double udar;
   final bool isSigningIn;
   final Future<void> Function() onSignIn;
 
-  const _ProfileHeroCard({
+  const _UserProfileCard({
+    required this.finance,
     required this.cloud,
-    required this.spent,
-    required this.savedRate,
-    required this.subscriptions,
-    required this.udar,
     required this.isSigningIn,
     required this.onSignIn,
   });
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final signedIn = cloud?.isSignedIn ?? false;
+    final isSignedIn = cloud?.isSignedIn ?? false;
     final signingIn = isSigningIn || (cloud?.isSigningIn ?? false);
-    final name = _displayName(cloud);
-    final email = cloud?.userEmail;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingMd),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ProfileAvatar(cloud: cloud, name: name),
-                const HGapSm(),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              signedIn ? name : 'Guest Spender',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.titleMedium,
-                            ),
-                          ),
-                          if (signedIn) ...[
-                            const HGapXs(),
-                            const Icon(
-                              Icons.verified_rounded,
-                              size: 16,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const VGapXs(),
-                      Text(
-                        signedIn
-                            ? (email == null || email.isEmpty
-                                  ? 'Signed in to Google'
-                                  : email)
-                            : 'Your data stays on this device.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall,
-                      ),
-                      const VGapXs(),
-                      Text(
-                        _syncLabel(cloud),
-                        style: textTheme.labelSmall?.copyWith(
-                          color: AppTheme.textMutedColor(context),
-                        ),
-                      ),
-                      if (cloud?.errorMessage != null) ...[
-                        const VGapXs(),
-                        Text(
-                          cloud!.errorMessage!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: AppTheme.errorColor,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (!signedIn && cloud != null) ...[
-                  const HGapSm(),
-                  FilledButton.tonal(
-                    onPressed: signingIn ? null : onSignIn,
-                    child: signingIn
-                        ? const _ButtonSpinner()
-                        : const Text('Sign in'),
-                  ),
-                ],
-              ],
-            ),
-            const VGapMd(),
-            Divider(color: AppTheme.borderColor(context), height: 1),
-            const VGapMd(),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _MiniStat(
-                    icon: Icons.arrow_upward_rounded,
-                    label: 'Spent',
-                    value: AppFormat.currency(spent),
-                    color: AppTheme.pastelCoralText(context),
-                  ),
-                ),
-                const HGapXs(),
-                Expanded(
-                  child: _MiniStat(
-                    icon: Icons.savings_rounded,
-                    label: 'Saved',
-                    value: '${savedRate.round()}%',
-                    color: AppTheme.pastelGreenText(context),
-                  ),
-                ),
-                const HGapXs(),
-                Expanded(
-                  child: _MiniStat(
-                    icon: Icons.repeat_rounded,
-                    label: 'Subs',
-                    value: '$subscriptions',
-                    color: AppTheme.pastelIndigoText(context),
-                  ),
-                ),
-                const HGapXs(),
-                Expanded(
-                  child: _MiniStat(
-                    icon: Icons.people_alt_rounded,
-                    label: 'Udar',
-                    value: AppFormat.currency(udar),
-                    color: AppTheme.pastelBlueText(context),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _displayName(CloudSyncController? cloud) {
-    final displayName = cloud?.displayName?.trim();
-    if (displayName != null && displayName.isNotEmpty) return displayName;
+    final syncDisplayName = cloud?.displayName?.trim();
     final email = cloud?.userEmail?.trim();
-    if (email != null && email.isNotEmpty) {
-      return email.split('@').first;
+
+    final displayName = (syncDisplayName != null && syncDisplayName.isNotEmpty)
+        ? syncDisplayName
+        : ((email != null && email.isNotEmpty)
+              ? email.split('@').first
+              : 'Guest Spender');
+    final displayEmail = (email != null && email.isNotEmpty)
+        ? email
+        : 'Sign in to sync your data';
+
+    final avatarUrl = cloud?.photoUrl;
+    final userInitial = displayName.trim().isEmpty
+        ? 'B'
+        : displayName.trim()[0].toUpperCase();
+
+    final incomeBase = finance.monthlyIncome > 0
+        ? finance.monthlyIncome
+        : finance.plannedIncome;
+    final savedRate = incomeBase <= 0
+        ? 0
+        : (((incomeBase - finance.monthlyExpense) / incomeBase) * 100)
+              .clamp(0, 100)
+              .round();
+
+    if (!isSignedIn && cloud?.isCheckingAuth == true) {
+      return const SizedBox.shrink();
     }
-    return 'Google account';
-  }
-
-  static String _syncLabel(CloudSyncController? cloud) {
-    if (cloud == null) return 'Local only';
-    if (cloud.isCheckingAuth) return 'Checking cloud account…';
-    if (!cloud.isSignedIn) return 'Local only · not backed up';
-    final lastBackup = cloud.lastBackupDate;
-    if (lastBackup == null) return 'Signed in · not backed up yet';
-    return 'Last synced ${AppFormat.relativeDate(lastBackup)}';
-  }
-}
-
-class _ProfileAvatar extends StatelessWidget {
-  final CloudSyncController? cloud;
-  final String name;
-
-  const _ProfileAvatar({required this.cloud, required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    final photoUrl = cloud?.photoUrl;
-    final initial = name.trim().isEmpty ? 'G' : name.trim()[0].toUpperCase();
 
     return Container(
-      width: 52,
-      height: 52,
-      clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.primaryColor, AppTheme.primaryLight],
-        ),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
+        borderRadius: BorderRadius.circular(AppTheme.defaultBorderRadius),
+        border: Border.all(color: AppTheme.borderColor(context)),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.shadowColor(context),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      alignment: Alignment.center,
-      child: photoUrl != null
-          ? Image.network(
-              photoUrl,
-              width: 52,
-              height: 52,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _AvatarInitial(initial: initial),
-            )
-          : _AvatarInitial(initial: initial),
-    );
-  }
-}
-
-class _AvatarInitial extends StatelessWidget {
-  final String initial;
-
-  const _AvatarInitial({required this.initial});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      initial,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        color: Colors.white,
-        fontWeight: FontWeight.w600,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14.0,
+              vertical: 10.0,
+            ),
+            child: isSignedIn
+                ? Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [
+                              AppTheme.primaryColor,
+                              AppTheme.primaryLight,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.25,
+                              ),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: ClipOval(
+                          child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                              ? Image.network(
+                                  avatarUrl,
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Text(
+                                    userInitial,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : Text(
+                                  userInitial,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const HGapMd(),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    displayName,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.textPrimaryColor(context),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const HGapXs(),
+                                const Icon(
+                                  Icons.verified_rounded,
+                                  size: 14,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ],
+                            ),
+                            const VGapXs(),
+                            Text(
+                              displayEmail,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondaryColor(context),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.person_outline_rounded,
+                          color: AppTheme.primaryColor,
+                          size: 20,
+                        ),
+                      ),
+                      const HGapMd(),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Guest Spender',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimaryColor(context),
+                              ),
+                            ),
+                            const VGapXs(),
+                            Text(
+                              displayEmail,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondaryColor(context),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const HGapSm(),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: cloud == null || signingIn ? null : onSignIn,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppTheme.primaryColor.withValues(
+                                  alpha: 0.25,
+                                ),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.cloud_upload_outlined,
+                                  size: 16,
+                                  color: AppTheme.primaryColor,
+                                ),
+                                HGapXs(),
+                                Text(
+                                  'Sign In',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 0.6,
+            color: AppTheme.borderColor(context),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              children: [
+                _MiniStat(
+                  value: AppFormat.currency(finance.monthlyExpense),
+                  label: 'Spent',
+                  icon: Icons.arrow_upward_rounded,
+                  color: AppTheme.pastelCoralText(context),
+                ),
+                _StatDivider(),
+                _MiniStat(
+                  value: '$savedRate%',
+                  label: 'Saved',
+                  icon: Icons.savings_rounded,
+                  color: const Color(0xFF10B981),
+                ),
+                _StatDivider(),
+                _MiniStat(
+                  value: '${getIt<SubscriptionController>().activeCount}',
+                  label: 'Subs',
+                  icon: Icons.repeat_rounded,
+                  color: const Color(0xFF06B6D4),
+                ),
+                _StatDivider(),
+                _MiniStat(
+                  value: AppFormat.currency(getIt<DebtController>().netBalance),
+                  label: 'Udar',
+                  icon: Icons.people_alt_rounded,
+                  color: AppTheme.pastelBlueText(context),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _MiniStat extends StatelessWidget {
-  final IconData icon;
-  final String label;
   final String value;
+  final String label;
+  final IconData icon;
   final Color color;
 
   const _MiniStat({
-    required this.icon,
-    required this.label,
     required this.value,
+    required this.label,
+    required this.icon,
     required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 12.5, color: color),
+                const HGapXs(),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const VGapXs(),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textSecondaryColor(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: color),
-        const VGapXs(),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.labelSmall,
+class _StatDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 18,
+      color: AppTheme.borderColor(context),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4.0, bottom: 6.0),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.textMutedColor(context),
+          letterSpacing: 0.8,
         ),
-        const VGapXs(),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
+      ),
+    );
+  }
+}
+
+class _ProfileMenuCard extends StatelessWidget {
+  final int transactionCount;
+  final int budgetCount;
+  final int activeSubscriptions;
+  final int smsPendingCount;
+  final VoidCallback onTransactionsTap;
+  final VoidCallback onBudgetsTap;
+  final VoidCallback onSubscriptionsTap;
+  final VoidCallback onUdarTap;
+  final VoidCallback onSmsTap;
+
+  const _ProfileMenuCard({
+    required this.transactionCount,
+    required this.budgetCount,
+    required this.activeSubscriptions,
+    required this.smsPendingCount,
+    required this.onTransactionsTap,
+    required this.onBudgetsTap,
+    required this.onSubscriptionsTap,
+    required this.onUdarTap,
+    required this.onSmsTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.surface(context),
+        borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+        border: Border.all(color: AppTheme.borderColor(context)),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.shadowColor(context),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _MenuTile(
+            icon: Icons.receipt_long_rounded,
+            iconColor: AppTheme.pastelGreenText(context),
+            iconBgColor: AppTheme.pastelGreen(context),
+            title: 'Budget Transactions',
+            trailing: _CountBadge(count: transactionCount),
+            onTap: onTransactionsTap,
+          ),
+          _MenuDivider(),
+          _MenuTile(
+            icon: Icons.account_balance_wallet_rounded,
+            iconColor: AppTheme.pastelPurpleText(context),
+            iconBgColor: AppTheme.pastelPurple(context),
+            title: 'Manage Budgets',
+            trailing: _CountBadge(count: budgetCount),
+            onTap: onBudgetsTap,
+          ),
+          _MenuDivider(),
+          _MenuTile(
+            icon: Icons.repeat_rounded,
+            iconColor: AppTheme.pastelIndigoText(context),
+            iconBgColor: AppTheme.pastelIndigo(context),
+            title: 'Subscriptions & recurring bills',
+            trailing: _CountBadge(count: activeSubscriptions),
+            onTap: onSubscriptionsTap,
+          ),
+          _MenuDivider(),
+          _MenuTile(
+            icon: Icons.people_alt_rounded,
+            iconColor: AppTheme.pastelBlueText(context),
+            iconBgColor: AppTheme.pastelBlue(context),
+            title: 'Udar & splits',
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              color: AppTheme.textMutedColor(context),
+              size: 18,
+            ),
+            onTap: onUdarTap,
+          ),
+          _MenuDivider(),
+          _MenuTile(
+            icon: Icons.sms_rounded,
+            iconColor: AppTheme.pastelOrangeText(context),
+            iconBgColor: AppTheme.pastelOrange(context),
+            title: 'SMS inbox',
+            trailing: _CountBadge(count: smsPendingCount),
+            onTap: onSmsTap,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 0.6,
+      indent: 52,
+      color: AppTheme.borderColor(context),
+    );
+  }
+}
+
+class _CountBadge extends StatelessWidget {
+  final int count;
+
+  const _CountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) {
+      return Icon(
+        Icons.chevron_right_rounded,
+        color: AppTheme.textMutedColor(context),
+        size: 18,
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppTheme.pillBorderRadius),
+          ),
           child: Text(
-            value,
-            maxLines: 1,
-            style: textTheme.labelLarge?.copyWith(
-              color: color,
+            '$count',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppTheme.primaryColor,
               fontWeight: FontWeight.w600,
             ),
           ),
+        ),
+        const HGapSm(),
+        Icon(
+          Icons.chevron_right_rounded,
+          color: AppTheme.textMutedColor(context),
+          size: 18,
         ),
       ],
     );
   }
 }
 
-class _ProfileActionsCard extends StatelessWidget {
-  final int activeSubscriptions;
-  final double udarBalance;
-  final VoidCallback onOpenSubscriptions;
-  final VoidCallback onOpenUdar;
+class _MenuTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+  final String title;
+  final Widget? trailing;
+  final VoidCallback onTap;
 
-  const _ProfileActionsCard({
-    required this.activeSubscriptions,
-    required this.udarBalance,
-    required this.onOpenSubscriptions,
-    required this.onOpenUdar,
+  const _MenuTile({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+    required this.title,
+    this.trailing,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = activeSubscriptions == 0
-        ? 'No active subscriptions'
-        : activeSubscriptions == 1
-        ? '1 active subscription'
-        : '$activeSubscriptions active subscriptions';
-
-    final udarLabel = udarBalance.abs() < 0.01
-        ? 'All settled'
-        : udarBalance > 0
-        ? 'You are owed ${AppFormat.currency(udarBalance.abs())}'
-        : 'You owe ${AppFormat.currency(udarBalance.abs())}';
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppTheme.pastelIndigo(context),
-                borderRadius: BorderRadius.circular(AppTheme.iconBoxRadius),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: iconColor, size: 17),
               ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.autorenew_rounded,
-                color: AppTheme.pastelIndigoText(context),
-                size: 20,
+              const HGapSm(),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimaryColor(context),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-            title: const Text('Subscriptions & recurring bills'),
-            subtitle: Text(subtitle),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: onOpenSubscriptions,
+              trailing ??
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.textMutedColor(context),
+                    size: 18,
+                  ),
+            ],
           ),
-          Divider(
-            height: 1,
-            indent: 68,
-            color: AppTheme.borderColor(context),
-          ),
-          ListTile(
-            leading: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppTheme.pastelBlue(context),
-                borderRadius: BorderRadius.circular(AppTheme.iconBoxRadius),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.people_alt_rounded,
-                color: AppTheme.pastelBlueText(context),
-                size: 20,
-              ),
-            ),
-            title: const Text('Udar & splits'),
-            subtitle: Text(udarLabel),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: onOpenUdar,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -543,35 +832,6 @@ class _SignInDialog extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ButtonSpinner extends StatelessWidget {
-  const _ButtonSpinner();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 16,
-      height: 16,
-      child: CircularProgressIndicator(strokeWidth: 2),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-
-  const _SectionLabel(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: Theme.of(
-        context,
-      ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 }

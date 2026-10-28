@@ -123,7 +123,9 @@ class SmsParserService {
     // First attempt parsing via BankSmsEngine (from sms_parser)
     final parsedEngine = BankSmsEngine.parse(body);
     if (parsedEngine != null && parsedEngine.amount > 0) {
-      final typeStr = parsedEngine.type == parser_models.TransactionType.debit ? 'debit' : 'credit';
+      final typeStr = parsedEngine.type == parser_models.TransactionType.debit
+          ? 'debit'
+          : 'credit';
       final merchant = parsedEngine.merchant ?? _extractMerchant(body);
       final account = parsedEngine.account.number ?? _extractAccountRef(body);
 

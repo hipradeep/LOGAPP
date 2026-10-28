@@ -23,6 +23,7 @@ class BudgetExpenseGraph extends StatefulWidget {
 
 class _BudgetExpenseGraphState extends State<BudgetExpenseGraph> {
   String _viewType = '7d'; // '7d', 'monthly'
+  bool _showLabels = false;
 
   Widget _buildWindowButton(String viewType, String title) {
     final isActive = _viewType == viewType;
@@ -33,16 +34,16 @@ class _BudgetExpenseGraphState extends State<BudgetExpenseGraph> {
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
           color: isActive
-              ? AppTheme.primaryColor.withValues(alpha: 0.12)
+              ? AppTheme.surfaceVariant(context)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppTheme.smallBorderRadius),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isActive
-                ? AppTheme.primaryColor
-                : AppTheme.borderColor(context),
+                ? AppTheme.borderColor(context)
+                : AppTheme.borderColor(context).withValues(alpha: 0.4),
             width: 1,
           ),
         ),
@@ -50,8 +51,8 @@ class _BudgetExpenseGraphState extends State<BudgetExpenseGraph> {
           title,
           style: TextStyle(
             color: isActive
-                ? AppTheme.primaryLight
-                : AppTheme.textSecondaryColor(context),
+                ? AppTheme.textPrimaryColor(context)
+                : AppTheme.textSecondaryColor(context).withValues(alpha: 0.8),
             fontSize: 11,
             fontWeight: FontWeight.bold,
           ),
@@ -67,11 +68,11 @@ class _BudgetExpenseGraphState extends State<BudgetExpenseGraph> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14.0),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: AppTheme.surface(context),
-        borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),
-        border: Border.all(color: AppTheme.borderColor(context), width: 1.0),
+        color: AppTheme.surface(context).withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderColor(context), width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,24 +84,55 @@ class _BudgetExpenseGraphState extends State<BudgetExpenseGraph> {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimaryColor(context),
-                  fontSize: 13,
+                  fontSize: 14,
                 ),
               ),
               const Spacer(),
+              if (_viewType == 'monthly') ...[
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showLabels = !_showLabels;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: _showLabels
+                          ? AppTheme.surfaceVariant(context)
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _showLabels
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      size: 16,
+                      color: _showLabels
+                          ? AppTheme.primaryLight
+                          : AppTheme.textSecondaryColor(
+                              context,
+                            ).withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+                const HGapSm(),
+              ],
               _buildWindowButton('7d', '7D'),
               const HGapSm(),
               _buildWindowButton('monthly', 'Month'),
             ],
           ),
           const VGapMd(),
-          if (_viewType == '7d')
-            BudgetDailyExpenseGraph(
-              daysWindow: 7,
+          if (_viewType == 'monthly')
+            BudgetMonthlyExpenseGraph(
               budget: widget.budget,
               transactions: widget.transactions,
+              showLabels: _showLabels,
             )
           else
-            BudgetMonthlyExpenseGraph(
+            BudgetDailyExpenseGraph(
+              daysWindow: 7,
               budget: widget.budget,
               transactions: widget.transactions,
             ),

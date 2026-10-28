@@ -15,7 +15,8 @@ offline-first SQLite store and optional Google Drive backup.
 In scope:
 
 - Expense and income logging, search, and filtering.
-- Monthly, weekly, daily, and custom budgets with a single active budget.
+- Monthly, weekly, daily, and custom budgets with up to three active budgets.
+- Category tag mappings that drive budget spending and income aggregation.
 - Categories and payment modes with seeded defaults.
 - Split expenses and an Udar (give/take) debt ledger.
 - Recurring subscriptions with local reminder notifications.
@@ -175,8 +176,8 @@ The current shell has three tabs
 
 | Index | Tab | Screen | Purpose |
 | --- | --- | --- | --- |
-| 0 | Home | `HomeScreen` | Monthly summary, active budget, subscriptions preview, recent transactions |
-| 1 | Budgets | `BudgetScreen` | Active budget detail, charts, category breakdown, filtered expenses |
+| 0 | Home | `HomeScreen` | Monthly summary, active-budget switcher, selected budget detail, subscriptions preview, recent transactions |
+| 1 | Budgets | `BudgetScreen` | Active-budget pills, all-budget selector, charts, category breakdown, filtered expenses |
 | 2 | Profile | `ProfileScreen` | Account state, financial snapshot, Subscriptions and Udar entry points, Settings |
 
 There is no Log tab. The full transaction ledger is pushed from Home's
@@ -189,9 +190,10 @@ Tab screens use the custom `TabHeader`. Pushed screens use `CustomAppBar`.
 
 | Screen | Opened from | Notes |
 | --- | --- | --- |
-| `TransactionLogScreen` | Home "View all" | Search, type and date filters, transaction FAB |
+| `TransactionLogScreen` | Home "View all" | Search, budget, type and date filters, transaction FAB |
 | `AddTransactionScreen` | Home, Budget, Log, SMS review | Create/edit expense or income, split expense |
-| `AddBudgetScreen` | Home empty state, Budget | Create/edit budget |
+| `AddBudgetScreen` | Home empty state, Budget, Manage Budgets | Create/edit/copy budget with tag mappings |
+| `ManageBudgetsScreen` | Home, Budget | Active count, activate/deactivate, copy, and delete |
 | `SubscriptionScreen` | Home preview, Profile | Upcoming, overdue, paused sections |
 | `AddSubscriptionScreen` | Subscription screen | Create/edit subscription |
 | `UdarScreen` | Profile | Contact ledger and net balance |
@@ -269,7 +271,7 @@ possible.
 
 ## 7. Data model
 
-Schema version: **2** (`lib/services/database_service.dart:25`).
+Schema version: **3** (`lib/services/database_service.dart:27`).
 
 Database file: `budget_log.db` in the platform database directory. Foreign keys
 are enabled on every connection; WAL is enabled on open.
@@ -281,6 +283,7 @@ are enabled on every connection; WAL is enabled on open.
 | `payment_modes` | Cash, bank, UPI, cards, wallets | `id` text PK, `name`, `type`, `icon`, `created_at` |
 | `categories` | Expense and income labels | `id` text PK, `name`, `type`, `icon`, `color_index`, `created_at` |
 | `budgets` | Budget definitions | `id` PK; `category_name` denormalized text; `limit_amount`; `period`; `repeat_days` JSON; `start_date`/`end_date`; `is_active`; `alert_threshold`; `allocations` JSON |
+| `budget_tags` | Per-budget expense/income tag mappings | `id` PK; `budget_id` FK cascade; `type` (`exp`/`income`); `tag_ids` JSON; unique `(budget_id, type)` |
 | `transactions` | Ledger entries | `id` PK; `amount`; `type`; nullable FKs to categories, payment modes, budgets, all `ON DELETE SET NULL`; `timestamp`; `created_at` |
 | `contacts` | Udar participants | `id` PK; `name`; `phone`; `upi_id`; `avatar_color_index`; `created_at` |
 | `debt_records` | Give/take ledger | `id` PK; `contact_id` cascade; `transaction_id` set null; `direction`; `amount`; `settled_amount`; `status`; `due_date`; `settled_at` |
@@ -288,11 +291,11 @@ are enabled on every connection; WAL is enabled on open.
 | `staged_sms_transactions` | SMS candidates awaiting review | `id` PK; `sms_sender`; `raw_body`; `extracted_amount`; `extracted_merchant`; `extracted_type`; `account_ref`; `sms_timestamp`; `status` |
 | `app_settings` | Key-value app state | `key` PK, `value`, `updated_at` |
 
-Creation statements: `lib/services/database_service.dart:136-278`.
+Creation statements: `lib/services/database_service.dart:140-295`.
 
 ### Indexes
 
-Sixteen indexes are created on open (`lib/services/database_service.dart:27-44`):
+Seventeen indexes are created on open (`lib/services/database_service.dart:30-48`):
 
 - Transactions: timestamp, type, budget, category, payment mode.
 - Categories and payment modes: type.
@@ -301,6 +304,7 @@ Sixteen indexes are created on open (`lib/services/database_service.dart:27-44`)
 - Subscriptions: next due date, active flag.
 - Staged SMS: status, timestamp.
 - Budgets: active flag.
+- Budget tags: `(budget_id, type)` lookup.
 
 ### Conventions
 
@@ -311,14 +315,18 @@ Sixteen indexes are created on open (`lib/services/database_service.dart:27-44`)
 - Money is stored as SQLite `REAL`. There is no minor-unit integer policy.
 - Nested budget data uses JSON-encoded text columns.
 - Models are immutable with manual `toMap`/`fromMap` and `copyWith`.
-- There are no `CHECK` or `UNIQUE` constraints beyond primary keys.
+- There are no `CHECK` constraints. The only composite uniqueness rule is
+  `budget_tags(budget_id, type)`.
 - Foreign key behavior is relied on for cascade and set-null semantics.
 
 ### Migration and seeds
 
-`_onUpgrade` is a per-version switch. Version 2 adds
-`subscriptions.is_autopay INTEGER NOT NULL DEFAULT 0`
-(`lib/services/database_service.dart:280-293`).
+`_onUpgrade` is an ordered per-version switch
+(`lib/services/database_service.dart:297-328`):
+
+- Version 2 adds `subscriptions.is_autopay INTEGER NOT NULL DEFAULT 0`.
+- Version 3 creates `budget_tags`, its cascade FK, unique pair, and
+  `idx_budget_tags_lookup`.
 
 On first creation the database seeds:
 
@@ -335,8 +343,7 @@ and emits `all` (`lib/services/database_service.dart:1176-1192`).
 ### 8.1 Transactions and filtering
 
 - `DatabaseService.getTransactions` supports budget, type, category, payment
-  mode, and date-range filters, ordered by timestamp then creation time
-  (`lib/services/database_service.dart:453-497`).
+  mode, and date-range filters, ordered by timestamp then creation time.
 - No pagination or result limit is applied. The finance controller loads the
   full table and derives aggregates in memory.
 - `FinanceController` computes current-month income and expense, top five
@@ -344,25 +351,37 @@ and emits `all` (`lib/services/database_service.dart:1176-1192`).
   (`lib/controllers/finance_controller.dart:228-272`).
 - Search matches title, note, category name, and payment mode name through a
   lowercase in-memory index (`lib/controllers/finance_controller.dart:216-225`).
-- `LogFilter` combines text, type, start date, and end date.
+- `LogFilter` combines text, type, budget, start date, and end date.
+- Tag-aware budget spend matches the transaction category and misc pseudo-tag
+  against the budget's saved expense tag list. A legacy transaction `budget_id`
+  is used only when no explicit mapping row exists for that budget.
 
 Split expenses create the parent transaction and linked debt records in one
 SQLite transaction (`lib/services/database_service.dart:515-538`).
 
 ### 8.2 Budgets
 
-- One active budget is enforced by `addBudget`, `updateBudget`, and
-  `setActiveBudget`, which clear the previous active flag before setting the new
-  one (`lib/services/database_service.dart:1037-1124`).
+- At most three budgets can be active at once. The guard runs inside a database
+  transaction for `addBudget`, `updateBudget`, and `setBudgetActive`
+  (`lib/services/database_service.dart:1209-1355`).
+- The form blocks a fourth active selection before saving and the database guard
+  remains the final check.
+- `FinanceController` owns the shared selected budget. Home and Budget read the
+  same selection; `initialBudgetId` routes Budget to a specific budget.
 - Supported periods: `daily`, `weekly`, `monthly`, `custom`.
-- `spentForCurrentPeriod` sums expense transactions linked by `budget_id`
-  (`lib/models/budget.dart:139-173`).
-- `safeToSpendDaily` divides remaining budget by remaining days in the period
-  (`lib/models/budget.dart:175-196`).
+- Expense and income tag mappings are stored per budget in `budget_tags`.
+  New budgets default to every current expense and income tag.
+- `spentForCurrentPeriod` and `incomeForCurrentPeriod` use saved tag mappings.
+  Budgets without a mapping row retain legacy `transactions.budget_id` matching.
+- Category relation changes do not rewrite existing budget tag mappings.
+- `safeToSpendDaily` divides remaining budget by remaining days in the period.
 - `category_name` on a budget is informational text. It is not a foreign key and
   does not follow category renames.
-- `alert_threshold` defaults to 0.7 but is presentation metadata; alerts are not
-  scheduled by the notification service.
+- `alert_threshold` defaults to 0.7 and drives the visual warning state and
+  progress marker; alerts are not scheduled by the notification service.
+- Copy creates a new budget from the source values and tag mappings. The source
+  record is not modified.
+- Persistent drag reordering is not implemented.
 
 ### 8.3 Udar, contacts, and debt
 
@@ -501,7 +520,7 @@ transaction and any debt records are inserted and the row becomes `accepted`
 ```json
 {
   "format": "budget_log",
-  "version": 1,
+  "version": 2,
   "exportedAt": "...",
   "paymentModes": [],
   "categories": [],
@@ -511,12 +530,15 @@ transaction and any debt records are inserted and the row becomes `accepted`
   "subscriptions": [],
   "stagedSmsTransactions": [],
   "budgets": [],
+  "budgetTags": [],
   "appSettings": []
 }
 ```
 
 - `raw_body` is blanked on export.
 - `active_account_email` is excluded.
+- Version 2 adds `budgetTags`. Version 1 backups remain importable without tag
+  mappings.
 - SMS sender, merchant, account reference, contact phone/UPI, and notes are still
   included.
 - Drive stores one file: `budget_log_backup.json` in `appDataFolder`.
@@ -585,6 +607,12 @@ Test inventory: `budget_log/test/`.
 | `sms_inbox_controller_test.dart` | Scan/stage, 30-day cutoff, duplicates, drain, accept/reject, background toggle |
 | `sms_inbox_screen_test.dart` | Pending SMS rendering and review action |
 | `notification_settings_screen_test.dart` | Permission status UI |
+| `budget_test.dart` | Tag matching, legacy fallback, period math |
+| `budget_tag_mapping_test.dart` | Mapping model and category relation behavior |
+| `budget_tag_selector_test.dart` | Tag tabs, counts, bulk selection, empty warning |
+| `add_budget_screen_test.dart` | Default tags, edit/copy tags, max-3 guard |
+| `multi_budget_ui_test.dart` | Home/Budget switcher, Manage actions, inactive selection, log filter |
+| `categories_screen_test.dart` | Shared category relation UI |
 | `screens_smoke_test.dart` | Home, log, budget, forms, Udar, profile, catalog rendering |
 | `widget_test.dart` | Design system light/dark rendering |
 
@@ -606,7 +634,10 @@ The design intentionally keeps the data layer simple. The most important
 limitations are:
 
 - Whole-table loads and full-domain reloads on every write.
-- No database-level enum, amount, or uniqueness constraints.
+- No database-level enum, amount, or broad uniqueness constraints outside
+  `budget_tags(budget_id, type)`.
+- Tag mappings do not migrate automatically when a category changes relation.
+- Budgets cannot be reordered persistently.
 - `ConflictAlgorithm.replace` on transactions can trigger delete-and-insert
   semantics under foreign keys.
 - No sync conflict resolution or merge; Drive is last-write-wins.
@@ -627,7 +658,7 @@ See `budget_log_audit_guide.md` for severity, evidence, and remediation checks.
 | Entry and shell | `lib/main.dart`, `lib/screens/main_navigation_screen.dart` |
 | DI | `lib/services/service_locator.dart` |
 | Data | `lib/services/database_service.dart`, `lib/models/` |
-| Finance | `lib/controllers/finance_controller.dart`, `lib/screens/home_screen.dart`, `lib/screens/budget_screen.dart`, `lib/screens/transaction_log_screen.dart` |
+| Finance | `lib/controllers/finance_controller.dart`, `lib/screens/home_screen.dart`, `lib/screens/budget_screen.dart`, `lib/screens/manage_budgets_screen.dart`, `lib/screens/transaction_log_screen.dart`, `lib/widgets/active_budget_switcher.dart`, `lib/widgets/budget_selector_sheet.dart` |
 | Udar | `lib/controllers/contacts_controller.dart`, `lib/controllers/debt_controller.dart`, `lib/screens/udar_screen.dart`, `lib/screens/contact_detail_screen.dart` |
 | Subscriptions | `lib/controllers/subscription_controller.dart`, `lib/services/notification_service.dart`, `lib/services/subscription_reminder_planner.dart` |
 | SMS | `lib/services/sms_*.dart`, `lib/screens/sms_inbox_screen.dart`, `android/app/src/main/kotlin/in/logapp/budget_log/sms/` |

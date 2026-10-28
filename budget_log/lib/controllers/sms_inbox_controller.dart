@@ -25,6 +25,7 @@ class SmsInboxController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isScanning = false;
   bool _hasSmsPermission = false;
+  SmsPermissionState _smsPermissionState = SmsPermissionState.denied;
   bool _backgroundEnabled = false;
   bool _isDisposed = false;
   String? _errorMessage;
@@ -35,6 +36,10 @@ class SmsInboxController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isScanning => _isScanning;
   bool get hasSmsPermission => _hasSmsPermission;
+  bool get smsPermissionPermanentlyDenied =>
+      _smsPermissionState == SmsPermissionState.permanentlyDenied;
+  bool get smsPermissionRestricted =>
+      _smsPermissionState == SmsPermissionState.restricted;
   bool get backgroundEnabled => _backgroundEnabled;
   String? get errorMessage => _errorMessage;
   String? get message => _message;
@@ -62,6 +67,9 @@ class SmsInboxController extends ChangeNotifier {
 
     try {
       _hasSmsPermission = await _service.hasSmsPermission();
+      _smsPermissionState = _hasSmsPermission
+          ? SmsPermissionState.granted
+          : await _service.smsPermissionState();
       _backgroundEnabled = await _service.getBackgroundEnabled();
       await _service.drainAndStage();
       await _service.syncPendingValidations();
@@ -77,12 +85,39 @@ class SmsInboxController extends ChangeNotifier {
     _errorMessage = null;
     final granted = await _service.requestSmsPermission();
     _hasSmsPermission = granted;
+    _smsPermissionState = granted
+        ? SmsPermissionState.granted
+        : await _service.smsPermissionState();
     if (!granted) {
-      _errorMessage = 'SMS permission is required to scan bank messages.';
+      _errorMessage =
+          _smsPermissionState == SmsPermissionState.permanentlyDenied
+          ? 'SMS access is blocked. Enable it from app settings.'
+          : 'SMS permission is required to scan bank messages.';
     }
     _notify();
     return granted;
   }
+
+  Future<void> requestPermissionOnLaunch() async {
+    try {
+      _hasSmsPermission = await _service.hasSmsPermission();
+      _smsPermissionState = _hasSmsPermission
+          ? SmsPermissionState.granted
+          : await _service.smsPermissionState();
+      _notify();
+      if (_hasSmsPermission ||
+          _smsPermissionState == SmsPermissionState.permanentlyDenied ||
+          _smsPermissionState == SmsPermissionState.restricted) {
+        return;
+      }
+      await requestSmsPermission();
+    } catch (error) {
+      _errorMessage = _describeError(error);
+      _notify();
+    }
+  }
+
+  Future<void> openSmsSettings() => _service.openSmsSettings();
 
   Future<void> refresh() async {
     try {
@@ -90,6 +125,9 @@ class SmsInboxController extends ChangeNotifier {
         status: 'pending',
       )).toList(growable: false);
       _hasSmsPermission = await _service.hasSmsPermission();
+      _smsPermissionState = _hasSmsPermission
+          ? SmsPermissionState.granted
+          : await _service.smsPermissionState();
       _backgroundEnabled = await _service.getBackgroundEnabled();
       _notify();
     } catch (error) {
@@ -109,15 +147,22 @@ class SmsInboxController extends ChangeNotifier {
         _hasSmsPermission = requestPermission
             ? await _service.requestSmsPermission()
             : await _service.hasSmsPermission();
+        _smsPermissionState = _hasSmsPermission
+            ? SmsPermissionState.granted
+            : await _service.smsPermissionState();
       }
       if (!_hasSmsPermission) {
-        _errorMessage = 'SMS permission is required to scan bank messages.';
+        _errorMessage =
+            _smsPermissionState == SmsPermissionState.permanentlyDenied
+            ? 'SMS access is blocked. Enable it from app settings.'
+            : 'SMS permission is required to scan bank messages.';
         return null;
       }
 
       final result = await _service.scanAndStage();
       if (result.permissionDenied) {
         _hasSmsPermission = false;
+        _smsPermissionState = await _service.smsPermissionState();
         _errorMessage = 'SMS permission is required to scan bank messages.';
         return result;
       }

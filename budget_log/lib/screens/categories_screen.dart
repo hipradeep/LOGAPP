@@ -32,7 +32,8 @@ class CategoriesScreen extends StatelessWidget {
           children: [
             const CustomAppBar(
               title: 'Categories',
-              subtitle: 'Expense and income labels for your transactions.',
+              subtitle:
+                  'Expense, income, and shared labels for your transactions.',
             ),
             Expanded(
               child: ListView(
@@ -48,7 +49,7 @@ class CategoriesScreen extends StatelessWidget {
                       icon: Icons.category_outlined,
                       title: 'No categories yet',
                       description:
-                          'Add an expense or income category to organise your log.',
+                          'Add an expense, income, or shared category to organise your log.',
                       actionLabel: 'Add category',
                       onActionPressed: () => CategoryFormSheet.show(
                         context,
@@ -156,10 +157,45 @@ class _CategoryRow extends StatelessWidget {
           size: 19,
         ),
       ),
-      title: Text(category.name),
-      subtitle: Text(category.isExpense ? 'Expense' : 'Income'),
+      title: Row(
+        children: [
+          Flexible(child: Text(category.name)),
+          if (category.isBoth) ...[const HGapSm(), const _SharedBadge()],
+        ],
+      ),
+      subtitle: Text(
+        category.isBoth
+            ? 'Expense & income'
+            : (category.isExpense ? 'Expense' : 'Income'),
+      ),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
+    );
+  }
+}
+
+class _SharedBadge extends StatelessWidget {
+  const _SharedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = AppTheme.pastelPurpleText(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppTheme.pillBorderRadius),
+        border: Border.all(color: AppTheme.pastelPurpleBorder(context)),
+      ),
+      child: Text(
+        'Shared',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -290,7 +326,8 @@ class _CategoryFormSheetState extends State<CategoryFormSheet> {
       context,
       entityName: 'category',
       message:
-          'Transactions using this category will become uncategorized. '
+          'Transactions using this category will become uncategorized, and the '
+          'category will be removed from budget tag mappings. '
           'This action cannot be undone.',
     );
     if (!confirmed || !mounted) return;
@@ -318,7 +355,7 @@ class _CategoryFormSheetState extends State<CategoryFormSheet> {
         const VGapMd(),
         SheetHeader(
           title: _isEditing ? 'Edit category' : 'New category',
-          subtitle: 'Choose a name, type and colour.',
+          subtitle: 'Choose a name, relation and colour.',
         ),
         const VGapMd(),
         TextField(
@@ -340,7 +377,7 @@ class _CategoryFormSheetState extends State<CategoryFormSheet> {
           ),
         ],
         const VGapMd(),
-        Text('Type', style: textTheme.labelLarge),
+        Text('Relation', style: textTheme.labelLarge),
         const VGapXs(),
         SizedBox(
           width: double.infinity,
@@ -348,6 +385,7 @@ class _CategoryFormSheetState extends State<CategoryFormSheet> {
             segments: const [
               ButtonSegment(value: 'expense', label: Text('Expense')),
               ButtonSegment(value: 'income', label: Text('Income')),
+              ButtonSegment(value: 'both', label: Text('Both')),
             ],
             selected: {_type},
             showSelectedIcon: false,
@@ -356,6 +394,15 @@ class _CategoryFormSheetState extends State<CategoryFormSheet> {
             },
           ),
         ),
+        if (_type == 'both') ...[
+          const VGapXs(),
+          Text(
+            'Shared categories can be used in both expense and income logs.',
+            style: textTheme.labelSmall?.copyWith(
+              color: AppTheme.textSecondaryColor(context),
+            ),
+          ),
+        ],
         const VGapMd(),
         Text('Colour', style: textTheme.labelLarge),
         const VGapSm(),

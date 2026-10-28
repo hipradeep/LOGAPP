@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../utils/date_utils.dart';
+import 'budget_tag_mapping.dart';
 import 'budget_transaction.dart';
 import 'model_utils.dart';
 
@@ -136,44 +137,98 @@ class Budget {
     return today.isAfter(budgetEnd);
   }
 
-  double spentForCurrentPeriod(List<BudgetTransaction> allTransactions) {
-    final now = DateTime.now();
+  double spentForCurrentPeriod(
+    List<BudgetTransaction> allTransactions, {
+    List<String>? expenseTagIds,
+  }) {
+    final tags = expenseTagIds?.toSet();
     var total = 0.0;
     for (final transaction in allTransactions) {
-      if (transaction.budgetId != id || !transaction.isExpense) continue;
-      if (period == 'daily') {
-        if (AppDateUtils.isSameDay(transaction.timestamp, now)) {
-          total += transaction.amount;
-        }
-      } else if (period == 'weekly') {
-        final startOfWeek = AppDateUtils.startOfWeek(now);
-        final transactionDate = AppDateUtils.startOfDay(transaction.timestamp);
-        if (!transactionDate.isBefore(startOfWeek) &&
-            transactionDate.isBefore(now.add(const Duration(days: 1)))) {
-          total += transaction.amount;
-        }
-      } else if (period == 'monthly') {
-        if (transaction.timestamp.year == now.year &&
-            transaction.timestamp.month == now.month) {
-          total += transaction.amount;
-        }
-      } else if (period == 'custom' || (startDate != null && endDate != null)) {
-        if (AppDateUtils.isDateInRange(
-          transaction.timestamp,
-          startDate,
-          endDate,
-        )) {
-          total += transaction.amount;
-        }
-      } else {
+      if (!transaction.isExpense) continue;
+      if (!_matchesExpense(transaction, tags)) continue;
+      if (_isInCurrentPeriod(transaction.timestamp)) {
         total += transaction.amount;
       }
     }
     return total;
   }
 
-  double safeToSpendDaily(List<BudgetTransaction> allTransactions) {
-    final spent = spentForCurrentPeriod(allTransactions);
+  double incomeForCurrentPeriod(
+    List<BudgetTransaction> allTransactions, {
+    List<String>? incomeTagIds,
+  }) {
+    final tags = incomeTagIds?.toSet();
+    var total = 0.0;
+    for (final transaction in allTransactions) {
+      if (!transaction.isIncome) continue;
+      if (!_matchesIncome(transaction, tags)) continue;
+      if (_isInCurrentPeriod(transaction.timestamp)) {
+        total += transaction.amount;
+      }
+    }
+    return total;
+  }
+
+  bool matchesTransaction(
+    BudgetTransaction transaction, {
+    Set<String>? expenseTags,
+    Set<String>? incomeTags,
+  }) {
+    if (transaction.isExpense) {
+      return _matchesExpense(transaction, expenseTags);
+    }
+    if (transaction.isIncome) {
+      return _matchesIncome(transaction, incomeTags);
+    }
+    return false;
+  }
+
+  bool _matchesExpense(BudgetTransaction transaction, Set<String>? tags) {
+    if (tags == null) return transaction.budgetId == id;
+    final categoryId = transaction.categoryId;
+    if (categoryId == null || categoryId.isEmpty) {
+      return tags.contains(BudgetTagMapping.miscExpenseTag);
+    }
+    return tags.contains(categoryId);
+  }
+
+  bool _matchesIncome(BudgetTransaction transaction, Set<String>? tags) {
+    if (tags == null) return transaction.budgetId == id;
+    final categoryId = transaction.categoryId;
+    if (categoryId == null || categoryId.isEmpty) {
+      return tags.contains(BudgetTagMapping.miscIncomeTag);
+    }
+    return tags.contains(categoryId);
+  }
+
+  bool _isInCurrentPeriod(DateTime timestamp) {
+    final now = DateTime.now();
+    if (period == 'daily') {
+      return AppDateUtils.isSameDay(timestamp, now);
+    }
+    if (period == 'weekly') {
+      final startOfWeek = AppDateUtils.startOfWeek(now);
+      final transactionDate = AppDateUtils.startOfDay(timestamp);
+      return !transactionDate.isBefore(startOfWeek) &&
+          transactionDate.isBefore(now.add(const Duration(days: 1)));
+    }
+    if (period == 'monthly') {
+      return timestamp.year == now.year && timestamp.month == now.month;
+    }
+    if (period == 'custom' || (startDate != null && endDate != null)) {
+      return AppDateUtils.isDateInRange(timestamp, startDate, endDate);
+    }
+    return true;
+  }
+
+  double safeToSpendDaily(
+    List<BudgetTransaction> allTransactions, {
+    List<String>? expenseTagIds,
+  }) {
+    final spent = spentForCurrentPeriod(
+      allTransactions,
+      expenseTagIds: expenseTagIds,
+    );
     final remaining = (limit - spent).clamp(0, double.infinity).toDouble();
     final now = DateTime.now();
 
@@ -195,8 +250,12 @@ class Budget {
     return remaining / remainingDays;
   }
 
-  bool isOverBudget(List<BudgetTransaction> allTransactions) =>
-      spentForCurrentPeriod(allTransactions) > limit;
+  bool isOverBudget(
+    List<BudgetTransaction> allTransactions, {
+    List<String>? expenseTagIds,
+  }) =>
+      spentForCurrentPeriod(allTransactions, expenseTagIds: expenseTagIds) >
+      limit;
 
   Map<String, dynamic> toMap() => {
     'id': id,

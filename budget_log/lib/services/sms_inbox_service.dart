@@ -7,6 +7,8 @@ import 'database_service.dart';
 import 'sms_native_bridge.dart';
 import 'sms_parser_service.dart';
 
+enum SmsPermissionState { granted, denied, permanentlyDenied, restricted }
+
 class SmsImportResult {
   final int scanned;
   final int staged;
@@ -48,6 +50,32 @@ class SmsInboxService {
   Future<bool> hasSmsPermission() => _hasPermission();
 
   Future<bool> requestSmsPermission() => _requestPermission();
+
+  Future<SmsPermissionState> smsPermissionState() async {
+    try {
+      final status = await Permission.sms.status;
+      if (status.isGranted || status.isLimited) {
+        return SmsPermissionState.granted;
+      }
+      if (status.isPermanentlyDenied) {
+        return SmsPermissionState.permanentlyDenied;
+      }
+      if (status.isRestricted) {
+        return SmsPermissionState.restricted;
+      }
+      return SmsPermissionState.denied;
+    } catch (_) {
+      return SmsPermissionState.denied;
+    }
+  }
+
+  Future<void> openSmsSettings() async {
+    try {
+      await openAppSettings();
+    } catch (_) {
+      // Settings cannot be opened in tests or unsupported platforms.
+    }
+  }
 
   static Future<bool> _defaultHasPermission() async {
     try {

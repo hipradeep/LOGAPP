@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 
 import '../models/budget.dart';
+import '../models/budget_tag_mapping.dart';
 import '../models/budget_transaction.dart';
 import '../models/category.dart';
 import '../models/debt_record.dart';
@@ -16,19 +17,22 @@ class LogFilter {
   final String type;
   final DateTime? startDate;
   final DateTime? endDate;
+  final String? budgetId;
 
   const LogFilter({
     this.query = '',
     this.type = 'all',
     this.startDate,
     this.endDate,
+    this.budgetId,
   });
 
   bool get isActive =>
       query.trim().isNotEmpty ||
       type != 'all' ||
       startDate != null ||
-      endDate != null;
+      endDate != null ||
+      budgetId != null;
 }
 
 class CategorySpend {
@@ -70,7 +74,10 @@ class FinanceController extends ChangeNotifier {
   final Map<String, String> _searchIndex = {};
   final Map<String, double> _monthlyCategoryTotals = {};
   final Map<String, double> _spentByBudgetId = {};
+  final Map<String, double> _incomeByBudgetId = {};
   final Map<String, double> _safeDailyByBudgetId = {};
+  final Map<String, List<String>> _expenseTagsByBudgetId = {};
+  final Map<String, List<String>> _incomeTagsByBudgetId = {};
 
   Map<String, String> _settings = const {};
   LogFilter _logFilter = const LogFilter();
@@ -79,6 +86,7 @@ class FinanceController extends ChangeNotifier {
   double _monthlyIncome = 0;
   double _monthlyExpense = 0;
   double _selectedBudgetSpent = 0;
+  double _selectedBudgetIncome = 0;
   double _selectedBudgetSafeDaily = 0;
   bool _isLoading = true;
 
@@ -98,17 +106,23 @@ class FinanceController extends ChangeNotifier {
   double get monthlyExpense => _monthlyExpense;
   double get monthlyNet => _monthlyIncome - _monthlyExpense;
   double get selectedBudgetSpent => _selectedBudgetSpent;
+  double get selectedBudgetIncome => _selectedBudgetIncome;
   double get selectedBudgetSafeDaily => _selectedBudgetSafeDaily;
 
   Budget? get selectedBudget => _budgetById[_selectedBudgetId];
 
+  List<Budget> get activeBudgets => _budgets
+      .where((budget) => budget.isActive)
+      .take(DatabaseService.maxActiveBudgets)
+      .toList(growable: false);
+
+  bool get hasActiveBudgets => _budgets.any((budget) => budget.isActive);
+
   Budget? get activeBudget {
     final selected = selectedBudget;
     if (selected != null && selected.isActive) return selected;
-    for (final budget in _budgets) {
-      if (budget.isActive) return budget;
-    }
-    return null;
+    final active = activeBudgets;
+    return active.isEmpty ? null : active.first;
   }
 
   double get plannedIncome =>
@@ -126,13 +140,66 @@ class FinanceController extends ChangeNotifier {
   List<Category> categoriesForType(String type) =>
       _categoriesByType[type] ?? const [];
 
-  List<BudgetTransaction> transactionsForBudget(String budgetId) =>
-      _transactions.where((item) => item.budgetId == budgetId).toList();
+  List<BudgetTransaction> transactionsForBudget(String budgetId) {
+    final budget = _budgetById[budgetId];
+    if (budget == null) return const [];
+    final expenseTags = _expenseTagsByBudgetId[budgetId]?.toSet();
+    final incomeTags = _incomeTagsByBudgetId[budgetId]?.toSet();
+    return _transactions
+        .where(
+          (transaction) => budget.matchesTransaction(
+            transaction,
+            expenseTags: expenseTags,
+            incomeTags: incomeTags,
+          ),
+        )
+        .toList();
+  }
 
   double spentForBudget(String budgetId) => _spentByBudgetId[budgetId] ?? 0;
 
+  double incomeForBudget(String budgetId) => _incomeByBudgetId[budgetId] ?? 0;
+
   double safeToSpendForBudget(String budgetId) =>
       _safeDailyByBudgetId[budgetId] ?? 0;
+
+  bool isOverBudget(String budgetId) {
+    final budget = _budgetById[budgetId];
+    return budget != null && spentForBudget(budgetId) > budget.limit;
+  }
+
+  bool isThresholdExceeded(String budgetId) {
+    final budget = _budgetById[budgetId];
+    if (budget == null || budget.limit <= 0) return false;
+    return spentForBudget(budgetId) >= budget.limit * budget.alertThreshold;
+  }
+
+  bool hasBudgetTagMapping(String budgetId, String type) {
+    if (type == BudgetTagMapping.expenseType) {
+      return _expenseTagsByBudgetId.containsKey(budgetId);
+    }
+    if (type == BudgetTagMapping.incomeType) {
+      return _incomeTagsByBudgetId.containsKey(budgetId);
+    }
+    return false;
+  }
+
+  List<String> expenseTagsForBudget(String budgetId) {
+    final tags = _expenseTagsByBudgetId[budgetId];
+    return tags == null
+        ? _defaultBudgetTags(expense: true)
+        : List<String>.unmodifiable(tags);
+  }
+
+  List<String> incomeTagsForBudget(String budgetId) {
+    final tags = _incomeTagsByBudgetId[budgetId];
+    return tags == null
+        ? _defaultBudgetTags(expense: false)
+        : List<String>.unmodifiable(tags);
+  }
+
+  List<String> budgetTagOptions({required bool expense}) =>
+      List<String>.unmodifiable(_defaultBudgetTags(expense: expense));
 
   Future<void> load() async {
     _reloadTimer?.cancel();
@@ -166,6 +233,7 @@ class FinanceController extends ChangeNotifier {
       _dbService.getCategories(),
       _dbService.getPaymentModes(),
       _dbService.getAllSettings(),
+      _dbService.getAllBudgetTagMappings(),
     ]);
 
     if (_isDisposed) return;
@@ -177,16 +245,20 @@ class FinanceController extends ChangeNotifier {
     _settings = results[4] as Map<String, String>;
 
     _reindex();
+    _indexBudgetTags(results[5] as List<BudgetTagMapping>);
     _rebuildAggregates();
 
     final storedBudgetId = _settings['selected_budget_id'];
-    if (storedBudgetId != null && _budgetById.containsKey(storedBudgetId)) {
-      _selectedBudgetId = storedBudgetId;
+    final storedBudget = storedBudgetId == null
+        ? null
+        : _budgetById[storedBudgetId];
+    if (storedBudget != null && (storedBudget.isActive || !hasActiveBudgets)) {
+      _selectedBudgetId = storedBudget.id;
     } else {
-      _selectedBudgetId = activeBudget?.id;
-      if (_selectedBudgetId == null && _budgets.isNotEmpty) {
-        _selectedBudgetId = _budgets.first.id;
-      }
+      final active = activeBudgets;
+      _selectedBudgetId = active.isNotEmpty
+          ? active.first.id
+          : (_budgets.isEmpty ? null : _budgets.first.id);
     }
 
     _monthlySalary = double.tryParse(_settings['monthly_salary'] ?? '') ?? 0;
@@ -223,6 +295,49 @@ class FinanceController extends ChangeNotifier {
                   '$categoryName $paymentName'
               .toLowerCase();
     }
+  }
+
+  void _indexBudgetTags(List<BudgetTagMapping> mappings) {
+    _expenseTagsByBudgetId.clear();
+    _incomeTagsByBudgetId.clear();
+    for (final mapping in mappings) {
+      if (mapping.isExpense) {
+        _expenseTagsByBudgetId[mapping.budgetId] = mapping.tagIds;
+      } else if (mapping.isIncome) {
+        _incomeTagsByBudgetId[mapping.budgetId] = mapping.tagIds;
+      }
+    }
+  }
+
+  List<String> _defaultBudgetTags({required bool expense}) {
+    final tags = _categories
+        .where((category) => expense ? category.isExpense : category.isIncome)
+        .map((category) => category.id)
+        .toList();
+    tags.add(
+      expense
+          ? BudgetTagMapping.miscExpenseTag
+          : BudgetTagMapping.miscIncomeTag,
+    );
+    return tags;
+  }
+
+  List<String> _normalizeBudgetTags(
+    Iterable<String> tags, {
+    required bool expense,
+  }) {
+    final allowed = _defaultBudgetTags(expense: expense).toSet();
+    final normalized = <String>[];
+    for (final tag in tags) {
+      final cleaned = tag.trim();
+      if (cleaned.isEmpty ||
+          !allowed.contains(cleaned) ||
+          normalized.contains(cleaned)) {
+        continue;
+      }
+      normalized.add(cleaned);
+    }
+    return normalized;
   }
 
   void _rebuildAggregates() {
@@ -264,10 +379,23 @@ class FinanceController extends ChangeNotifier {
     _recentTransactions = _transactions.take(5).toList(growable: false);
 
     _spentByBudgetId.clear();
+    _incomeByBudgetId.clear();
     _safeDailyByBudgetId.clear();
     for (final budget in _budgets) {
-      _spentByBudgetId[budget.id] = budget.spentForCurrentPeriod(_transactions);
-      _safeDailyByBudgetId[budget.id] = budget.safeToSpendDaily(_transactions);
+      final expenseTags = _expenseTagsByBudgetId[budget.id];
+      final incomeTags = _incomeTagsByBudgetId[budget.id];
+      _spentByBudgetId[budget.id] = budget.spentForCurrentPeriod(
+        _transactions,
+        expenseTagIds: expenseTags,
+      );
+      _incomeByBudgetId[budget.id] = budget.incomeForCurrentPeriod(
+        _transactions,
+        incomeTagIds: incomeTags,
+      );
+      _safeDailyByBudgetId[budget.id] = budget.safeToSpendDaily(
+        _transactions,
+        expenseTagIds: expenseTags,
+      );
     }
   }
 
@@ -275,11 +403,24 @@ class FinanceController extends ChangeNotifier {
     final budget = selectedBudget;
     if (budget == null) {
       _selectedBudgetSpent = 0;
+      _selectedBudgetIncome = 0;
       _selectedBudgetSafeDaily = 0;
       return;
     }
-    _selectedBudgetSpent = budget.spentForCurrentPeriod(_transactions);
-    _selectedBudgetSafeDaily = budget.safeToSpendDaily(_transactions);
+    final expenseTags = _expenseTagsByBudgetId[budget.id];
+    final incomeTags = _incomeTagsByBudgetId[budget.id];
+    _selectedBudgetSpent = budget.spentForCurrentPeriod(
+      _transactions,
+      expenseTagIds: expenseTags,
+    );
+    _selectedBudgetIncome = budget.incomeForCurrentPeriod(
+      _transactions,
+      incomeTagIds: incomeTags,
+    );
+    _selectedBudgetSafeDaily = budget.safeToSpendDaily(
+      _transactions,
+      expenseTagIds: expenseTags,
+    );
   }
 
   void _applyFilter() {
@@ -299,6 +440,15 @@ class FinanceController extends ChangeNotifier {
             59,
             999,
           );
+    final budget = _logFilter.budgetId == null
+        ? null
+        : _budgetById[_logFilter.budgetId];
+    final expenseTags = budget == null
+        ? null
+        : _expenseTagsByBudgetId[budget.id]?.toSet();
+    final incomeTags = budget == null
+        ? null
+        : _incomeTagsByBudgetId[budget.id]?.toSet();
 
     if (!_logFilter.isActive) {
       _filteredTransactions = _transactions;
@@ -307,6 +457,14 @@ class FinanceController extends ChangeNotifier {
 
     _filteredTransactions = _transactions
         .where((transaction) {
+          if (budget != null &&
+              !budget.matchesTransaction(
+                transaction,
+                expenseTags: expenseTags,
+                incomeTags: incomeTags,
+              )) {
+            return false;
+          }
           if (_logFilter.type == 'expense' && !transaction.isExpense) {
             return false;
           }
@@ -383,6 +541,14 @@ class FinanceController extends ChangeNotifier {
     DateTime? startDate,
     DateTime? endDate,
     bool isActive = true,
+    List<int>? repeatDays,
+    String? scheduledTime,
+    bool? repeat,
+    double? salary,
+    String? rule,
+    List<BudgetCategoryAllocation>? allocations,
+    List<String>? expenseTags,
+    List<String>? incomeTags,
   }) async {
     final now = DateTime.now();
     final budget = Budget(
@@ -392,36 +558,86 @@ class FinanceController extends ChangeNotifier {
       limit: limit,
       period: period,
       description: description,
+      repeatDays: repeatDays ?? const [1, 2, 3, 4, 5, 6, 7],
+      scheduledTime: scheduledTime,
       startDate: startDate,
       endDate: endDate,
+      repeat: repeat ?? true,
       isActive: isActive,
       alertThreshold: alertThreshold,
+      salary: salary,
+      rule: rule,
+      allocations: allocations ?? const [],
       createdAt: now,
       updatedAt: now,
     );
+    final resolvedExpenseTags = _normalizeBudgetTags(
+      expenseTags ?? _defaultBudgetTags(expense: true),
+      expense: true,
+    );
+    final resolvedIncomeTags = _normalizeBudgetTags(
+      incomeTags ?? _defaultBudgetTags(expense: false),
+      expense: false,
+    );
 
-    await _dbService.addBudget(budget, activate: isActive);
+    await _dbService.addBudget(
+      budget,
+      activate: isActive,
+      expenseTags: resolvedExpenseTags,
+      incomeTags: resolvedIncomeTags,
+    );
     await reload();
     if (isActive) {
       await setSelectedBudget(budget.id);
     }
   }
 
-  Future<void> updateBudget(Budget budget) async {
-    await _dbService.updateBudget(budget.copyWith(updatedAt: DateTime.now()));
+  Future<void> updateBudget(
+    Budget budget, {
+    List<String>? expenseTags,
+    List<String>? incomeTags,
+  }) async {
+    final wasSelected = _selectedBudgetId == budget.id;
+    final resolvedExpenseTags = expenseTags == null
+        ? null
+        : _normalizeBudgetTags(expenseTags, expense: true);
+    final resolvedIncomeTags = incomeTags == null
+        ? null
+        : _normalizeBudgetTags(incomeTags, expense: false);
+    await _dbService.updateBudget(
+      budget.copyWith(updatedAt: DateTime.now()),
+      expenseTags: resolvedExpenseTags,
+      incomeTags: resolvedIncomeTags,
+    );
     await reload();
     if (budget.isActive) {
       await setSelectedBudget(budget.id);
-    } else if (_selectedBudgetId == budget.id) {
-      await setSelectedBudget(activeBudget?.id);
+    } else if (wasSelected) {
+      final fallback =
+          activeBudget ?? (_budgets.isEmpty ? null : _budgets.first);
+      await setSelectedBudget(fallback?.id);
     }
   }
 
   Future<void> deleteBudget(String id) async {
+    final wasSelected = _selectedBudgetId == id;
     await _dbService.deleteBudget(id);
     await reload();
-    if (_selectedBudgetId == id) {
-      await setSelectedBudget(activeBudget?.id);
+    if (wasSelected) {
+      final fallback =
+          activeBudget ?? (_budgets.isEmpty ? null : _budgets.first);
+      await setSelectedBudget(fallback?.id);
+    }
+  }
+
+  Future<void> setBudgetActive(String id, bool active) async {
+    final wasSelected = _selectedBudgetId == id;
+    await _dbService.setBudgetActive(id, active);
+    await reload();
+    if (!active && wasSelected) {
+      final fallback =
+          activeBudget ?? (_budgets.isEmpty ? null : _budgets.first);
+      await setSelectedBudget(fallback?.id);
     }
   }
 
@@ -502,8 +718,12 @@ class FinanceController extends ChangeNotifier {
   }
 
   void _validateCategoryType(String type) {
-    if (type != 'expense' && type != 'income') {
-      throw ArgumentError.value(type, 'type', 'Must be expense or income');
+    if (type != 'expense' && type != 'income' && type != 'both') {
+      throw ArgumentError.value(
+        type,
+        'type',
+        'Must be expense, income, or both',
+      );
     }
   }
 

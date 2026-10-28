@@ -17,8 +17,9 @@ class Category {
     required this.createdAt,
   });
 
-  bool get isExpense => type == 'expense';
-  bool get isIncome => type == 'income';
+  bool get isExpense => type == 'expense' || type == 'both';
+  bool get isIncome => type == 'income' || type == 'both';
+  bool get isBoth => type == 'both';
 
   Map<String, dynamic> toMap() => {
     'id': id,

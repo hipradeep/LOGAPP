@@ -10,6 +10,8 @@ class AppEmptyState extends StatelessWidget {
   final VoidCallback? onActionPressed;
   final Color? iconColor;
   final bool showCard;
+  final EdgeInsetsGeometry? margin;
+  final EdgeInsetsGeometry? padding;
 
   const AppEmptyState({
     super.key,
@@ -20,6 +22,8 @@ class AppEmptyState extends StatelessWidget {
     this.onActionPressed,
     this.iconColor,
     this.showCard = true,
+    this.margin,
+    this.padding,
   });
 
   @override
@@ -59,12 +63,14 @@ class AppEmptyState extends StatelessWidget {
     if (!showCard) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppTheme.spacingLg,
-            AppTheme.spacingXxl,
-            AppTheme.spacingLg,
-            AppTheme.spacingXl,
-          ),
+          padding:
+              padding ??
+              const EdgeInsets.fromLTRB(
+                AppTheme.spacingLg,
+                AppTheme.spacingXxl,
+                AppTheme.spacingLg,
+                AppTheme.spacingXl,
+              ),
           child: content,
         ),
       );
@@ -72,11 +78,14 @@ class AppEmptyState extends StatelessWidget {
 
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacingMd,
-          vertical: AppTheme.spacingLg,
-        ),
-        padding: const EdgeInsets.all(AppTheme.spacingLg),
+        width: double.infinity,
+        margin:
+            margin ??
+            const EdgeInsets.symmetric(
+              horizontal: AppTheme.spacingMd,
+              vertical: AppTheme.spacingLg,
+            ),
+        padding: padding ?? const EdgeInsets.all(AppTheme.spacingLg),
         decoration: BoxDecoration(
           color: AppTheme.surface(context),
           borderRadius: BorderRadius.circular(AppTheme.cardBorderRadius),

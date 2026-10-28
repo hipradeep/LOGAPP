@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/budget.dart';
+import '../models/budget_tag_mapping.dart';
 import '../models/budget_transaction.dart';
 import '../models/category.dart';
 import '../models/contact.dart';
@@ -22,7 +24,8 @@ class DatabaseService {
 
   static final DatabaseService instance = DatabaseService();
 
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
+  static const int maxActiveBudgets = 3;
 
   static const List<String> _indexStatements = [
     'CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp);',
@@ -41,6 +44,7 @@ class DatabaseService {
     'CREATE INDEX IF NOT EXISTS idx_staged_sms_status ON staged_sms_transactions(status);',
     'CREATE INDEX IF NOT EXISTS idx_staged_sms_timestamp ON staged_sms_transactions(sms_timestamp);',
     'CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_active);',
+    'CREATE INDEX IF NOT EXISTS idx_budget_tags_lookup ON budget_tags(budget_id, type);',
   ];
 
   final DatabaseFactory _factory;
@@ -181,6 +185,19 @@ class DatabaseService {
     ''');
 
     batch.execute('''
+      CREATE TABLE budget_tags (
+        id         TEXT PRIMARY KEY,
+        budget_id  TEXT NOT NULL,
+        type       TEXT NOT NULL,
+        tag_ids    TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
+        UNIQUE(budget_id, type)
+      );
+    ''');
+
+    batch.execute('''
       CREATE TABLE transactions (
         id              TEXT PRIMARY KEY,
         amount          REAL NOT NULL,
@@ -286,6 +303,24 @@ class DatabaseService {
           await db.execute(
             'ALTER TABLE subscriptions '
             'ADD COLUMN is_autopay INTEGER NOT NULL DEFAULT 0;',
+          );
+          break;
+        case 3:
+          await db.execute('''
+            CREATE TABLE budget_tags (
+              id         TEXT PRIMARY KEY,
+              budget_id  TEXT NOT NULL,
+              type       TEXT NOT NULL,
+              tag_ids    TEXT NOT NULL,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
+              UNIQUE(budget_id, type)
+            );
+          ''');
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budget_tags_lookup '
+            'ON budget_tags(budget_id, type);',
           );
           break;
       }
@@ -443,11 +478,17 @@ class DatabaseService {
 
   Future<void> deleteCategory(String id) async {
     final db = await database;
-    await db.delete('categories', where: 'id = ?', whereArgs: [id]);
+    final tagsChanged = await db.transaction((txn) async {
+      await txn.delete('categories', where: 'id = ?', whereArgs: [id]);
+      return _removeTagFromBudgetMappings(txn, id);
+    });
     await _refreshCategories();
     await _refreshTransactions();
     _notifyChange('categories');
     _notifyChange('transactions');
+    if (tagsChanged) {
+      _notifyChange('budget_tags');
+    }
   }
 
   Future<List<BudgetTransaction>> getTransactions({
@@ -1054,17 +1095,152 @@ class DatabaseService {
     return rows.isEmpty ? null : Budget.fromMap(rows.first);
   }
 
+  Future<List<Budget>> getActiveBudgets() async {
+    final db = await database;
+    final rows = await db.query(
+      'budgets',
+      where: 'is_active = 1',
+      orderBy: 'created_at DESC',
+      limit: maxActiveBudgets,
+    );
+    return rows.map(Budget.fromMap).toList(growable: false);
+  }
+
+  Future<Map<String, List<String>>> getBudgetTags(String budgetId) async {
+    final db = await database;
+    final rows = await db.query(
+      'budget_tags',
+      where: 'budget_id = ?',
+      whereArgs: [budgetId],
+    );
+    final result = <String, List<String>>{
+      BudgetTagMapping.expenseType: const [],
+      BudgetTagMapping.incomeType: const [],
+    };
+    for (final row in rows.map(BudgetTagMapping.fromMap)) {
+      if (row.type == BudgetTagMapping.expenseType ||
+          row.type == BudgetTagMapping.incomeType) {
+        result[row.type] = row.tagIds;
+      }
+    }
+    return result;
+  }
+
+  Future<List<BudgetTagMapping>> getAllBudgetTagMappings() async {
+    final db = await database;
+    final rows = await db.query(
+      'budget_tags',
+      orderBy: 'budget_id ASC, type ASC',
+    );
+    return rows.map(BudgetTagMapping.fromMap).toList(growable: false);
+  }
+
+  Future<void> setBudgetTags(
+    String budgetId, {
+    required List<String> expenseTags,
+    required List<String> incomeTags,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction((txn) async {
+      await _upsertBudgetTags(
+        txn,
+        budgetId,
+        BudgetTagMapping.expenseType,
+        expenseTags,
+        now,
+      );
+      await _upsertBudgetTags(
+        txn,
+        budgetId,
+        BudgetTagMapping.incomeType,
+        incomeTags,
+        now,
+      );
+    });
+    _notifyChange('budget_tags');
+  }
+
+  Future<void> _upsertBudgetTags(
+    DatabaseExecutor executor,
+    String budgetId,
+    String type,
+    List<String> tagIds,
+    int now,
+  ) async {
+    await executor.insert('budget_tags', {
+      'id': '${budgetId}_$type',
+      'budget_id': budgetId,
+      'type': type,
+      'tag_ids': jsonEncode(tagIds),
+      'created_at': now,
+      'updated_at': now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<bool> _removeTagFromBudgetMappings(
+    DatabaseExecutor executor,
+    String tagId,
+  ) async {
+    final rows = await executor.query('budget_tags');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var changed = false;
+    for (final row in rows.map(BudgetTagMapping.fromMap)) {
+      if (!row.tagIds.contains(tagId)) continue;
+      final remaining = row.tagIds
+          .where((item) => item != tagId)
+          .toList(growable: false);
+      await executor.update(
+        'budget_tags',
+        {'tag_ids': jsonEncode(remaining), 'updated_at': now},
+        where: 'id = ?',
+        whereArgs: [row.id],
+      );
+      changed = true;
+    }
+    return changed;
+  }
+
   Stream<List<Budget>> watchBudgets() async* {
     yield await getBudgets();
     yield* _budgetsController.stream;
   }
 
-  Future<void> addBudget(Budget budget, {bool activate = false}) async {
+  Future<void> _assertCanActivateBudget(
+    DatabaseExecutor executor, {
+    String? excludeId,
+  }) async {
+    final where = excludeId == null
+        ? 'is_active = 1'
+        : 'is_active = 1 AND id != ?';
+    final args = excludeId == null ? <Object?>[] : <Object?>[excludeId];
+    final count =
+        Sqflite.firstIntValue(
+          await executor.rawQuery(
+            'SELECT COUNT(*) FROM budgets WHERE $where;',
+            args,
+          ),
+        ) ??
+        0;
+    if (count >= maxActiveBudgets) {
+      throw StateError(
+        'A maximum of $maxActiveBudgets budgets can be active at the same time.',
+      );
+    }
+  }
+
+  Future<void> addBudget(
+    Budget budget, {
+    bool activate = false,
+    List<String>? expenseTags,
+    List<String>? incomeTags,
+  }) async {
     final db = await database;
     final shouldActivate = activate || budget.isActive;
+    final tagsChanged = expenseTags != null || incomeTags != null;
     await db.transaction((txn) async {
       if (shouldActivate) {
-        await txn.update('budgets', {'is_active': 0});
+        await _assertCanActivateBudget(txn, excludeId: budget.id);
       }
       final value = shouldActivate ? budget.copyWith(isActive: true) : budget;
       await txn.insert(
@@ -1072,21 +1248,45 @@ class DatabaseService {
         value.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      if (tagsChanged) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (expenseTags != null) {
+          await _upsertBudgetTags(
+            txn,
+            budget.id,
+            BudgetTagMapping.expenseType,
+            expenseTags,
+            now,
+          );
+        }
+        if (incomeTags != null) {
+          await _upsertBudgetTags(
+            txn,
+            budget.id,
+            BudgetTagMapping.incomeType,
+            incomeTags,
+            now,
+          );
+        }
+      }
     });
     await _refreshBudgets();
     _notifyChange('budgets');
+    if (tagsChanged) {
+      _notifyChange('budget_tags');
+    }
   }
 
-  Future<void> updateBudget(Budget budget) async {
+  Future<void> updateBudget(
+    Budget budget, {
+    List<String>? expenseTags,
+    List<String>? incomeTags,
+  }) async {
     final db = await database;
+    final tagsChanged = expenseTags != null || incomeTags != null;
     await db.transaction((txn) async {
       if (budget.isActive) {
-        await txn.update(
-          'budgets',
-          {'is_active': 0},
-          where: 'id != ?',
-          whereArgs: [budget.id],
-        );
+        await _assertCanActivateBudget(txn, excludeId: budget.id);
       }
       await txn.update(
         'budgets',
@@ -1094,18 +1294,56 @@ class DatabaseService {
         where: 'id = ?',
         whereArgs: [budget.id],
       );
+      if (tagsChanged) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (expenseTags != null) {
+          await _upsertBudgetTags(
+            txn,
+            budget.id,
+            BudgetTagMapping.expenseType,
+            expenseTags,
+            now,
+          );
+        }
+        if (incomeTags != null) {
+          await _upsertBudgetTags(
+            txn,
+            budget.id,
+            BudgetTagMapping.incomeType,
+            incomeTags,
+            now,
+          );
+        }
+      }
     });
     await _refreshBudgets();
     _notifyChange('budgets');
+    if (tagsChanged) {
+      _notifyChange('budget_tags');
+    }
   }
 
-  Future<void> setActiveBudget(String id) async {
+  Future<void> setBudgetActive(String id, bool active) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.update('budgets', {'is_active': 0});
+      final rows = await txn.query(
+        'budgets',
+        columns: ['is_active'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final currentlyActive = (rows.first['is_active'] as int? ?? 0) != 0;
+      if (active && !currentlyActive) {
+        await _assertCanActivateBudget(txn, excludeId: id);
+      }
       await txn.update(
         'budgets',
-        {'is_active': 1},
+        {
+          'is_active': active ? 1 : 0,
+          'updated_at': DateTime.now().millisecondsSinceEpoch,
+        },
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -1113,6 +1351,8 @@ class DatabaseService {
     await _refreshBudgets();
     _notifyChange('budgets');
   }
+
+  Future<void> setActiveBudget(String id) => setBudgetActive(id, true);
 
   Future<void> deleteBudget(String id) async {
     final db = await database;
@@ -1183,6 +1423,7 @@ class DatabaseService {
       await txn.delete('contacts');
       await txn.delete('categories');
       await txn.delete('payment_modes');
+      await txn.delete('budget_tags');
       await txn.delete('budgets');
       await txn.delete('app_settings');
       await _seedDefaults(txn);

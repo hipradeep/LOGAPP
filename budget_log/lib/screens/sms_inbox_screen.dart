@@ -35,7 +35,8 @@ class SmsInboxScreen extends StatefulWidget {
   State<SmsInboxScreen> createState() => _SmsInboxScreenState();
 }
 
-class _SmsInboxScreenState extends State<SmsInboxScreen> {
+class _SmsInboxScreenState extends State<SmsInboxScreen>
+    with WidgetsBindingObserver {
   late final SmsInboxController _controller =
       widget.controller ?? getIt<SmsInboxController>();
   String? _lastMessage;
@@ -43,11 +44,19 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller.addListener(_onControllerChanged);
     _controller.initialize();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openInitialTarget();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _controller.refresh();
+    }
   }
 
   Future<void> _openInitialTarget() async {
@@ -111,6 +120,7 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -133,17 +143,26 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
   }
 
   Future<void> _requestPermission() async {
+    if (_controller.smsPermissionPermanentlyDenied) {
+      await _controller.openSmsSettings();
+      return;
+    }
     final granted = await _controller.requestSmsPermission();
-    if (!granted || !mounted) return;
+    if (!granted) {
+      if (_controller.smsPermissionPermanentlyDenied) {
+        await _controller.openSmsSettings();
+      }
+      return;
+    }
+    if (!mounted) return;
     await _requestNotificationPermission();
     await _controller.scanNow();
   }
 
   Future<void> _scanNow() async {
     if (!_controller.hasSmsPermission) {
-      final granted = await _controller.requestSmsPermission();
-      if (!granted || !mounted) return;
-      await _requestNotificationPermission();
+      await _requestPermission();
+      if (!_controller.hasSmsPermission) return;
     }
     await _controller.scanNow();
   }
@@ -167,6 +186,7 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
       initialTitle: _titleFor(staged),
       initialNote: 'Imported from SMS · ${staged.smsSender}',
       initialTimestamp: staged.smsTimestamp,
+      rawSmsBody: staged.rawBody,
       onSave:
           (BudgetTransaction transaction, List<DebtRecord> debtRecords) async {
             final accepted = await _controller.accept(
@@ -233,7 +253,10 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
                       ),
                       children: [
                         if (!_controller.hasSmsPermission) ...[
-                          _PermissionCard(onAllow: _requestPermission),
+                          _PermissionCard(
+                            onAllow: _requestPermission,
+                            blocked: _controller.smsPermissionPermanentlyDenied,
+                          ),
                           const VGapMd(),
                         ],
                         _BackgroundCard(
@@ -288,8 +311,9 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
 
 class _PermissionCard extends StatelessWidget {
   final VoidCallback onAllow;
+  final bool blocked;
 
-  const _PermissionCard({required this.onAllow});
+  const _PermissionCard({required this.onAllow, this.blocked = false});
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +330,7 @@ class _PermissionCard extends StatelessWidget {
                 const HGapSm(),
                 Expanded(
                   child: Text(
-                    'SMS access is off',
+                    blocked ? 'SMS access is blocked' : 'SMS access is off',
                     style: textTheme.titleMedium,
                   ),
                 ),
@@ -314,9 +338,12 @@ class _PermissionCard extends StatelessWidget {
             ),
             const VGapSm(),
             Text(
-              'Allow SMS access to detect bank credit and debit messages. '
-              'Only transaction messages are kept; OTPs and promotions are '
-              'ignored.',
+              blocked
+                  ? 'SMS access was denied permanently. Open app settings and '
+                        'allow SMS for Budget Log, then return here.'
+                  : 'Allow SMS access to detect bank credit and debit messages. '
+                        'Only transaction messages are kept; OTPs and promotions '
+                        'are ignored.',
               style: textTheme.bodySmall,
             ),
             const VGapMd(),
@@ -324,8 +351,11 @@ class _PermissionCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: onAllow,
-                icon: const Icon(Icons.lock_open_rounded, size: 18),
-                label: const Text('Allow SMS access'),
+                icon: Icon(
+                  blocked ? Icons.settings_rounded : Icons.lock_open_rounded,
+                  size: 18,
+                ),
+                label: Text(blocked ? 'Open app settings' : 'Allow SMS access'),
               ),
             ),
           ],

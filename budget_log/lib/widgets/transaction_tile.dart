@@ -28,11 +28,19 @@ class TransactionTile extends StatelessWidget {
     final isExpense = transaction.isExpense;
     final tintIndex = category?.colorIndex ?? (isExpense ? 6 : 1);
     final tint = AppTheme.tintFor(context, tintIndex);
-    final categoryName = category?.name ?? 'Uncategorized';
-    final paymentName = paymentMode?.name;
-    final subtitle = paymentName == null
-        ? categoryName
-        : '$categoryName · $paymentName';
+    final categoryName = category?.name ?? (isExpense ? 'Expense' : 'Income');
+    final paymentSuffix =
+        paymentMode?.name != null && paymentMode!.name.isNotEmpty
+        ? ' [${paymentMode!.name}]'
+        : '';
+    final note = transaction.note ?? '';
+
+    // Legacy display title: '$tagName | $description [$paymentMethod]' or '$tagName [$paymentMethod]'
+    final displayTitle = note.isNotEmpty
+        ? '$categoryName | $note$paymentSuffix'
+        : (transaction.title.contains('[')
+              ? transaction.title
+              : '$categoryName$paymentSuffix');
 
     return Card(
       child: InkWell(
@@ -64,14 +72,14 @@ class TransactionTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      transaction.title,
+                      displayTitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodyLarge,
                     ),
                     const VGapXs(),
                     Text(
-                      subtitle,
+                      AppFormat.relativeDate(transaction.timestamp),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodySmall,
@@ -80,27 +88,17 @@ class TransactionTile extends StatelessWidget {
                 ),
               ),
               const HGapSm(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    AppFormat.signedCurrency(
-                      transaction.amount,
-                      isExpense: isExpense,
-                    ),
-                    style: textTheme.titleMedium?.copyWith(
-                      color: isExpense
-                          ? AppTheme.expenseColor
-                          : AppTheme.incomeColor,
-                    ),
-                  ),
-                  const VGapXs(),
-                  Text(
-                    AppFormat.relativeDate(transaction.timestamp),
-                    style: textTheme.labelSmall,
-                  ),
-                ],
+              Text(
+                AppFormat.signedCurrency(
+                  transaction.amount,
+                  isExpense: isExpense,
+                ),
+                style: textTheme.titleMedium?.copyWith(
+                  color: isExpense
+                      ? AppTheme.expenseColor
+                      : AppTheme.incomeColor,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),

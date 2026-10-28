@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../controllers/finance_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/budget.dart';
+import '../models/budget_tag_mapping.dart';
 import '../models/budget_transaction.dart';
 import '../models/subscription.dart';
 import '../services/service_locator.dart';
 import '../theme/app_theme.dart';
 import '../utils/format_utils.dart';
 import '../utils/subscription_schedule.dart';
+import '../widgets/active_budget_switcher.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_fab.dart';
 import '../widgets/app_provider.dart';
@@ -79,6 +81,7 @@ class HomeScreen extends StatelessWidget {
                   }
 
                   final budget = controller.activeBudget;
+                  final activeBudgets = controller.activeBudgets;
                   final recent = controller.recentTransactions;
 
                   return RefreshIndicator(
@@ -97,16 +100,28 @@ class HomeScreen extends StatelessWidget {
                           onEditSalary: () => _editSalary(context, controller),
                         ),
                         const VGapLg(),
-                        if (budget != null)
+                        if (budget != null) ...[
+                          if (activeBudgets.length > 1) ...[
+                            ActiveBudgetSwitcher(
+                              budgets: activeBudgets,
+                              selectedBudgetId: budget.id,
+                              onSelected: controller.setSelectedBudget,
+                            ),
+                            const VGapSm(),
+                          ],
                           _ActiveBudgetCard(
                             budget: budget,
                             spent: controller.spentForBudget(budget.id),
                             safeToSpend: controller.safeToSpendForBudget(
                               budget.id,
                             ),
-                            onManage: onNavigateToBudget,
-                          )
-                        else
+                            tagLabels: _budgetTagLabels(controller, budget),
+                            onManage: () {
+                              controller.setSelectedBudget(budget.id);
+                              onNavigateToBudget();
+                            },
+                          ),
+                        ] else
                           AppEmptyState(
                             icon: Icons.account_balance_wallet_outlined,
                             title: 'No active budget',
@@ -115,6 +130,7 @@ class HomeScreen extends StatelessWidget {
                                 'get a safe-to-spend daily allowance.',
                             actionLabel: 'Create budget',
                             onActionPressed: () => _createBudget(context),
+                            margin: EdgeInsets.zero,
                           ),
                         if (subscriptionController != null)
                           _SubscriptionsPreviewCard(
@@ -143,21 +159,25 @@ class HomeScreen extends StatelessWidget {
                                 style: textTheme.titleMedium,
                               ),
                             ),
-                            TextButton(
-                              onPressed: onNavigateToLog,
-                              child: const Text('View all'),
-                            ),
+                            if (recent.isNotEmpty)
+                              TextButton(
+                                onPressed: onNavigateToLog,
+                                child: const Text('View all'),
+                              ),
                           ],
                         ),
-                        const VGapXs(),
+                        const VGapSm(),
                         if (recent.isEmpty)
-                          const AppEmptyState(
+                          AppEmptyState(
                             icon: Icons.receipt_long_outlined,
                             title: 'Nothing logged yet',
                             description:
                                 'Add your first expense or income to see '
                                 'it here.',
-                            showCard: false,
+                            actionLabel: 'Add transaction',
+                            onActionPressed: () =>
+                                AddTransactionScreen.navigate(context),
+                            margin: EdgeInsets.zero,
                           )
                         else
                           ..._buildRecentTransactions(
@@ -183,6 +203,25 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  List<String> _budgetTagLabels(FinanceController controller, Budget budget) {
+    final labels = <String>{};
+    final tagIds = {
+      ...controller.expenseTagsForBudget(budget.id),
+      ...controller.incomeTagsForBudget(budget.id),
+    };
+    for (final tagId in tagIds) {
+      if (tagId == BudgetTagMapping.miscExpenseTag) {
+        labels.add('Misc expense');
+      } else if (tagId == BudgetTagMapping.miscIncomeTag) {
+        labels.add('Misc income');
+      } else {
+        final category = controller.categoryById(tagId);
+        if (category != null) labels.add(category.name);
+      }
+    }
+    return labels.toList(growable: false);
+  }
+
   List<Widget> _buildRecentTransactions(
     BuildContext context,
     FinanceController controller,
@@ -194,6 +233,7 @@ class HomeScreen extends StatelessWidget {
       if (index > 0) children.add(const VGapSm());
       children.add(
         TransactionTile(
+          key: ValueKey(transaction.id),
           transaction: transaction,
           category: controller.categoryById(transaction.categoryId),
           paymentMode: controller.paymentModeById(transaction.paymentModeId),
@@ -375,7 +415,9 @@ class _MonthlySummaryCard extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: onEditSalary,
-                  child: const Text('Edit income'),
+                  child: Text(
+                    controller.monthlySalary > 0 ? 'Edit income' : 'Set income',
+                  ),
                 ),
               ],
             ),
@@ -453,12 +495,14 @@ class _ActiveBudgetCard extends StatelessWidget {
   final Budget budget;
   final double spent;
   final double safeToSpend;
+  final List<String> tagLabels;
   final VoidCallback onManage;
 
   const _ActiveBudgetCard({
     required this.budget,
     required this.spent,
     required this.safeToSpend,
+    required this.tagLabels,
     required this.onManage,
   });
 
@@ -533,15 +577,39 @@ class _ActiveBudgetCard extends StatelessWidget {
               ],
             ),
             const VGapSm(),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: percentage,
-                minHeight: 6,
-                color: statusColor,
-                backgroundColor: AppTheme.surfaceVariant(context),
-              ),
+            _BudgetProgressBar(
+              value: percentage,
+              threshold: budget.alertThreshold,
+              color: statusColor,
             ),
+            const VGapXs(),
+            Row(
+              children: [
+                Icon(
+                  Icons.flag_outlined,
+                  size: 13,
+                  color: AppTheme.textSecondaryColor(context),
+                ),
+                const HGapXs(),
+                Text(
+                  'Alert at ${(budget.alertThreshold * 100).round()}%',
+                  style: textTheme.labelSmall,
+                ),
+              ],
+            ),
+            if (tagLabels.isNotEmpty) ...[
+              const VGapMd(),
+              Wrap(
+                spacing: AppTheme.spacingXs,
+                runSpacing: AppTheme.spacingXs,
+                children: [
+                  for (final label in tagLabels.take(3))
+                    _BudgetTagPill(label: label),
+                  if (tagLabels.length > 3)
+                    _BudgetTagPill(label: '+${tagLabels.length - 3} more'),
+                ],
+              ),
+            ],
             const VGapMd(),
             Row(
               children: [
@@ -561,6 +629,89 @@ class _ActiveBudgetCard extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetProgressBar extends StatelessWidget {
+  final double value;
+  final double threshold;
+  final Color color;
+
+  const _BudgetProgressBar({
+    required this.value,
+    required this.threshold,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final markerLeft = (constraints.maxWidth * threshold).clamp(
+          0.0,
+          constraints.maxWidth - 2,
+        );
+
+        return SizedBox(
+          height: 8,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: value,
+                    minHeight: 6,
+                    color: color,
+                    backgroundColor: AppTheme.surfaceVariant(context),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: markerLeft,
+                top: -2,
+                child: Container(
+                  width: 2,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningColor,
+                    borderRadius: BorderRadius.circular(1),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BudgetTagPill extends StatelessWidget {
+  final String label;
+
+  const _BudgetTagPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceVariant(context),
+        borderRadius: BorderRadius.circular(AppTheme.pillBorderRadius),
+        border: Border.all(color: AppTheme.borderColor(context)),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 10,
+          color: AppTheme.textSecondaryColor(context),
         ),
       ),
     );

@@ -12,7 +12,7 @@ class DatabaseBackupService {
 
   final DatabaseService _dbService;
 
-  static const int backupVersion = 1;
+  static const int backupVersion = 2;
   static const String backupFormat = 'budget_log';
 
   static const List<String> _paymentModeColumns = [
@@ -109,6 +109,14 @@ class DatabaseBackupService {
     'created_at',
     'updated_at',
   ];
+  static const List<String> _budgetTagColumns = [
+    'id',
+    'budget_id',
+    'type',
+    'tag_ids',
+    'created_at',
+    'updated_at',
+  ];
   static const List<String> _settingsColumns = ['key', 'value', 'updated_at'];
 
   static const List<String> _backupTables = [
@@ -147,6 +155,7 @@ class DatabaseBackupService {
         orderBy: 'sms_timestamp DESC',
       )).map((row) => {...row, 'raw_body': ''}).toList(),
       'budgets': await db.query('budgets', orderBy: 'created_at ASC'),
+      'budgetTags': await db.query('budget_tags', orderBy: 'created_at ASC'),
       'appSettings': await db.query(
         'app_settings',
         where: 'key != ?',
@@ -229,6 +238,7 @@ class DatabaseBackupService {
     final subscriptions = _readRows(data, 'subscriptions');
     final stagedSms = _readRows(data, 'stagedSmsTransactions');
     final budgets = _readRows(data, 'budgets');
+    final budgetTags = _readRows(data, 'budgetTags');
     final settings = _readRows(
       data,
       'appSettings',
@@ -244,6 +254,7 @@ class DatabaseBackupService {
         await txn.delete('contacts');
         await txn.delete('categories');
         await txn.delete('payment_modes');
+        await txn.delete('budget_tags');
         await txn.delete('budgets');
         await txn.delete('app_settings');
 
@@ -255,6 +266,7 @@ class DatabaseBackupService {
         );
         await _insertRows(txn, 'categories', categories, _categoryColumns);
         await _insertRows(txn, 'budgets', budgets, _budgetColumns);
+        await _insertRows(txn, 'budget_tags', budgetTags, _budgetTagColumns);
         await _insertRows(txn, 'contacts', contacts, _contactColumns);
         await _insertRows(
           txn,
@@ -286,6 +298,7 @@ class DatabaseBackupService {
           'subscriptions': subscriptions.length,
           'staged_sms_transactions': stagedSms.length,
           'budgets': budgets.length,
+          'budget_tags': budgetTags.length,
           'app_settings': settings.length,
         });
       });
@@ -307,6 +320,10 @@ class DatabaseBackupService {
       if (data[key] is! List) {
         throw FormatException('Invalid backup table: $key');
       }
+    }
+    final versionNumber = version.toInt();
+    if (versionNumber >= 2 && data['budgetTags'] is! List) {
+      throw const FormatException('Invalid backup table: budgetTags');
     }
   }
 

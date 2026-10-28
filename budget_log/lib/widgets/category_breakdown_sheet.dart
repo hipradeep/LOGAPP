@@ -67,9 +67,9 @@ class CategoryBreakdownSheet extends StatelessWidget {
             Text(
               'Total: ${AppFormat.currency(total)}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondaryColor(context),
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: AppTheme.textSecondaryColor(context),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),

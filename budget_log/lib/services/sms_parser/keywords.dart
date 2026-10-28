@@ -25,9 +25,7 @@ class SmsKeywords {
   ];
 
   /// Outstanding balance trigger keywords.
-  static const List<String> outstandingBalanceKeywords = [
-    'outstanding',
-  ];
+  static const List<String> outstandingBalanceKeywords = ['outstanding'];
 
   /// Supported digital wallet brand keywords.
   static const List<String> wallets = [

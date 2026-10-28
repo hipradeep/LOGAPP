@@ -79,91 +79,91 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             ),
           ],
         ),
-          const VGapMd(),
-          Text(
-            'TRANSACTION TYPE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textSecondaryColor(context),
+        const VGapMd(),
+        Text(
+          'TRANSACTION TYPE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textSecondaryColor(context),
+          ),
+        ),
+        const VGapSm(),
+        Row(
+          children: [
+            _buildTypeChip('all', 'All'),
+            const HGapSm(),
+            _buildTypeChip('debit', 'Debit (Expense)'),
+            const HGapSm(),
+            _buildTypeChip('credit', 'Credit (Gain)'),
+          ],
+        ),
+        const VGapLg(),
+        Text(
+          'DATE RANGE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textSecondaryColor(context),
+          ),
+        ),
+        const VGapSm(),
+        GestureDetector(
+          onTap: _handleSelectDateRange,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceVariant(context),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.borderColor(context)),
             ),
-          ),
-          const VGapSm(),
-          Row(
-            children: [
-              _buildTypeChip('all', 'All'),
-              const HGapSm(),
-              _buildTypeChip('debit', 'Debit (Expense)'),
-              const HGapSm(),
-              _buildTypeChip('credit', 'Credit (Gain)'),
-            ],
-          ),
-          const VGapLg(),
-          Text(
-            'DATE RANGE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textSecondaryColor(context),
-            ),
-          ),
-          const VGapSm(),
-          GestureDetector(
-            onTap: _handleSelectDateRange,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceVariant(context),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.borderColor(context)),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 16,
-                    color: AppTheme.primaryLight,
-                  ),
-                  const HGapMd(),
-                  Expanded(
-                    child: Text(
-                      _startDate != null && _endDate != null
-                          ? '${DateFormat('MMM d, yyyy').format(_startDate!)} — ${DateFormat('MMM d, yyyy').format(_endDate!)}'
-                          : 'Select date range (All time)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.textPrimaryColor(context),
-                      ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 16,
+                  color: AppTheme.primaryLight,
+                ),
+                const HGapMd(),
+                Expanded(
+                  child: Text(
+                    _startDate != null && _endDate != null
+                        ? '${DateFormat('MMM d, yyyy').format(_startDate!)} — ${DateFormat('MMM d, yyyy').format(_endDate!)}'
+                        : 'Select date range (All time)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textPrimaryColor(context),
                     ),
                   ),
-                  if (_startDate != null)
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _startDate = null;
-                          _endDate = null;
-                        });
-                      },
-                      child: const Icon(Icons.close_rounded, size: 16),
-                    ),
-                ],
-              ),
+                ),
+                if (_startDate != null)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _startDate = null;
+                        _endDate = null;
+                      });
+                    },
+                    child: const Icon(Icons.close_rounded, size: 16),
+                  ),
+              ],
             ),
           ),
-          const VGapXl(),
-          SizedBox(
-            width: double.infinity,
-            height: AppTheme.buttonHeight,
-            child: ElevatedButton(
-              onPressed: () {
-                widget.onApply(_startDate, _endDate, _selectedType);
-                Navigator.of(context).pop();
-              },
-              child: const Text('Apply Filters'),
-            ),
+        ),
+        const VGapXl(),
+        SizedBox(
+          width: double.infinity,
+          height: AppTheme.buttonHeight,
+          child: ElevatedButton(
+            onPressed: () {
+              widget.onApply(_startDate, _endDate, _selectedType);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Apply Filters'),
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 
   Widget _buildTypeChip(String type, String label) {

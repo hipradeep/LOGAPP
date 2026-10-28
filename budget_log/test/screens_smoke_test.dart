@@ -64,6 +64,7 @@ void main() {
     await contactsController.load();
     await debtController.load();
     await subscriptionController.load();
+    getIt.registerSingleton<FinanceController>(controller);
     getIt.registerSingleton<ContactsController>(contactsController);
     getIt.registerSingleton<DebtController>(debtController);
     getIt.registerSingleton<SubscriptionController>(subscriptionController);
@@ -101,7 +102,7 @@ void main() {
 
     await tester.pumpWidget(wrap(const BudgetScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('No budgets yet'), findsOneWidget);
+    expect(find.text('No Budget Limits Set'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(wrap(const TransactionLogScreen()));
@@ -111,10 +112,12 @@ void main() {
   });
 
   testWidgets('add transaction and budget forms render', (tester) async {
-    await tester.pumpWidget(wrap(AddTransactionScreen(controller: controller)));
+    await tester.pumpWidget(
+      wrap(AddTransactionSheet(controller: controller, isBottomSheet: false)),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Add transaction'), findsWidgets);
-    expect(find.text('Category'), findsOneWidget);
+    expect(find.text('Record Transaction'), findsOneWidget);
+    expect(find.text('What was it for?'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(wrap(const AddBudgetScreen()));

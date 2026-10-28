@@ -8,12 +8,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:608865694471:android:78d60228b448728e794ba2",
+        "mobilesdk_app_id": "1:608865694471:android:c09e68f4200efdcf794ba2",
         "android_client_info": {
           "package_name": "in.logapp.budget"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "608865694471-2offv5jg5dfm7v6ag78r9mi9ksmeba5c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.logapp.budget",
+            "certificate_hash": "8544f81e1b15b608da3f27245cdafce468f4c79c"
+          }
+        },
+        {
+          "client_id": "608865694471-efddjku401hadss959ksc71ugbepsjun.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA4QIZS5af5YHotjVgI-klYB58skn91CUI"
@@ -21,26 +34,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:608865694471:android:c259dbd761438bb8794ba2",
-        "android_client_info": {
-          "package_name": "in.logapp.budget_log"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyA4QIZS5af5YHotjVgI-klYB58skn91CUI"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "608865694471-efddjku401hadss959ksc71ugbepsjun.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

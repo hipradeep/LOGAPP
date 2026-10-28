@@ -26,9 +26,7 @@ class _FakeSmsBridge extends SmsNativeBridge {
   Future<List<SmsInboxRecord>> drainCaptured() async => const [];
 
   @override
-  Future<void> syncPendingValidations(
-    List<SmsValidationEntry> entries,
-  ) async {}
+  Future<void> syncPendingValidations(List<SmsValidationEntry> entries) async {}
 
   @override
   Future<void> removeValidation(String id) async {

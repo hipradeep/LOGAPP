@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:budget_log/models/budget.dart';
+import 'package:budget_log/models/budget_tag_mapping.dart';
 import 'package:budget_log/models/budget_transaction.dart';
 import 'package:budget_log/models/contact.dart';
 import 'package:budget_log/models/debt_record.dart';
@@ -59,11 +60,184 @@ void main() {
         createdAt: fixedDate,
       );
 
+  Future<void> insertBudgetTags(String budgetId) async {
+    final db = await databaseService.database;
+    for (final type in ['exp', 'income']) {
+      await db.insert('budget_tags', {
+        'id': '${budgetId}_$type',
+        'budget_id': budgetId,
+        'type': type,
+        'tag_ids': '["misc_${type == 'exp' ? 'exp' : 'inc'}"]',
+        'created_at': fixedDate.millisecondsSinceEpoch,
+        'updated_at': fixedDate.millisecondsSinceEpoch,
+      });
+    }
+  }
+
   test('creates schema, indexes, and seed data', () async {
+    final db = await databaseService.database;
+    expect(await db.getVersion(), 3);
+    final tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table';",
+    );
+    expect(tables.map((row) => row['name']), contains('budget_tags'));
     expect(await databaseService.getPaymentModes(), hasLength(6));
     expect(await databaseService.getCategories(), hasLength(11));
     expect(await databaseService.getTransactions(), isEmpty);
     expect(await databaseService.getSetting('active_account_email'), isNull);
+  });
+
+  test(
+    'upgrades a version 2 database with an empty budget_tags table',
+    () async {
+      await databaseService.close();
+      final dbPath = path.join(tempDirectory.path, 'budget_log.db');
+      final raw = await databaseFactoryFfi.openDatabase(dbPath);
+      await raw.execute('DROP TABLE IF EXISTS budget_tags;');
+      await raw.setVersion(2);
+      await raw.close();
+
+      await databaseService.init();
+
+      final db = await databaseService.database;
+      expect(await db.getVersion(), 3);
+      expect(await db.query('budget_tags'), isEmpty);
+    },
+  );
+
+  test('enforces three active budgets and supports toggling', () async {
+    for (final id in ['bud_active_1', 'bud_active_2', 'bud_active_3']) {
+      await databaseService.addBudget(createBudget(id), activate: true);
+    }
+    final inactive = createBudget('bud_active_4').copyWith(isActive: false);
+    await databaseService.addBudget(inactive);
+
+    await expectLater(
+      databaseService.setBudgetActive('bud_active_4', true),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      databaseService.addBudget(createBudget('bud_active_5'), activate: true),
+      throwsA(isA<StateError>()),
+    );
+
+    var budgets = await databaseService.getBudgets();
+    expect(budgets.where((budget) => budget.isActive), hasLength(3));
+
+    await databaseService.setBudgetActive('bud_active_1', false);
+    await databaseService.setBudgetActive('bud_active_4', true);
+
+    budgets = await databaseService.getBudgets();
+    final activeIds = budgets
+        .where((budget) => budget.isActive)
+        .map((budget) => budget.id);
+    expect(activeIds, containsAll(['bud_active_2', 'bud_active_3']));
+    expect(activeIds, contains('bud_active_4'));
+    expect(activeIds, isNot(contains('bud_active_1')));
+  });
+
+  test('stores budget tag mappings and returns active budgets', () async {
+    await databaseService.addBudget(createBudget('bud_tags'), activate: true);
+    await databaseService.setBudgetTags(
+      'bud_tags',
+      expenseTags: const ['cat_food', BudgetTagMapping.miscExpenseTag],
+      incomeTags: const ['cat_salary', BudgetTagMapping.miscIncomeTag],
+    );
+
+    var tags = await databaseService.getBudgetTags('bud_tags');
+    expect(tags[BudgetTagMapping.expenseType], [
+      'cat_food',
+      BudgetTagMapping.miscExpenseTag,
+    ]);
+    expect(tags[BudgetTagMapping.incomeType], [
+      'cat_salary',
+      BudgetTagMapping.miscIncomeTag,
+    ]);
+
+    await databaseService.setBudgetTags(
+      'bud_tags',
+      expenseTags: const ['cat_rent'],
+      incomeTags: const [],
+    );
+
+    tags = await databaseService.getBudgetTags('bud_tags');
+    expect(tags[BudgetTagMapping.expenseType], ['cat_rent']);
+    expect(tags[BudgetTagMapping.incomeType], isEmpty);
+    expect(
+      (await databaseService.getBudgetTags(
+        'missing_budget',
+      ))[BudgetTagMapping.expenseType],
+      isEmpty,
+    );
+
+    final mappings = await databaseService.getAllBudgetTagMappings();
+    expect(mappings, hasLength(2));
+    expect(mappings.singleWhere((mapping) => mapping.isExpense).tagIds, [
+      'cat_rent',
+    ]);
+    expect(mappings.singleWhere((mapping) => mapping.isIncome).tagIds, isEmpty);
+
+    final active = await databaseService.getActiveBudgets();
+    expect(active.map((budget) => budget.id), ['bud_tags']);
+  });
+
+  test('writes budget and tag mappings atomically', () async {
+    await databaseService.addBudget(
+      createBudget('bud_atomic'),
+      activate: true,
+      expenseTags: const ['cat_food', BudgetTagMapping.miscExpenseTag],
+      incomeTags: const ['cat_salary', BudgetTagMapping.miscIncomeTag],
+    );
+
+    var tags = await databaseService.getBudgetTags('bud_atomic');
+    expect(tags[BudgetTagMapping.expenseType], [
+      'cat_food',
+      BudgetTagMapping.miscExpenseTag,
+    ]);
+    expect(tags[BudgetTagMapping.incomeType], [
+      'cat_salary',
+      BudgetTagMapping.miscIncomeTag,
+    ]);
+
+    await databaseService.updateBudget(
+      createBudget('bud_atomic').copyWith(limit: 25000),
+      expenseTags: const ['cat_rent'],
+      incomeTags: const [],
+    );
+
+    tags = await databaseService.getBudgetTags('bud_atomic');
+    expect(tags[BudgetTagMapping.expenseType], ['cat_rent']);
+    expect(tags[BudgetTagMapping.incomeType], isEmpty);
+  });
+
+  test('removes deleted categories from budget tag mappings', () async {
+    await databaseService.addBudget(
+      createBudget('bud_cleanup'),
+      activate: true,
+      expenseTags: const ['cat_food', 'cat_rent'],
+      incomeTags: const ['cat_salary'],
+    );
+
+    await databaseService.deleteCategory('cat_food');
+
+    final tags = await databaseService.getBudgetTags('bud_cleanup');
+    expect(tags[BudgetTagMapping.expenseType], ['cat_rent']);
+    expect(tags[BudgetTagMapping.incomeType], ['cat_salary']);
+  });
+
+  test('cascades budget tag deletion with its budget', () async {
+    await databaseService.addBudget(
+      createBudget('bud_cascade'),
+      activate: true,
+    );
+    await insertBudgetTags('bud_cascade');
+
+    final db = await databaseService.database;
+    expect(await db.query('budget_tags'), hasLength(2));
+
+    await databaseService.deleteBudget('bud_cascade');
+
+    expect(await db.query('budget_tags'), isEmpty);
   });
 
   test(
@@ -392,6 +566,7 @@ void main() {
   test('round-trips a versioned JSON backup', () async {
     final budget = createBudget('bud_1');
     await databaseService.addBudget(budget, activate: true);
+    await insertBudgetTags(budget.id);
     await databaseService.addTransaction(
       createTransaction('txn_1', budgetId: budget.id),
     );
@@ -436,7 +611,8 @@ void main() {
 
     final payload = await backupService.exportAllToJson();
     expect(payload['format'], 'budget_log');
-    expect(payload['version'], 1);
+    expect(payload['version'], 2);
+    expect(payload['budgetTags'], hasLength(2));
     expect(
       (payload['appSettings'] as List<Map<String, Object?>>).any(
         (row) => row['key'] == 'active_account_email',
@@ -457,8 +633,23 @@ void main() {
     expect(await databaseService.getSetting('active_account_email'), isNull);
     expect(await databaseService.getPaymentModes(), hasLength(6));
     expect(await databaseService.getCategories(), hasLength(11));
+    final db = await databaseService.database;
+    expect(await db.query('budget_tags'), hasLength(2));
     final subscriptions = await databaseService.getSubscriptions();
     expect(subscriptions.single.isAutopay, isTrue);
+  });
+
+  test('imports a version 1 backup without budget tags', () async {
+    final payload = Map<String, dynamic>.from(
+      await backupService.exportAllToJson(),
+    );
+    payload['version'] = 1;
+    payload.remove('budgetTags');
+
+    await backupService.importAllFromJson(payload);
+
+    final db = await databaseService.database;
+    expect(await db.query('budget_tags'), isEmpty);
   });
 
   test('clears user data and restores default seed data', () async {
